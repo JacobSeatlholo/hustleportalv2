@@ -727,8 +727,13 @@
         <label class="field-label" for="fwa">WhatsApp Number</label>
         <input class="field-input" type="tel" id="fwa" name="whatsapp" placeholder="+27 74 000 0000" required autocomplete="tel">
       </div>
+      <div class="field-group">
+        <label class="field-label" for="fcode">Access Code</label>
+        <input class="field-input" type="text" id="fcode" name="code" placeholder="Enter your code" required autocomplete="off" style="letter-spacing:0.12em;">
+        <div id="codeError" style="display:none;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--red);letter-spacing:0.08em;">✕ Invalid code. Check your source and try again.</div>
+      </div>
       <button class="submit-btn" type="submit" id="submitBtn">
-        GET THE FREE EBOOK →
+        UNLOCK THE EBOOK →
       </button>
     </form>
 
@@ -753,26 +758,13 @@
 
 <!-- ── WHY FREE ── -->
 <section class="why-section">
-  <span class="section-label">Why Free?</span>
-  <h2 class="section-title">Because the<br>Relationship Is<br>Worth More.</h2>
-
-  <div class="why-grid">
-    <div class="why-card">
-      <span class="why-icon">🧠</span>
-      <div class="why-title">We build trust first</div>
-      <div class="why-body">Founders who see our work before spending money become long-term clients. This ebook is our handshake.</div>
-    </div>
-    <div class="why-card">
-      <span class="why-icon">📈</span>
-      <div class="why-title">You get real value</div>
-      <div class="why-body">14 tactics from actual engineering docs. Not recycled Twitter advice. This is the kind of intel agencies charge for.</div>
-    </div>
-    <div class="why-card">
-      <span class="why-icon">🤝</span>
-      <div class="why-title">SA entrepreneurs first</div>
-      <div class="why-body">We're Cape Town-built, South Africa-focused. Putting tools in local founders' hands is the whole mission.</div>
-    </div>
-  </div>
+  <span class="section-label">A straight answer</span>
+  <h2 class="section-title">Why we're<br>giving this<br>away.</h2>
+  <p style="font-size:16px;color:rgba(240,237,230,0.65);max-width:560px;line-height:1.8;margin-bottom:40px;">
+    Building a business in South Africa is hard. Capital is scarce, networks are unequal, and most of the best knowledge is locked behind paywalls or reserved for people who already know the right people.<br><br>
+    We started Business Hustle because we got tired of watching capable founders lose on a tilted playing field. This ebook exists because when X published their algorithm, we knew most SA entrepreneurs would never hear about it &mdash; let alone have the time to decode a GitHub repo.<br><br>
+    So we did it for you. No catch. No upsell hiding behind the download button. Just the information, because you deserve to compete with the same tools as anyone else.
+  </p>
 </section>
 
 <!-- ── FOOTER ── -->
@@ -786,37 +778,45 @@
 </footer>
 
 <script>
+  var ACCESS_CODE = 'Hustle2026!';
+
   function handleSubmit(e) {
     e.preventDefault();
-    const btn = document.getElementById('submitBtn');
-    const name = document.getElementById('fname').value.trim();
-    const wa = document.getElementById('fwa').value.trim();
+    var btn = document.getElementById('submitBtn');
+    var name = document.getElementById('fname').value.trim();
+    var wa = document.getElementById('fwa').value.trim();
+    var code = document.getElementById('fcode').value.trim();
+    var codeInput = document.getElementById('fcode');
+    var errEl = document.getElementById('codeError');
 
-    if (!name || !wa) return;
+    if (!name || !wa || !code) return;
 
-    // Disable button, show loading
+    if (code !== ACCESS_CODE) {
+      errEl.style.display = 'block';
+      codeInput.style.borderColor = 'var(--red)';
+      codeInput.focus();
+      return;
+    }
+
+    errEl.style.display = 'none';
+    codeInput.style.borderColor = '';
     btn.disabled = true;
-    btn.textContent = 'SENDING...';
+    btn.textContent = 'UNLOCKING...';
 
-    // Simulate brief processing then reveal success
-    setTimeout(() => {
+    setTimeout(function() {
       document.getElementById('captureForm').style.display = 'none';
       document.getElementById('successState').classList.add('active');
-
-      // Also ping WhatsApp with their details (optional auto-notification)
-      // This opens a prefilled WA message so the BH team gets notified
-      const msg = encodeURIComponent(`New eBook lead 🔥\nName: ${name}\nWhatsApp: ${wa}\nSource: X Algorithm Capture Page`);
-      // Silent fetch to a form handler could go here if Formspree is wired
-      // For now the download triggers directly
-    }, 800);
+    }, 700);
   }
 
-  // Phone number formatting helper
+  document.getElementById('fcode').addEventListener('input', function() {
+    document.getElementById('codeError').style.display = 'none';
+    this.style.borderColor = '';
+  });
+
   document.getElementById('fwa').addEventListener('input', function() {
-    let v = this.value.replace(/[^\d+]/g, '');
-    if (v && !v.startsWith('+') && !v.startsWith('0') && v.length > 1) {
-      v = '+' + v;
-    }
+    var v = this.value.replace(/[^\d+]/g, '');
+    if (v && !v.startsWith('+') && !v.startsWith('0') && v.length > 1) v = '+' + v;
     this.value = v;
   });
 </script>
