@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crack The X Algorithm — Business Hustle</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@300;400;600;700&display=swap');
+
+  :root {
+    --gold: #F5C518;
+    --black: #060608;
+    --white: #F0EDE6;
+    --red: #E8382A;
+    --steel: #1A1A20;
+    --muted: #6B6B7A;
+    --accent: #00D4FF;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Sora', sans-serif;
+    font-weight: 300;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ─── NOISE OVERLAY ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* ─── COVER ─── */
+  .cover {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 60px 40px;
+    background: var(--black);
+  }
+
+  .cover-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 50%, rgba(245,197,24,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 30%, rgba(0,212,255,0.06) 0%, transparent 50%);
+  }
+
+  .cover-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(245,197,24,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,197,24,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .cover-content {
+    position: relative;
+    z-index: 2;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .bh-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(245,197,24,0.3);
+    padding: 6px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 40px;
+    animation: fadeSlide 0.8s ease both;
+  }
+
+  .bh-badge span { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes fadeSlide { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:none} }
+
+  .cover-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    animation: fadeUp 0.9s 0.2s ease both;
+  }
+
+  .cover-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(72px, 14vw, 160px);
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    animation: fadeUp 1s 0.3s ease both;
+  }
+
+  .cover-title .line-gold { color: var(--gold); display: block; }
+  .cover-title .line-white { color: var(--white); display: block; }
+  .cover-title .line-outline {
+    -webkit-text-stroke: 2px var(--white);
+    color: transparent;
+    display: block;
+    opacity: 0.4;
+  }
+
+  .cover-subtitle {
+    font-size: 18px;
+    color: var(--white);
+    opacity: 0.7;
+    max-width: 560px;
+    margin-bottom: 48px;
+    animation: fadeUp 1s 0.5s ease both;
+  }
+
+  .cover-meta {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    animation: fadeUp 1s 0.7s ease both;
+  }
+
+  .meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .meta-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; }
+  .meta-value { font-size: 14px; color: var(--white); font-weight: 600; }
+
+  .cover-number {
+    position: absolute;
+    right: 40px;
+    bottom: 40px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 200px;
+    line-height: 1;
+    color: rgba(245,197,24,0.04);
+    letter-spacing: -0.05em;
+    z-index: 1;
+    user-select: none;
+  }
+
+  /* ─── SECTIONS ─── */
+  .section {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 80px 40px;
+  }
+
+  .section-full {
+    padding: 80px 40px;
+    position: relative;
+  }
+
+  /* ─── DIVIDER ─── */
+  .chapter-divider {
+    border: none;
+    border-top: 1px solid rgba(245,197,24,0.15);
+    margin: 0;
+  }
+
+  /* ─── CHAPTER HEADER ─── */
+  .chapter-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 32px;
+    margin-bottom: 48px;
+  }
+
+  .chapter-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 80px;
+    line-height: 0.85;
+    color: var(--gold);
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  .chapter-title-block { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+
+  .chapter-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .chapter-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(28px, 5vw, 48px);
+    line-height: 1.1;
+    color: var(--white);
+  }
+
+  /* ─── BODY TEXT ─── */
+  p { font-size: 16px; color: rgba(240,237,230,0.8); margin-bottom: 20px; line-height: 1.8; }
+  p strong { color: var(--white); font-weight: 600; }
+
+  /* ─── CALLOUT BOXES ─── */
+  .callout {
+    border-left: 3px solid var(--gold);
+    background: rgba(245,197,24,0.04);
+    padding: 24px 28px;
+    margin: 32px 0;
+  }
+
+  .callout-red {
+    border-left-color: var(--red);
+    background: rgba(232,56,42,0.04);
+  }
+
+  .callout-cyan {
+    border-left-color: var(--accent);
+    background: rgba(0,212,255,0.04);
+  }
+
+  .callout-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    color: var(--gold);
+  }
+
+  .callout-red .callout-label { color: var(--red); }
+  .callout-cyan .callout-label { color: var(--accent); }
+
+  .callout p { margin-bottom: 0; font-size: 15px; }
+
+  /* ─── ALGORITHM VISUAL ─── */
+  .algo-pipeline {
+    background: var(--steel);
+    border: 1px solid rgba(245,197,24,0.1);
+    padding: 32px;
+    margin: 32px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .algo-pipeline::before {
+    content: 'SYSTEM ARCHITECTURE';
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: rgba(245,197,24,0.3);
+  }
+
+  .pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+  }
+
+  .pipeline-step:last-child { border-bottom: none; }
+
+  .step-icon {
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(245,197,24,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+
+  .step-body { flex: 1; }
+  .step-name { font-weight: 600; font-size: 14px; color: var(--white); }
+  .step-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .step-arrow { color: var(--gold); opacity: 0.4; font-size: 18px; align-self: center; }
+
+  /* ─── SCORING TABLE ─── */
+  .score-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0;
+    margin: 32px 0;
+    border: 1px solid rgba(245,197,24,0.1);
+  }
+
+  .score-row {
+    display: contents;
+  }
+
+  .score-row > * {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 14px;
+  }
+
+  .score-row:last-child > * { border-bottom: none; }
+
+  .score-action { color: var(--white); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+  .score-weight { text-align: right; font-weight: 700; font-size: 13px; }
+  .score-weight.pos { color: var(--gold); }
+  .score-weight.neg { color: var(--red); }
+
+  .score-header > * {
+    background: rgba(245,197,24,0.08);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 400;
+  }
+
+  /* ─── STAT BLOCKS ─── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 32px 0;
+  }
+
+  .stat-block {
+    background: var(--steel);
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--gold);
+    line-height: 1;
+    display: block;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── RULES ─── */
+  .rule-list { list-style: none; margin: 32px 0; display: flex; flex-direction: column; gap: 16px; }
+
+  .rule-item {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px;
+    background: var(--steel);
+    border: 1px solid rgba(255,255,255,0.04);
+    position: relative;
+  }
+
+  .rule-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--gold);
+  }
+
+  .rule-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: rgba(245,197,24,0.3);
+    line-height: 1;
+    flex-shrink: 0;
+    min-width: 32px;
+  }
+
+  .rule-text { display: flex; flex-direction: column; gap: 6px; }
+  .rule-title { font-weight: 700; font-size: 15px; color: var(--white); }
+  .rule-body { font-size: 14px; color: rgba(240,237,230,0.65); line-height: 1.6; }
+
+  /* ─── FILTER TABLE ─── */
+  .filter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 32px 0;
+  }
+
+  .filter-card {
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .filter-card.kill { border-color: rgba(232,56,42,0.2); background: rgba(232,56,42,0.03); }
+  .filter-card.boost { border-color: rgba(245,197,24,0.2); background: rgba(245,197,24,0.03); }
+
+  .filter-head {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .filter-head.kill-label { color: var(--red); }
+  .filter-head.boost-label { color: var(--gold); }
+
+  .filter-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .filter-list li { font-size: 13px; color: rgba(240,237,230,0.75); display: flex; gap: 10px; align-items: baseline; }
+  .filter-list li::before { content: '→'; font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; font-size: 12px; }
+  .filter-card.kill .filter-list li::before { color: var(--red); }
+  .filter-card.boost .filter-list li::before { color: var(--gold); }
+
+  /* ─── HUSTLE SCORE ─── */
+  .hustle-score {
+    background: var(--steel);
+    border: 1px solid rgba(245,197,24,0.15);
+    padding: 36px;
+    margin: 40px 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hustle-score::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(245,197,24,0.08) 0%, transparent 70%);
+  }
+
+  .hs-formula {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(12px, 2.5vw, 16px);
+    color: var(--gold);
+    background: rgba(0,0,0,0.4);
+    padding: 20px 28px;
+    display: inline-block;
+    margin: 24px auto;
+    letter-spacing: 0.05em;
+    line-height: 1.8;
+    text-align: left;
+  }
+
+  .hs-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .hs-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    color: var(--white);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* ─── CHECKLIST ─── */
+  .checklist { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 28px 0; }
+
+  .checklist li {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    font-size: 15px;
+    color: rgba(240,237,230,0.8);
+    line-height: 1.6;
+  }
+
+  .check-box {
+    width: 20px;
+    height: 20px;
+    border: 1.5px solid var(--gold);
+    flex-shrink: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .check-box::after { content: '✓'; font-size: 11px; color: var(--gold); }
+
+  /* ─── BACK COVER CTA ─── */
+  .back-cover {
+    min-height: 60vh;
+    background: var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .back-cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 100% 100% at 50% 100%, rgba(245,197,24,0.1) 0%, transparent 60%);
+  }
+
+  .back-content { position: relative; z-index: 2; max-width: 600px; }
+
+  .back-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 8vw, 80px);
+    line-height: 0.95;
+    margin-bottom: 24px;
+  }
+
+  .back-title .gold { color: var(--gold); }
+
+  .back-body { font-size: 18px; color: rgba(240,237,230,0.7); margin-bottom: 40px; }
+
+  .cta-button {
+    display: inline-block;
+    background: var(--gold);
+    color: var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 16px 36px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .cta-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(245,197,24,0.25);
+  }
+
+  .footer-meta {
+    margin-top: 48px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── QUOTE ─── */
+  .pull-quote {
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    font-size: clamp(22px, 4vw, 36px);
+    line-height: 1.3;
+    color: var(--white);
+    border-left: 4px solid var(--gold);
+    padding: 20px 32px;
+    margin: 40px 0;
+    background: rgba(245,197,24,0.02);
+  }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 640px) {
+    .section { padding: 60px 24px; }
+    .section-full { padding: 60px 24px; }
+    .chapter-header { flex-direction: column; gap: 16px; }
+    .chapter-num { font-size: 56px; }
+    .stats-row { grid-template-columns: 1fr; }
+    .filter-grid { grid-template-columns: 1fr; }
+    .cover { padding: 48px 24px; }
+    .cover-meta { gap: 24px; }
+    .hs-formula { font-size: 12px; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-grid"></div>
+  <div class="cover-number">X</div>
+  <div class="cover-content">
+    <div class="bh-badge"><span></span> Business Hustle Intelligence</div>
+    <div class="cover-eyebrow">The Definitive Entrepreneur's Guide</div>
+    <h1 class="cover-title">
+      <span class="line-gold">CRACK</span>
+      <span class="line-white">THE X</span>
+      <span class="line-outline">ALGORITHM</span>
+    </h1>
+    <p class="cover-subtitle">
+      X just open-sourced their For You feed algorithm. Here's what it actually means for your brand, your content, and your hustle — explained without the PhD.
+    </p>
+    <div class="cover-meta">
+      <div class="meta-item">
+        <span class="meta-label">Source</span>
+        <span class="meta-value">xai-org/x-algorithm</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Publisher</span>
+        <span class="meta-value">Business Hustle</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Edition</span>
+        <span class="meta-value">2025 — Vol. I</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ INTRO ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">00</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Introduction</span>
+        <h2 class="chapter-title">The Code is Out. Most People Won't Read It.</h2>
+      </div>
+    </div>
+
+    <p>In 2025, X (formerly Twitter) did something almost no major tech platform has ever done: they published the actual source code powering their recommendation algorithm. Not a blog post. Not a PR-spun explainer. The real code — 16,500 GitHub stars worth of it.</p>
+
+    <p>Built by xAI, the team behind Grok, the X algorithm is a <strong>machine learning system</strong> that decides what the 250+ million daily users on X see on their For You feed. It determines who goes viral and who gets buried.</p>
+
+    <div class="callout">
+      <div class="callout-label">Why This Matters For You</div>
+      <p>Every founder, creator, and SME competing for attention on X is playing a game with hidden rules. This ebook decodes those rules — not for engineers, but for <strong>builders who want to win the feed.</strong></p>
+    </div>
+
+    <p>We reverse-engineered the GitHub repo so you don't have to. What follows is the most actionable breakdown of the X algorithm you'll find outside of xAI's own offices.</p>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 1: HOW IT WORKS ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">01</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter One</span>
+        <h2 class="chapter-title">How the Machine Actually Thinks</h2>
+      </div>
+    </div>
+
+    <p>The X algorithm is not a single function. It's a <strong>seven-stage pipeline</strong> with distinct components working in sequence. Understanding the pipeline is the first step to gaming it — legitimately.</p>
+
+    <div class="algo-pipeline">
+      <div class="pipeline-step">
+        <div class="step-icon">01</div>
+        <div class="step-body">
+          <div class="step-name">Query Hydration</div>
+          <div class="step-desc">System fetches YOUR engagement history, who you follow, what you've liked, replied to, and shared.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">02</div>
+        <div class="step-body">
+          <div class="step-name">Candidate Sourcing (Thunder + Phoenix)</div>
+          <div class="step-desc">Two retrieval engines run in parallel: one pulls from accounts you follow, one from the entire global corpus via ML similarity.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">03</div>
+        <div class="step-body">
+          <div class="step-name">Hydration</div>
+          <div class="step-desc">Enriches each candidate post with author info, media type, verification status, subscription status.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">04</div>
+        <div class="step-body">
+          <div class="step-name">Pre-Scoring Filters</div>
+          <div class="step-desc">Hard kills: duplicates, old posts, blocked authors, muted keywords, posts already served.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">05</div>
+        <div class="step-body">
+          <div class="step-name">Phoenix Scoring (Grok Transformer)</div>
+          <div class="step-desc">AI model predicts probability of 15 different engagement actions — like, reply, block, mute, share, and more.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">06</div>
+        <div class="step-body">
+          <div class="step-name">Weighted Score + Diversity</div>
+          <div class="step-desc">Combines predictions into one final score. Author diversity scorer penalises feeds dominated by one account.</div>
+        </div>
+        <div class="step-arrow">↓</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">07</div>
+        <div class="step-body">
+          <div class="step-name">Selection + Post-Filters</div>
+          <div class="step-desc">Top K posts selected by score. Final sweep removes spam, violence, deleted posts.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-cyan">
+      <div class="callout-label">Key Insight</div>
+      <p>The algorithm has <strong>two retrieval sources</strong>: in-network (accounts you follow) and out-of-network (the global corpus). Out-of-network content is how strangers discover your posts. That's the growth engine. The code calls it <em>Phoenix Retrieval</em>.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 2: THE SCORE ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">02</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter Two</span>
+        <h2 class="chapter-title">The Score That Determines Your Fate</h2>
+      </div>
+    </div>
+
+    <p>The algorithm uses a <strong>Grok-based transformer model</strong> called Phoenix. It doesn't guess what you want — it predicts the <em>probability</em> of you taking specific actions on each post, then multiplies those probabilities by weights to create one final score.</p>
+
+    <div class="hustle-score">
+      <span class="hs-label">The Algorithm's Core Formula</span>
+      <span class="hs-title">Final Score = Σ (weight × P(action))</span>
+      <div class="hs-formula">
+        Final Score =<br>
+        &nbsp;&nbsp;(w₁ × P(like)) + (w₂ × P(reply))<br>
+        &nbsp;&nbsp;+ (w₃ × P(repost)) + (w₄ × P(share))<br>
+        &nbsp;&nbsp;− (w₅ × P(mute)) − (w₆ × P(block))<br>
+        &nbsp;&nbsp;− (w₇ × P(report))
+      </div>
+    </div>
+
+    <p>Every action the algorithm predicts is weighted. Positive actions (likes, replies, reposts) push your score <strong>up</strong>. Negative actions (mute, block, report, "not interested") push your score <strong>down</strong>.</p>
+
+    <div class="score-grid">
+      <div class="score-row score-header">
+        <div>Predicted Action</div>
+        <div>Signal Weight</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(reply)</div>
+        <div class="score-weight pos">+++ High</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(repost)</div>
+        <div class="score-weight pos">+++ High</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(like)</div>
+        <div class="score-weight pos">++ Medium</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(share)</div>
+        <div class="score-weight pos">++ Medium</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(follow_author)</div>
+        <div class="score-weight pos">+++ Very High</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(profile_click)</div>
+        <div class="score-weight pos">+ Low-Med</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(dwell)</div>
+        <div class="score-weight pos">+ Low</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(not_interested)</div>
+        <div class="score-weight neg">− Negative</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(mute_author)</div>
+        <div class="score-weight neg">−− Negative</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(block_author)</div>
+        <div class="score-weight neg">−−− Very Negative</div>
+      </div>
+      <div class="score-row">
+        <div class="score-action">P(report)</div>
+        <div class="score-weight neg">−−− Very Negative</div>
+      </div>
+    </div>
+
+    <div class="callout callout-red">
+      <div class="callout-label">The Trap Most Creators Fall Into</div>
+      <p>Bait posts that trigger "not interested" or silent unfollows are <strong>algorithmically devastating</strong>. One wave of negative signals can suppress your content for weeks. The algorithm remembers. Stop chasing impressions at the expense of quality signal.</p>
+    </div>
+
+    <p>Notice what's <em>not</em> in the formula: raw impressions, follower count, post frequency. The algorithm is built on <strong>engagement quality</strong>, not vanity metrics. This is both the danger and the opportunity for serious builders.</p>
+
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 3: WHAT KILLS YOU ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">03</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter Three</span>
+        <h2 class="chapter-title">What Gets You Killed vs. What Gets You Boosted</h2>
+      </div>
+    </div>
+
+    <p>Before scoring even begins, a set of hard filters run. These are <strong>automatic disqualifications</strong> — no ML needed, no score calculated. Your post simply doesn't exist for the viewer if it trips one of these.</p>
+
+    <div class="filter-grid">
+      <div class="filter-card kill">
+        <div class="filter-head kill-label">☠ Instant Kills (Pre-Scoring Filters)</div>
+        <ul class="filter-list">
+          <li>Post is older than the age threshold</li>
+          <li>Post from a blocked or muted account</li>
+          <li>Post contains muted keywords</li>
+          <li>Post already served in this session</li>
+          <li>Duplicate post (same content ID)</li>
+          <li>Post is behind a subscription paywall you don't have</li>
+          <li>Post flagged: spam, violence, gore, deleted</li>
+          <li>Self-posts removed from your own FYF</li>
+        </ul>
+      </div>
+      <div class="filter-card boost">
+        <div class="filter-head boost-label">⚡ What the System Actively Wants</div>
+        <ul class="filter-list">
+          <li>High probability of reply (most weighted signal)</li>
+          <li>High probability of repost or quote</li>
+          <li>Causing profile clicks and follows</li>
+          <li>Posts generating dwell time</li>
+          <li>Content semantically similar to what user engages with</li>
+          <li>Out-of-network posts that match user embedding</li>
+          <li>Author with consistent positive signals</li>
+          <li>Verified/premium account status</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-block">
+        <span class="stat-num">15</span>
+        <span class="stat-label">Engagement types the AI predicts simultaneously</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-num">7</span>
+        <span class="stat-label">Pipeline stages before your post hits a feed</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-num">2</span>
+        <span class="stat-label">Retrieval engines: in-network + global corpus</span>
+      </div>
+    </div>
+
+    <div class="pull-quote">
+      "The algorithm has eliminated every single hand-engineered feature and most heuristics. The Grok-based transformer does all the heavy lifting." — X Algorithm README
+    </div>
+
+    <p>Translation: there are no shortcuts. No tricks. No keyword hacks. The model is end-to-end ML. It's learned what "good" looks like from billions of real user actions. You can't fake the signal — you have to earn it.</p>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 4: THE TWO TOWERS ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">04</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter Four</span>
+        <h2 class="chapter-title">The Two-Tower Model: Your Growth Engine</h2>
+      </div>
+    </div>
+
+    <p>Most creators only think about the followers they already have. That's the <strong>in-network</strong> game (called Thunder internally). But the real growth lever is the <strong>out-of-network</strong> engine — the part called Phoenix Retrieval.</p>
+
+    <p>Phoenix uses a <strong>Two-Tower Model</strong> to find strangers who should see your content:</p>
+
+    <div class="callout">
+      <div class="callout-label">How Two-Tower Works</div>
+      <p><strong>Tower 1 — User Tower:</strong> Encodes a specific user's engagement history into a mathematical vector (embedding). What they liked, replied to, shared — compressed into numbers that represent their interests.</p>
+    </div>
+
+    <div class="callout callout-cyan">
+      <div class="callout-label">Tower 2</div>
+      <p><strong>Tower 2 — Candidate Tower:</strong> Encodes your post into a similar vector. The algorithm then calculates the <strong>dot product similarity</strong> between user vectors and post vectors to find matches. If your post's embedding is close to a non-follower's interest embedding, they see you.</p>
+    </div>
+
+    <p>This is the mechanism behind going viral to people who don't follow you. The algorithm is doing high-dimensional similarity matching at scale — millions of vectors, sub-second latency.</p>
+
+    <div class="callout callout-red">
+      <div class="callout-label">Practical Implication</div>
+      <p>Your content needs to be <strong>topically coherent and consistent</strong>. The system builds a representation of what your account is about based on your post history. If you tweet about 12 different things, your embedding is blurry. If you own one niche, your embedding is sharp — and the algorithm sends you to the right non-followers.</p>
+    </div>
+
+    <p>This is why niche accounts grow faster than generalist accounts on X, all else being equal. It's not an opinion — it's mathematics.</p>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 5: THE HUSTLE PLAYBOOK ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">05</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter Five</span>
+        <h2 class="chapter-title">The Business Hustle Playbook</h2>
+      </div>
+    </div>
+
+    <p>Now we translate engineering into action. Fourteen rules derived directly from the source code — not speculation, not guru advice.</p>
+
+    <ul class="rule-list">
+      <li class="rule-item">
+        <div class="rule-num">01</div>
+        <div class="rule-text">
+          <span class="rule-title">Engineer for replies, not likes</span>
+          <span class="rule-body">Replies are the highest-weighted positive signal in the algorithm. End posts with questions. Create controversy worth engaging with. A post with 50 replies beats one with 500 likes in scoring.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">02</div>
+        <div class="rule-text">
+          <span class="rule-title">Own a niche. Your embedding depends on it.</span>
+          <span class="rule-body">The Two-Tower model builds a vector for your account. Mixed content = blurry vector = low out-of-network reach. Pick a lane. Business, tech, civic, finance — one sharp topic signals stack.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">03</div>
+        <div class="rule-text">
+          <span class="rule-title">Never post content that invites blocking or muting</span>
+          <span class="rule-body">P(block) and P(report) carry large negative weights. One viral post that triggers mass muting can suppress your account for weeks. Controversy has to earn replies, not repulsion.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">04</div>
+        <div class="rule-text">
+          <span class="rule-title">Fresh content beats archived wisdom</span>
+          <span class="rule-body">The age filter removes posts older than a threshold. Evergreen threads posted once and never refreshed will decay. Re-share, re-frame, and recycle your best ideas on a schedule.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">05</div>
+        <div class="rule-text">
+          <span class="rule-title">Make people click your profile</span>
+          <span class="rule-body">P(profile_click) is a positive signal. A compelling post hook that makes someone curious about who wrote it is doing double work — engagement on the post and a signal that your account is worth knowing.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">06</div>
+        <div class="rule-text">
+          <span class="rule-title">Dwell time is real — write for it</span>
+          <span class="rule-body">P(dwell) is tracked. Longer reads, threads, and media that require viewing time earn dwell signals. Don't over-optimise for short punchy takes at the expense of deep content that makes people stop scrolling.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">07</div>
+        <div class="rule-text">
+          <span class="rule-title">Protect your engagement history</span>
+          <span class="rule-body">The algorithm builds your "user action sequence" from what you've liked, replied to, and shared. Your engagement pattern on X is your taste fingerprint. It shapes what you see — and who you're shown to. Engage strategically.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">08</div>
+        <div class="rule-text">
+          <span class="rule-title">Batch your posting, not your audience</span>
+          <span class="rule-body">The Author Diversity Scorer penalises feeds dominated by one account. Don't flood your followers' timelines — you'll get attenuated. Quality over frequency. One high-signal post beats five mediocre ones algorithmically.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">09</div>
+        <div class="rule-text">
+          <span class="rule-title">Reposts from high-signal accounts are gold</span>
+          <span class="rule-body">P(repost) is highly weighted. Get one influential account to repost you and the cascade effect is real — because that repost then gets scored for all their followers' feeds.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">10</div>
+        <div class="rule-text">
+          <span class="rule-title">Premium verification isn't just optics</span>
+          <span class="rule-body">Verified/premium status is a feature in the hydration stage. The algorithm explicitly uses this as metadata. If you're serious about building on X, the subscription cost is an algorithm investment, not a vanity purchase.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">11</div>
+        <div class="rule-text">
+          <span class="rule-title">Muted keywords don't exist — use them</span>
+          <span class="rule-body">The MutedKeywordFilter removes content with keywords users have muted. Know your audience's mute lists. Political slurs, overused buzzwords, certain hashtags — if your target audience mutes them, your post vanishes for them.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">12</div>
+        <div class="rule-text">
+          <span class="rule-title">Session recency matters</span>
+          <span class="rule-body">PreviouslyServedPostsFilter kills posts already shown in a session. Don't expect your followers to see the same content twice in one scroll. Each session is a fresh competition for feed slots.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">13</div>
+        <div class="rule-text">
+          <span class="rule-title">Replies and quote posts are distribution, not just engagement</span>
+          <span class="rule-body">When you quote-post or reply to a viral post, you enter the candidate pool for everyone viewing that thread. The Phoenix retrieval engine can pull your content into feeds of users who've never seen you — via thread association.</span>
+        </div>
+      </li>
+      <li class="rule-item">
+        <div class="rule-num">14</div>
+        <div class="rule-text">
+          <span class="rule-title">There is no hack — there is only signal</span>
+          <span class="rule-body">The code is explicit: "We have eliminated every single hand-engineered feature." The Grok transformer learned from billions of real human choices. You cannot trick it. You can only earn it.</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ CH 6: YOUR ACTION PLAN ═══════════ -->
+<section class="section-full">
+  <div class="section">
+    <div class="chapter-header">
+      <div class="chapter-num">06</div>
+      <div class="chapter-title-block">
+        <span class="chapter-label">Chapter Six</span>
+        <h2 class="chapter-title">Your 30-Day Algorithm Reset</h2>
+      </div>
+    </div>
+
+    <p>Close the book. Open your X profile. Run this audit against what you find.</p>
+
+    <ul class="checklist">
+      <li><div class="check-box"></div> Define your single niche topic — if you can't describe it in 5 words, you don't have one yet</li>
+      <li><div class="check-box"></div> Audit your last 20 posts: what percentage end with a question or clear reply hook?</li>
+      <li><div class="check-box"></div> Identify your last 3 posts that got zero replies — what killed the conversation?</li>
+      <li><div class="check-box"></div> Clean up who you engage with — your like history shapes your embedding</li>
+      <li><div class="check-box"></div> Set a content cadence: 3–5 posts per week, not 3–5 per day</li>
+      <li><div class="check-box"></div> Create one long-form thread per week designed for dwell time</li>
+      <li><div class="check-box"></div> Identify 5 high-signal accounts in your niche to engage with authentically</li>
+      <li><div class="check-box"></div> Review your bio and pinned post — do they make someone want to click your profile?</li>
+      <li><div class="check-box"></div> Decide: is X Premium worth the algorithm signal boost for your business? Run the maths.</li>
+      <li><div class="check-box"></div> Commit to 90 days of consistent niche content before judging results</li>
+    </ul>
+
+    <div class="callout">
+      <div class="callout-label">The Real Talk</div>
+      <p>The algorithm is ruthlessly meritocratic about engagement quality. That's actually <strong>great news for founders and creators who do the work</strong>. If you produce content people genuinely respond to, the system will amplify it — regardless of your follower count today.</p>
+    </div>
+
+    <div class="pull-quote">
+      The algorithm doesn't care about your history. It cares about your next post.
+    </div>
+
+    <p>That's the entrepreneurial edge. You don't need 10 years on the platform. You need 10 consecutive posts that earn real signal. The pipeline resets every session. Start now.</p>
+  </div>
+</section>
+
+<hr class="chapter-divider">
+
+<!-- ═══════════ BACK COVER ═══════════ -->
+<section class="back-cover">
+  <div class="back-content">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.2em;color:var(--gold);text-transform:uppercase;margin-bottom:20px;">Business Hustle</p>
+    <h2 class="back-title">
+      NOW GO<br><span class="gold">BUILD.</span>
+    </h2>
+    <p class="back-body">
+      You now know more about the X algorithm than 99% of people posting on it today. The code is public. The playbook is in your hands. The only variable left is execution.
+    </p>
+    <a href="https://businesshustle.co.za" class="cta-button">Visit Business Hustle →</a>
+    <div class="footer-meta">
+      <p>© 2025 Simple Eternity Holdings (Pty) Ltd · businesshustle.co.za · @TeeJaySeatlholo</p>
+      <p style="margin-top:8px;">Source: github.com/xai-org/x-algorithm · Apache 2.0 License</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
