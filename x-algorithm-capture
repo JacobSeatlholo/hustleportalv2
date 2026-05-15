@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crack The X Algorithm — Free eBook | Business Hustle</title>
+<meta name="description" content="X just open-sourced their algorithm. We decoded it for South African entrepreneurs. Free download — name + WhatsApp only.">
+<meta name="theme-color" content="#F5C518">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@300;400;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  :root {
+    --gold: #F5C518;
+    --gold-dim: rgba(245,197,24,0.12);
+    --black: #080809;
+    --steel: #111114;
+    --panel: #16161A;
+    --border: rgba(245,197,24,0.15);
+    --white: #F0EDE6;
+    --muted: #5A5A68;
+    --red: #E8382A;
+    --green: #22C55E;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Sora', sans-serif;
+    font-weight: 300;
+    line-height: 1.6;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* NOISE */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(8,8,9,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    color: var(--white);
+    text-decoration: none;
+  }
+
+  .logo span { color: var(--gold); }
+
+  .topbar-cta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+
+  .topbar-cta:hover { background: var(--gold); color: var(--black); }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 80px 32px 0;
+    text-align: center;
+  }
+
+  .hero-glow {
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(245,197,24,0.1) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(245,197,24,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,197,24,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+
+  .hero-inner { position: relative; z-index: 2; max-width: 780px; margin: 0 auto; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    background: var(--gold-dim);
+    padding: 6px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--gold);
+    border-radius: 50%;
+    animation: blink 2s infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+
+  .hero-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    animation: fadeUp 0.7s 0.1s ease both;
+  }
+
+  .hero-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(60px, 13vw, 130px);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    animation: fadeUp 0.7s 0.15s ease both;
+  }
+
+  .hero-title .gold { color: var(--gold); }
+  .hero-title .outline {
+    -webkit-text-stroke: 2px rgba(240,237,230,0.25);
+    color: transparent;
+  }
+
+  .hero-sub {
+    font-size: clamp(15px, 2.5vw, 18px);
+    color: rgba(240,237,230,0.65);
+    max-width: 560px;
+    margin: 0 auto 48px;
+    animation: fadeUp 0.7s 0.25s ease both;
+  }
+
+  .hero-sub strong { color: var(--white); font-weight: 600; }
+
+  /* ── BOOK MOCKUP ── */
+  .book-wrap {
+    position: relative;
+    width: 260px;
+    margin: 0 auto 60px;
+    animation: fadeUp 0.8s 0.3s ease both;
+  }
+
+  .book {
+    background: var(--steel);
+    border: 1px solid var(--border);
+    padding: 32px 28px;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      8px 8px 0 rgba(245,197,24,0.08),
+      16px 16px 0 rgba(245,197,24,0.04);
+  }
+
+  .book::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gold);
+  }
+
+  .book-bg-num {
+    position: absolute;
+    right: -10px; bottom: -20px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 120px;
+    color: rgba(245,197,24,0.05);
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .book-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .book-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    line-height: 0.95;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+
+  .book-title .g { color: var(--gold); }
+
+  .book-author {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.1em;
+    margin-top: 20px;
+  }
+
+  .book-free-tag {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: var(--gold);
+    color: var(--black);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+  }
+
+  /* ── SOCIAL PROOF ── */
+  .social-proof {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+    padding: 32px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 1s 0.5s ease both;
+  }
+
+  .proof-item { text-align: center; }
+  .proof-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: var(--gold);
+    line-height: 1;
+    display: block;
+  }
+  .proof-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ── WHAT YOU GET ── */
+  .section { max-width: 720px; margin: 0 auto; padding: 64px 32px; }
+
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(32px, 6vw, 52px);
+    line-height: 0.95;
+    margin-bottom: 40px;
+  }
+
+  .chapters { display: flex; flex-direction: column; gap: 12px; }
+
+  .chapter-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .chapter-row:hover {
+    border-left-color: var(--gold);
+    background: rgba(245,197,24,0.03);
+  }
+
+  .ch-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: rgba(245,197,24,0.35);
+    flex-shrink: 0;
+    line-height: 1;
+    min-width: 28px;
+  }
+
+  .ch-body { display: flex; flex-direction: column; gap: 4px; }
+  .ch-title { font-size: 15px; font-weight: 700; color: var(--white); }
+  .ch-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* ── FORM SECTION ── */
+  .form-section {
+    background: var(--steel);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-glow {
+    position: absolute;
+    bottom: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(245,197,24,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .form-inner { position: relative; z-index: 2; max-width: 480px; margin: 0 auto; }
+
+  .form-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(36px, 7vw, 64px);
+    line-height: 0.95;
+    margin-bottom: 12px;
+  }
+
+  .form-title .gold { color: var(--gold); }
+
+  .form-sub {
+    font-size: 15px;
+    color: rgba(240,237,230,0.6);
+    margin-bottom: 36px;
+  }
+
+  .form-sub strong { color: var(--white); }
+
+  .capture-form { display: flex; flex-direction: column; gap: 14px; }
+
+  .field-group { position: relative; }
+
+  .field-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 6px;
+    text-align: left;
+  }
+
+  .field-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--white);
+    font-family: 'Sora', sans-serif;
+    font-size: 15px;
+    padding: 14px 16px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
+  .field-input::placeholder { color: var(--muted); }
+  .field-input:focus {
+    border-color: var(--gold);
+    background: rgba(245,197,24,0.04);
+  }
+
+  .submit-btn {
+    width: 100%;
+    background: var(--gold);
+    color: var(--black);
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    padding: 18px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(245,197,24,0.3);
+  }
+
+  .submit-btn:hover::before { opacity: 1; animation: shimmer 1s infinite; }
+  .submit-btn:active { transform: none; }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  .privacy-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+
+  /* SUCCESS STATE */
+  .success-state {
+    display: none;
+    padding: 40px;
+    background: rgba(34,197,94,0.06);
+    border: 1px solid rgba(34,197,94,0.2);
+    text-align: center;
+  }
+
+  .success-state.active { display: block; }
+
+  .success-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+  }
+
+  .success-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+
+  .success-body {
+    font-size: 15px;
+    color: rgba(240,237,230,0.7);
+    margin-bottom: 24px;
+  }
+
+  .download-btn {
+    display: inline-block;
+    background: var(--gold);
+    color: var(--black);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    padding: 16px 36px;
+    text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .download-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(245,197,24,0.25); }
+
+  .wa-followup {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #25D366;
+    color: white;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+
+  .wa-btn:hover { opacity: 0.9; }
+
+  /* ── WHY FREE ── */
+  .why-section { padding: 64px 32px; max-width: 720px; margin: 0 auto; }
+
+  .why-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 40px;
+  }
+
+  .why-card {
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.04);
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .why-icon { font-size: 28px; display: block; margin-bottom: 12px; }
+
+  .why-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  .why-body { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── FOOTER ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 32px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .footer-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--white);
+    text-decoration: none;
+  }
+
+  .footer-logo span { color: var(--gold); }
+
+  .footer-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    .topbar { padding: 14px 20px; }
+    .hero { padding: 56px 20px 0; }
+    .social-proof { gap: 24px; padding: 28px 20px; }
+    .section { padding: 48px 20px; }
+    .form-section { padding: 48px 20px; }
+    .why-grid { grid-template-columns: 1fr; }
+    .why-section { padding: 48px 20px; }
+    .footer { padding: 28px 20px; }
+    .book-wrap { width: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<nav class="topbar">
+  <a href="https://hustleportal.online" class="logo">HUSTLE<span>PORTAL</span>™</a>
+  <a href="https://wa.me/27744815163?text=Hi Business Hustle! I want the X Algorithm eBook." class="topbar-cta">Get It Free →</a>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="badge"><span class="badge-dot"></span> Free Download · Limited Time</div>
+    <p class="hero-eyebrow">Business Hustle Intelligence Report</p>
+    <h1 class="hero-title">
+      <span class="gold">CRACK</span><br>
+      THE X<br>
+      <span class="outline">ALGORITHM</span>
+    </h1>
+    <p class="hero-sub">
+      X just published the <strong>actual source code</strong> powering their For You feed. We read it so you didn't have to — and turned it into your growth playbook. <strong>Free. No fluff.</strong>
+    </p>
+
+    <!-- BOOK MOCKUP -->
+    <div class="book-wrap">
+      <div class="book">
+        <div class="book-free-tag">FREE</div>
+        <span class="book-label">Business Hustle · 2025</span>
+        <div class="book-title">CRACK<br>THE <span class="g">X</span><br>ALGO</div>
+        <div class="book-author">businesshustle.co.za</div>
+        <div class="book-bg-num">X</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SOCIAL PROOF ── -->
+<div class="social-proof">
+  <div class="proof-item">
+    <span class="proof-num">16.5K</span>
+    <span class="proof-label">GitHub Stars on the Source Code</span>
+  </div>
+  <div class="proof-item">
+    <span class="proof-num">14</span>
+    <span class="proof-label">Actionable Hustle Rules</span>
+  </div>
+  <div class="proof-item">
+    <span class="proof-num">6</span>
+    <span class="proof-label">Chapters Decoded</span>
+  </div>
+  <div class="proof-item">
+    <span class="proof-num">0</span>
+    <span class="proof-label">Rands to Download</span>
+  </div>
+</div>
+
+<!-- ── WHAT'S INSIDE ── -->
+<div class="section">
+  <span class="section-label">What's Inside</span>
+  <h2 class="section-title">Six Chapters.<br>Zero Fluff.</h2>
+
+  <div class="chapters">
+    <div class="chapter-row">
+      <div class="ch-num">01</div>
+      <div class="ch-body">
+        <div class="ch-title">How the Machine Actually Thinks</div>
+        <div class="ch-desc">The 7-stage pipeline decoded — from query hydration to your ranked feed. No PhD required.</div>
+      </div>
+    </div>
+    <div class="chapter-row">
+      <div class="ch-num">02</div>
+      <div class="ch-body">
+        <div class="ch-title">The Score That Determines Your Fate</div>
+        <div class="ch-desc">What P(like), P(reply), P(block) actually mean — and the weighted formula running under every post you publish.</div>
+      </div>
+    </div>
+    <div class="chapter-row">
+      <div class="ch-num">03</div>
+      <div class="ch-body">
+        <div class="ch-title">What Gets You Killed vs. What Gets You Boosted</div>
+        <div class="ch-desc">The hard filters that silently kill your reach — and the signals the system actively rewards.</div>
+      </div>
+    </div>
+    <div class="chapter-row">
+      <div class="ch-num">04</div>
+      <div class="ch-body">
+        <div class="ch-title">The Two-Tower Model: Your Growth Engine</div>
+        <div class="ch-desc">How strangers discover your content. The out-of-network engine explained — and why niche creators win.</div>
+      </div>
+    </div>
+    <div class="chapter-row">
+      <div class="ch-num">05</div>
+      <div class="ch-body">
+        <div class="ch-title">The Business Hustle Playbook</div>
+        <div class="ch-desc">14 rules derived directly from the source code. Not opinion. Not vibes. Engineering translated into tactics.</div>
+      </div>
+    </div>
+    <div class="chapter-row">
+      <div class="ch-num">06</div>
+      <div class="ch-body">
+        <div class="ch-title">Your 30-Day Algorithm Reset</div>
+        <div class="ch-desc">A 10-point audit you run on your own profile today. Actionable. Measurable. Starts now.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CAPTURE FORM ── -->
+<section class="form-section">
+  <div class="form-glow"></div>
+  <div class="form-inner">
+    <span class="section-label">Get Your Free Copy</span>
+    <h2 class="form-title">DROP YOUR<br><span class="gold">DETAILS.</span></h2>
+    <p class="form-sub">Name + WhatsApp number. That's it. <strong>No spam. No newsletter you didn't ask for.</strong> Just the ebook — delivered instantly.</p>
+
+    <!-- FORM -->
+    <form class="capture-form" id="captureForm" onsubmit="handleSubmit(event)">
+      <div class="field-group">
+        <label class="field-label" for="fname">Your Name</label>
+        <input class="field-input" type="text" id="fname" name="name" placeholder="e.g. Thabo Nkosi" required autocomplete="given-name">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="fwa">WhatsApp Number</label>
+        <input class="field-input" type="tel" id="fwa" name="whatsapp" placeholder="+27 74 000 0000" required autocomplete="tel">
+      </div>
+      <button class="submit-btn" type="submit" id="submitBtn">
+        GET THE FREE EBOOK →
+      </button>
+    </form>
+
+    <!-- SUCCESS STATE -->
+    <div class="success-state" id="successState">
+      <span class="success-icon">🔥</span>
+      <div class="success-title">You're In, Founder.</div>
+      <p class="success-body">Your copy of <strong>Crack The X Algorithm</strong> is ready. Download it below — then join the Business Hustle WhatsApp community for more intelligence like this.</p>
+      <a href="crack-the-x-algorithm.html" class="download-btn" download="Crack-The-X-Algorithm-BusinessHustle.html">⬇ Download Free eBook</a>
+      <div class="wa-followup">
+        <span>Or get it on WhatsApp:</span>
+        <a href="https://wa.me/27744815163?text=Hi! I just signed up for the X Algorithm eBook. Please send it through." class="wa-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          WhatsApp Us
+        </a>
+      </div>
+    </div>
+
+    <p class="privacy-note">🔒 Your details stay with Business Hustle only. No selling, no spam — just value.<br>Business Hustle · Simple Eternity Holdings (Pty) Ltd · Cape Town 🇿🇦</p>
+  </div>
+</section>
+
+<!-- ── WHY FREE ── -->
+<section class="why-section">
+  <span class="section-label">Why Free?</span>
+  <h2 class="section-title">Because the<br>Relationship Is<br>Worth More.</h2>
+
+  <div class="why-grid">
+    <div class="why-card">
+      <span class="why-icon">🧠</span>
+      <div class="why-title">We build trust first</div>
+      <div class="why-body">Founders who see our work before spending money become long-term clients. This ebook is our handshake.</div>
+    </div>
+    <div class="why-card">
+      <span class="why-icon">📈</span>
+      <div class="why-title">You get real value</div>
+      <div class="why-body">14 tactics from actual engineering docs. Not recycled Twitter advice. This is the kind of intel agencies charge for.</div>
+    </div>
+    <div class="why-card">
+      <span class="why-icon">🤝</span>
+      <div class="why-title">SA entrepreneurs first</div>
+      <div class="why-body">We're Cape Town-built, South Africa-focused. Putting tools in local founders' hands is the whole mission.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer class="footer">
+  <a href="https://hustleportal.online" class="footer-logo">HUSTLE<span>PORTAL</span>™</a>
+  <div class="footer-meta">
+    © 2025 Simple Eternity Holdings (Pty) Ltd · businesshustle.co.za<br>
+    Cape Town, South Africa 🇿🇦 · @TeeJaySeatlholo<br>
+    Source: github.com/xai-org/x-algorithm · Apache 2.0
+  </div>
+</footer>
+
+<script>
+  function handleSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const name = document.getElementById('fname').value.trim();
+    const wa = document.getElementById('fwa').value.trim();
+
+    if (!name || !wa) return;
+
+    // Disable button, show loading
+    btn.disabled = true;
+    btn.textContent = 'SENDING...';
+
+    // Simulate brief processing then reveal success
+    setTimeout(() => {
+      document.getElementById('captureForm').style.display = 'none';
+      document.getElementById('successState').classList.add('active');
+
+      // Also ping WhatsApp with their details (optional auto-notification)
+      // This opens a prefilled WA message so the BH team gets notified
+      const msg = encodeURIComponent(`New eBook lead 🔥\nName: ${name}\nWhatsApp: ${wa}\nSource: X Algorithm Capture Page`);
+      // Silent fetch to a form handler could go here if Formspree is wired
+      // For now the download triggers directly
+    }, 800);
+  }
+
+  // Phone number formatting helper
+  document.getElementById('fwa').addEventListener('input', function() {
+    let v = this.value.replace(/[^\d+]/g, '');
+    if (v && !v.startsWith('+') && !v.startsWith('0') && v.length > 1) {
+      v = '+' + v;
+    }
+    this.value = v;
+  });
+</script>
+</body>
+</html>
