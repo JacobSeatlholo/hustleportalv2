@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USERS & TEAMS ============
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  businessName String?
+  industry     String?
+  city         String?
+  phone        String?
+  role         String   @default("MEMBER") // ADMIN | MEMBER
+  xp           Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teamsOwned         Team[]              @relation("TeamOwner")
+  memberships        TeamMember[]
+  tasksCreated       Task[]              @relation("TaskCreator")
+  tasksAssigned      Task[]              @relation("TaskAssignee")
+  leads              Lead[]
+  clients            Client[]
+  financeEntries     FinanceEntry[]
+  wallet             Wallet?
+  creditTxs          CreditTx[]
+  topUps             TopUp[]
+  aiPlans            AiPlan[]
+  aiChats            AiMessage[]
+  xpEvents           XpEvent[]
+  challengeProgress  ChallengeProgress[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation("TeamOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  members TeamMember[]
+  tasks   Task[]
+  leads   Lead[]
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String
+  userId String
+  role   String @default("MEMBER") // OWNER | MEMBER
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+// ============ LEADS / CRM ============
+
+model Lead {
+  id          String   @id @default(cuid())
+  userId      String
+  teamId      String?
+  company     String
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  industry    String?
+  city        String?
+  country     String?
+  source      String   @default("MANUAL") // EXPLEE | CSV | MANUAL
+  stage       String   @default("NEW") // NEW | CONTACTED | QUALIFIED | QUOTE_SENT | WON | LOST
+  value       Float    @default(0)
+  notes       String?
+  unlocked    Boolean  @default(false) // contact details revealed (paid)
+  score       Int?
+  externalId  String? // Explee dedup
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([userId, stage])
+}
+
+model Client {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  company      String?
+  email        String?
+  phone        String?
+  notes        String?
+  monthlyValue Float    @default(0)
+  status       String   @default("ACTIVE") // ACTIVE | CHURNED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============ TASKS ============
+
+model Task {
+  id         String    @id @default(cuid())
+  title      String
+  notes      String?
+  status     String    @default("TODO") // TODO | IN_PROGRESS | DONE
+  priority   String    @default("MEDIUM") // LOW | MEDIUM | HIGH
+  dueDate    DateTime?
+  isPrivate  Boolean   @default(false)
+  teamId     String? // null = personal task
+  creatorId  String
+  assigneeId String?
+
+  creator  User  @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId, status])
+  @@index([teamId, status])
+}
+
+// ============ FINANCE ============
+
+model FinanceEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String // INCOME | EXPENSE
+  description String
+  category    String?
+  amount      Float // positive rands
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+}
+
+// ============ WALLET / CREDITS ============
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0) // cents (R1 = 100)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CreditTx {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String // TOPUP | LEAD_REVEAL | BONUS | ADJUSTMENT
+  amount       Int // cents, negative = spend
+  description  String
+  balanceAfter Int
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model TopUp {
+  id          String   @id @default(cuid())
+  userId      String
+  packageId   String
+  amountCents Int // what user pays
+  creditCents Int // credits received
+  status      String   @default("PENDING") // PENDING | PAID | FAILED
+  provider    String   @default("YOCO")
+  reference   String
+  createdAt   DateTime @default(now())
+  paidAt      DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============ AI ============
+
+model AiPlan {
+  id        String   @id @default(cuid())
+  userId    String
+  answers   String // JSON of wizard answers
+  content   String // markdown plan
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AiMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ============ GAMIFICATION ============
+
+model XpEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String // LEAD_ADDED | TASK_DONE | LEAD_REVEALED | DAILY_LOGIN | AI_PLAN ...
+  amount      Int
+  description String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model ChallengeProgress {
+  id     String  @id @default(cuid())
+  userId String
+  day    String // YYYY-MM-DD
+  key    String
+  count  Int     @default(0)
+  done   Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day, key])
+}
+
+// ============ PLATFORM CONFIG (admin) ============
+
+model PlatformConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
