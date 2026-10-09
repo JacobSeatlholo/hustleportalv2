@@ -20,7 +20,7 @@ interface TeamInfo {
 }
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
-const CITIES = ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
+const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
 
 export default function ProfileView() {
   const { session, loadSession, logout } = useHp()
@@ -131,7 +131,7 @@ export default function ProfileView() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" /> Today&apos;s challenges
+                <Trophy className="h-4 w-4 text-brand" /> Today&apos;s challenges
                 <Badge variant="secondary" className="ml-auto">{doneCount}/{challenges.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -142,7 +142,7 @@ export default function ProfileView() {
                     ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                     : <Circle className="h-4 w-4 text-stone-300 shrink-0" />}
                   <span className={c.done ? 'line-through text-muted-foreground' : ''}>{c.label}</span>
-                  <span className="ml-auto text-xs text-amber-700">+{c.xp} XP</span>
+                  <span className="ml-auto text-xs text-brand">+{c.xp} XP</span>
                 </div>
               ))}
             </CardContent>
@@ -173,7 +173,7 @@ export default function ProfileView() {
                         key={i}
                         type="button"
                         onClick={() => setForm({ ...form, industry: i })}
-                        className={`text-xs px-2 py-1 rounded-full border transition ${form.industry === i ? 'bg-amber-400/90 border-amber-500 text-black font-medium' : 'bg-white text-muted-foreground hover:border-amber-300'}`}
+                        className={`text-xs px-2 py-1 rounded-full border transition ${form.industry === i ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
                       >
                         {i}
                       </button>
@@ -188,7 +188,7 @@ export default function ProfileView() {
                         key={c}
                         type="button"
                         onClick={() => setForm({ ...form, city: c })}
-                        className={`text-xs px-2 py-1 rounded-full border transition ${form.city === c ? 'bg-amber-400/90 border-amber-500 text-black font-medium' : 'bg-white text-muted-foreground hover:border-amber-300'}`}
+                        className={`text-xs px-2 py-1 rounded-full border transition ${form.city === c ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
                       >
                         {c}
                       </button>
@@ -234,7 +234,7 @@ export default function ProfileView() {
                     <div className="space-y-1">
                       {t.members.map((m) => (
                         <div key={m.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <div className="h-6 w-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">
+                          <div className="h-6 w-6 rounded-full bg-brand/15 text-brand flex items-center justify-center text-[10px] font-bold">
                             {m.name.slice(0, 1).toUpperCase()}
                           </div>
                           {m.name} <span className="text-xs">({m.email})</span>

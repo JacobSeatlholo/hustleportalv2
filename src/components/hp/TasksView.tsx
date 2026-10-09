@@ -120,7 +120,7 @@ export default function TasksView() {
       </div>
 
       {!session?.team && (
-        <Card className="border-amber-200 bg-amber-50/50">
+        <Card className="border-brand/40 bg-brand/5">
           <CardContent className="p-4 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Want to share tasks with your team?</span> Create a team in Profile → Team, invite teammates by email, then switch to Team tasks.
           </CardContent>
@@ -223,7 +223,7 @@ function TaskRow({ task, onToggle, onRemove, currentUserId }: {
         <button
           onClick={() => onToggle(task)}
           className={`h-5 w-5 rounded-md border-2 flex items-center justify-center shrink-0 transition ${
-            task.status === 'DONE' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 hover:border-amber-500'
+            task.status === 'DONE' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-500 hover:border-brand'
           }`}
           aria-label={task.status === 'DONE' ? 'Mark as not done' : 'Mark as done'}
         >

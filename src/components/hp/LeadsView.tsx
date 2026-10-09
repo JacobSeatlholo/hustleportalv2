@@ -111,7 +111,7 @@ export default function LeadsView() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}><Upload className="h-4 w-4 mr-1" /> Import CSV</Button>
           <Button onClick={() => setShowDiscover(true)} className="bg-sidebar hover:bg-sidebar/90 text-white">
-            <Sparkles className="h-4 w-4 mr-1 text-amber-400" /> Find leads with AI
+            <Sparkles className="h-4 w-4 mr-1 text-brand" /> Find leads with AI
           </Button>
           <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Quick capture</Button>
         </div>
@@ -175,7 +175,7 @@ export default function LeadsView() {
             <div className="divide-y">
               {leads.map((l) => (
                 <button key={l.id} className="w-full text-left p-4 hover:bg-muted/40 flex items-center gap-4" onClick={() => setDetail(l)}>
-                  <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-sm font-bold shrink-0">
+                  <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
                     {l.company.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -206,11 +206,11 @@ function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-xl border bg-white p-3 shadow-sm hover:shadow-md hover:border-amber-300 transition"
+      className="w-full text-left rounded-xl border bg-card p-3 shadow-sm hover:shadow-md hover:border-brand/60 transition"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium leading-snug">{lead.company}</span>
-        {lead.value > 0 && <span className="text-xs font-semibold text-amber-700 shrink-0">{randsPlain(lead.value)}</span>}
+        {lead.value > 0 && <span className="text-xs font-semibold text-brand shrink-0">{randsPlain(lead.value)}</span>}
       </div>
       <div className="mt-1 text-xs text-muted-foreground">
         {lead.city || 'South Africa'}
@@ -264,7 +264,7 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
           <div className="space-y-1.5"><Label>Company *</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Nkosi Brands" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Contact</Label><Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="Sipho Nkosi" /></div>
-            <div className="space-y-1.5"><Label>City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Cape Town" /></div>
+            <div className="space-y-1.5"><Label>City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="e.g. Johannesburg" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
@@ -295,7 +295,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   const { session } = useHp()
   const { toast } = useToast()
   const [definition, setDefinition] = useState('')
-  const [city, setCity] = useState(session?.user.city || 'Cape Town')
+  const [city, setCity] = useState(session?.user.city || 'Johannesburg')
   const [limit, setLimit] = useState('10')
   const [busy, setBusy] = useState(false)
   const [results, setResults] = useState<DiscoverResult[]>([])
@@ -352,7 +352,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-500" /> AI Lead Finder</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> AI Lead Finder</DialogTitle>
           <DialogDescription>
             Describe who you want to sell to — the AI finds matching businesses.
           </DialogDescription>
@@ -363,7 +363,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             <Textarea
               value={definition}
               onChange={(e) => setDefinition(e.target.value)}
-              placeholder="e.g. coffee shops and restaurants in Cape Town that need social media management"
+              placeholder="e.g. coffee shops and restaurants that need social media management"
               rows={2}
             />
           </div>
@@ -373,7 +373,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               <Select value={city} onValueChange={setCity}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['Cape Town', 'Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Anywhere in SA'].map((c) => (
+                  {['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Anywhere in SA'].map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>
@@ -404,7 +404,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span>{results.length} matches found</span>
-                <Badge className={mode === 'LIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}>
+                <Badge className={mode === 'LIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-brand/20 text-brand'}>
                   {mode === 'LIVE' ? 'Explee live data' : 'Demo data'}
                 </Badge>
               </div>
@@ -420,7 +420,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                         else next.delete(r.company)
                         setSelected(next)
                       }}
-                      className="h-4 w-4 accent-amber-500"
+                      className="h-4 w-4 accent-brand"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{r.company}</div>
@@ -485,7 +485,7 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <label className="block rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:border-amber-400 transition">
+          <label className="block rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:border-brand transition">
             <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
             <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
             <p className="text-sm mt-2 font-medium">Choose a CSV file</p>
@@ -495,7 +495,7 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
             rows={5}
-            placeholder={'Company,Contact,Email,Phone,City\nNkosi Brands,Sipho,sipho@nkosi.co.za,074 000 0000,Cape Town'}
+            placeholder={'Company,Contact,Email,Phone,City\nNkosi Brands,Sipho,sipho@nkosi.co.za,074 000 0000,Johannesburg'}
             className="font-mono text-xs"
           />
           <Button onClick={doImport} disabled={busy || !csv.trim()} className="w-full">
@@ -576,15 +576,15 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
         <div className="space-y-4">
           {/* contact block */}
           {lead.unlocked ? (
-            <div className="rounded-xl border bg-white p-3 space-y-2 text-sm">
+            <div className="rounded-xl border bg-card p-3 space-y-2 text-sm">
               <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> {lead.contactName || '—'}</div>
-              <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> <a className="text-amber-700 hover:underline" href={`mailto:${lead.email}`}>{lead.email || '—'}</a></div>
-              <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> <a className="text-amber-700 hover:underline" href={`tel:${lead.phone}`}>{lead.phone || '—'}</a></div>
+              <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> <a className="text-brand hover:underline" href={`mailto:${lead.email}`}>{lead.email || '—'}</a></div>
+              <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> <a className="text-brand hover:underline" href={`tel:${lead.phone}`}>{lead.phone || '—'}</a></div>
               {lead.website && <div className="flex items-center gap-2"><Globe className="h-4 w-4 text-muted-foreground" /> {lead.website}</div>}
             </div>
           ) : (
-            <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-4 text-center space-y-2">
-              <Lock className="h-5 w-5 mx-auto text-amber-600" />
+            <div className="rounded-xl border-2 border-dashed border-brand/40 bg-brand/5 p-4 text-center space-y-2">
+              <Lock className="h-5 w-5 mx-auto text-brand" />
               <p className="text-sm font-medium">Contact details locked</p>
               <p className="text-xs text-muted-foreground">Reveal email &amp; phone using wallet credits. CSV/manual leads are always free.</p>
               <Button onClick={() => { setRevealing(true); onReveal() }} disabled={revealing} size="sm" className="bg-sidebar hover:bg-sidebar/90 text-white">

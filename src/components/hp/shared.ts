@@ -89,7 +89,7 @@ export interface TopUpPack {
 }
 
 export const STAGES = [
-  { key: 'NEW', label: 'New', color: 'bg-amber-400' },
+  { key: 'NEW', label: 'New', color: 'bg-brand' },
   { key: 'CONTACTED', label: 'Contacted', color: 'bg-yellow-500' },
   { key: 'QUALIFIED', label: 'Qualified', color: 'bg-orange-500' },
   { key: 'QUOTE_SENT', label: 'Quote Sent', color: 'bg-stone-600' },

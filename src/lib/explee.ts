@@ -90,7 +90,6 @@ function normalizeExplee(c: Record<string, unknown>, i: number): ExpleeLead | nu
 
 const STREETS = ['Vilakazi', 'Khumalo', 'Mlangeni', 'Dlamini', 'Sisulu', 'Mbeki', 'Tambo', 'Luthuli']
 const AREAS: Record<string, string[]> = {
-  'Cape Town': ['Langa', 'Khayelitsha', 'Mitchells Plain', 'Salt River', 'Woodstock', 'Bellville'],
   Johannesburg: ['Soweto', 'Alexandra', 'Braamfontein', 'Randburg', 'Midrand', 'Sandton'],
   Durban: ['Umlazi', 'Chatsworth', 'Pinetown', 'Umhlanga', 'Phoenix'],
   Pretoria: ['Mamelodi', 'Soshanguve', 'Hatfield', 'Centurion'],

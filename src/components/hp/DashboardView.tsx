@@ -111,8 +111,8 @@ export default function DashboardView() {
     <div className="space-y-4">
       {/* Hero + AI command bar */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 md:p-8 relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-amber-400/10 blur-2xl" />
-        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-brand/10 blur-2xl" />
+        <div className="flex items-center gap-2 text-brand text-sm font-medium">
           <Sparkles className="h-4 w-4" /> HustlePortal Business OS
         </div>
         <h1 className="font-display text-4xl md:text-5xl mt-2">
@@ -123,7 +123,7 @@ export default function DashboardView() {
         </p>
 
         <div className="mt-5 flex items-center gap-2 bg-white/10 rounded-full p-1.5 pl-4 max-w-2xl">
-          <BrainCircuit className="h-4 w-4 text-amber-400 shrink-0" />
+          <BrainCircuit className="h-4 w-4 text-brand shrink-0" />
           <input
             value={aiQuery}
             onChange={(e) => setAiQuery(e.target.value)}
@@ -162,7 +162,7 @@ export default function DashboardView() {
         <Card className="cursor-pointer hover:shadow-md transition group" onClick={() => setView('leads')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-100 p-2"><Target className="h-5 w-5 text-amber-700" /></div>
+              <div className="rounded-lg bg-brand/15 p-2"><Target className="h-5 w-5 text-brand" /></div>
               <div>
                 <div className="font-medium">Leads &amp; Pipeline</div>
                 <div className="text-xs text-muted-foreground">{k.pipelineCount} active · {randsPlain(k.pipelineValue)}</div>
@@ -174,7 +174,7 @@ export default function DashboardView() {
         <Card className="cursor-pointer hover:shadow-md transition group" onClick={() => setView('tasks')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-100 p-2"><CheckSquare className="h-5 w-5 text-amber-700" /></div>
+              <div className="rounded-lg bg-brand/15 p-2"><CheckSquare className="h-5 w-5 text-brand" /></div>
               <div>
                 <div className="font-medium">Tasks</div>
                 <div className="text-xs text-muted-foreground">{k.openTasks} open{k.overdueTasks ? ` · ${k.overdueTasks} overdue` : ''}</div>
@@ -186,7 +186,7 @@ export default function DashboardView() {
         <Card className="cursor-pointer hover:shadow-md transition group" onClick={() => setView('wallet')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-100 p-2"><Wallet className="h-5 w-5 text-amber-700" /></div>
+              <div className="rounded-lg bg-brand/15 p-2"><Wallet className="h-5 w-5 text-brand" /></div>
               <div>
                 <div className="font-medium">Credit Wallet</div>
                 <div className="text-xs text-muted-foreground">{rands(k.creditBalance)} available</div>
@@ -222,9 +222,9 @@ export default function DashboardView() {
             <div className="flex items-end gap-2 h-36">
               {data.week.map((w, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full rounded-t-md bg-amber-400/30 relative" style={{ height: `${Math.max((w.count / maxWeek) * 110, 4)}px` }}>
+                  <div className="w-full rounded-t-md bg-brand/30 relative" style={{ height: `${Math.max((w.count / maxWeek) * 110, 4)}px` }}>
                     {w.count > 0 && (
-                      <div className="absolute inset-x-0 bottom-0 rounded-t-md bg-amber-500" style={{ height: `${(w.count / maxWeek) * 110}px` }} />
+                      <div className="absolute inset-x-0 bottom-0 rounded-t-md bg-brand" style={{ height: `${(w.count / maxWeek) * 110}px` }} />
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground">{w.day}</span>
@@ -244,8 +244,8 @@ export default function DashboardView() {
             <OverviewRow label="Won this month" value={k.wonCount} pct={Math.min(100, k.wonCount * 12)} />
             <div className="pt-2 border-t">
               <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2 text-muted-foreground"><Flame className="h-4 w-4 text-amber-500" /> Daily challenges</span>
-                <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">{doneChallenges}/{session?.challenges.length} done</Badge>
+                <span className="flex items-center gap-2 text-muted-foreground"><Flame className="h-4 w-4 text-brand" /> Daily challenges</span>
+                <Badge className="bg-brand/15 text-brand hover:bg-brand/15">{doneChallenges}/{session?.challenges.length} done</Badge>
               </div>
               <Progress value={(doneChallenges / Math.max(session?.challenges.length || 1, 1)) * 100} className="mt-2 h-2" />
             </div>
@@ -259,7 +259,7 @@ export default function DashboardView() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
               New leads
-              <button className="text-xs text-amber-600 hover:underline" onClick={() => setView('leads')}>Open →</button>
+              <button className="text-xs text-brand hover:underline" onClick={() => setView('leads')}>Open →</button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -271,7 +271,7 @@ export default function DashboardView() {
             ) : (
               newLeads.map((l) => (
                 <div key={l.id} className="flex items-center gap-3 py-1.5">
-                  <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-brand/15 text-brand flex items-center justify-center text-xs font-bold shrink-0">
                     {l.company.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -289,7 +289,7 @@ export default function DashboardView() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
               Priority tasks
-              <button className="text-xs text-amber-600 hover:underline" onClick={() => setView('tasks')}>Open →</button>
+              <button className="text-xs text-brand hover:underline" onClick={() => setView('tasks')}>Open →</button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -322,8 +322,8 @@ export default function DashboardView() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
-              <span className="flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" /> XP feed</span>
-              <button className="text-xs text-amber-600 hover:underline" onClick={() => setView('profile')}>Level →</button>
+              <span className="flex items-center gap-2"><Trophy className="h-4 w-4 text-brand" /> XP feed</span>
+              <button className="text-xs text-brand hover:underline" onClick={() => setView('profile')}>Level →</button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -333,7 +333,7 @@ export default function DashboardView() {
               data.recentXp.map((e) => (
                 <div key={e.id} className="flex items-center justify-between text-sm py-1">
                   <span className="text-muted-foreground truncate pr-2">{e.description || e.type.replace(/_/g, ' ').toLowerCase()}</span>
-                  <Badge variant="outline" className="text-amber-700 border-amber-300 shrink-0">+{e.amount} XP</Badge>
+                  <Badge variant="outline" className="text-brand border-brand/50 shrink-0">+{e.amount} XP</Badge>
                 </div>
               ))
             )}
@@ -346,7 +346,7 @@ export default function DashboardView() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
             Revenue — last 6 months
-            <button className="text-xs text-amber-600 hover:underline" onClick={() => setView('finance')}>Log income →</button>
+            <button className="text-xs text-brand hover:underline" onClick={() => setView('finance')}>Log income →</button>
           </CardTitle>
         </CardHeader>
         <CardContent>

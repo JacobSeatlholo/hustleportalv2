@@ -151,7 +151,7 @@ export default function AdminView() {
           <div className="divide-y max-h-[50vh] overflow-y-auto hp-scroll">
             {data.users.map((u) => (
               <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-sm font-bold shrink-0">
+                <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
                   {u.name.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -176,7 +176,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <Card>
       <CardContent className="p-4 flex items-center gap-3">
-        <div className="rounded-lg bg-amber-100 p-2 text-amber-700">{icon}</div>
+        <div className="rounded-lg bg-brand/15 p-2 text-brand">{icon}</div>
         <div>
           <div className="text-xs text-muted-foreground">{label}</div>
           <div className="font-display text-2xl">{value}</div>

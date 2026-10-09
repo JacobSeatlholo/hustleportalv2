@@ -173,12 +173,12 @@ export default function AiView() {
           {!activePlan && !generating && (
             <Card>
               <CardContent className="p-6 md:p-8">
-                <div className="flex items-center gap-2 text-amber-600 text-sm font-medium">
+                <div className="flex items-center gap-2 text-brand text-sm font-medium">
                   <Sparkles className="h-4 w-4" /> Free · about 60 seconds
                 </div>
                 <div className="mt-2 flex gap-1.5">
                   {QUESTIONS.map((_, i) => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-amber-500' : 'bg-muted'}`} />
+                    <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-muted'}`} />
                   ))}
                 </div>
                 <div className="mt-6">
@@ -223,7 +223,7 @@ export default function AiView() {
           {generating && (
             <Card>
               <CardContent className="p-10 text-center space-y-3">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-500" />
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" />
                 <p className="font-medium">Writing your plan…</p>
                 <Progress value={80} className="max-w-xs mx-auto" />
                 <p className="text-xs text-muted-foreground">Grounded in SA market reality — this takes up to a minute.</p>
@@ -236,7 +236,7 @@ export default function AiView() {
               <Card className="lg:col-span-3">
                 <CardContent className="p-6 md:p-8">
                   <div className="flex items-center justify-between mb-4">
-                    <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">AI Business Plan</Badge>
+                    <Badge className="bg-brand/15 text-brand hover:bg-brand/15">AI Business Plan</Badge>
                     <span className="text-xs text-muted-foreground">
                       {new Date(activePlan.createdAt).toLocaleDateString('en-ZA', { dateStyle: 'medium' })}
                     </span>
@@ -263,7 +263,7 @@ export default function AiView() {
                           <button
                             key={p.id}
                             onClick={() => setActivePlan(p)}
-                            className="w-full text-left text-xs rounded-lg border p-2 hover:border-amber-300 transition"
+                            className="w-full text-left text-xs rounded-lg border p-2 hover:border-brand/60 transition"
                           >
                             {new Date(p.createdAt).toLocaleDateString('en-ZA', { dateStyle: 'medium' })}
                           </button>
@@ -284,7 +284,7 @@ export default function AiView() {
               <div className="flex-1 overflow-y-auto hp-scroll p-4 space-y-3">
                 {messages.length === 0 && (
                   <div className="text-center py-10 space-y-2">
-                    <BrainCircuit className="h-10 w-10 mx-auto text-amber-400" />
+                    <BrainCircuit className="h-10 w-10 mx-auto text-brand" />
                     <p className="font-medium">Your AI Co-Founder knows your numbers</p>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                       It can see your pipeline, tasks, finance and profile. Ask about pricing, growth, proposals or what to focus on today.

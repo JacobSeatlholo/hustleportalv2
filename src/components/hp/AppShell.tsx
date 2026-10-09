@@ -106,25 +106,25 @@ export default function AppShell() {
       {/* Main */}
       <div className="flex-1 md:ml-60 min-w-0 flex flex-col">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 bg-white/70 backdrop-blur border-b">
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b">
           <div className="flex items-center gap-3 px-4 py-3">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="h-5 w-5" />
             </Button>
             <div className="font-display text-lg md:hidden">
-              HUSTLE<span className="text-amber-500">PORTAL</span>
+              HUSTLE<span className="text-brand">PORTAL</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setView('wallet')}
-                className="rounded-full border bg-white px-3 py-1.5 text-xs font-medium hover:border-amber-400 transition flex items-center gap-1.5"
+                className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
               >
-                <Wallet className="h-3.5 w-3.5 text-amber-600" />
+                <Wallet className="h-3.5 w-3.5 text-brand" />
                 {rands(session.wallet.balance)}
               </button>
               <button
                 onClick={() => setView('profile')}
-                className="rounded-full border bg-white px-3 py-1.5 text-xs font-medium hover:border-amber-400 transition flex items-center gap-1.5"
+                className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
                 title={`${session.level.name} · ${session.user.xp} XP`}
               >
                 <span>{session.level.icon}</span>
@@ -139,10 +139,10 @@ export default function AppShell() {
           {content}
         </main>
 
-        <footer className="mt-auto border-t bg-white/60 backdrop-blur">
+        <footer className="mt-auto border-t bg-background/60 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground flex flex-wrap justify-between gap-2">
-            <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD · CAPE TOWN</span>
-            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-amber-500" /> HustlePortal™ — your business, levelled up</span>
+            <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
+            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — your business, levelled up</span>
           </div>
         </footer>
       </div>
@@ -166,7 +166,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
     <>
       <div className="p-5">
         <div className="font-display text-2xl tracking-wide text-white">
-          HUSTLE<span className="text-amber-400">PORTAL</span>
+          HUSTLE<span className="text-brand">PORTAL</span>
           <span className="text-[9px] align-super">™</span>
         </div>
         <p className="text-[10px] text-white/40 mt-0.5 tracking-widest">BUSINESS OS</p>
@@ -179,7 +179,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
             onClick={() => setView(n.key)}
             className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               view === n.key
-                ? 'bg-amber-400 text-black'
+                ? 'bg-brand text-black'
                 : 'text-white/70 hover:bg-white/10 hover:text-white'
             }`}
           >
@@ -196,7 +196,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
         </div>
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
           <div
-            className="h-full bg-amber-400 rounded-full transition-all"
+            className="h-full bg-brand rounded-full transition-all"
             style={{ width: `${totalChallenges ? (doneChallenges / totalChallenges) * 100 : 0}%` }}
           />
         </div>
@@ -204,7 +204,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
 
       <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-3 px-1 py-1">
-          <div className="h-9 w-9 rounded-full bg-amber-400 text-black flex items-center justify-center text-sm font-bold shrink-0">
+          <div className="h-9 w-9 rounded-full bg-brand text-black flex items-center justify-center text-sm font-bold shrink-0">
             {session.user.name.slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">

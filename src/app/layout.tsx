@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HustlePortal™ — Business OS for South African Entrepreneurs",
   description:
-    "Leads, clients, tasks and finance in one place. Source leads with AI, reveal contacts with prepaid credits, and level up your hustle. Built in Cape Town for SA.",
+    "Leads, clients, tasks and finance in one place. Source leads with AI, reveal contacts with prepaid credits, and level up your hustle. Built by Business Hustle for SA.",
   keywords: [
     "HustlePortal", "Business Hustle", "leads South Africa", "CRM for entrepreneurs",
     "AI business plan", "SME tools South Africa", "business OS", "township economy",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1a1812",
+  themeColor: "#0a0a0b",
 };
 
 export default function RootLayout({

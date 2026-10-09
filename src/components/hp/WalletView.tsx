@@ -63,7 +63,7 @@ export default function WalletView() {
       {/* Balance hero */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="rounded-xl bg-amber-400/15 p-3"><Wallet className="h-7 w-7 text-amber-400" /></div>
+          <div className="rounded-xl bg-brand/15 p-3"><Wallet className="h-7 w-7 text-brand" /></div>
           <div>
             <div className="text-sm text-sidebar-foreground/60">Available credits</div>
             <div className="font-display text-4xl">{rands(data?.wallet.balance ?? session?.wallet.balance ?? 0)}</div>
@@ -76,13 +76,13 @@ export default function WalletView() {
 
       {/* Packs */}
       <div>
-        <h2 className="font-medium mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-500" /> Top-up packs</h2>
+        <h2 className="font-medium mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> Top-up packs</h2>
         <div className="grid md:grid-cols-3 gap-3">
           {!data && [...Array(3)].map((_, i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}
           {data?.packs.map((p, i) => (
-            <Card key={p.id} className={`relative ${i === 1 ? 'border-amber-400 shadow-md shadow-amber-100' : ''}`}>
+            <Card key={p.id} className={`relative ${i === 1 ? 'border-brand shadow-md shadow-brand/20' : ''}`}>
               {i === 1 && (
-                <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-400 text-black hover:bg-amber-400">
+                <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand text-black hover:bg-brand">
                   Most popular
                 </Badge>
               )}
@@ -126,21 +126,21 @@ export default function WalletView() {
           )}
           {data?.txs.map((t) => (
             <div key={t.id} className="flex items-center gap-3 py-2.5">
-              <div className={`rounded-lg p-2 ${t.amount >= 0 ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+              <div className={`rounded-lg p-2 ${t.amount >= 0 ? 'bg-emerald-500/15' : 'bg-brand/15'}`}>
                 {t.amount >= 0
-                  ? <ArrowDownLeft className="h-4 w-4 text-emerald-700" />
-                  : <ArrowUpRight className="h-4 w-4 text-amber-700" />}
+                  ? <ArrowDownLeft className="h-4 w-4 text-emerald-400" />
+                  : <ArrowUpRight className="h-4 w-4 text-brand" />}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate flex items-center gap-2">
                   {t.description}
-                  {t.type === 'BONUS' && <Gift className="h-3.5 w-3.5 text-amber-500" />}
+                  {t.type === 'BONUS' && <Gift className="h-3.5 w-3.5 text-brand" />}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {new Date(t.createdAt).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })} · balance {rands(t.balanceAfter)}
                 </div>
               </div>
-              <span className={`text-sm font-semibold shrink-0 ${t.amount >= 0 ? 'text-emerald-600' : 'text-amber-700'}`}>
+              <span className={`text-sm font-semibold shrink-0 ${t.amount >= 0 ? 'text-emerald-400' : 'text-brand'}`}>
                 {t.amount >= 0 ? '+' : ''}{rands(t.amount)}
               </span>
             </div>

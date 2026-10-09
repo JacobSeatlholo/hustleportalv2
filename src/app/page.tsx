@@ -19,10 +19,10 @@ export default function Home() {
       <div className="min-h-screen hp-gradient-bg flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="font-display text-3xl">
-            HUSTLE<span className="text-amber-500">PORTAL</span>
+            HUSTLE<span className="text-brand">PORTAL</span>
             <span className="text-[10px] align-super">™</span>
           </div>
-          <Loader2 className="h-5 w-5 animate-spin mx-auto text-amber-500" />
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-brand" />
         </div>
       </div>
     )

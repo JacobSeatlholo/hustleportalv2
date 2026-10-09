@@ -9,11 +9,11 @@ import { useToast } from '@/hooks/use-toast'
 import { api } from './shared'
 import { useHp } from './store'
 import {
-  Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, MapPin, Star, Check,
+  Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
 } from 'lucide-react'
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
-const CITIES = ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
+const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
 
 export default function Landing() {
   const { loadSession } = useHp()
@@ -25,7 +25,7 @@ export default function Landing() {
   const [name, setName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [industry, setIndustry] = useState('')
-  const [city, setCity] = useState('Cape Town')
+  const [city, setCity] = useState('Johannesburg')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
@@ -55,7 +55,7 @@ export default function Landing() {
     <div className="min-h-screen hp-gradient-bg flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
         <div className="font-display text-2xl tracking-wide">
-          HUSTLE<span className="text-amber-500">PORTAL</span>
+          HUSTLE<span className="text-brand">PORTAL</span>
           <span className="text-[10px] align-super">™</span>
         </div>
         <a
@@ -72,12 +72,12 @@ export default function Landing() {
         {/* Left: pitch */}
         <div className="space-y-8">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-amber-100 text-amber-900 px-3 py-1 text-xs font-medium">
-              <MapPin className="h-3 w-3" /> Built in Cape Town · for South African hustlers
+            <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.22em] uppercase text-brand">
+              <Zap className="h-3.5 w-3.5" /> Built by Business Hustle
             </div>
-            <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-4">
+            <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-3">
               Your business.<br />
-              <span className="text-amber-500">Levelled up.</span>
+              <span className="text-brand">Levelled up.</span>
             </h1>
             <p className="text-muted-foreground mt-4 text-lg">
               Leads, clients, tasks and finance in one place. Source leads with AI,
@@ -94,9 +94,9 @@ export default function Landing() {
               { icon: Trophy, title: 'Daily challenges', desc: 'Earn XP, level up your hustle' },
               { icon: Zap, title: 'Your data only', desc: 'Your account, your pipeline, your numbers' },
             ].map((f) => (
-              <div key={f.title} className="flex gap-3 items-start rounded-xl border bg-white/70 backdrop-blur p-3">
-                <div className="rounded-lg bg-amber-100 p-2 shrink-0">
-                  <f.icon className="h-4 w-4 text-amber-700" />
+              <div key={f.title} className="flex gap-3 items-start rounded-xl border border-white/10 bg-card/70 backdrop-blur p-3">
+                <div className="rounded-lg bg-brand/15 p-2 shrink-0">
+                  <f.icon className="h-4 w-4 text-brand" />
                 </div>
                 <div>
                   <div className="font-medium text-sm">{f.title}</div>
@@ -107,14 +107,14 @@ export default function Landing() {
           </div>
 
           <div className="flex flex-wrap gap-6 text-sm">
-            <div className="flex items-center gap-2"><Star className="h-4 w-4 text-amber-500" /> Cape Town born &amp; bred</div>
+            <div className="flex items-center gap-2"><Star className="h-4 w-4 text-brand" /> Proudly South African</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Free starter credits</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Yoco secure payments</div>
           </div>
         </div>
 
         {/* Right: auth card */}
-        <Card className="border-0 shadow-xl shadow-amber-100">
+        <Card className="border-white/10 shadow-2xl shadow-black/60">
           <CardContent className="p-6 md:p-8">
             <div className="flex gap-2 mb-6 p-1 rounded-lg bg-muted w-fit">
               <button
@@ -153,7 +153,7 @@ export default function Landing() {
                             key={i}
                             type="button"
                             onClick={() => setIndustry(i)}
-                            className={`text-xs px-2 py-1 rounded-full border transition ${industry === i ? 'bg-amber-400/90 border-amber-500 text-black font-medium' : 'bg-white text-muted-foreground hover:border-amber-300'}`}
+                            className={`text-xs px-2 py-1 rounded-full border transition ${industry === i ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
                           >
                             {i}
                           </button>
@@ -168,7 +168,7 @@ export default function Landing() {
                             key={c}
                             type="button"
                             onClick={() => setCity(c)}
-                            className={`text-xs px-2 py-1 rounded-full border transition ${city === c ? 'bg-amber-400/90 border-amber-500 text-black font-medium' : 'bg-white text-muted-foreground hover:border-amber-300'}`}
+                            className={`text-xs px-2 py-1 rounded-full border transition ${city === c ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
                           >
                             {c}
                           </button>
@@ -209,9 +209,9 @@ export default function Landing() {
         </Card>
       </main>
 
-      <footer className="border-t bg-white/60 backdrop-blur">
+      <footer className="border-t bg-background/60 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-muted-foreground flex flex-wrap justify-between gap-2">
-          <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD · CAPE TOWN</span>
+          <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
           <span>© {new Date().getFullYear()} HustlePortal™</span>
         </div>
       </footer>
