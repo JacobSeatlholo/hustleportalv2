@@ -9,6 +9,8 @@ export type ViewKey =
   | 'tasks'
   | 'finance'
   | 'ai'
+  | 'store'
+  | 'resources'
   | 'wallet'
   | 'profile'
   | 'admin'

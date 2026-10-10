@@ -35,6 +35,8 @@ export const CHALLENGES = [
   { key: 'log_expense', label: 'Log a finance entry', xp: 20, target: 1 },
   { key: 'ai_chat', label: 'Ask the AI Advisor something', xp: 25, target: 1 },
   { key: 'move_stage', label: 'Move a lead forward in the pipeline', xp: 35, target: 1 },
+  { key: 'browse_store', label: 'Browse the Store', xp: 15, target: 1 },
+  { key: 'explore_resources', label: 'Explore the Resource Hub', xp: 20, target: 1 },
 ]
 
 function today() {

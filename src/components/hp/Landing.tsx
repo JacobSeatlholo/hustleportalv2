@@ -68,7 +68,9 @@ export default function Landing() {
         </a>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 pb-16 grid lg:grid-cols-2 gap-10 items-center">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 pb-16 space-y-16">
+      {/* ===== Hero: pitch + auth ===== */}
+      <div className="grid lg:grid-cols-2 gap-10 items-center">
         {/* Left: pitch */}
         <div className="space-y-8">
           <div>
@@ -207,6 +209,66 @@ export default function Landing() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* ===== Our Solutions (Store highlights, like hustleportal.online) ===== */}
+      <section id="solutions" className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Our Solutions</div>
+            <h2 className="font-display text-3xl mt-1">Everything your hustle needs</h2>
+            <p className="text-sm text-muted-foreground mt-1">Real products &amp; services from Business Hustle — pay securely with Yoco, or order on WhatsApp.</p>
+          </div>
+          <a
+            href="https://app.businesshustle.co.za/shop"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-brand hover:underline inline-flex items-center gap-1"
+          >
+            Browse the full store <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              emoji: '🌐', title: 'HustlePortal™', price: 'R1,850/yr',
+              desc: 'Professional landing page for your business — live in days, not months.',
+              url: 'https://app.businesshustle.co.za/product/hustle-portal/'
+            },
+            {
+              emoji: '📖', title: 'Hustle Basics eBook', price: 'R270',
+              desc: '🔥 On sale (was R399) — the essential entrepreneur toolkit.',
+              url: 'https://app.businesshustle.co.za/product/hustle-basics-ebook/'
+            },
+            {
+              emoji: '💻', title: 'Landing Page', price: 'R1,850',
+              desc: 'Professional web presence, mobile-friendly and SEO-ready.',
+              url: 'https://app.businesshustle.co.za/product/landing-page/'
+            },
+            {
+              emoji: '🏘️', title: 'BH Local', price: 'From R960',
+              desc: 'Digitise your neighbourhood — get featured on KloofStreet.online.',
+              url: 'https://app.businesshustle.co.za/product/kloof-street-starter-feature-package/'
+            },
+          ].map((s) => (
+            <a
+              key={s.title}
+              href={s.url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-4 hover:border-brand/60 transition group"
+            >
+              <div className="text-2xl">{s.emoji}</div>
+              <div className="font-semibold text-sm mt-2 group-hover:text-brand transition">{s.title}</div>
+              <div className="font-display text-brand text-lg mt-0.5">{s.price}</div>
+              <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{s.desc}</div>
+            </a>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Inside the app you&apos;ll find the full Store — 15 packages from R249 to R21,000 — plus a Resource Hub of 50+ free tools &amp; guides.
+        </p>
+      </section>
       </main>
 
       <footer className="border-t bg-background/60 backdrop-blur">

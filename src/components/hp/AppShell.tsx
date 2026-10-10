@@ -13,9 +13,11 @@ import AiView from './AiView'
 import FinanceView from './FinanceView'
 import ProfileView from './ProfileView'
 import AdminView from './AdminView'
+import StoreView from './StoreView'
+import ResourcesView from './ResourcesView'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
-  UserCog, ShieldCheck, Menu, X, Sparkles, LogOut,
+  UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen,
 } from 'lucide-react'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
@@ -24,6 +26,8 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'tasks', label: 'Tasks', icon: <ListTodo className="h-4 w-4" /> },
   { key: 'finance', label: 'Finance', icon: <TrendingUp className="h-4 w-4" /> },
   { key: 'ai', label: 'AI Co-Founder', icon: <BrainCircuit className="h-4 w-4" /> },
+  { key: 'store', label: 'Store', icon: <ShoppingCart className="h-4 w-4" /> },
+  { key: 'resources', label: 'Resources', icon: <BookOpen className="h-4 w-4" /> },
   { key: 'wallet', label: 'Wallet', icon: <Wallet className="h-4 w-4" /> },
   { key: 'profile', label: 'Profile & Team', icon: <UserCog className="h-4 w-4" /> },
 ]
@@ -62,6 +66,8 @@ export default function AppShell() {
       case 'tasks': return <TasksView />
       case 'finance': return <FinanceView />
       case 'ai': return <AiView />
+      case 'store': return <StoreView />
+      case 'resources': return <ResourcesView />
       case 'wallet': return <WalletView />
       case 'profile': return <ProfileView />
       case 'admin': return <AdminView />
