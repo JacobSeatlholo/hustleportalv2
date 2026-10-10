@@ -185,6 +185,7 @@ model TopUp {
   status      String   @default("PENDING") // PENDING | PAID | FAILED
   provider    String   @default("YOCO")
   reference   String
+  providerRef String? // Yoco checkout/payment id for reconciliation
   createdAt   DateTime @default(now())
   paidAt      DateTime?
 

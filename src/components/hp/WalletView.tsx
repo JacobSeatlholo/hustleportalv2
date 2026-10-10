@@ -21,6 +21,7 @@ export default function WalletView() {
   const { toast } = useToast()
   const [data, setData] = useState<WalletData | null>(null)
   const [buying, setBuying] = useState<string | null>(null)
+  const [returnNote, setReturnNote] = useState<string | null>(null)
 
   async function load() {
     try {
@@ -32,13 +33,35 @@ export default function WalletView() {
 
   useEffect(() => {
     load()
-     
+    // Return-from-Yoco handling: credits land via webhook a few seconds after payment.
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('topup')
+    if (t) {
+      if (t === 'success') {
+        setReturnNote('Payment received — your credits are being added to your wallet right now.')
+        setTimeout(load, 4000)
+        setTimeout(load, 9000)
+      } else if (t === 'cancelled') {
+        setReturnNote('Checkout cancelled — nothing was charged.')
+      } else if (t === 'failed') {
+        setReturnNote('Payment did not go through. No charge was made — please try again.')
+      }
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   async function topUp(pack: TopUpPack) {
     setBuying(pack.id)
     try {
-      await api('/api/wallet/topup', { method: 'POST', body: JSON.stringify({ packageId: pack.id }) })
+      const res = await api<{ ok: boolean; redirectUrl?: string; sandbox?: boolean }>(
+        '/api/wallet/topup',
+        { method: 'POST', body: JSON.stringify({ packageId: pack.id }) }
+      )
+      if (res.redirectUrl) {
+        // Live Yoco Checkout — hand off to the hosted payment page.
+        window.location.href = res.redirectUrl
+        return
+      }
       toast({
         title: 'Top-up successful',
         description: `${rands(pack.creditCents)} in credits added to your wallet.`,
@@ -59,6 +82,14 @@ export default function WalletView() {
         <h1 className="font-display text-3xl">Credit Wallet</h1>
         <p className="text-sm text-muted-foreground">Top up once, reveal leads as you go. Credits never expire.</p>
       </div>
+
+      {returnNote && (
+        <div className="rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-brand shrink-0" />
+          <span>{returnNote}</span>
+          <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setReturnNote(null)}>✕</button>
+        </div>
+      )}
 
       {/* Balance hero */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 flex flex-wrap items-center justify-between gap-4">
@@ -109,7 +140,7 @@ export default function WalletView() {
         </div>
         <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-          Paid securely with Yoco (card, Apple Pay, Google Pay). Sandbox mode confirms instantly for demo — live Yoco Checkout wires in with production keys.
+          Paid securely with Yoco (card, Apple Pay, Google Pay). Credits land in your wallet the moment your payment clears.
         </p>
       </div>
 

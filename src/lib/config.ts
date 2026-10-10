@@ -6,6 +6,7 @@ export const CONFIG_KEYS = {
   FREE_LEADS: 'free_leads', // free reveals on signup
   TOPUP_PACKS: 'topup_packs', // JSON [{id,name,amountCents,creditCents,bonus}]
   MODE: 'mode', // DEMO | LIVE
+  YOCO_WEBHOOK_SECRET: 'yoco_webhook_secret', // whsec_... from registering the checkout webhook
 } as const
 
 const DEFAULTS: Record<string, string> = {
