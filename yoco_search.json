@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://support.bookinglayer.com",
+    "name": "How to connect your Yoco account",
+    "snippet": "May 21, 2026 — In your Yoco Business Portal go to Sell online > Payment gateways. 4. Copy the Live Public Key and Live Secret Key and paste them in Yoco's ... Read more",
+    "host_name": "support.bookinglayer.com",
+    "rank": 0,
+    "date": "May 21, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.yoco.com",
+    "name": "Secure Online Payments for SA Businesses",
+    "snippet": "Log into your Yoco Portal and go to 'Online payments' then 'Payment gateway'. Here you'll find your Test and Live API keys to link with your website.",
+    "host_name": "www.yoco.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apis.io",
+    "name": "Yoco Payments Api",
+    "snippet": "Checkout API (secret-key Bearer auth) Obtain keys in the Yoco app under Sales -> Payment Gateway . Use server-side only.'",
+    "host_name": "apis.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dlthub.com",
+    "name": "Yoco Python API Docs",
+    "snippet": "Aug 26, 2026 — To obtain your Yoco API credentials, log in to your Yoco Business Portal (web or mobile app). Navigate to the Sales section in the sidebar, then ... Read more",
+    "host_name": "dlthub.com",
+    "rank": 3,
+    "date": "Aug 26, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://workdo.io",
+    "name": "Yoco Payment Gateway Add-On – Integration Guide",
+    "snippet": "Visit the Yoco Developer Portal : https://developer.yoco.com/online/resources/integration-keys/ Log in or create a Yoco account and retrieve your credentials. Read more",
+    "host_name": "workdo.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apitracker.io",
+    "name": "Yoco API - Developer docs, APIs, SDKs, and auth.",
+    "snippet": "Yoco API specs , API docs, OpenAPI support, SDKs, GraphQL, developer docs, CLI, IDE plugins, API pricing, developer experience, authentication, and API ...",
+    "host_name": "apitracker.io",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]
