@@ -37,6 +37,8 @@ export const CHALLENGES = [
   { key: 'move_stage', label: 'Move a lead forward in the pipeline', xp: 35, target: 1 },
   { key: 'browse_store', label: 'Browse the Store', xp: 15, target: 1 },
   { key: 'explore_resources', label: 'Explore the Resource Hub', xp: 20, target: 1 },
+  { key: 'add_client', label: 'Add a client to your CRM', xp: 25, target: 1 },
+  { key: 'explore_services', label: 'Explore Our Services', xp: 15, target: 1 },
 ]
 
 function today() {

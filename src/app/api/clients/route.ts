@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { bumpChallenge } from '@/lib/gamification'
 
 // GET/POST clients
 export async function GET() {
@@ -31,5 +32,6 @@ export async function POST(req: NextRequest) {
       monthlyValue: Number(monthlyValue) || 0,
     },
   })
+  await bumpChallenge(userId, 'add_client')
   return NextResponse.json({ client })
 }

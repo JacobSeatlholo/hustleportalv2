@@ -15,18 +15,22 @@ import ProfileView from './ProfileView'
 import AdminView from './AdminView'
 import StoreView from './StoreView'
 import ResourcesView from './ResourcesView'
+import ClientsView from './ClientsView'
+import ServicesView from './ServicesView'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
-  UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen,
+  UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
 } from 'lucide-react'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'leads', label: 'Leads & CRM', icon: <Target className="h-4 w-4" /> },
+  { key: 'clients', label: 'Clients', icon: <Users className="h-4 w-4" /> },
   { key: 'tasks', label: 'Tasks', icon: <ListTodo className="h-4 w-4" /> },
   { key: 'finance', label: 'Finance', icon: <TrendingUp className="h-4 w-4" /> },
   { key: 'ai', label: 'AI Co-Founder', icon: <BrainCircuit className="h-4 w-4" /> },
   { key: 'store', label: 'Store', icon: <ShoppingCart className="h-4 w-4" /> },
+  { key: 'services', label: 'Services', icon: <Briefcase className="h-4 w-4" /> },
   { key: 'resources', label: 'Resources', icon: <BookOpen className="h-4 w-4" /> },
   { key: 'wallet', label: 'Wallet', icon: <Wallet className="h-4 w-4" /> },
   { key: 'profile', label: 'Profile & Team', icon: <UserCog className="h-4 w-4" /> },
@@ -63,10 +67,12 @@ export default function AppShell() {
     switch (view) {
       case 'dashboard': return <DashboardView />
       case 'leads': return <LeadsView />
+      case 'clients': return <ClientsView />
       case 'tasks': return <TasksView />
       case 'finance': return <FinanceView />
       case 'ai': return <AiView />
       case 'store': return <StoreView />
+      case 'services': return <ServicesView />
       case 'resources': return <ResourcesView />
       case 'wallet': return <WalletView />
       case 'profile': return <ProfileView />

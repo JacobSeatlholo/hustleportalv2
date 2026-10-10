@@ -3,7 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { bumpChallenge, todaysChallenges } from '@/lib/gamification'
 
 // keys that may be bumped straight from the client (view visits)
-const CLIENT_BUMPABLE = new Set(['browse_store', 'explore_resources'])
+const CLIENT_BUMPABLE = new Set(['browse_store', 'explore_resources', 'explore_services'])
 
 export async function GET() {
   const userId = await getUserId()

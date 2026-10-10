@@ -10,7 +10,18 @@ import { api } from './shared'
 import { useHp } from './store'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
+  Laptop, TrendingUp, Camera, Handshake, Brain,
 } from 'lucide-react'
+import { BH_SERVICES } from '@/data/services'
+
+const SERVICE_ICONS: Record<string, React.ReactNode> = {
+  target: <Target className="h-5 w-5" />,
+  laptop: <Laptop className="h-5 w-5" />,
+  'trending-up': <TrendingUp className="h-5 w-5" />,
+  camera: <Camera className="h-5 w-5" />,
+  handshake: <Handshake className="h-5 w-5" />,
+  brain: <Brain className="h-5 w-5" />,
+}
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
 const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
@@ -267,6 +278,37 @@ export default function Landing() {
         </div>
         <p className="text-xs text-muted-foreground">
           Inside the app you&apos;ll find the full Store — 15 packages from R249 to R21,000 — plus a Resource Hub of 50+ free tools &amp; guides.
+        </p>
+      </section>
+
+      {/* ===== Services by Business Hustle (like hustleportal.online Services page) ===== */}
+      <section id="services" className="space-y-5">
+        <div>
+          <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Services</div>
+          <h2 className="font-display text-3xl mt-1">Work with Business Hustle</h2>
+          <p className="text-sm text-muted-foreground mt-1">Expert services for SA entrepreneurs — quote per project, delivered by the team behind HustlePortal.</p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {BH_SERVICES.map((svc) => (
+            <a
+              key={svc.id}
+              href={`https://wa.me/27744815163?text=${encodeURIComponent(svc.waMsg)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-4 hover:border-brand/60 transition group"
+            >
+              <div className="rounded-lg p-2 inline-flex" style={{ background: `${svc.color}1f`, color: svc.color }}>
+                {SERVICE_ICONS[svc.icon]}
+              </div>
+              <div className="font-semibold text-sm mt-2.5 group-hover:text-brand transition">{svc.title}</div>
+              <div className="text-xs text-brand/80">{svc.desc}</div>
+              <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{svc.detail}</div>
+              <div className="text-xs font-medium mt-2.5 inline-flex items-center gap-1 text-brand">Enquire on WhatsApp →</div>
+            </a>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Not sure what you need? WhatsApp us for a free business assessment — we&apos;ll recommend the right solution.
         </p>
       </section>
       </main>
