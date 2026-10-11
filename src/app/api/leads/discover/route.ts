@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { searchLeads } from '@/lib/explee'
+import { searchOsmLeads } from '@/lib/osm'
 
 export const maxDuration = 60
 
@@ -154,7 +155,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2) FALLBACK — Explee verified data when configured (no fabricated demo data, ever)
+  // 2) FALLBACK A — OpenStreetMap: real, keyless directory listings (Gemini only
+  //    helped translate the need into map tags; Overpass supplies the actual data).
+  const osm = await searchOsmLeads(area, definition, cap)
+  if (osm.leads.length > 0) {
+    return NextResponse.json({
+      leads: osm.leads,
+      mode: 'OSM',
+      source: 'OSM',
+      note: `Real businesses from the OpenStreetMap directory${area ? ` in ${area}` : ''} — publicly mappable, contact details as listed. Search grounding was busy, so these come from the map instead.`,
+    })
+  }
+
+  // 3) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
   const ex = await searchLeads(definition, city || undefined, cap)
   if (ex.leads.length > 0) {
     return NextResponse.json({ ...ex, source: 'EXPLEE' })
@@ -166,8 +179,8 @@ export async function POST(req: NextRequest) {
       mode: 'NONE',
       note:
         (ai.ok
-          ? 'The web search came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services").'
-          : `${ai.error} — you can also add your own free Gemini key under Integrations.`),
+          ? 'The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services").'
+          : `${ai.error} — the map directory also had nothing for that description. Try naming the business type and area more directly.`),
     },
     { status: 200 }
   )
