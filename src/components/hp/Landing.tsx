@@ -24,7 +24,7 @@ const SERVICE_ICONS: Record<string, React.ReactNode> = {
 }
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
-const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
+const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Cape Town', 'Port Elizabeth', 'Other']
 
 export default function Landing() {
   const { loadSession } = useHp()
@@ -102,10 +102,10 @@ export default function Landing() {
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               { icon: Target, title: 'AI Lead Finder', desc: 'Describe your ideal client, get matched businesses' },
-              { icon: Wallet, title: 'Prepaid credits', desc: 'Top up, reveal real contacts. No subscription traps' },
+              { icon: Wallet, title: 'Prepaid credits', desc: 'Reveal real contacts. No subscription lock.' },
               { icon: Users, title: 'Team hustle', desc: 'Share tasks & pipelines with your team' },
-              { icon: BrainCircuit, title: 'AI Co-Founder', desc: 'Plans, pricing & advice grounded in your data' },
-              { icon: Trophy, title: 'Daily challenges', desc: 'Earn XP, level up your hustle' },
+              { icon: BrainCircuit, title: 'AI Co-Founder', desc: 'Plans, pricing & advice grounded to your data' },
+              { icon: Trophy, title: 'Daily challenges', desc: 'Earn XP + level up your hustle' },
               { icon: Zap, title: 'Your data only', desc: 'Your account, your pipeline, your numbers' },
             ].map((f) => (
               <div key={f.title} className="flex gap-3 items-start rounded-xl border border-white/10 bg-card/70 backdrop-blur p-3">
@@ -272,23 +272,23 @@ export default function Landing() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
-              emoji: '🌐', title: 'HustlePortal™', price: 'R1,850/yr',
-              desc: 'Professional landing page for your business — live in days, not months.',
+              emoji: '🌐', title: 'HustlePortal™', price: 'R1,950/yr',
+              desc: 'We build your landing page for your business — live in days, not months.',
               url: 'https://app.businesshustle.co.za/product/hustle-portal/'
             },
             {
               emoji: '📖', title: 'Hustle Basics eBook', price: 'R270',
-              desc: '🔥 On sale (was R399) — the essential entrepreneur toolkit.',
+              desc: 'On sale now (20%!) — the essential entrepreneurial toolkit.',
               url: 'https://app.businesshustle.co.za/product/hustle-basics-ebook/'
             },
             {
-              emoji: '💻', title: 'Landing Page', price: 'R1,850',
-              desc: 'Professional web presence, mobile-friendly and SEO-ready.',
+              emoji: '💻', title: 'Landing Page', price: 'R1,950',
+              desc: 'Modern, fast web presence, mobile-friendly and SEO-ready.',
               url: 'https://app.businesshustle.co.za/product/landing-page/'
             },
             {
-              emoji: '🏘️', title: 'BH Local', price: 'From R960',
-              desc: 'Digitise your neighbourhood — get featured on KloofStreet.online.',
+              emoji: '🏘️', title: 'Biz Local', price: 'From R950',
+              desc: 'Get your business on the local neighbourhood — get featured on KasiStreet.online.',
               url: 'https://app.businesshustle.co.za/product/kloof-street-starter-feature-package/'
             },
           ].map((s) => (
