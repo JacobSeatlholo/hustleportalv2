@@ -284,6 +284,76 @@ function AIDiagnosticsCard() {
   )
 }
 
+interface MailStatusInfo {
+  platformConfigured: boolean
+  fromAddress: string
+  sendingDomain: string
+  domainStatus: 'verified' | 'pending' | 'not_started' | 'failed' | 'unknown'
+  domains: { name: string; status: string }[]
+  gmailConfigured: boolean
+}
+
+/**
+ * Email engine status — the ONE card that answers "can I send email right now?".
+ * Shows live Resend domain verification (fetched server-side with the platform key)
+ * so setup never feels like guesswork.
+ */
+function MailEngineCard() {
+  const [status, setStatus] = useState<MailStatusInfo | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api<{ status: MailStatusInfo }>('/api/emails/status')
+      setStatus(res.status)
+    } catch {
+      setStatus(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const verified = status?.domainStatus === 'verified'
+  const badge = !status || !status.platformConfigured
+    ? <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-500">WARMING UP</Badge>
+    : verified
+      ? <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">LIVE</Badge>
+      : <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">VERIFYING · {status.sendingDomain}</Badge>
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <Mail className="h-4 w-4 text-brand" />
+          <h3 className="font-medium text-sm">Email engine</h3>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : badge}
+        </div>
+        <div className="flex items-center gap-3">
+          <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+            Resend domains <ExternalLink className="h-3 w-3" />
+          </a>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Check again'}
+          </Button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {!status ? 'Checking the sending engine…'
+          : !status.platformConfigured
+            ? 'The built-in engine is warming up. You can already send by connecting Gmail below — or wait a moment and check again.'
+            : verified
+              ? `Ready — every send goes out from ${status.fromAddress} with replies routed back to your account email. Zero setup, nothing to maintain.`
+              : status.domainStatus === 'failed'
+                ? `${status.sendingDomain} failed verification at Resend — open resend.com/domains to see which DNS record is missing or wrong, fix it at your domain\u2019s DNS host, then hit Verify again.`
+                : `${status.sendingDomain} is finishing verification — DNS records can take from a few minutes up to a few hours to be seen. Sends already work to your own inbox; they open up to every client the moment it flips to verified. No other setup exists.`}
+      </p>
+    </div>
+  )
+}
+
 export default function IntegrationsView() {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
@@ -368,6 +438,7 @@ export default function IntegrationsView() {
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
       ) : (
         <div className="space-y-3">
+          <MailEngineCard />
           <AIDiagnosticsCard />
           <WhatsAppCard />
           {INTEGRATIONS.map((intg) => {

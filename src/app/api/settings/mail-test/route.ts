@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { getUserMailCreds, classifyGmailError } from '@/lib/mailer'
+import { getUserMailCreds, classifyGmailError, isGmailAuthError, flagGmailFailure, clearGmailFailure } from '@/lib/mailer'
 
 export const maxDuration = 30
 
@@ -33,12 +33,14 @@ export async function POST() {
     })
     await transport.verify()
     try { transport.close() } catch {}
+    clearGmailFailure(userId) // a passing login lifts any send-time cooldown
     return NextResponse.json({
       ok: true,
       message: `Gmail connection verified for ${creds.user} — sends from your address will work.`,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to reach Gmail'
+    if (isGmailAuthError(msg)) flagGmailFailure(userId) // failed test = skip Gmail on real sends for a while
     return NextResponse.json({ ok: false, error: classifyGmailError(msg) }, { status: 400 })
   }
 }

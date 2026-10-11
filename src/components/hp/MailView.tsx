@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { api, type EmailLogRow, type Lead } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -18,14 +18,25 @@ const GOALS = [
   'Pitch a specific offering',
 ]
 
+interface MailStatus {
+  platformConfigured: boolean
+  fromAddress: string
+  sendingDomain: string
+  domainStatus: 'verified' | 'pending' | 'not_started' | 'failed' | 'unknown'
+  domains: { name: string; status: string }[]
+  gmailConfigured: boolean
+}
+
 export default function MailView() {
-  const { activeProjectId, bumpRefresh } = useHp()
+  const { activeProjectId, bumpRefresh, setView } = useHp()
   const { toast } = useToast()
   const [emails, setEmails] = useState<EmailLogRow[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [drafting, setDrafting] = useState(false)
   const [sending, setSending] = useState(false)
+  const [mailStatus, setMailStatus] = useState<MailStatus | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   // compose state
   const [leadId, setLeadId] = useState('')
@@ -38,12 +49,14 @@ export default function MailView() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [mail, leadData] = await Promise.all([
+      const [mail, leadData, status] = await Promise.all([
         api<{ emails: EmailLogRow[] }>('/api/emails'),
         api<{ leads: Lead[] }>('/api/leads'),
+        api<{ status: MailStatus }>('/api/emails/status').catch(() => null),
       ])
       setEmails(mail.emails)
       setLeads(leadData.leads.filter((l) => l.unlocked && l.email))
+      if (status?.status) setMailStatus(status.status)
     } catch (e) {
       toast({ title: 'Could not load mail', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -81,6 +94,7 @@ export default function MailView() {
       return
     }
     setSending(true)
+    setSendError(null)
     try {
       const res = await api<{ email: EmailLogRow; notice?: string | null }>('/api/emails', {
         method: 'POST',
@@ -93,7 +107,8 @@ export default function MailView() {
       setSubject(''); setBody(''); setTo(''); setDraftId(null)
       load()
     } catch (e) {
-      toast({ title: 'Send failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      // Calm inline card instead of a toast wall — details stay under the composer
+      setSendError(e instanceof Error ? e.message : 'Send failed')
       load()
     } finally {
       setSending(false)
@@ -108,6 +123,24 @@ export default function MailView() {
       // non-fatal
     }
   }
+
+  // One calm line: what will happen when I hit Send?
+  const engineReady = mailStatus ? mailStatus.platformConfigured && mailStatus.domainStatus === 'verified' : null
+  const statusDot = engineReady === true ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+  const statusText = (() => {
+    if (!mailStatus) return 'Sends via the HustlePortal mail engine — replies route back to your inbox.'
+    if (mailStatus.gmailConfigured && engineReady) {
+      return `Goes out from your Gmail — the HustlePortal engine (${mailStatus.fromAddress}) backs it up automatically.`
+    }
+    if (mailStatus.gmailConfigured && !engineReady) {
+      return 'Goes out from your Gmail when it passes the connection test — meanwhile the HustlePortal engine is finishing setup and may only reach your own inbox.'
+    }
+    if (!mailStatus.platformConfigured) {
+      return 'HustlePortal mail engine is warming up — connect Gmail under Integrations to send in the meantime.'
+    }
+    if (engineReady) return `Email ready — goes out from ${mailStatus.fromAddress}. Replies route to your inbox.`
+    return `${mailStatus.sendingDomain} is verifying in Resend — your sends work to your own inbox meanwhile and open up to everyone the moment verification completes. Nothing for you to configure.`
+  })()
 
   return (
     <div className="space-y-6">
@@ -164,14 +197,34 @@ export default function MailView() {
               <Textarea id="m-body" rows={10} placeholder="Write it yourself, or let Gemini draft it from your business profile…" value={body} onChange={(e) => setBody(e.target.value)} />
             </div>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground">
-                Sends via the HustlePortal mail engine — no setup needed. Want replies in your own inbox? Connect your Gmail in <b>Integrations</b>.
+              <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
+                <span>{statusText}</span>
               </p>
               <Button onClick={send} disabled={sending || !subject || !body}>
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Send
               </Button>
             </div>
+            {sendError && (
+              <div className="rounded-lg border border-rose-500/40 bg-rose-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-rose-400">Send failed — here&apos;s why and the fix</p>
+                  <button onClick={() => setSendError(null)} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="text-xs text-rose-300/90 whitespace-pre-line max-h-32 overflow-y-auto hp-scroll">{sendError}</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setView('integrations')}>
+                    <ShieldCheck className="h-3.5 w-3.5" /> Fix in Integrations
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={send} disabled={sending}>
+                    Try again
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -222,8 +275,8 @@ export default function MailView() {
       <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <Mail className="h-4 w-4 text-brand shrink-0 mt-0.5" />
         <span>
-          Sending is included — HustlePortal mails for you and replies are routed back to your account email.
-          Prefer your own address on the label? Connect Gmail (and, optionally, your own AI key) in Integrations.
+          Sending is included — hit Send and HustlePortal delivers, with replies routed back to your account email.
+          Prefer your own address on the label? Connect Gmail in Integrations (optional, takes about a minute).
         </span>
       </div>
     </div>
