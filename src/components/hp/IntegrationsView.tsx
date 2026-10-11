@@ -10,7 +10,7 @@ import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
   KeyRound, Loader2, Mail, Sparkles, CalendarCheck2, Trash2,
-  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal,
 } from 'lucide-react'
 
 const INTEGRATIONS: {
@@ -301,6 +301,8 @@ interface MailStatusInfo {
 function MailEngineCard() {
   const [status, setStatus] = useState<MailStatusInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -315,6 +317,22 @@ function MailEngineCard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // One tap → the exact system-mail path password resets use. Arrives = engine
+  // proven end-to-end; fails = the precise fix shows right here.
+  const sendTest = useCallback(async () => {
+    setTesting(true)
+    setTestMsg(null)
+    try {
+      const res = await api<{ ok: boolean; notice?: string }>('/api/emails/test', { method: 'POST' })
+      setTestMsg({ ok: true, text: res.notice || 'Test email sent — check your inbox (and spam).' })
+    } catch (e) {
+      setTestMsg({ ok: false, text: e instanceof Error ? e.message : 'Test send failed.' })
+    } finally {
+      setTesting(false)
+      load()
+    }
+  }, [load])
 
   const verified = status?.domainStatus === 'verified'
   const badge = !status || !status.platformConfigured
@@ -338,8 +356,17 @@ function MailEngineCard() {
           <Button size="sm" variant="outline" onClick={load} disabled={loading}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Check again'}
           </Button>
+          <Button size="sm" onClick={sendTest} disabled={testing}>
+            {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
+            Send test
+          </Button>
         </div>
       </div>
+      {testMsg && (
+        <p className={`text-xs leading-relaxed ${testMsg.ok ? 'text-emerald-500' : 'text-rose-500'}`}>
+          {testMsg.text}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         {!status ? 'Checking the sending engine…'
           : !status.platformConfigured

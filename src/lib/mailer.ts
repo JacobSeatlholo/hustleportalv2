@@ -60,6 +60,36 @@ export type MailStatus = {
 let domainCache: { at: number; rows: MailDomainRow[] } | null = null
 const DOMAIN_TTL_MS = 60_000
 
+// --- durable domain proof ---------------------------------------------------
+// A sending-restricted Resend key can never read /domains (403 → status shows
+// "unknown" forever). But every ACCEPTED branded send IS proof the domain is
+// verified in the key's account. Stamp it in PlatformConfig so the status UI
+// reflects reality instead of nagging about verification that already happened.
+const DOMAIN_PROOF_KEY = 'MAIL_DOMAIN_VERIFIED_AT'
+const DOMAIN_PROOF_TTL_MS = 30 * 24 * 60 * 60_000
+
+async function stampDomainProof(): Promise<void> {
+  try {
+    await db.platformConfig.upsert({
+      where: { key: DOMAIN_PROOF_KEY },
+      create: { key: DOMAIN_PROOF_KEY, value: new Date().toISOString() },
+      update: { value: new Date().toISOString() },
+    })
+  } catch {
+    // proof is best-effort — never let it break a send
+  }
+}
+
+async function readDomainProof(): Promise<boolean> {
+  try {
+    const row = await db.platformConfig.findUnique({ where: { key: DOMAIN_PROOF_KEY } })
+    if (!row?.value) return false
+    return Date.now() - new Date(row.value).getTime() < DOMAIN_PROOF_TTL_MS
+  } catch {
+    return false
+  }
+}
+
 async function fetchResendDomains(apiKey: string): Promise<MailDomainRow[]> {
   try {
     const res = await fetch('https://api.resend.com/domains', {
@@ -84,13 +114,19 @@ export async function getMailStatus(userId: string): Promise<MailStatus> {
   const rows = apiKey ? await fetchResendDomains(apiKey) : []
   const domain = sendingDomain()
   const own = rows.find((r) => r.name === domain)
+  // Accepted branded send = the domain verified, even when the key can't read
+  // the domains list (sending-restricted key). Trust live Resend rows first,
+  // then our own send-proof, then guess from whatever rows exist.
+  const proved = own ? false : await readDomainProof()
   const status: MailStatus['domainStatus'] = own
     ? (own.status as MailStatus['domainStatus'])
-    : rows.some((r) => r.status === 'verified')
+    : proved
       ? 'verified'
-      : rows.length
-        ? 'pending'
-        : 'unknown'
+      : rows.some((r) => r.status === 'verified')
+        ? 'verified'
+        : rows.length
+          ? 'pending'
+          : 'unknown'
   const creds = await getUserMailCreds(userId)
   return {
     platformConfigured: !!apiKey,
@@ -151,8 +187,11 @@ export function classifyGmailError(msg: string): string {
 }
 
 /** Resend's sandbox restricts sends until the sender domain is verified. */
-function classifyPlatformError(msg: string): string {
+function classifyPlatformError(msg: string, domainVerified = false): string {
   const domain = sendingDomain()
+  if (domainVerified && /422|validation|invalid/i.test(msg)) {
+    return 'The email service rejected the recipient address as undeliverable — check it for typos, or try a different address.'
+  }
   if (/testing emails|only send.*own email|403/i.test(msg)) {
     return `${domain} is still verifying in Resend — until it completes, sends can only reach your own account inbox. Nothing to configure: it opens up automatically the moment you hit Verify at resend.com/domains.`
   }
@@ -262,15 +301,16 @@ async function sendViaPlatform(
       at: Date.now(),
       rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
     }
+    await stampDomainProof()
     return { ok: true, provider: 'PLATFORM' }
   }
   // From-domain rejection (unverified) → retry once with the test sender
   if (/from|domain|verif|422|403/i.test(first.raw)) {
     const second = await resendSend(apiKey, SANDBOX_FROM, userId, mail)
     if (second.ok) return { ok: true, provider: 'PLATFORM', viaFallback: true }
-    return { ok: false, error: classifyPlatformError(second.raw) }
+    return { ok: false, error: classifyPlatformError(second.raw, await readDomainProof()) }
   }
-  return { ok: false, error: classifyPlatformError(first.raw) }
+  return { ok: false, error: classifyPlatformError(first.raw, await readDomainProof()) }
 }
 
 /**
@@ -357,14 +397,15 @@ export async function sendSystemMail(
       at: Date.now(),
       rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
     }
+    await stampDomainProof()
     return { ok: true }
   }
   if (/from|domain|verif|422|403/i.test(first.raw)) {
     const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
     if (second.ok) return { ok: true }
     console.error('[mail] system mail failed (both senders):', second.raw.slice(0, 200))
-    return { ok: false, error: classifyPlatformError(second.raw) }
+    return { ok: false, error: classifyPlatformError(second.raw, await readDomainProof()) }
   }
   console.error('[mail] system mail failed:', first.raw.slice(0, 200))
-  return { ok: false, error: classifyPlatformError(first.raw) }
+  return { ok: false, error: classifyPlatformError(first.raw, await readDomainProof()) }
 }
