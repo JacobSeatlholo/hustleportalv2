@@ -10,7 +10,7 @@ import { api } from './shared'
 import { useHp } from './store'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
-  Laptop, TrendingUp, Camera, Handshake, Brain,
+  Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles,
 } from 'lucide-react'
 import { BH_SERVICES } from '@/data/services'
 
@@ -85,8 +85,9 @@ export default function Landing() {
         {/* Left: pitch */}
         <div className="space-y-8">
           <div>
-            <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.22em] uppercase text-brand">
-              <Zap className="h-3.5 w-3.5" /> Built by Business Hustle
+            <div className="text-xs font-semibold tracking-[0.3em] uppercase text-brand">Explore. Adapt. Evolve.</div>
+            <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase text-muted-foreground mt-2">
+              <Zap className="h-3 w-3 text-brand" /> Built by Business Hustle
             </div>
             <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-3">
               Your business.<br />
@@ -222,6 +223,35 @@ export default function Landing() {
         </Card>
       </div>
 
+      {/* ===== The problem ===== */}
+      <section id="problem" className="space-y-5">
+        <div>
+          <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">The problem</div>
+          <h2 className="font-display text-3xl mt-1">Running a hustle is chaos</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Leads buried in WhatsApp. Invoices in Word. Expenses in your head and a shoebox of slips.
+            By the time you catch up, the month is gone — and so is the money.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {[
+            { icon: '💬', title: 'Your leads live in your DMs', desc: 'Hot prospects scattered across WhatsApp, DMs and missed calls — no pipeline, no follow-up, no closure.' },
+            { icon: '💸', title: 'Money just disappears', desc: 'No invoice trail, no expense record, no idea which clients actually pay. Profit is a feeling, not a number.' },
+            { icon: '🧍', title: 'You\u2019re the whole back office', desc: 'Admin, scheduling, quotes, follow-ups — all on you, all after hours. The busywork eats the hustle.' },
+          ].map((p) => (
+            <div key={p.title} className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-5">
+              <div className="text-2xl">{p.icon}</div>
+              <div className="font-semibold text-sm mt-2">{p.title}</div>
+              <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{p.desc}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          HustlePortal gives it <span className="text-brand font-medium">one home</span> — pipeline, payments, tasks,
+          appointments and AI in a single Business OS, built for how South Africa actually hustles.
+        </p>
+      </section>
+
       {/* ===== Our Solutions (Store highlights, like hustleportal.online) ===== */}
       <section id="solutions" className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -311,11 +341,47 @@ export default function Landing() {
           Not sure what you need? WhatsApp us for a free business assessment — we&apos;ll recommend the right solution.
         </p>
       </section>
+      {/* ===== Explee trust ===== */}
+      <section id="trust" className="rounded-2xl border border-brand/25 bg-brand/5 p-6 md:p-8 space-y-3">
+        <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Verified leads, zero fluff</div>
+        <h2 className="font-display text-3xl">Explee works in the background — we don't</h2>
+        <p className="text-sm text-muted-foreground max-w-3xl">
+          HustlePortal integrates <span className="text-foreground font-medium">Explee as a background verified-leads source only</span>:
+          when you connect it, verified contact data quietly tops up your pipeline. That's all it does — by design.
+        </p>
+        <p className="text-sm text-muted-foreground max-w-3xl">
+          We are <span className="text-brand font-medium">not trying to be another Explee</span>. The product is your Business OS:
+          CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers. Explee is just one pipe that feeds it.
+        </p>
+        <div className="flex flex-wrap gap-6 pt-1 text-sm">
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Verified contacts, your control</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Optional — everything works without it</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Your keys, stored on your account only</div>
+        </div>
+      </section>
+
+      {/* ===== Final CTA ===== */}
+      <section className="text-center space-y-4 py-6">
+        <h2 className="font-display text-4xl md:text-5xl">Start hustling smarter.</h2>
+        <p className="text-brand font-display text-xl tracking-wide">Free to start. Ready when you are.</p>
+        <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+          Free account, starter credits to reveal your first leads, and every tool above included. No subscription traps — top up only what you use.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3 pt-1">
+          <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:brightness-110 transition">
+            Start free <ArrowRight className="h-4 w-4 ml-1.5" />
+          </a>
+          <a href="https://wa.me/27744815163" target="_blank" rel="noreferrer" className="rounded-lg border px-6 h-11 inline-flex items-center font-medium hover:border-brand transition">
+            Talk to us on WhatsApp
+          </a>
+        </div>
+      </section>
       </main>
 
       <footer className="border-t bg-background/60 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-muted-foreground flex flex-wrap justify-between gap-2">
           <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
+          <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> <span className="text-brand tracking-wide">Explore. Adapt. Evolve.</span></span>
           <span>© {new Date().getFullYear()} HustlePortal™</span>
         </div>
       </footer>

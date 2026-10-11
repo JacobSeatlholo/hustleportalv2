@@ -34,6 +34,84 @@ export interface SessionData {
   level: LevelInfo
   challenges: Challenge[]
   team: { id: string; name: string; role: string } | null
+  projects: HpProjectRef[]
+}
+
+export interface HpProjectRef {
+  id: string
+  name: string
+  isDefault: boolean
+  counts: { id: string; leads: number; clients: number; invoices: number }
+}
+
+export interface ProjectFull {
+  id: string
+  name: string
+  industry: string | null
+  valueProp: string | null
+  targetMarket: string | null
+  offerings: string | null
+  tone: string | null
+  website: string | null
+  contactEmail: string | null
+  contactPhone: string | null
+  salesPitch: string | null
+  isDefault: boolean
+}
+
+export interface Appointment {
+  id: string
+  title: string
+  clientName: string | null
+  notes: string | null
+  startsAt: string
+  endsAt: string | null
+  meetLink: string | null
+  source: string
+  gcalEventId: string | null
+  createdAt: string
+}
+
+export interface InvoiceItem {
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
+export interface Invoice {
+  id: string
+  number: string
+  clientName: string
+  clientEmail: string | null
+  status: string
+  items: InvoiceItem[] | string
+  currency: string
+  subtotal: number
+  taxRate: number
+  total: number
+  logoUrl: string | null
+  notes: string | null
+  issuedAt: string
+  dueAt: string | null
+  paidAt: string | null
+  createdAt: string
+}
+
+export interface EmailLogRow {
+  id: string
+  toEmail: string
+  subject: string
+  body: string
+  status: string
+  error: string | null
+  createdAt: string
+}
+
+export interface IntegrationSetting {
+  key: string
+  value: string
+  configured: boolean
+  updatedAt?: string
 }
 
 export interface Lead {

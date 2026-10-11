@@ -38,6 +38,25 @@ async function main() {
     },
   })
 
+  // ---------- default company workspace ----------
+  await db.project.deleteMany({ where: { userId: owner.id } })
+  const defaultProject = await db.project.create({
+    data: {
+      userId: owner.id,
+      name: 'My Business',
+      industry: 'Printing & Branding',
+      valueProp: 'We turn small SA businesses into brands people trust — signs, prints and promo that sell.',
+      targetMarket: 'Spaza shops, salons, gyms and logistics firms in Gauteng & KZN',
+      offerings: 'Fleet branding — from R8,500\nShop signage & menu boards — from R4,200\nPromo packs (caps, lanyards, aprons) — from R35/unit\nBusiness cards & flyers — from R450',
+      tone: 'Warm, straight-talking, no jargon',
+      website: 'https://hustleprints.co.za',
+      contactEmail: 'sales@hustleprints.co.za',
+      contactPhone: '082 555 0101',
+      isDefault: true,
+    },
+  })
+  const mateProjectPlaceholder = null // teammate workspace created after mate upsert
+
   // ---------- teammate (MEMBER) ----------
   const mate = await db.user.upsert({
     where: { email: TEAM_EMAIL },
@@ -68,6 +87,12 @@ async function main() {
     where: { teamId_userId: { teamId: team.id, userId: owner.id } },
     update: {},
     create: { teamId: team.id, userId: owner.id, role: 'OWNER' },
+  })
+
+  // teammate default workspace
+  await db.project.deleteMany({ where: { userId: mate.id } })
+  const mateProject = await db.project.create({
+    data: { userId: mate.id, name: 'My Business', industry: 'Printing & Branding', isDefault: true },
   })
 
   // ---------- wallet + credit ledger ----------
@@ -128,6 +153,7 @@ async function main() {
       data: {
         userId: owner.id,
         teamId: team.id,
+        projectId: defaultProject.id,
         company: l.company,
         contactName: l.contactName ?? null,
         email: l.unlocked ? (l.email ?? null) : null,
@@ -157,8 +183,96 @@ async function main() {
     { name: 'Wandile Peters', company: 'Wandi Coffee Roasters', email: 'wandile@wandicoffee.co.za', phone: '079 555 0166', monthlyValue: 3200, notes: 'Cup sleeves + shop menu. Loves quick turnarounds.' },
   ]
   for (const c of clients) {
-    await db.client.create({ data: { userId: owner.id, ...c } })
+    await db.client.create({ data: { userId: owner.id, projectId: defaultProject.id, ...c } })
   }
+
+  // ---------- invoices (ZAR, VAT 15%) ----------
+  await db.invoice.deleteMany({ where: { userId: owner.id } })
+  const invoices = [
+    {
+      number: 'INV-0001', clientName: 'Siyabonga Logistics', clientEmail: 'sipho@siyabongalog.co.za',
+      status: 'PAID', taxRate: 15, issued: 20, due: 6,
+      items: [
+        { description: 'Fleet branding — 3 delivery vans', quantity: 3, unitPrice: 6500 },
+        { description: '500 branded caps', quantity: 500, unitPrice: 35 },
+      ],
+      notes: 'Paid via EFT. Thank you for the business!',
+    },
+    {
+      number: 'INV-0002', clientName: 'Midrand Events Co', clientEmail: 'naledi@midrandevents.co.za',
+      status: 'SENT', taxRate: 15, issued: 4, due: -10,
+      items: [
+        { description: '2 000 conference lanyards', quantity: 2000, unitPrice: 6.5 },
+        { description: 'Design fee', quantity: 1, unitPrice: 800 },
+      ],
+      notes: 'Payment due in 14 days. Banking: FNB 6284XXXX, ref INV-0002.',
+    },
+    {
+      number: 'INV-0003', clientName: 'Katlehong Autospare', clientEmail: 'lerato@katautospare.co.za',
+      status: 'OVERDUE', taxRate: 15, issued: 30, due: 16,
+      items: [
+        { description: 'Shop signage — 2 panels', quantity: 2, unitPrice: 3100 },
+      ],
+      notes: 'Final reminder — please settle to avoid re-printing fees.',
+    },
+  ]
+  for (const inv of invoices) {
+    const subtotal = inv.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    await db.invoice.create({
+      data: {
+        userId: owner.id,
+        projectId: defaultProject.id,
+        number: inv.number,
+        clientName: inv.clientName,
+        clientEmail: inv.clientEmail,
+        status: inv.status,
+        items: JSON.stringify(inv.items),
+        currency: 'ZAR',
+        subtotal,
+        taxRate: inv.taxRate,
+        total: Math.round(subtotal * (1 + inv.taxRate / 100) * 100) / 100,
+        notes: inv.notes,
+        issuedAt: daysAgo(inv.issued),
+        dueAt: daysAgo(inv.due),
+        paidAt: inv.status === 'PAID' ? daysAgo(inv.due) : null,
+      },
+    })
+  }
+
+  // ---------- appointments ----------
+  await db.appointment.deleteMany({ where: { userId: owner.id } })
+  const inDays = (n: number, hour = 10) => {
+    const d = new Date(Date.now() + n * 86400000)
+    d.setHours(hour, 0, 0, 0)
+    return d
+  }
+  await db.appointment.create({
+    data: {
+      userId: owner.id, projectId: defaultProject.id,
+      title: 'Lanyard mockup review — Midrand Events', clientName: 'Naledi Khumalo',
+      startsAt: inDays(1, 14), endsAt: inDays(1, 15),
+      meetLink: 'https://meet.jit.si/hustleportal-midrand-events-demo1',
+      source: 'MANUAL', notes: 'Bring colour samples.',
+    },
+  })
+  await db.appointment.create({
+    data: {
+      userId: owner.id, projectId: defaultProject.id,
+      title: 'Site visit — Bra Nkosi Shisanyama', clientName: 'Bra Nkosi',
+      startsAt: inDays(3, 9), endsAt: inDays(3, 10),
+      meetLink: 'https://meet.jit.si/hustleportal-shisanyama-demo2',
+      source: 'VOICE', notes: 'Measure menu boards, quote on the spot.',
+    },
+  })
+  await db.appointment.create({
+    data: {
+      userId: owner.id, projectId: defaultProject.id,
+      title: 'Quote handover — Katlehong Autospare', clientName: 'Lerato Dlamini',
+      startsAt: daysAgo(5), endsAt: daysAgo(5),
+      meetLink: 'https://meet.jit.si/hustleportal-katautospare-demo3',
+      source: 'MANUAL',
+    },
+  })
 
   // ---------- tasks (personal + team shared) ----------
   await db.task.deleteMany({ where: { creatorId: { in: [owner.id, mate.id] } } })
@@ -212,7 +326,7 @@ async function main() {
   ]
   for (const [type, description, category, amount, d] of finance) {
     await db.financeEntry.create({
-      data: { userId: owner.id, type: type as any, description, category, amount, occurredAt: daysAgo(d) },
+      data: { userId: owner.id, projectId: defaultProject.id, type: type as any, description, category, amount, occurredAt: daysAgo(d) },
     })
   }
 
@@ -235,6 +349,8 @@ async function main() {
   console.log('Seed complete.')
   console.log('Owner :', OWNER_EMAIL, '/', PASSWORD, '(ADMIN)')
   console.log('Teammate:', TEAM_EMAIL, '/', PASSWORD, '(MEMBER)')
+  console.log('Default workspace:', defaultProject.name, '— leads/clients/finance/invoices/appointments attached')
+  console.log('Teammate workspace:', mateProject.name)
   console.log('Wallet balance:', wallet.balance, 'cents (R' + (wallet.balance / 100).toFixed(2) + ')')
 }
 

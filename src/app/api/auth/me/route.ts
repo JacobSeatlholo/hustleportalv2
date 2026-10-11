@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server'
 import { getSessionUser, publicUser } from '@/lib/auth'
 import { levelFor, todaysChallenges } from '@/lib/gamification'
 import { ensureWallet } from '@/lib/wallet'
+import { listProjects, getOrCreateDefaultProject } from '@/lib/workspace'
 
 export async function GET() {
   const user = await getSessionUser()
   if (!user) return NextResponse.json({ user: null }, { status: 401 })
   const wallet = await ensureWallet(user.id)
   const challenges = await todaysChallenges(user.id)
+  await getOrCreateDefaultProject(user.id)
+  const projects = await listProjects(user.id)
   return NextResponse.json({
     user: publicUser(user),
     wallet: { balance: wallet.balance },
@@ -16,5 +19,11 @@ export async function GET() {
     team: user.memberships?.[0]?.team
       ? { id: user.memberships[0].team.id, name: user.memberships[0].team.name, role: user.memberships[0].role }
       : null,
+    projects: projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      isDefault: p.isDefault,
+      counts: p.counts,
+    })),
   })
 }

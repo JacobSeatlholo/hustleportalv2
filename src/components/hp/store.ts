@@ -10,12 +10,24 @@ export type ViewKey =
   | 'tasks'
   | 'finance'
   | 'ai'
+  | 'mail'
+  | 'calendar'
+  | 'invoices'
+  | 'reports'
+  | 'integrations'
   | 'store'
   | 'resources'
   | 'services'
   | 'wallet'
   | 'profile'
   | 'admin'
+
+export interface HpProject {
+  id: string
+  name: string
+  isDefault: boolean
+  counts: { id: string; leads: number; clients: number; invoices: number }
+}
 
 interface HpState {
   session: SessionData | null
@@ -28,6 +40,8 @@ interface HpState {
   setAiBarQuery: (q: string) => void
   refreshTick: number
   bumpRefresh: () => void
+  activeProjectId: string | null
+  setActiveProject: (id: string) => void
 }
 
 export const useHp = create<HpState>((set) => ({
@@ -35,6 +49,11 @@ export const useHp = create<HpState>((set) => ({
   sessionLoading: true,
   view: 'dashboard',
   setView: (v) => set({ view: v }),
+  activeProjectId: typeof window !== 'undefined' ? localStorage.getItem('hp_active_project') : null,
+  setActiveProject: (id) => {
+    if (typeof window !== 'undefined') localStorage.setItem('hp_active_project', id)
+    set({ activeProjectId: id })
+  },
   loadSession: async (silent = false) => {
     // silent: background refresh — never flip the boot loader
     if (!silent) set({ sessionLoading: true })

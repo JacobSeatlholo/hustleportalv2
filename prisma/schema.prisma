@@ -37,6 +37,41 @@ model User {
   aiChats            AiMessage[]
   xpEvents           XpEvent[]
   challengeProgress  ChallengeProgress[]
+  projects           Project[]
+  appointments       Appointment[]
+  invoices           Invoice[]
+  emailLogs          EmailLog[]
+  userSettings       UserSetting[]
+}
+
+// ============ COMPANY WORKSPACE (per-business context) ============
+
+model Project {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  industry     String?
+  valueProp    String?
+  targetMarket String?
+  offerings    String? // newline-separated list of products/services
+  tone         String? // communication tone for AI drafts
+  website      String?
+  contactEmail String?
+  contactPhone String?
+  salesPitch   String? // AI-generated pitch (ProfileView → /api/ai/sales-pitch)
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+  clients      Client[]
+  financeEntries FinanceEntry[]
+  appointments Appointment[]
+  invoices     Invoice[]
+  emailLogs    EmailLog[]
+
+  @@index([userId])
 }
 
 model Team {
@@ -89,8 +124,11 @@ model Lead {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  projectId String?
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, stage])
+  @@index([projectId])
 }
 
 model Client {
@@ -107,6 +145,10 @@ model Client {
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }
 
 // ============ TASKS ============
@@ -147,8 +189,100 @@ model FinanceEntry {
   createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, occurredAt])
+  @@index([projectId])
+}
+
+// ============ APPOINTMENTS ============
+
+model Appointment {
+  id         String    @id @default(cuid())
+  userId     String
+  projectId  String?
+  title      String
+  clientName String?
+  notes      String?
+  startsAt   DateTime
+  endsAt     DateTime?
+  meetLink   String? // Jitsi link (meet.ts)
+  source     String    @default("MANUAL") // MANUAL | VOICE
+  gcalEventId String?  // set when synced to Google Calendar
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+  @@index([projectId])
+}
+
+// ============ INVOICES ============
+
+model Invoice {
+  id          String    @id @default(cuid())
+  userId      String
+  projectId   String?
+  number      String    @unique
+  clientName  String
+  clientEmail String?
+  status      String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE
+  items       String    @default("[]") // JSON [{description, quantity, unitPrice}]
+  currency    String    @default("ZAR")
+  subtotal    Float     @default(0)
+  taxRate     Float     @default(15)
+  total       Float     @default(0)
+  logoUrl     String?   // data URL for the printable template
+  notes       String?
+  issuedAt    DateTime  @default(now())
+  dueAt       DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([projectId])
+}
+
+// ============ EMAIL (user's own Gmail SMTP) ============
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?
+  leadId    String?
+  toEmail   String
+  subject   String
+  body      String
+  status    String   @default("DRAFT") // DRAFT | SENT | FAILED
+  provider  String   @default("GMAIL")
+  error     String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+// ============ USER INTEGRATION SETTINGS ============
+
+model UserSetting {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String // GMAIL_USER | GMAIL_APP_PASSWORD | GEMINI_API_KEY | EXPLEE_API_KEY ...
+  value     String
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 // ============ WALLET / CREDITS ============
