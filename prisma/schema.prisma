@@ -20,6 +20,8 @@ model User {
   phone        String?
   role         String   @default("MEMBER") // ADMIN | MEMBER
   xp           Int      @default(0)
+  refCode      String?  @unique // personal invite code (lazy-generated)
+  platformAdmin Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -42,6 +44,9 @@ model User {
   invoices           Invoice[]
   emailLogs          EmailLog[]
   userSettings       UserSetting[]
+  subscription       Subscription?
+  referralsMade      Referral[]    @relation("Referrer")
+  referralsReceived  Referral[]    @relation("Invitee")
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============
@@ -385,4 +390,44 @@ model PlatformConfig {
   key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// ============ SUBSCRIPTIONS (predictable MRR) ============
+
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String    @unique // one plan per user (upsert on renewal/upgrade)
+  plan        String    // HUSTLER | BOSS
+  status      String    @default("PENDING") // PENDING | ACTIVE | PAST_DUE | CANCELED
+  amountCents Int
+  provider    String    @default("YOCO")
+  reference   String    // platform reference (HPSUB-...)
+  providerRef String?   // Yoco checkout/payment id for reconciliation
+  startedAt   DateTime?
+  renewsAt    DateTime? // monthly anniversary; renewal nudge fires 5 days before
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, renewsAt])
+}
+
+// ============ REFERRALS (distribution + reverse churn) ============
+
+model Referral {
+  id            String    @id @default(cuid())
+  referrerId    String    // who shared their code
+  invitedUserId String?   // set when the invited person registers
+  invitedEmail  String?
+  status        String    @default("SIGNED_UP") // SIGNED_UP | SUBSCRIBED
+  rewardCents   Int       @default(0) // total credited to referrer
+  createdAt     DateTime  @default(now())
+  subscribedAt  DateTime?
+
+  referrer    User   @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  invitedUser User?  @relation("Invitee", fields: [invitedUserId], references: [id], onDelete: SetNull)
+
+  @@index([referrerId])
+  @@index([invitedUserId])
 }

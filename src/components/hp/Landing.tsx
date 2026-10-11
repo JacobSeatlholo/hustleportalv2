@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,7 +10,7 @@ import { api } from './shared'
 import { useHp } from './store'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
-  Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles,
+  Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket,
 } from 'lucide-react'
 import { BH_SERVICES } from '@/data/services'
 
@@ -39,6 +39,18 @@ export default function Landing() {
   const [city, setCity] = useState('Johannesburg')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [refApplied, setRefApplied] = useState<string | null>(null)
+
+  // Referral capture: ?ref=CODE — store it, greet the invitee, attach at register.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('ref')
+    if (code && code.trim()) {
+      localStorage.setItem('hp_ref', code.trim().toUpperCase())
+      setRefApplied(code.trim().toUpperCase())
+    } else if (localStorage.getItem('hp_ref')) {
+      setRefApplied(localStorage.getItem('hp_ref'))
+    }
+  }, [])
 
   async function submit() {
     setBusy(true)
@@ -46,8 +58,9 @@ export default function Landing() {
       if (mode === 'register') {
         await api('/api/auth', {
           method: 'POST',
-          body: JSON.stringify({ action: 'register', name, businessName, industry, city, email, password }),
+          body: JSON.stringify({ action: 'register', name, businessName, industry, city, email, password, refCode: localStorage.getItem('hp_ref') }),
         })
+        localStorage.removeItem('hp_ref')
       } else {
         await api('/api/auth', {
           method: 'POST',
@@ -97,6 +110,12 @@ export default function Landing() {
               Leads, clients, tasks and finance in one place. Source leads with AI,
               reveal contacts with prepaid credits — no monthly lock-in for what you use.
             </p>
+            {refApplied && (
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs text-foreground mt-2">
+                <Gift className="h-3.5 w-3.5 text-brand" />
+                Invited with code <b className="text-brand font-mono">{refApplied}</b> — your bonus is waiting after signup.
+              </div>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
@@ -361,11 +380,57 @@ export default function Landing() {
       </section>
 
       {/* ===== Final CTA ===== */}
+      <section id="pricing" className="space-y-5">
+        <div className="text-center space-y-2">
+          <div className="text-xs font-semibold tracking-[0.3em] uppercase text-brand">Go further, faster</div>
+          <h2 className="font-display text-3xl md:text-4xl">Plans that pay for themselves</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Start free. Upgrade when the pipeline demands it. One closed deal covers the month.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+          {[
+            {
+              name: 'Hustler', price: 'R199', icon: <Rocket className="h-5 w-5 text-brand" />,
+              tagline: 'For the solo grinder building momentum.',
+              perks: ['Unlimited AI Co-Founder & email drafts', '30 verified lead reveals every month', 'Invoices, calendar, reports, exports', 'R50 for every hustler you bring in'],
+            },
+            {
+              name: 'Boss', price: 'R499', icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
+              tagline: 'For teams ready to outscale the competition.',
+              perks: ['Everything in Hustler', '100 verified lead reveals every month', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
+            },
+          ].map((p) => (
+            <div key={p.name} className={`rounded-2xl border p-6 space-y-4 ${p.highlight ? 'border-brand/50 bg-brand/5' : 'bg-card'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">{p.icon}<h3 className="font-display text-xl">{p.name}</h3></div>
+                <div className="text-right">
+                  <div className="font-display text-3xl">{p.price}</div>
+                  <div className="text-[10px] text-muted-foreground">per month</div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{p.tagline}</p>
+              <ul className="space-y-2">
+                {p.perks.map((perk) => (
+                  <li key={perk} className="flex items-start gap-2 text-sm"><Check className="h-4 w-4 text-brand shrink-0 mt-0.5" />{perk}</li>
+                ))}
+              </ul>
+              <Button className="w-full bg-brand text-black hover:brightness-110 font-semibold" onClick={() => { document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
+                Start with {p.name}<ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          Secure card payments by Yoco · cancel anytime · your data is always exportable — the platform earns your loyalty, it doesn&apos;t lock it.
+        </p>
+      </section>
+
       <section className="text-center space-y-4 py-6">
         <h2 className="font-display text-4xl md:text-5xl">Start hustling smarter.</h2>
         <p className="text-brand font-display text-xl tracking-wide">Free to start. Ready when you are.</p>
         <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-          Free account, starter credits to reveal your first leads, and every tool above included. No subscription traps — top up only what you use.
+          Free account, starter credits to reveal your first leads, and every tool above included. Upgrade only when the pipeline demands it.
         </p>
         <div className="flex flex-wrap justify-center gap-3 pt-1">
           <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:brightness-110 transition">

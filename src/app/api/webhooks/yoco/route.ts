@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { awardXp } from '@/lib/gamification'
 import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, type YocoWebhookEvent } from '@/lib/yoco'
+import { rewardOnSubscribe } from '@/lib/referral'
 
 /** GET /api/webhooks/yoco — config status (authenticated). */
 export async function GET() {
@@ -47,6 +48,24 @@ export async function POST(req: NextRequest) {
   const payment = event.payload ?? {}
 
   if (event.type === 'payment.succeeded') {
+    // ---- Subscription activation (metadata.subscriptionId) ----
+    if (payment.metadata?.subscriptionId) {
+      const sub = await db.subscription.findUnique({ where: { id: String(payment.metadata.subscriptionId) } })
+      if (sub) {
+        // Idempotent claim: only transition PENDING -> ACTIVE once.
+        const claim = await db.subscription.updateMany({
+          where: { id: sub.id, status: 'PENDING' },
+          data: { status: 'ACTIVE', startedAt: new Date(), renewsAt: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000) },
+        })
+        if (claim.count > 0) {
+          await rewardOnSubscribe(sub.userId).catch(() => {}) // R50 to whoever invited this user
+        }
+        return NextResponse.json({ ok: true, activated: claim.count > 0, subscriptionId: sub.id })
+      }
+      return NextResponse.json({ ok: true, matched: false })
+    }
+
+    // ---- Wallet top-up (existing flow) ----
     // Match the TopUp: metadata.topUpId (primary) -> providerRef (Yoco payment id) -> amount+PENDING fallback.
     let topUp = payment.metadata?.topUpId
       ? await db.topUp.findUnique({ where: { id: payment.metadata.topUpId } })

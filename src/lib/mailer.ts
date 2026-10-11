@@ -7,6 +7,21 @@
  * HustlePortal never forces users to create app passwords or OAuth grants.
  */
 import { db } from '@/lib/db'
+import { ensureRefCode } from '@/lib/referral'
+
+/**
+ * Distribution engine: every email sent through HustlePortal carries a branded
+ * signature with the SENDER's referral link. Mail is the product's biggest
+ * organic surface — each client touch recruits the next hustler.
+ */
+async function buildSignature(userId: string): Promise<string> {
+  try {
+    const code = await ensureRefCode(userId)
+    return `\n\n— Sent with HustlePortal · the Business OS for SA hustlers\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
+  } catch {
+    return '\n\n— Sent with HustlePortal · hustleportal.online'
+  }
+}
 
 export type MailCreds = { user: string; appPassword: string }
 
@@ -89,14 +104,16 @@ export async function sendMail(
   userId: string,
   mail: { to: string; subject: string; body: string },
 ): Promise<{ ok: true; provider: 'GMAIL' | 'PLATFORM' } | { ok: false; error: string }> {
+  const signature = await buildSignature(userId)
+  const payload = { ...mail, body: mail.body + signature }
   const creds = await getUserMailCreds(userId)
   if (creds) {
-    const r = await sendViaUserGmail(creds, mail)
+    const r = await sendViaUserGmail(creds, payload)
     if (r.ok) return r
     // their Gmail failed — fall through to platform so the send still happens
-    const fb = await sendViaPlatform(userId, mail)
+    const fb = await sendViaPlatform(userId, payload)
     if (fb.ok) return fb
     return { ok: false, error: `Gmail: ${r.error}` }
   }
-  return sendViaPlatform(userId, mail)
+  return sendViaPlatform(userId, payload)
 }

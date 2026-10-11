@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { replayTour } from './WelcomeTour'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles } from 'lucide-react'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass } from 'lucide-react'
 
 interface TeamInfo {
   id: string
@@ -197,9 +198,14 @@ export default function ProfileView() {
           <h1 className="font-display text-3xl">My Profile</h1>
           <p className="text-sm text-muted-foreground">{session.user.email}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={logout} className="text-red-600 hover:text-red-700">
-          <LogOut className="h-4 w-4 mr-1" /> Sign out
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => replayTour()}>
+            <Compass className="h-4 w-4 mr-1" /> Replay the tour
+          </Button>
+          <Button variant="outline" size="sm" onClick={logout} className="text-red-600 hover:text-red-700">
+            <LogOut className="h-4 w-4 mr-1" /> Sign out
+          </Button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">

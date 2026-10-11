@@ -22,10 +22,12 @@ import CalendarView from './CalendarView'
 import InvoicesView from './InvoicesView'
 import ReportsView from './ReportsView'
 import IntegrationsView from './IntegrationsView'
+import GrowView from './GrowView'
+import WelcomeTour from './WelcomeTour'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
-  Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard,
+  Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
 } from 'lucide-react'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
@@ -44,6 +46,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'services', label: 'Services', icon: <Briefcase className="h-4 w-4" /> },
   { key: 'resources', label: 'Resources', icon: <BookOpen className="h-4 w-4" /> },
   { key: 'wallet', label: 'Wallet', icon: <Wallet className="h-4 w-4" /> },
+  { key: 'grow', label: 'Grow & Earn', icon: <Gift className="h-4 w-4" /> },
   { key: 'profile', label: 'Profile & Team', icon: <UserCog className="h-4 w-4" /> },
 ]
 
@@ -62,15 +65,22 @@ export default function AppShell() {
     })
   }, [])
 
-  // wallet navigation from anywhere
+  // wallet navigation from anywhere + tour replay
   useEffect(() => {
     const handler = (e: Event) => {
       const target = (e as CustomEvent).detail as ViewKey
       if (target) setView(target)
     }
     window.addEventListener('hp:navigate', handler)
-    return () => window.removeEventListener('hp:navigate', handler)
-
+    const replay = () => {
+      // replaying the tour re-arms it for one show
+      window.dispatchEvent(new CustomEvent('hp:tour-fire'))
+    }
+    window.addEventListener('hp:tour-replay', replay)
+    return () => {
+      window.removeEventListener('hp:navigate', handler)
+      window.removeEventListener('hp:tour-replay', replay)
+    }
   }, [])
 
   // silent background refresh to keep XP/wallet fresh (never flips boot loader)
@@ -111,6 +121,7 @@ export default function AppShell() {
       case 'services': return <ServicesView />
       case 'resources': return <ResourcesView />
       case 'wallet': return <WalletView />
+      case 'grow': return <GrowView />
       case 'profile': return <ProfileView />
       case 'admin': return <AdminView />
       default: return <DashboardView />
@@ -209,6 +220,8 @@ export default function AppShell() {
         <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">
           {content}
         </main>
+
+        <WelcomeTour />
 
         <footer className="mt-auto border-t bg-background/60 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground flex flex-wrap justify-between gap-2">

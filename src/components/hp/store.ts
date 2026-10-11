@@ -19,6 +19,7 @@ export type ViewKey =
   | 'resources'
   | 'services'
   | 'wallet'
+  | 'grow'
   | 'profile'
   | 'admin'
 

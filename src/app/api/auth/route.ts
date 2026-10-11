@@ -4,6 +4,7 @@ import { hashPassword, createSession, verifyPassword } from '@/lib/auth'
 import { ensureWallet, addCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
+import { attributeSignup } from '@/lib/referral'
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest) {
       }
       await awardXp(user.id, 'SIGNUP', 50, 'Joined HustlePortal')
       await bumpChallenge(user.id, 'login')
+      // Referral attribution (teams invite teams) — R10 to the referrer on signup.
+      try {
+        await attributeSignup(user.id, normalized, body.refCode)
+      } catch { /* attribution must never block registration */ }
       return NextResponse.json({ ok: true })
     }
 

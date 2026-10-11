@@ -12,7 +12,91 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
-import { Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save } from 'lucide-react'
+import { Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift, Repeat2, Trophy } from 'lucide-react'
+
+interface GrowthData {
+  mrr: { cents: number; targetCents: number; percent: number }
+  members: { total: number; newThisMonth: number; subscribers: number; byPlan: { HUSTLER: number; BOSS: number } }
+  subscriptions: { active: number; pastDue: number; canceled: number }
+  referrals: { total: number; subscribed: number; viaReferralActive: number }
+  topups: { last30DaysCents: number }
+  leaderboard: { name: string; businessName: string | null; invites: number; subscribed: number }[]
+}
+
+function GrowthSection() {
+  const [data, setData] = useState<GrowthData | null>(null)
+  useEffect(() => {
+    api<GrowthData>('/api/admin/growth').then(setData).catch(() => setData(null))
+  }, [])
+  if (!data) return null
+  const remain = Math.max(0, data.mrr.targetCents - data.mrr.cents)
+  return (
+    <Card className="border-brand/40">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-brand" /> Revenue &amp; Growth — R45,000/mo mission
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* MRR progress */}
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <div className="font-display text-3xl">{rands(data.mrr.cents)}<span className="text-sm text-muted-foreground font-sans"> MRR</span></div>
+            <div className="text-xs text-muted-foreground">{rands(remain)} to go · {data.mrr.percent}%</div>
+          </div>
+          <div className="h-3 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${data.mrr.percent}%` }} />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>Hustler ×{data.members.byPlan.HUSTLER}</span>
+            <span>Boss ×{data.members.byPlan.BOSS}</span>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MiniStat icon={<Users className="h-3.5 w-3.5" />} label="Members" value={String(data.members.total)} sub={`+${data.members.newThisMonth} this month`} />
+          <MiniStat icon={<Crown className="h-3.5 w-3.5" />} label="Subscribers" value={String(data.subscriptions.active)} sub={`${data.subscriptions.pastDue} past due · ${data.subscriptions.canceled} canceled`} />
+          <MiniStat icon={<Gift className="h-3.5 w-3.5" />} label="Referrals" value={String(data.referrals.total)} sub={`${data.referrals.subscribed} subscribed`} />
+          <MiniStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Top-ups 30d" value={rands(data.topups.last30DaysCents)} sub="one-off credit sales" />
+        </div>
+
+        {/* Referral leaderboard — teams invite teams */}
+        {data.leaderboard.length > 0 && (
+          <div>
+            <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-brand" /> Top recruiters — the growth engine</div>
+            <div className="rounded-lg border divide-y">
+              {data.leaderboard.map((r, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <span className="w-5 text-center font-display text-brand">{i + 1}</span>
+                  <span className="flex-1 truncate">{r.name}{r.businessName ? ` · ${r.businessName}` : ''}</span>
+                  <Badge variant="outline" className="text-[10px]">{r.invites} invited</Badge>
+                  <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">{r.subscribed} subscribed</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reverse-churn signal */}
+        <p className="text-xs text-muted-foreground">
+          {data.referrals.viaReferralActive} of {data.subscriptions.active} active subscribers arrived via referral —
+          referred members are your stickiest. Keep the invite loop warm.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MiniStat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{icon}{label}</div>
+      <div className="font-display text-lg mt-0.5">{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
+    </div>
+  )
+}
 
 interface AdminData {
   config: {
@@ -82,6 +166,8 @@ export default function AdminView() {
         <h1 className="font-display text-3xl">Admin</h1>
         <p className="text-sm text-muted-foreground">Platform settings, lead economics and users.</p>
       </div>
+
+      <GrowthSection />
 
       {/* Stats */}
       <div className="grid sm:grid-cols-3 gap-3">
