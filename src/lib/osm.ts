@@ -62,11 +62,11 @@ async function geocodePlace(area: string): Promise<{ areaId?: number; lat?: numb
 }
 
 /**
- * Translate the seller's need into OSM tag filters (plain Gemini, json mode).
- * Returns e.g. { regex: "^(hairdresser|beauty)$", keys: ["shop"] } style filters,
- * or null when the caller should use the generic sweep.
+ * Translate the seller's need into OSM tag filters AND a human category term for
+ * Nominatim's category search (which works from datacenter IPs where Overpass
+ * mirrors refuse traffic).
  */
-export function buildTagRegexFromDefinition(definition: string): { key: string; regex: string }[] {
+export function buildTagFilters(definition: string): { tags: { key: string; regex: string }[]; term?: string } {
   const d = definition.toLowerCase()
   const map: { match: RegExp; key: string; values: string[] }[] = [
     { match: /tavern|bar|pub|shebeen|liquor/, key: 'amenity', values: ['bar', 'pub', 'biergarten'] },
@@ -93,10 +93,47 @@ export function buildTagRegexFromDefinition(definition: string): { key: string; 
   ]
   for (const m of map) {
     if (m.match.test(d)) {
-      return [{ key: m.key, regex: `^(${m.values.join('|')})$` }]
+      return { tags: [{ key: m.key, regex: `^(${m.values.join('|')})$` }] }
     }
   }
-  return []
+  return { tags: [] }
+}
+
+/** Human-readable category term + key/value for Nominatim category search. */
+export function buildNominatimQuery(definition: string): { kv?: { key: string; value: string }; term?: string } {
+  const d = definition.toLowerCase()
+  const kvMap: { match: RegExp; key: string; values: string[] }[] = [
+    { match: /tavern|shebeen|liquor/, key: 'amenity', values: ['bar', 'pub'] },
+    { match: /\bbar\b|\bpub\b/, key: 'amenity', values: ['bar', 'pub'] },
+    { match: /restaurant|food|kota|catering|kitchen|takeaway/, key: 'amenity', values: ['restaurant', 'fast_food', 'cafe'] },
+    { match: /cafe|coffee/, key: 'amenity', values: ['cafe'] },
+    { match: /salon|beauty|hair|nail|spa/, key: 'shop', values: ['hairdresser', 'beauty'] },
+    { match: /spaza|grocery|supermarket|store|shop|retail/, key: 'shop', values: ['supermarket', 'convenience', 'clothes'] },
+    { match: /construction|building|plumbing|electrician|renovat/, key: 'craft', values: ['builder', 'plumber', 'electrician'] },
+    { match: /hardware|build material/, key: 'shop', values: ['hardware', 'doityourself'] },
+    { match: /security|guard|alarm/, key: 'office', values: ['security'] },
+    { match: /logistics|transport|courier|delivery/, key: 'office', values: ['logistics', 'courier'] },
+    { match: /cleaning|laundry|dry clean/, key: 'shop', values: ['laundry', 'dry_cleaning'] },
+    { match: /print|branding|signage|stationery/, key: 'shop', values: ['copyshop', 'stationery'] },
+    { match: /school|training|academy|tutor|daycare|creche/, key: 'amenity', values: ['school', 'college', 'kindergarten'] },
+    { match: /clinic|health|doctor|dentist|pharmacy|medical/, key: 'amenity', values: ['clinic', 'doctors', 'dentist', 'pharmacy'] },
+    { match: /gym|fitness/, key: 'leisure', values: ['fitness_centre', 'sports_centre'] },
+    { match: /funeral|mortuary/, key: 'shop', values: ['funeral_directors'] },
+    { match: /estate|property|rental/, key: 'office', values: ['estate_agent'] },
+    { match: /law|attorney|legal/, key: 'office', values: ['lawyer'] },
+    { match: /account|bookkeep|tax_|audit/, key: 'office', values: ['accountant'] },
+    { match: /insurance/, key: 'office', values: ['insurance'] },
+    { match: /\bit\b|tech|software|web|computer|phone repair/, key: 'shop', values: ['computer', 'mobile_phone', 'electronics'] },
+    { match: /car|panel|mechanic|tyre|spare/, key: 'shop', values: ['car_repair', 'car_parts', 'tyres'] },
+  ]
+  for (const m of kvMap) {
+    if (m.match.test(d)) {
+      const value = m.values[0]
+      const term = value.replace(/_/g, ' ')
+      return { kv: { key: m.key, value }, term }
+    }
+  }
+  return {}
 }
 
 function overpassQuery(place: { areaId?: number; lat?: number; lon?: number }, tagFilters: { key: string; regex: string }[], limit: number): string {
@@ -127,6 +164,75 @@ ${filters.map((f) => f.replace('RADIUS', String(radius)).replace('LAT', String(p
 out tags center ${Math.max(limit * 6, 60)};`
 }
 
+/**
+ * Nominatim category search — same OpenStreetMap data, works from datacenter IPs.
+ * extratags=1 returns website/phone/email where mapped. Real businesses or nothing.
+ */
+async function searchNominatimLeads(
+  area: string,
+  definition: string,
+  limit: number
+): Promise<{ leads: OsmLead[]; note?: string }> {
+  const { kv } = buildNominatimQuery(definition)
+  if (!kv) return { leads: [] }
+  try {
+    const params = new URLSearchParams({
+      [kv.key]: kv.value,
+      city: area,
+      countrycodes: 'za',
+      format: 'jsonv2',
+      limit: String(Math.min(limit * 3, 40)),
+      addressdetails: '1',
+      extratags: '1',
+    })
+    const res = await fetch(`${NOMINATIM}?${params}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return { leads: [] }
+    const rows = (await res.json()) as {
+      osm_id?: number
+      category?: string
+      type?: string
+      name?: string
+      display_name?: string
+      lat?: string
+      lon?: string
+      address?: Record<string, string>
+      extratags?: Record<string, string>
+    }[]
+    const seen = new Set<string>()
+    const leads: OsmLead[] = []
+    for (const r of rows) {
+      // Skip place/boundary rows — “Johannesburg” is not a hairdresser.
+      if (r.category === 'place' || r.category === 'boundary' || r.type === 'administrative') continue
+      const name = (r.name || r.display_name?.split(',')[0] || '').trim()
+      if (!name) continue
+      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      const ex = r.extratags || {}
+      const addr = r.address || {}
+      const suburb = addr.suburb || addr.neighbourhood || addr.town || addr.city_district
+      leads.push({
+        company: name,
+        email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ex.email || '') ? ex.email : undefined,
+        phone: (ex.phone || ex['contact:phone'] || '').trim() || undefined,
+        website: (ex.website || ex['contact:website'] || '').replace(/^https?:\/\//, '').replace(/\/$/, '') || undefined,
+        industry: (kv.value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        city: suburb || addr.city || area,
+        why: `Listed on OpenStreetMap${suburb ? ' in ' + suburb : ''}${addr.state ? ', ' + addr.state : ''} — a real, mappable business matching what you sell.`,
+        score: 4,
+        externalId: r.osm_id ? `osm_n_${r.osm_id}` : undefined,
+      })
+      if (leads.length >= limit) break
+    }
+    return { leads }
+  } catch {
+    return { leads: [] }
+  }
+}
+
 export async function searchOsmLeads(
   area: string,
   definition: string,
@@ -135,7 +241,7 @@ export async function searchOsmLeads(
   const place = await geocodePlace(area)
   if (!place) return { leads: [], note: `Could not map "${area}" to a map area — check the spelling.` }
 
-  const tagFilters = buildTagRegexFromDefinition(definition)
+  const tagFilters = buildTagFilters(definition).tags
   const runOverpass = async (query: string): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
     for (const endpoint of OVERPASS_ENDPOINTS) {
       try {
@@ -161,7 +267,13 @@ export async function searchOsmLeads(
     if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0) {
       result = await runOverpass(overpassQuery(place, [], limit))
     }
-    if (!result.ok) return { leads: [], note: 'The map directory is busy right now — try again in a minute.' }
+    if (!result.ok) {
+      // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
+      // category search (same OSM data, indexer-friendly) picks up the slack.
+      const nom = await searchNominatimLeads(area, definition, limit)
+      if (nom.leads.length > 0) return nom
+      return { leads: [], note: 'The map directory is busy right now — try again in a minute.' }
+    }
     const data = result.data!
     const seen = new Set<string>()
     const leads: OsmLead[] = []
@@ -188,6 +300,12 @@ export async function searchOsmLeads(
         externalId: `osm_${el.type}_${el.id}`,
       })
       if (leads.length >= limit) break
+    }
+    if (leads.length === 0) {
+      // Sparse township coverage in the map directory → Nominatim's category indexer
+      // (same OSM data) gets one more shot before we admit defeat.
+      const nom = await searchNominatimLeads(area, definition, limit)
+      if (nom.leads.length > 0) return nom
     }
     return { leads, note: leads.length ? undefined : 'No named businesses with contact details matched that category in this area yet.' }
   } catch {
