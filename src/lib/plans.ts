@@ -21,7 +21,7 @@ export const PLANS: PlanDef[] = [
     priceCents: 19900, // R199
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '30 verified lead reveals every month',
+      '5 verified lead reveals every month',
       'Invoices, calendar, reports, exports',
       'Invite & earn R50 per paying member',
       'Your business listed in the public business directory',
@@ -34,7 +34,7 @@ export const PLANS: PlanDef[] = [
     priceCents: 49900, // R499
     perks: [
       'Everything in Operator',
-      '100 verified lead reveals every month',
+      '10+ verified lead reveals every month',
       'Up to 5 team seats, shared pipeline',
       'Priority AI (longer context, faster replies)',
       'Founding Member badge on your profile',
