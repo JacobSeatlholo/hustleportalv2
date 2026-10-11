@@ -40,7 +40,7 @@ const PLANS = [
     icon: <Sparkles className="h-5 w-5 text-brand" />,
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '30 verified lead reveals every month',
+      '5 verified lead reveals every month',
       'Invoices, calendar, reports, exports',
       'R50 credit for every business owner you refer',
       'Your business listed in the public directory',
@@ -55,7 +55,7 @@ const PLANS = [
     highlight: true,
     perks: [
       'Everything in Operator',
-      '100 verified lead reveals every month',
+      '10+ verified lead reveals every month',
       'Up to 5 team seats, shared pipeline',
       'Priority AI — faster, longer answers',
       'Founding Member badge',

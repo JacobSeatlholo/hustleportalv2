@@ -391,9 +391,9 @@ export default function Landing() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
-              emoji: '🌐', title: 'HustlePortal™', price: 'R1,950/yr',
-              desc: 'We build your landing page for your business — live in days, not months.',
-              url: 'https://app.businesshustle.co.za/product/hustle-portal/'
+              emoji: '🛠️', title: 'Project Execution', price: 'From R5,000',
+              desc: 'Fixed-scope builds delivered by the Business Hustle team — brands, landing pages and launches, live in days.',
+              url: 'https://businesshustle.co.za'
             },
             {
               emoji: '📖', title: 'Hustle Basics eBook', price: 'R270',
@@ -406,9 +406,9 @@ export default function Landing() {
               url: 'https://app.businesshustle.co.za/product/landing-page/'
             },
             {
-              emoji: '🏘️', title: 'Biz Local', price: 'From R950',
-              desc: 'Get your business featured in your local neighbourhood directory on KasiStreet.online.',
-              url: 'https://app.businesshustle.co.za/product/kloof-street-starter-feature-package/'
+              emoji: '🧭', title: 'Strategy & Structuring', price: 'From R2,500',
+              desc: 'Business cases, company structuring and go-to-market plans — the thinking before the doing.',
+              url: 'https://businesshustle.co.za'
             },
           ].map((s) => (
             <a
@@ -435,7 +435,7 @@ export default function Landing() {
         <div>
           <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Services</div>
           <h2 className="font-display text-3xl mt-1">Expert services, done for you</h2>
-          <p className="text-sm text-muted-foreground mt-1">Professional services for South African businesses — quoted per project, delivered by the team behind HustlePortal.</p>
+          <p className="text-sm text-muted-foreground mt-1">Professional services for South African businesses — quoted per project, delivered by <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a>.</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {BH_SERVICES.map((svc) => (
@@ -494,12 +494,12 @@ export default function Landing() {
             {
               name: 'Operator', price: 'R199', icon: <Rocket className="h-5 w-5 text-brand" />,
               tagline: 'For owner-operators building steady momentum.',
-              perks: ['Unlimited AI Co-Founder & email drafts', '30 verified lead reveals every month', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
+              perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
             },
             {
               name: 'Boss', price: 'R499', icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
               tagline: 'For teams ready to outscale the competition.',
-              perks: ['Everything in Operator', '100 verified lead reveals every month', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
+              perks: ['Everything in Operator', '10+ verified lead reveals every month', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
             },
           ].map((p) => (
             <div key={p.name} className={`rounded-2xl border p-6 space-y-4 ${p.highlight ? 'border-brand/50 bg-brand/5' : 'bg-card'}`}>
@@ -545,10 +545,20 @@ export default function Landing() {
       </main>
 
       <footer className="border-t bg-background/60 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-muted-foreground flex flex-wrap justify-between gap-2">
-          <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
-          <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> <span className="text-brand tracking-wide">We feed your pipeline. You run your business.</span></span>
-          <span>© {new Date().getFullYear()} HustlePortal™</span>
+        <div className="max-w-6xl mx-auto px-6 py-5 space-y-3">
+          <div className="text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+            <span>
+              © {new Date().getFullYear()} HustlePortal™ · a <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a> product · Simple Eternity Holdings (Pty) Ltd
+            </span>
+            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> <span className="text-brand tracking-wide">We feed your pipeline. You run your business.</span></span>
+          </div>
+          <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <a href="https://businesshustle.co.za/terms" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Terms of Service</a>
+            <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Privacy &amp; POPIA</a>
+            <a href="https://businesshustle.co.za/cookies" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Cookie Policy</a>
+            <a href="https://app.businesshustle.co.za/wp-content/uploads/2025/12/BHW-PAIA-Manual-Integrated-with-POPIA.pdf" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">PAIA Manual</a>
+            <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
+          </div>
         </div>
       </footer>
     </div>
