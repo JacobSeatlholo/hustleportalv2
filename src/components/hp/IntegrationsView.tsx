@@ -8,7 +8,10 @@ import { Badge } from '@/components/ui/badge'
 import { api, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
-import { KeyRound, Loader2, Mail, Sparkles, Database, CalendarCheck2, Trash2 } from 'lucide-react'
+import {
+  KeyRound, Loader2, Mail, Sparkles, Database, CalendarCheck2, Trash2,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink,
+} from 'lucide-react'
 
 const INTEGRATIONS: {
   key: string
@@ -58,6 +61,173 @@ const INTEGRATIONS: {
     secret: true,
   },
 ]
+
+interface WaStatus {
+  connected: boolean
+  phoneNumberId: string | null
+  displayNumber: string | null
+  verifyToken: string | null
+  webhookPath: string
+}
+
+function CopyRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
+  const { toast } = useToast()
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast({ title: 'Could not copy — select the text manually', variant: 'destructive' })
+    }
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-28 shrink-0 text-xs text-muted-foreground">{label}</div>
+      <code className={`flex-1 truncate rounded bg-black/40 px-2 py-1.5 text-xs ${mono ? 'font-mono' : ''}`}>{value}</code>
+      <Button variant="outline" size="sm" onClick={copy} className="shrink-0">
+        {copied ? <Check className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
+    </div>
+  )
+}
+
+/** WhatsApp Business Cloud API connect card — per-user credentials + webhook. */
+function WhatsAppCard() {
+  const { toast } = useToast()
+  const { bumpRefresh } = useHp()
+  const [status, setStatus] = useState<WaStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [phoneNumberId, setPhoneNumberId] = useState('')
+  const [accessToken, setAccessToken] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api<WaStatus>('/api/whatsapp/connect')
+      setStatus(res)
+    } catch (e) {
+      toast({ title: 'Could not load WhatsApp status', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => { load() }, [load])
+
+  async function connect() {
+    setSaving(true)
+    try {
+      const res = await api<WaStatus>('/api/whatsapp/connect', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumberId, accessToken }),
+      })
+      setStatus(res)
+      setPhoneNumberId('')
+      setAccessToken('')
+      toast({
+        title: 'WhatsApp connected ✓',
+        description: res.displayNumber ? `Linked to ${res.displayNumber}. Paste the webhook below into Meta to auto-capture contacts.` : 'Verified with Meta.',
+      })
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Verification failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function disconnect() {
+    setDisconnecting(true)
+    try {
+      await api('/api/whatsapp/connect', { method: 'DELETE' })
+      await load()
+      toast({ title: 'WhatsApp disconnected', description: 'Your contacts stay — only the API link was removed.' })
+    } catch {
+      // non-fatal
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  const webhookUrl = status ? `${typeof window !== 'undefined' ? window.location.origin : 'https://hustleportal.online'}${status.webhookPath}` : ''
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <MessageCircle className="h-4 w-4 text-brand" />
+          <h3 className="font-medium text-sm">WhatsApp Business</h3>
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          ) : status?.connected ? (
+            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">CONNECTED{status.displayNumber ? ` · ${status.displayNumber}` : ''}</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] border-stone-500/40 text-stone-400">NOT CONNECTED</Badge>
+          )}
+        </div>
+        <a
+          href="https://business.facebook.com/latest/whatsapp_business_phone_numbers/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+        >
+          Meta dashboard <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        <b className="text-foreground">1-click import, zero setup:</b> your clients list can bulk-import any WhatsApp list you paste or upload (Clients → Import from WhatsApp) — Meta does not let ANY tool read your app&apos;s contact list, so that&apos;s the compliant way.{' '}
+        <b className="text-foreground">Optional API link below</b> adds auto-capture: everyone who messages your business number is added to your CRM automatically.
+      </p>
+
+      {!loading && !status?.connected && (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="wa-pid">WhatsApp Business Phone Number ID</Label>
+            <Input id="wa-pid" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} placeholder="e.g. 123456789012345" />
+            <p className="text-[11px] text-muted-foreground">Meta developers → WhatsApp → API Setup → &quot;Phone number ID&quot; (not the phone number itself).</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="wa-token">Access token</Label>
+            <Input id="wa-token" type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} placeholder="EAAG… (System User token)" />
+            <p className="text-[11px] text-muted-foreground">Create a System User in Meta Business Settings, add the WhatsApp product, generate a token with whatsapp_business_messaging. Stored only on your account.</p>
+          </div>
+          <Button onClick={connect} disabled={saving || !phoneNumberId.trim() || !accessToken.trim()}>
+            {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plug className="h-4 w-4 mr-1.5" />}
+            Connect &amp; verify with Meta
+          </Button>
+        </div>
+      )}
+
+      {!loading && status?.connected && (
+        <div className="space-y-3">
+          <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium"><ShieldCheck className="h-3.5 w-3.5 text-brand" /> Finish in Meta (2 pastes) — activates auto-capture</div>
+            <p className="text-[11px] text-muted-foreground">
+              In Meta developers → WhatsApp → Configuration: set the Callback URL and Verify token below, then click Subscribe to the <b>messages</b> field. After that, every customer who messages your number lands in Clients automatically.
+            </p>
+            <CopyRow label="Callback URL" value={webhookUrl} />
+            <CopyRow label="Verify token" value={status.verifyToken || ''} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={load} disabled={loading}>
+              <Loader2 className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : 'hidden'}`} /> Recheck status
+            </Button>
+            <Button variant="outline" onClick={disconnect} disabled={disconnecting} className="text-red-400 hover:text-red-300">
+              {disconnecting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1.5" />}
+              Disconnect
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function IntegrationsView() {
   const { bumpRefresh } = useHp()
@@ -124,6 +294,7 @@ export default function IntegrationsView() {
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
       ) : (
         <div className="space-y-3">
+          <WhatsAppCard />
           {INTEGRATIONS.map((intg) => {
             const row = settings.find((s) => s.key === intg.key)
             const configured = row?.configured || false

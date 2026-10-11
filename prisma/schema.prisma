@@ -47,6 +47,7 @@ model User {
   subscription       Subscription?
   referralsMade      Referral[]    @relation("Referrer")
   referralsReceived  Referral[]    @relation("Invitee")
+  waMessages         WaMessage[]
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============
@@ -146,6 +147,7 @@ model Client {
   notes        String?
   monthlyValue Float    @default(0)
   status       String   @default("ACTIVE") // ACTIVE | CHURNED
+  source       String   @default("MANUAL") // MANUAL | WHATSAPP | WHATSAPP_AUTO | VCF | CSV
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -274,6 +276,26 @@ model EmailLog {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+}
+
+// ============ WHATSAPP (Cloud API log: inbound auto-capture + outbound sends) ============
+
+model WaMessage {
+  id          String   @id @default(cuid())
+  userId      String
+  clientId    String?
+  phone       String   // E.164 without + (WhatsApp wa_id)
+  direction   String   // IN | OUT
+  body        String
+  status      String   @default("RECEIVED") // RECEIVED | SENT | FAILED
+  waMessageId String?  // Meta wamid for dedup/status
+  error       String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, phone])
 }
 
 // ============ USER INTEGRATION SETTINGS ============

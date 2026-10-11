@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -14,9 +15,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { parseContactList, normalizePhone, waLink, waGreeting } from '@/lib/whatsapp'
 import { api, rands } from './shared'
 import { useHp } from './store'
-import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle } from 'lucide-react'
+import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText } from 'lucide-react'
 
 interface Client {
   id: string
@@ -27,7 +29,16 @@ interface Client {
   notes: string | null
   monthlyValue: number
   status: string // ACTIVE | CHURNED
+  source?: string // MANUAL | WHATSAPP | WHATSAPP_AUTO | VCF | CSV
   createdAt: string
+}
+
+interface ImportResult {
+  imported: number
+  duplicates: number
+  invalidCount: number
+  invalid: { raw: string; reason: string }[]
+  detected: number
 }
 
 const EMPTY = { name: '', company: '', email: '', phone: '', monthlyValue: '', status: 'ACTIVE', notes: '' }
@@ -44,6 +55,19 @@ export default function ClientsView() {
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const businessName = useHp((s) => s.session?.user?.businessName) ?? null
+
+  // Live parse preview — same engine the server runs on import
+  const importPreview = useMemo(() => {
+    if (!importText.trim()) return { detected: 0, valid: 0, invalid: 0 }
+    const parsed = parseContactList(importText)
+    const valid = parsed.filter((c) => normalizePhone(c.phone).valid).length
+    return { detected: parsed.length, valid, invalid: parsed.length - valid }
+  }, [importText])
 
   async function load() {
     try {
@@ -84,6 +108,48 @@ export default function ClientsView() {
     setEditing(null)
     setForm(EMPTY)
     setDialogOpen(true)
+  }
+
+  function openImport() {
+    setImportText('')
+    setImportResult(null)
+    setImportOpen(true)
+  }
+
+  async function readFile(f: File | undefined) {
+    if (!f) return
+    if (f.size > 2 * 1024 * 1024) {
+      toast({ title: 'File too big (max 2 MB)', variant: 'destructive' })
+      return
+    }
+    const text = await f.text()
+    setImportText(text)
+    toast({ title: `Loaded ${f.name}`, description: 'Check the preview below, then import.' })
+  }
+
+  async function runImport() {
+    if (!importText.trim()) return
+    setImporting(true)
+    try {
+      const res = await api<ImportResult>('/api/whatsapp/import', {
+        method: 'POST',
+        body: JSON.stringify({ text: importText }),
+      })
+      setImportResult(res)
+      await load()
+      bumpRefresh()
+      if (res.imported > 0) toast({ title: `${res.imported} contacts added ✓`, description: 'Your WhatsApp list is now in the CRM.' })
+    } catch (e) {
+      toast({ title: 'Import failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function waHref(c: Client): string | null {
+    const norm = c.phone ? normalizePhone(c.phone) : null
+    if (!norm?.valid) return null
+    return waLink(norm.e164!, waGreeting(c.name, businessName))
   }
 
   function openEdit(c: Client) {
@@ -154,9 +220,14 @@ export default function ClientsView() {
           <h1 className="font-display text-3xl">Clients</h1>
           <p className="text-sm text-muted-foreground">Your CRM — everyone you do business with, in one place.</p>
         </div>
-        <Button onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add Client
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={openImport}>
+            <Upload className="h-4 w-4 mr-1.5" /> Import from WhatsApp
+          </Button>
+          <Button onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1.5" /> Add Client
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -205,9 +276,14 @@ export default function ClientsView() {
                 : 'No clients match your search.'}
             </p>
             {clients.length === 0 && (
-              <Button onClick={openAdd} variant="outline" size="sm" className="mt-1">
-                <Plus className="h-4 w-4 mr-1" /> Add your first client
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2 mt-1">
+                <Button onClick={openImport} variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-1" /> Import your WhatsApp list
+                </Button>
+                <Button onClick={openAdd} variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-1" /> Add your first client
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -221,6 +297,9 @@ export default function ClientsView() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{c.name}</span>
                     {c.company && <span className="text-sm text-muted-foreground">· {c.company}</span>}
+                    {c.source === 'WHATSAPP' && <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">WhatsApp import</Badge>}
+                    {c.source === 'WHATSAPP_AUTO' && <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">Auto-captured</Badge>}
+                    {c.source === 'VCF' && <Badge variant="outline" className="text-[10px] border-stone-500/40 text-stone-400">vCard</Badge>}
                     {c.status === 'ACTIVE'
                       ? <Badge className="bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/15 border-0">Active</Badge>
                       : <Badge variant="secondary">Churned</Badge>}
@@ -237,10 +316,10 @@ export default function ClientsView() {
                   {c.notes && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{c.notes}</p>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {c.phone && (
-                    <Button variant="ghost" size="icon" asChild title="WhatsApp">
-                      <a href={`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">
-                        <MessageCircle className="h-4 w-4" />
+                  {c.phone && waHref(c) && (
+                    <Button variant="ghost" size="icon" asChild title="Chat on WhatsApp">
+                      <a href={waHref(c)!} target="_blank" rel="noreferrer">
+                        <MessageCircle className="h-4 w-4 text-brand" />
                       </a>
                     </Button>
                   )}
@@ -305,14 +384,94 @@ export default function ClientsView() {
               <Label htmlFor="c-notes">Notes</Label>
               <Input id="c-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What are you doing for them?" />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={save} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                {editing ? 'Save changes' : 'Add client'}
-              </Button>
-            </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp list import dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-brand" /> Import your WhatsApp list
+            </DialogTitle>
+            <DialogDescription>
+              Paste your contact list (group members, broadcast list, chat exports) or upload a .vcf / .csv — we detect
+              SA numbers, pair the names, skip duplicates and add everyone in one click.
+            </DialogDescription>
+          </DialogHeader>
+
+          {importResult ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-brand/20 bg-brand/5 p-4 space-y-1.5">
+                <p className="font-display text-lg flex items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-brand" /> {importResult.imported} contacts added
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {importResult.duplicates > 0 && `${importResult.duplicates} duplicates skipped (already in your CRM). `}
+                  {importResult.invalidCount > 0 && `${importResult.invalidCount} entries had no valid number.`}
+                  {(importResult.duplicates === 0 && importResult.invalidCount === 0) && 'Everything in your paste was new and valid.'}
+                </p>
+              </div>
+              {importResult.invalid.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Skipped entries:</p>
+                  {importResult.invalid.map((row, i) => (
+                    <p key={i} className="text-[11px] text-muted-foreground truncate">• {row.raw} — {row.reason}</p>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button onClick={() => setImportOpen(false)}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 p-4 cursor-pointer hover:border-brand/50 transition-colors">
+                <Upload className="h-4 w-4 text-brand" />
+                <span className="text-xs text-muted-foreground">Upload contacts file (.vcf, .csv, .txt — from your phone or WhatsApp)</span>
+                <input
+                  type="file"
+                  accept=".vcf,.csv,.txt,text/vcard,text/csv,text/plain"
+                  className="hidden"
+                  onChange={(e) => readFile(e.target.files?.[0])}
+                />
+              </label>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-import" className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Or paste your list</Label>
+                <Textarea
+                  id="wa-import"
+                  rows={7}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder={'Thandi Mokoena — 082 123 4567\n+27 83 987 6543\nSipho, 072 555 1234, sipho@gmail.com'}
+                  className="font-mono text-xs"
+                />
+              </div>
+
+              {importText.trim() && (
+                <div className="rounded-lg bg-black/30 px-3 py-2 text-xs">
+                  {importPreview.valid > 0 ? (
+                    <span className="text-brand font-medium">
+                      {importPreview.valid} contact{importPreview.valid === 1 ? '' : 's'} detected
+                      {importPreview.invalid > 0 && <span className="text-muted-foreground font-normal"> · {importPreview.invalid} line{importPreview.invalid === 1 ? '' : 's'} without a valid number will be skipped</span>}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">No valid numbers yet — make sure the numbers are in the text.</span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+                <Button onClick={runImport} disabled={importing || importPreview.valid === 0}>
+                  {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ListChecks className="h-4 w-4 mr-1" />}
+                  Import {importPreview.valid > 0 ? importPreview.valid : ''} contacts
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
