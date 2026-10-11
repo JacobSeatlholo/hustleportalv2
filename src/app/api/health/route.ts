@@ -30,12 +30,23 @@ function classifyDbError(e: unknown): string {
 export async function GET() {
   let dbPing = false
   let dbPingError: string | null = null
+  let tables: string[] | null = null
+  let userQuery: 'ok' | string | null = null
   try {
     const { PrismaClient } = await import('@prisma/client')
     const prisma = new PrismaClient()
     try {
       await prisma.$queryRaw`SELECT 1`
       dbPing = true
+      // Enumerate public tables (names only — no data) to detect empty/partial schema.
+      const rows = (await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`) as { table_name: string }[]
+      tables = rows.map((r) => String(r.table_name))
+      try {
+        await prisma.user.findFirst({ select: { id: true } })
+        userQuery = 'ok'
+      } catch (e) {
+        userQuery = classifyDbError(e)
+      }
     } finally {
       await prisma.$disconnect().catch(() => {})
     }
@@ -46,7 +57,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
-    db: { ping: dbPing, error: dbPingError },
+    db: { ping: dbPing, error: dbPingError, tables, userQuery },
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
       emailPlatformKey: Boolean(process.env.RESEND_API_KEY?.trim()),
