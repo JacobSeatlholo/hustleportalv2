@@ -86,7 +86,7 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'KEY_INVALID':
       return `Your Gemini key was rejected by Google (invalid, deleted or mistyped).${own ? ' Update it under Integrations, or remove it to use HustlePortal AI.' : ' The platform AI key looks misconfigured — the operator has been alerted by this message.'}`
     case 'PERMISSION':
-      return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it.' : ' The platform AI key\'s Google project is currently restricted or suspended — the operator must issue a fresh project key. You can add your own free Gemini key under Integrations to go live instantly.'}`
+      return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it — or simply remove it under Integrations to ride HustlePortal AI.' : ' The platform AI key\'s Google project is currently restricted or suspended — the operator must issue a fresh project key. You can add your own free Gemini key under Integrations to go live instantly.'}`
     case 'QUOTA':
       return `Gemini is rate-limited right now (429). We tried the fallback key too — please try again in a minute.${own}`
     case 'MODEL':
@@ -107,9 +107,9 @@ interface Failure {
 }
 
 /**
- * Pick the failure the user can actually DO something about:
- * their own key's problems first (fixable in Integrations), platform problems next
- * (operator/add-a-key advice), "model retired" last (nobody's fault, self-heals).
+ * Surface the failure the user can actually DO something about — and, when BOTH
+ * keys failed for different reasons, name each cause so the escape hatch is
+ * obvious (mirrors the mail engine's combined-error contract).
  */
 function bestError(failures: Failure[]): string {
   if (failures.length === 0) return 'Gemini request failed'
@@ -124,7 +124,25 @@ function bestError(failures: Failure[]): string {
     }
   }
   const best = failures.reduce((a, b) => (rank(b) > rank(a) ? b : a))
-  return friendlyError(best.cls, best.status, best.detail, best.ownKey)
+  let msg = friendlyError(best.cls, best.status, best.detail, best.ownKey)
+  const other = failures.find((f) => f.ownKey !== best.ownKey && f.cls !== best.cls)
+  if (other) {
+    const clause = shortOtherCause(other)
+    if (clause) msg += ` ${clause}`
+  }
+  return msg
+}
+
+/** One compact line about what the OTHER key did, so both causes are visible at once. */
+function shortOtherCause(f: Failure): string {
+  const who = f.ownKey ? 'Your own key' : 'HustlePortal AI'
+  switch (f.cls) {
+    case 'KEY_INVALID': return `(${who} was also rejected as invalid.)`
+    case 'PERMISSION': return `(${who} was also blocked by Google — 403.)`
+    case 'QUOTA': return `(${who} is rate-limited this minute — retrying in a minute usually clears it.)`
+    case 'MODEL': return `(Google is also mid-rotation on its models right now.)`
+    default: return ''
+  }
 }
 
 /**

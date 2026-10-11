@@ -40,7 +40,7 @@ function firstLine(s: string): string {
  * The classic case: 535 BadCredentials — Gmail refuses NORMAL passwords for
  * sending; only App Passwords work (2-Step Verification required).
  */
-function classifyGmailError(msg: string): string {
+export function classifyGmailError(msg: string): string {
   if (/535|BadCredentials|Username and Password not accepted|Invalid login|EAUTH/i.test(msg)) {
     return 'Google rejected your Gmail login. Gmail blocks normal passwords for sending — use an App Password: turn on 2-Step Verification (myaccount.google.com/security), create one at myaccount.google.com/apppasswords, and paste it under Integrations → Gmail app password (no spaces).'
   }

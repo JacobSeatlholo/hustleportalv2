@@ -291,6 +291,8 @@ export default function IntegrationsView() {
   const [loading, setLoading] = useState(true)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
+  const [mailTesting, setMailTesting] = useState(false)
+  const [mailVerdict, setMailVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -330,8 +332,25 @@ export default function IntegrationsView() {
       await api(`/api/settings?key=${key}`, { method: 'DELETE' })
       setSettings((rows) => rows.filter((r) => r.key !== key))
       toast({ title: 'Cleared', description: `${key} removed.` })
+      if (key === 'GMAIL_APP_PASSWORD') setMailVerdict(null)
     } catch {
       // non-fatal
+    }
+  }
+
+  // SMTP handshake against the saved Gmail creds — instant verdict, no email sent.
+  async function testGmail() {
+    setMailTesting(true)
+    setMailVerdict(null)
+    try {
+      const res = await api<{ ok: boolean; message: string }>('/api/settings/mail-test', { method: 'POST' })
+      setMailVerdict({ ok: true, msg: res.message })
+      toast({ title: 'Gmail connection verified ✓', description: res.message })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Test failed'
+      setMailVerdict({ ok: false, msg })
+    } finally {
+      setMailTesting(false)
     }
   }
 
@@ -385,6 +404,27 @@ export default function IntegrationsView() {
                     {saving === intg.key ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
                   </Button>
                 </div>
+                {intg.key === 'GMAIL_APP_PASSWORD' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={testGmail}
+                        disabled={mailTesting}
+                        variant="outline"
+                        className="h-8 text-xs"
+                      >
+                        {mailTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                        Test Gmail connection
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">Runs a real Google login check — no email is sent.</span>
+                    </div>
+                    {mailVerdict && (
+                      <p className={`text-xs rounded-md border px-2.5 py-2 ${mailVerdict.ok ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/5' : 'border-rose-500/40 text-rose-400 bg-rose-500/5'}`}>
+                        {mailVerdict.ok ? '✓ ' : '✕ '}{mailVerdict.msg}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
