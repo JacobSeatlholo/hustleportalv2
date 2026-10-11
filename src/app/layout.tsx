@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HustlePortal™ — Business OS for South African Entrepreneurs",
   description:
-    "Leads, clients, tasks and finance in one place. Source leads with AI, reveal contacts with prepaid credits, and level up your hustle. Built by Business Hustle for SA.",
+    "Leads, clients, invoicing, tasks and finance in one professional system. Source leads with AI, reveal verified contacts with prepaid credits. Built in South Africa.",
   keywords: [
     "HustlePortal", "Business Hustle", "leads South Africa", "CRM for entrepreneurs",
     "AI business plan", "SME tools South Africa", "business OS", "township economy",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Business Hustle — Simple Eternity Holdings (Pty) Ltd" }],
   openGraph: {
     title: "HustlePortal™ — Business OS for South African Entrepreneurs",
-    description: "Your hustle, levelled up. Leads, CRM, tasks, finance & AI — built for SA.",
+    description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI — built for South African businesses.",
     siteName: "HustlePortal",
     type: "website",
     locale: "en_ZA",

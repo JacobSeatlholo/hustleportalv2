@@ -392,7 +392,7 @@ export default function ProfileView() {
 
               {/* Multi-company */}
               <div className="border-t pt-3 space-y-2">
-                <Label className="text-xs text-muted-foreground">Add another company workspace (multi-business hustle)</Label>
+                <Label className="text-xs text-muted-foreground">Add another company workspace (multi-business)</Label>
                 <div className="flex gap-2">
                   <Input value={newWsName} onChange={(e) => setNewWsName(e.target.value)} placeholder="e.g. Sibo Events" className="flex-1" />
                   <Button variant="outline" onClick={createWorkspace} disabled={!newWsName.trim()}>Create</Button>

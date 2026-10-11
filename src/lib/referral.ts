@@ -55,7 +55,7 @@ export async function attributeSignup(newUserId: string, newEmail: string, rawCo
       status: 'SIGNED_UP',
     },
   })
-  await addCredits(referrer.id, REFERRAL_REWARD_SIGNUP_CENTS, 'BONUS', `Referral reward — ${newEmail || 'a new hustler'} joined`)
+  await addCredits(referrer.id, REFERRAL_REWARD_SIGNUP_CENTS, 'BONUS', `Referral reward — ${newEmail || 'a new member'} joined`)
   return referrer.id
 }
 

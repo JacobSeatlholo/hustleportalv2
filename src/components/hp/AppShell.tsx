@@ -50,8 +50,8 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Profile & Team', icon: <UserCog className="h-4 w-4" /> },
 ]
 
-// XP level that nudges the hustler to link their Yoco card
-const CARD_LINK_XP_LEVEL = 3 // Hustler @ 300 XP
+// XP level that nudges the user to link their Yoco card
+const CARD_LINK_XP_LEVEL = 3 // Operator level @ 300 XP
 const CARD_BANNER_KEY = 'hp_card_banner_dismissed'
 
 export default function AppShell() {

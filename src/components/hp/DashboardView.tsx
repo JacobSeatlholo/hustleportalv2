@@ -101,7 +101,7 @@ export default function DashboardView() {
   }
 
   const k = data.kpis
-  const firstName = session?.user.name.split(' ')[0] || 'Hustler'
+  const firstName = session?.user.name.split(' ')[0] || 'there'
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const maxWeek = Math.max(...data.week.map((w) => w.count), 1)

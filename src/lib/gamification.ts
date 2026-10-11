@@ -2,8 +2,8 @@ import { db } from '@/lib/db'
 
 export const LEVELS = [
   { level: 1, name: 'Seedling', min: 0, icon: '🌱' },
-  { level: 2, name: 'Grinder', min: 100, icon: '🔧' },
-  { level: 3, name: 'Hustler', min: 300, icon: '⚡' },
+  { level: 2, name: 'Builder', min: 100, icon: '🔧' },
+  { level: 3, name: 'Operator', min: 300, icon: '⚡' },
   { level: 4, name: 'Closer', min: 700, icon: '🎯' },
   { level: 5, name: 'Boss', min: 1200, icon: '👑' },
   { level: 6, name: 'Tycoon', min: 2500, icon: '🏆' },

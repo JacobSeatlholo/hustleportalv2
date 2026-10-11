@@ -53,7 +53,7 @@ export default function WelcomeTour() {
       icon: <Rocket className="h-7 w-7 text-brand" />,
       kicker: 'Welcome to HustlePortal',
       title: 'Outsell. Outlast. Outperform.',
-      body: 'This is your Business OS — everything a SA hustle needs to win: leads, follow-ups, money, and an AI co-founder that knows your numbers. Let\'s take 30 seconds to show you around.',
+      body: 'This is your Business OS — leads, follow-ups, invoicing and an AI co-founder that knows your numbers, in one professional system. Let\'s take 30 seconds to show you around.',
       cta: "Show me around",
     },
     {
@@ -76,14 +76,14 @@ export default function WelcomeTour() {
       icon: <Mail className="h-7 w-7 text-brand" />,
       kicker: 'Close deals on autopilot',
       title: 'Emails that send themselves',
-      body: 'AI drafts the follow-up in your voice; HustlePortal sends it and tracks it. Replies come straight back to you. This is how the top hustlers outlast everyone who forgets to follow up.',
+      body: 'AI drafts the follow-up in your voice; HustlePortal sends it and tracks it. Replies come straight back to you. This is how the most consistent businesses outlast everyone who forgets to follow up.',
       cta: 'Open Mail',
       goTo: () => setView('mail'),
     },
     {
       icon: <Users className="h-7 w-7 text-brand" />,
       kicker: 'Grow together',
-      title: 'Invite hustlers. Earn R50 each.',
+      title: 'Invite owners. Earn R50 each.',
       body: 'Teams that grow together, win together. Share your invite link — when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
       cta: 'Get my invite link',
       goTo: () => setView('grow'),
@@ -93,7 +93,7 @@ export default function WelcomeTour() {
       kicker: 'You\'re ready',
       title: 'Let\'s get you paid',
       body: 'Add your first lead, send your first follow-up, and watch your streak grow. HustlePortal levels up as you do — every action earns XP. Now go outperform.',
-      cta: "Let's hustle",
+      cta: "Let's get to work",
     },
   ]
 

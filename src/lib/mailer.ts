@@ -12,12 +12,12 @@ import { ensureRefCode } from '@/lib/referral'
 /**
  * Distribution engine: every email sent through HustlePortal carries a branded
  * signature with the SENDER's referral link. Mail is the product's biggest
- * organic surface — each client touch recruits the next hustler.
+ * organic surface — each client touch recruits the next member.
  */
 async function buildSignature(userId: string): Promise<string> {
   try {
     const code = await ensureRefCode(userId)
-    return `\n\n— Sent with HustlePortal · the Business OS for SA hustlers\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
+    return `\n\n— Sent with HustlePortal · the Business OS for South African businesses\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
   } catch {
     return '\n\n— Sent with HustlePortal · hustleportal.online'
   }

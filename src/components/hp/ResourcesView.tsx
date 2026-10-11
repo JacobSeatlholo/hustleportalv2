@@ -45,7 +45,7 @@ export default function ResourcesView() {
             <BookOpen className="h-6 w-6 text-brand" /> RESOURCES
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Free tools, guides &amp; learning materials — {totalTools} hand-picked links for hustlers
+            Free tools, guides &amp; learning materials — {totalTools} hand-picked links for business owners
           </p>
         </div>
         <div className="relative w-full sm:w-64">
@@ -107,7 +107,7 @@ export default function ResourcesView() {
       )}
 
       <p className="text-[11px] text-muted-foreground text-center pt-2">
-        Curated by Business Hustle — free tools your hustle can use today. Suggest a tool via WhatsApp.
+        Curated by the HustlePortal team — free tools your business can use today. Suggest a tool via WhatsApp.
       </p>
     </div>
   )

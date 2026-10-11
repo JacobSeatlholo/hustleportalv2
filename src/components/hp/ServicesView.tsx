@@ -51,9 +51,9 @@ export default function ServicesView() {
     <div className="space-y-4">
       <div>
         <p className="text-[11px] tracking-[0.18em] text-brand font-semibold">SERVICES</p>
-        <h1 className="font-display text-3xl">Everything Business Hustle offers</h1>
+        <h1 className="font-display text-3xl">Professional services for your business</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Expert services for SA entrepreneurs — delivered by the team behind HustlePortal.
+          Expert services for SA businesses — delivered by the team behind HustlePortal.
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export default function ServicesView() {
           </div>
         </div>
         <Button asChild>
-          <a href={waLink("Hi Business Hustle! I'd like a free business assessment, please.")} target="_blank" rel="noreferrer">
+          <a href={waLink("Hi HustlePortal team! I'd like a free business assessment, please.")} target="_blank" rel="noreferrer">
             <MessageCircle className="h-4 w-4 mr-1.5" /> Free Business Assessment
           </a>
         </Button>
@@ -123,8 +123,8 @@ export default function ServicesView() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Services are quoted per project and delivered by Business Hustle (Pty) Ltd. HustlePortal is built and maintained
-        by the same team — your dashboard, our craft.
+        Services are quoted per project and delivered by the team behind HustlePortal —
+        your dashboard, our craft.
       </p>
     </div>
   )

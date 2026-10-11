@@ -213,7 +213,7 @@ export default function StoreView() {
 
       <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground pt-2">
         <Loader2 className="h-3 w-3 animate-spin hidden" />
-        <span>Every purchase directly funds your hustle — built by Business Hustle, for SA hustlers.</span>
+        <span>Every purchase supports the platform — built for South African businesses, by a South African team.</span>
       </div>
     </div>
   )

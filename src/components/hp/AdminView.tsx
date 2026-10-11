@@ -48,7 +48,7 @@ function GrowthSection() {
             <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${data.mrr.percent}%` }} />
           </div>
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>Hustler ×{data.members.byPlan.HUSTLER}</span>
+            <span>Operator ×{data.members.byPlan.HUSTLER}</span>
             <span>Boss ×{data.members.byPlan.BOSS}</span>
           </div>
         </div>

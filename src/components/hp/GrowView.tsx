@@ -3,7 +3,7 @@
 /**
  * GrowView — "Grow & Earn": the distribution + revenue hub.
  *  - Share your personal invite link (WhatsApp-first — that's where SA business lives)
- *  - Subscribe to a monthly plan (Hustler R199 / Boss R499) via Yoco Checkout
+ *  - Subscribe to a monthly plan (Operator R199 / Boss R499) via Yoco Checkout
  * Negative churn: invite rewards + plan perks make leaving cost more than staying.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
 import { useHp } from './store'
+import { getPlan } from '@/lib/plans'
 import {
   Users, Copy, Check, Loader2, Sparkles, Crown, MessageCircle, Gift, TrendingUp, CheckCircle2,
 } from 'lucide-react'
@@ -33,16 +34,16 @@ interface PlansData {
 const PLANS = [
   {
     id: 'HUSTLER',
-    name: 'Hustler',
+    name: 'Operator',
     price: 'R199',
-    tagline: 'For the solo grinder building momentum.',
+    tagline: 'For owner-operators building steady momentum.',
     icon: <Sparkles className="h-5 w-5 text-brand" />,
     perks: [
       'Unlimited AI Co-Founder & email drafts',
       '30 verified lead reveals every month',
       'Invoices, calendar, reports, exports',
-      'R50 for every hustler you bring in',
-      'Listed in the hustle directory',
+      'R50 credit for every business owner you refer',
+      'Your business listed in the public directory',
     ],
   },
   {
@@ -53,7 +54,7 @@ const PLANS = [
     icon: <Crown className="h-5 w-5 text-brand" />,
     highlight: true,
     perks: [
-      'Everything in Hustler',
+      'Everything in Operator',
       '100 verified lead reveals every month',
       'Up to 5 team seats, shared pipeline',
       'Priority AI — faster, longer answers',
@@ -104,7 +105,7 @@ export default function GrowView() {
   function shareWhatsApp() {
     if (!refs) return
     const msg = encodeURIComponent(
-      `I run my whole hustle on HustlePortal — leads, follow-ups, invoices, an AI co-founder. It helps me outsell and outlast the competition. Join free with my link and we both win: ${refs.link}`
+      `I run my whole business on HustlePortal — leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win: ${refs.link}`
     )
     window.open(`https://wa.me/?text=${msg}`, '_blank')
   }
@@ -141,7 +142,7 @@ export default function GrowView() {
       <div>
         <h2 className="font-display text-2xl">Grow &amp; Earn</h2>
         <p className="text-sm text-muted-foreground">
-          The hustlers who win biggest are the ones who bring others with them. Share your link, earn credit, unlock perks.
+          The businesses that grow fastest bring others with them. Share your link, earn credit, unlock perks.
         </p>
       </div>
 
@@ -149,7 +150,7 @@ export default function GrowView() {
       <div className="rounded-xl border border-brand/30 bg-brand/5 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Gift className="h-5 w-5 text-brand" />
-          <h3 className="font-display text-lg">Invite hustlers — earn as they rise</h3>
+          <h3 className="font-display text-lg">Invite business owners — earn as they grow</h3>
         </div>
         <div className="grid sm:grid-cols-3 gap-3">
           <Metric label="Invited" value={String(refs?.stats.signedUp ?? 0)} />
@@ -178,7 +179,7 @@ export default function GrowView() {
             {refs.recent.map((r) => (
               <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                 <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate flex-1">{r.invitedUser?.name || r.invitedEmail || 'New hustler'}</span>
+                <span className="truncate flex-1">{r.invitedUser?.name || r.invitedEmail || 'New member'}</span>
                 {r.status === 'SUBSCRIBED' ? (
                   <Badge className="bg-brand text-black hover:bg-brand text-[10px]"><TrendingUp className="h-3 w-3 mr-0.5" /> SUBSCRIBED</Badge>
                 ) : (
@@ -195,7 +196,7 @@ export default function GrowView() {
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg">Go further, faster</h3>
           {active ? (
-            <Badge className="bg-brand text-black hover:bg-brand">ACTIVE · {active.plan}</Badge>
+            <Badge className="bg-brand text-black hover:bg-brand">ACTIVE · {getPlan(active.plan)?.name || active.plan}</Badge>
           ) : (
             <Badge variant="outline">Free plan</Badge>
           )}

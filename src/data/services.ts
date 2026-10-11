@@ -18,7 +18,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#F5C518',
     detail:
       'We craft positioning strategies for SA businesses — from logo to market narrative. Clear brand strategy, messaging that resonates.',
-    waMsg: "Hi Business Hustle! I'm interested in Brand Strategy. Please tell me more.",
+    waMsg: "Hi HustlePortal team! I'm interested in Brand Strategy. Please tell me more.",
   },
   {
     id: 'web-design',
@@ -28,7 +28,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#a78bfa',
     detail:
       'We design and build landing pages from R4,999. Fast, mobile-friendly, and SEO-ready for South African audiences.',
-    waMsg: 'Hi Business Hustle! I need a website. Please tell me about your packages.',
+    waMsg: 'Hi HustlePortal team! I need a website. Please tell me about your packages.',
   },
   {
     id: 'digital-marketing',
@@ -38,7 +38,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#34d399',
     detail:
       'Google Business Profile setup, SEO and social media management — data-driven campaigns turn traffic into customers.',
-    waMsg: "Hi Business Hustle! I'm interested in Digital Marketing. Please tell me more.",
+    waMsg: "Hi HustlePortal team! I'm interested in Digital Marketing. Please tell me more.",
   },
   {
     id: 'content-creation',
@@ -48,7 +48,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#f87171',
     detail:
       'Photo, video, copywriting and social content for SA audiences — content that drives engagement and sales.',
-    waMsg: "Hi Business Hustle! I'm interested in Content Creation. Please tell me more.",
+    waMsg: "Hi HustlePortal team! I'm interested in Content Creation. Please tell me more.",
   },
   {
     id: 'hire-expert',
@@ -58,7 +58,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#60a5fa',
     detail:
       'Access vetted South African designers, developers and marketers on demand. Quality work that starts within 48 hours.',
-    waMsg: "Hi Business Hustle! I'd like to hire an expert. How does this work?",
+    waMsg: "Hi HustlePortal team! I'd like to hire an expert. How does this work?",
   },
   {
     id: 'business-coaching',
@@ -68,7 +68,7 @@ export const BH_SERVICES: BhService[] = [
     color: '#fb923c',
     detail:
       'Four-track business and growth advisory packages for SA founders — clarity and a clear next step to grow revenue and scale.',
-    waMsg: "Hi Business Hustle! I'm interested in Business Coaching. Please tell me more.",
+    waMsg: "Hi HustlePortal team! I'm interested in Business Coaching. Please tell me more.",
   },
 ]
 
