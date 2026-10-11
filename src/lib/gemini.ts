@@ -17,20 +17,29 @@ export async function getUserGeminiKey(userId: string): Promise<string | null> {
 
 export type GeminiResult = { ok: true; text: string } | { ok: false; error: string }
 
+export interface GeminiHistoryTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean },
+  opts: { system?: string; prompt: string; json?: boolean; history?: GeminiHistoryTurn[] },
 ): Promise<GeminiResult> {
   const key = await getUserGeminiKey(userId)
   if (!key) {
     return { ok: false, error: 'NO_KEY: Add your Gemini API key in Integrations to unlock AI drafts.' }
   }
   try {
+    const history = (opts.history || []).slice(-10).map((h) => ({
+      role: h.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: h.content }],
+    }))
     const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: opts.prompt }] }],
+        contents: [...history, { role: 'user', parts: [{ text: opts.prompt }] }],
         ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
         generationConfig: {
           temperature: opts.json ? 0.4 : 0.8,

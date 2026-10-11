@@ -13,6 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, type Lead, type Task } from './shared'
 import { useHp } from './store'
+import SetupChecklist from './SetupChecklist'
 import {
   ArrowRight, ArrowUpRight, ArrowDownRight, Sparkles, Send, Target, CheckSquare,
   Wallet, TrendingUp, Clock, Flame, Loader2, Trophy, ListTodo, Users, BrainCircuit,
@@ -109,6 +110,7 @@ export default function DashboardView() {
 
   return (
     <div className="space-y-4">
+      <SetupChecklist />
       {/* Hero + AI command bar */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 md:p-8 relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-brand/10 blur-2xl" />

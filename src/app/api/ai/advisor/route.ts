@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
+import { geminiGenerate, GeminiHistoryTurn } from '@/lib/gemini'
 
-export const maxDuration = 120
+export const maxDuration = 60
 
-// POST /api/ai/advisor — chat with business context
+const NO_KEY_MSG =
+  'The AI Co-Founder needs your free Gemini API key. Get one in 1 minute at aistudio.google.com/apikey, then paste it under Integrations.'
+
+// POST /api/ai/advisor — AI Co-Founder chat, grounded in the user's real data
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,36 +42,32 @@ ${lastPlan ? `They have an AI business plan generated on ${lastPlan.createdAt.to
     orderBy: { createdAt: 'desc' },
     take: 10,
   })
-  const msgs = history.reverse().map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+  const msgs: GeminiHistoryTurn[] = history
+    .reverse()
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
   await db.aiMessage.create({ data: { userId, role: 'user', content: String(message) } })
 
-  try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content: `You are the BH AI Advisor inside HustlePortal, a business growth platform for South African entrepreneurs. You speak like a sharp, encouraging South African business partner — practical, warm, direct. Use rand values, SA context (WhatsApp marketing, Yoco, township economy, loadshedding). Reference the founder's real data when useful. Keep answers under 180 words unless asked for detail. Never invent data that contradicts the context.\n\nCONTEXT:\n${context}`,
-        },
-        ...msgs,
-        { role: 'user', content: String(message) },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const reply = completion?.choices?.[0]?.message?.content || ''
-    if (!reply.trim()) throw new Error('empty reply')
-    const saved = await db.aiMessage.create({ data: { userId, role: 'assistant', content: reply } })
-    await bumpChallenge(userId, 'ai_chat')
-    return NextResponse.json({ reply: saved.content })
-  } catch (e) {
-    console.error('advisor error', e)
+  const result = await geminiGenerate(userId, {
+    system: `You are the AI Co-Founder inside HustlePortal, a business growth platform for South African entrepreneurs. You speak like a sharp, encouraging South African business partner — practical, warm, direct. Use rand values, SA context (WhatsApp marketing, Yoco, township economy, loadshedding). Reference the founder's real data when useful. Keep answers under 180 words unless asked for detail. Never invent data that contradicts the context.\n\nCONTEXT:\n${context}`,
+    prompt: String(message),
+    history: msgs,
+  })
+
+  if (!result.ok) {
+    if (result.error.startsWith('NO_KEY')) {
+      return NextResponse.json({ error: NO_KEY_MSG, code: 'MISSING_GEMINI_KEY' }, { status: 400 })
+    }
+    console.error('advisor error', result.error)
     return NextResponse.json(
-      { error: 'The advisor is resting for a moment. Try again shortly.' },
-      { status: 503 }
+      { error: 'The AI Co-Founder could not answer right now. Try again in a moment.' },
+      { status: 502 }
     )
   }
+
+  const saved = await db.aiMessage.create({ data: { userId, role: 'assistant', content: result.text } })
+  await bumpChallenge(userId, 'ai_chat')
+  return NextResponse.json({ reply: saved.content })
 }
 
 // GET — chat history

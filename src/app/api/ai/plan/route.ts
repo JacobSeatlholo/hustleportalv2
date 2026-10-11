@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
+import { geminiGenerate } from '@/lib/gemini'
 
-export const maxDuration = 120
+export const maxDuration = 60
+
+const NO_KEY_MSG =
+  'The AI business plan needs your free Gemini API key. Get one in 1 minute at aistudio.google.com/apikey, then paste it under Integrations.'
 
 // POST /api/ai/plan — generate a real business plan from wizard answers
 export async function POST(req: NextRequest) {
@@ -39,32 +43,29 @@ Structure the plan with these markdown sections (## level):
 
 Keep it under 700 words. No preamble, start with the first heading.`
 
-  try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: 'You are a no-nonsense South African small business advisor. You write tight, practical plans. Markdown only.' },
-        { role: 'user', content: prompt },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const content = completion?.choices?.[0]?.message?.content || ''
-    if (!content.trim()) throw new Error('empty plan')
+  const result = await geminiGenerate(userId, {
+    system: 'You are a no-nonsense South African small business advisor. You write tight, practical plans. Markdown only.',
+    prompt,
+  })
 
-    const plan = await db.aiPlan.create({
-      data: { userId, answers: JSON.stringify(answers), content },
-    })
-    await bumpChallenge(userId, 'ai_plan')
-    await awardXp(userId, 'AI_PLAN', 30, 'Generated AI business plan')
-    return NextResponse.json({ plan })
-  } catch (e) {
-    console.error('ai plan error', e)
+  if (!result.ok) {
+    if (result.error.startsWith('NO_KEY')) {
+      return NextResponse.json({ error: NO_KEY_MSG, code: 'MISSING_GEMINI_KEY' }, { status: 400 })
+    }
+    console.error('ai plan error', result.error)
     return NextResponse.json(
       { error: 'The AI could not generate your plan right now. Please try again in a moment.' },
-      { status: 503 }
+      { status: 502 }
     )
   }
+  const content = result.text
+
+  const plan = await db.aiPlan.create({
+    data: { userId, answers: JSON.stringify(answers), content },
+  })
+  await bumpChallenge(userId, 'ai_plan')
+  await awardXp(userId, 'AI_PLAN', 30, 'Generated AI business plan')
+  return NextResponse.json({ plan })
 }
 
 // GET /api/ai/plan — list user's plans
