@@ -2,7 +2,7 @@
   "name": "HustlePortal — Business OS",
   "short_name": "HustlePortal",
   "description": "Run your business like a business — leads, clients, invoicing, tasks, finance and an AI co-founder in one professional system.",
-  "start_url": "/dashboard",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -15,7 +15,7 @@
     { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Lead Finder", "url": "/leads", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "New invoice", "url": "/invoices", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Lead Finder", "url": "/?view=leads", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New invoice", "url": "/?view=invoices", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

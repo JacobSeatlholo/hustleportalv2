@@ -47,11 +47,11 @@ export async function POST(req: NextRequest) {
       })
       await createSession(user.id)
       await ensureWallet(user.id)
-      // welcome bonus credits (free reveals)
-      const freeCredits = parseInt(await getConfig(CONFIG_KEYS.FREE_LEADS)) || 3
-      const leadPrice = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || 1500
-      if (freeCredits > 0) {
-        await addCredits(user.id, freeCredits * leadPrice, 'BONUS', `Welcome bonus — ${freeCredits} free lead reveals`)
+      // welcome bonus — R99 in lead credits: enough for real teaser reveals,
+      // the taste that sells the R199 Operator plan
+      const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
+      if (welcomeCents > 0) {
+        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus — R${Math.round(welcomeCents / 100)} in lead credits`)
       }
       await awardXp(user.id, 'SIGNUP', 50, 'Joined HustlePortal')
       await bumpChallenge(user.id, 'login')

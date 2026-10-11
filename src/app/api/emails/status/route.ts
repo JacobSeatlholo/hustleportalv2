@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { getMailStatus } from '@/lib/mailer'
+import { getMailStatus, readLastSystemSend } from '@/lib/mailer'
 
 /**
  * GET /api/emails/status → one call that tells the Mail UI everything:
@@ -12,7 +12,8 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const status = await getMailStatus(userId)
-    return NextResponse.json({ status })
+    const lastSend = await readLastSystemSend()
+    return NextResponse.json({ status, lastSend })
   } catch {
     // Never block the Mail screen on a status hiccup
     return NextResponse.json({

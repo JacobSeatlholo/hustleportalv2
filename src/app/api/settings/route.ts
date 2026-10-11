@@ -13,6 +13,7 @@ const ALLOWED_KEYS = [
   'WA_VERIFY_TOKEN',
   'WA_DISPLAY_NUMBER',
   'INVOICE_BANK',
+  'NAV_ORDER', // JSON ViewKey[] — the user's personal sidebar menu order
 ]
 
 const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])

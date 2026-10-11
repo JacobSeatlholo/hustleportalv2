@@ -270,22 +270,26 @@ async function callGemini(
 
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; history?: GeminiHistoryTurn[] },
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[] },
 ): Promise<GeminiResult> {
   const history = (opts.history || []).slice(-10).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: h.content }],
   }))
-  const body = {
+  const body: Record<string, unknown> = {
     contents: [...history, { role: 'user', parts: [{ text: opts.prompt }] }],
     ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
     generationConfig: {
       temperature: opts.json ? 0.4 : 0.8,
-      maxOutputTokens: 1200,
-      ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+      maxOutputTokens: opts.search ? 2000 : 1200,
+      // NOTE: JSON mime mode is incompatible with search grounding on many model
+      // versions — when searching, we ask for raw JSON in the prompt and parse loosely.
+      ...(opts.json && !opts.search ? { responseMimeType: 'application/json' } : {}),
     },
+    // Real-world grounding: Google Search results the model actually saw (real businesses).
+    ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
   }
-  return callGemini(userId, body, 30_000)
+  return callGemini(userId, body, opts.search ? 55_000 : 30_000)
 }
 
 /**

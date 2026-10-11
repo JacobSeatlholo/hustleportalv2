@@ -3,7 +3,8 @@ import { db } from '@/lib/db'
 export const CONFIG_KEYS = {
   EXPLEE_API_KEY: 'explee_api_key',
   LEAD_PRICE: 'lead_price_cents', // cost to reveal contact details
-  FREE_LEADS: 'free_leads', // free reveals on signup
+  FREE_LEADS: 'free_leads', // legacy — superseded by WELCOME_CREDIT_CENTS
+  WELCOME_CREDIT_CENTS: 'welcome_credit_cents', // signup bonus in lead-credit cents
   TOPUP_PACKS: 'topup_packs', // JSON [{id,name,amountCents,creditCents,bonus}]
   MODE: 'mode', // DEMO | LIVE
   YOCO_WEBHOOK_SECRET: 'yoco_webhook_secret', // whsec_... from registering the checkout webhook
@@ -12,6 +13,7 @@ export const CONFIG_KEYS = {
 const DEFAULTS: Record<string, string> = {
   [CONFIG_KEYS.LEAD_PRICE]: '1500', // R15.00
   [CONFIG_KEYS.FREE_LEADS]: '3',
+  [CONFIG_KEYS.WELCOME_CREDIT_CENTS]: '9900', // R99 — enough real teaser reveals to taste the platform
   [CONFIG_KEYS.TOPUP_PACKS]: JSON.stringify([
     { id: 'starter', name: 'Starter', amountCents: 50000, creditCents: 50000, bonus: 0 },
     { id: 'growth', name: 'Growth', amountCents: 150000, creditCents: 165000, bonus: 10 },

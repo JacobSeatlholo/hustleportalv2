@@ -3,10 +3,37 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
-import { demoReveal } from '@/lib/explee'
+import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { bumpChallenge } from '@/lib/gamification'
 
-// POST /api/leads/reveal — spend credits to unlock contact details
+export const maxDuration = 60
+
+/**
+ * POST /api/leads/reveal — spend credits to unlock contact details.
+ *
+ * HONESTY CONTRACT (no more fabricated contacts):
+ *  - Leads with stored (real) contact details: charge and unlock, as before.
+ *  - Leads with NO stored contact: Gemini runs a GROUNDED web lookup for the
+ *    business's PUBLICLY LISTED details. If verified details are found we charge
+ *    and unlock; if not, the user is NOT charged and we say so plainly.
+ *  - Fabricated demo contacts (pattern-built emails/phones) were removed —
+ *    the reveal is real results or your money stays in your wallet.
+ */
+
+function saneEmail(v?: string | null): string | undefined {
+  const s = (v || '').trim()
+  if (!s || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return undefined
+  if (/example\.(com|org|net)|your(email)?\.|domain\.com/i.test(s)) return undefined
+  return s
+}
+
+function sanePhone(v?: string | null): string | undefined {
+  const s = (v || '').trim()
+  if (!s) return undefined
+  if (s.replace(/\D/g, '').length < 9) return undefined
+  return s
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -19,18 +46,63 @@ export async function POST(req: NextRequest) {
   if (lead.unlocked) return NextResponse.json({ lead })
 
   const price = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || 1500
+
+  let contact = {
+    email: saneEmail(lead.email),
+    phone: sanePhone(lead.phone),
+    website: lead.website || undefined,
+    contactName: lead.contactName || undefined,
+  }
+  let viaSource: string | undefined
+
+  // No stored contact → grounded public lookup (real or nothing). Charged only on success.
+  if (!contact.email && !contact.phone) {
+    const lookup = await geminiGenerate(userId, {
+      search: true,
+      json: true,
+      system:
+        'You find publicly listed contact details for businesses, grounded in live Google Search results. Report ONLY details that actually appear in a source you saw (official website, directory, Google Business listing, news, Facebook page). NEVER guess, NEVER construct an email from a name@domain pattern. If you cannot verify real details, say so.',
+      prompt:
+        `Find the publicly listed contact details for the business "${lead.company}"` +
+        (lead.city ? ` in ${lead.city}` : '') +
+        (lead.website ? ` (website: ${lead.website})` : '') +
+        `, South Africa. Return ONLY JSON: {"found":true|false,"contactName":"","email":"","phone":"","source":"where you found it"}`,
+    })
+    let found = false
+    let via = ''
+    if (lookup.ok) {
+      const parsed = parseJsonLoose<{ found?: boolean; contactName?: string; email?: string; phone?: string; source?: string }>(lookup.text)
+      const email = saneEmail(parsed?.email)
+      const phone = sanePhone(parsed?.phone)
+      if (parsed?.found && (email || phone)) {
+        contact = {
+          ...contact,
+          email: email || contact.email,
+          phone: phone || contact.phone,
+          contactName: (parsed.contactName || '').trim() || contact.contactName,
+        }
+        found = true
+        via = (parsed.source || '').trim()
+      }
+    }
+    if (!found) {
+      return NextResponse.json({
+        lead,
+        charged: false,
+        message:
+          `No verified public contact found for ${lead.company} — you were NOT charged.` +
+          (lead.website ? ` Try their website directly: ${lead.website}` : ' Try searching for them directly.'),
+      })
+    }
+    viaSource = via
+  }
+
   const result = await spendCredits(userId, price, `Lead reveal: ${lead.company}`)
   if (!result) {
     return NextResponse.json(
       { error: 'Insufficient credits. Top up your wallet to reveal this lead.', code: 'INSUFFICIENT_CREDITS', price },
       { status: 402 }
     )
-  }
-
-  let contact = { email: lead.email, phone: lead.phone, website: lead.website, contactName: lead.contactName }
-  // For demo-mode leads with no stored contact, generate deterministic demo contact info
-  if (!contact.email && !contact.phone) {
-    contact = { ...contact, ...demoReveal(lead.company, lead.city || undefined, lead.contactName || undefined) }
   }
 
   const updated = await db.lead.update({
@@ -44,5 +116,10 @@ export async function POST(req: NextRequest) {
     },
   })
   await bumpChallenge(userId, 'reveal_lead')
-  return NextResponse.json({ lead: updated, wallet: result.wallet, spent: price })
+  return NextResponse.json({
+    lead: updated,
+    wallet: result.wallet,
+    spent: price,
+    ...(typeof viaSource !== 'undefined' && viaSource ? { sourceNote: `Found via: ${viaSource}` } : {}),
+  })
 }

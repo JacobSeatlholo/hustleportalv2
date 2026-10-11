@@ -298,8 +298,11 @@ interface MailStatusInfo {
  * Shows live Resend domain verification (fetched server-side with the platform key)
  * so setup never feels like guesswork.
  */
+interface LastSystemSend { to: string; subject: string; ok: boolean; via?: string; error?: string; at: string }
+
 function MailEngineCard() {
   const [status, setStatus] = useState<MailStatusInfo | null>(null)
+  const [lastSend, setLastSend] = useState<LastSystemSend | null>(null)
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -307,8 +310,9 @@ function MailEngineCard() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await api<{ status: MailStatusInfo }>('/api/emails/status')
+      const res = await api<{ status: MailStatusInfo; lastSend?: LastSystemSend | null }>('/api/emails/status')
       setStatus(res.status)
+      setLastSend(res.lastSend || null)
     } catch {
       setStatus(null)
     } finally {
@@ -365,6 +369,15 @@ function MailEngineCard() {
       {testMsg && (
         <p className={`text-xs leading-relaxed ${testMsg.ok ? 'text-emerald-500' : 'text-rose-500'}`}>
           {testMsg.text}
+        </p>
+      )}
+      {lastSend && (
+        <p className={`text-xs leading-relaxed rounded-lg border px-2.5 py-2 ${lastSend.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
+          <b>Last system email</b> ({lastSend.ok ? 'accepted by the engine' : 'failed'}){lastSend.via ? ` · via ${lastSend.via}` : ''}:{' '}
+          <b>{lastSend.to}</b> — “{lastSend.subject}” at {new Date(lastSend.at).toLocaleString('en-ZA')}.
+          {lastSend.ok
+            ? ' Accepted means Resend took it — if it never lands, check spam and confirm this is the exact address you check.'
+            : ` Engine error: ${lastSend.error || 'unknown'}`}
         </p>
       )}
       <p className="text-xs text-muted-foreground">

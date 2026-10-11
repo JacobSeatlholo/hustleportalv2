@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, MapPin, Globe, Copy, Check, ScanSearch } from 'lucide-react'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch } from 'lucide-react'
 
 interface TeamInfo {
   id: string
@@ -24,6 +24,10 @@ interface TeamInfo {
 interface UrlAnalysis {
   businessName?: string
   industry?: string
+  tagline?: string
+  city?: string
+  phone?: string
+  email?: string
   audience?: { summary?: string; demographics?: string; painPoints?: string[] }
   brand?: { voice?: string; personality?: string[] }
   positioning?: string
@@ -34,7 +38,6 @@ interface UrlAnalysis {
 }
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
-const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Other']
 
 export default function ProfileView() {
   const { session, loadSession, logout, activeProjectId, setActiveProject, bumpRefresh } = useHp()
@@ -65,10 +68,7 @@ export default function ProfileView() {
   const [analysis, setAnalysis] = useState<UrlAnalysis | null>(null)
   const [copiedPitch, setCopiedPitch] = useState<number | null>(null)
 
-  // city geolocation capture + confirm
-  const [showCityInput, setShowCityInput] = useState(false)
-  const [locating, setLocating] = useState(false)
-  const [cityProposal, setCityProposal] = useState<string | null>(null)
+  // (city geolocation + free-text live in the shared CityField component)
 
   useEffect(() => {
     if (!activeProjectId) return
@@ -200,7 +200,7 @@ export default function ProfileView() {
 
   async function analyzeUrl() {
     if (!urlInput.trim()) {
-      toast({ title: 'Add your web address first', description: 'e.g. bloombeauty.co.za — the AI reads the site and does the rest.', variant: 'destructive' })
+      toast({ title: 'Add your web address first', description: 'e.g. bloombeauty.co.za — the AI reads the site and fills your profile.', variant: 'destructive' })
       return
     }
     setAnalyzing(true)
@@ -210,7 +210,39 @@ export default function ProfileView() {
         body: JSON.stringify({ url: urlInput, projectId: activeProjectId }),
       })
       setAnalysis(r.analysis)
-      toast({ title: 'Business analysis complete ✓', description: 'Audience, brand and three ready-to-send pitches — saved to this workspace.' })
+
+      // Auto-fill the profile FOR THE USER TO VERIFY & CONFIRM — empty fields only,
+      // nothing overwrites what they already typed, and nothing saves until "Save changes".
+      const a = r.analysis || {}
+      const filled: string[] = []
+      setForm((f) => {
+        const next = { ...f }
+        if (!f.businessName && a.businessName) { next.businessName = a.businessName; filled.push('business name') }
+        if (!f.industry && a.industry) { next.industry = a.industry; filled.push('industry') }
+        if (!f.city && a.city) { next.city = a.city; filled.push('city') }
+        if (!f.phone && a.phone) { next.phone = a.phone; filled.push('WhatsApp number') }
+        return next
+      })
+      setWs((w) => ({
+        ...w,
+        website: w.website || urlInput.trim(),
+        name: w.name || a.businessName || '',
+        industry: w.industry || a.industry || '',
+        valueProp: w.valueProp || a.tagline || a.positioning || '',
+        tone: w.tone || a.brand?.voice || '',
+        contactEmail: w.contactEmail || a.email || '',
+        contactPhone: w.contactPhone || a.phone || '',
+        offerings: w.offerings || (a.keywords?.length ? a.keywords.join(', ') : ''),
+      }))
+
+      if (filled.length > 0) {
+        toast({
+          title: 'Profile drafted from your website ✓',
+          description: `Filled: ${filled.join(', ')}. Check each field, then press Save changes to confirm.`,
+        })
+      } else {
+        toast({ title: 'Business analysis complete ✓', description: 'Your profile fields were already filled — review them and save.' })
+      }
     } catch (e) {
       toast({ title: 'Analysis failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -226,37 +258,6 @@ export default function ProfileView() {
     } catch {
       toast({ title: 'Could not copy — select the text manually', variant: 'destructive' })
     }
-  }
-
-  function detectCity() {
-    if (!navigator.geolocation) {
-      toast({ title: 'Location not available', description: 'Your browser does not support location — type your city instead.', variant: 'destructive' })
-      return
-    }
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude.toFixed(4)}&longitude=${pos.coords.longitude.toFixed(4)}&localityLanguage=en`,
-            { signal: AbortSignal.timeout(10_000) }
-          )
-          const data = (await res.json()) as { city?: string; locality?: string; principalSubdivision?: string }
-          const city = (data.city || data.locality || '').trim()
-          if (!city) throw new Error('no city')
-          setCityProposal(data.principalSubdivision && !city.includes(data.principalSubdivision) ? `${city}, ${data.principalSubdivision}` : city)
-        } catch {
-          toast({ title: 'Could not read your city', description: 'Location worked but the lookup failed — type your city instead.', variant: 'destructive' })
-        } finally {
-          setLocating(false)
-        }
-      },
-      () => {
-        setLocating(false)
-        toast({ title: 'Location permission declined', description: 'No problem — type your city manually below.', variant: 'destructive' })
-      },
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 300_000 }
-    )
   }
 
   async function createWorkspace() {
@@ -338,6 +339,34 @@ export default function ProfileView() {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Business profile</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              {/* Website-first onboarding: key in the website, Gemini drafts the profile, user verifies & confirms */}
+              <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Globe className="h-4 w-4 text-brand" />
+                  Have a website? Let AI fill this in
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="yourbusiness.co.za"
+                    inputMode="url"
+                    autoComplete="off"
+                  />
+                  <Button
+                    type="button"
+                    onClick={analyzeUrl}
+                    disabled={analyzing}
+                    className="shrink-0 bg-brand text-black hover:brightness-110 font-semibold"
+                  >
+                    {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {analyzing ? 'Reading…' : 'Fill my profile'}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  We read your site once, Gemini drafts your profile, and you confirm. Empty fields only — nothing overwrites what you already entered, and nothing saves until you press Save changes.
+                </p>
+              </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Your name</Label>
@@ -364,68 +393,7 @@ export default function ProfileView() {
                     ))}
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>City</Label>
-                  <div className="flex flex-wrap gap-1">
-                    {CITIES.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => {
-                          if (c === 'Other') {
-                            setShowCityInput(true)
-                            return
-                          }
-                          setShowCityInput(false)
-                          setCityProposal(null)
-                          setForm({ ...form, city: c })
-                        }}
-                        className={`text-xs px-2 py-1 rounded-full border transition ${form.city === c ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                  {showCityInput && (
-                    <div className="space-y-2 rounded-lg border p-2.5 mt-1">
-                      <div className="flex gap-2">
-                        <Input
-                          value={form.city === 'Other' ? '' : !CITIES.includes(form.city) ? form.city : ''}
-                          onChange={(e) => setForm({ ...form, city: e.target.value })}
-                          placeholder="Type your city or town…"
-                          aria-label="City"
-                        />
-                        <Button type="button" variant="outline" size="sm" onClick={detectCity} disabled={locating} className="shrink-0">
-                          {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                          Detect
-                        </Button>
-                      </div>
-                      {cityProposal && (
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand/30 bg-brand/5 px-2.5 py-2 text-xs">
-                          <MapPin className="h-3.5 w-3.5 text-brand shrink-0" />
-                          <span>We found <b>{cityProposal}</b>. Use it?</span>
-                          <div className="flex gap-1.5 ml-auto">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-7 px-2.5 text-xs bg-brand text-black hover:brightness-110"
-                              onClick={() => { setForm({ ...form, city: cityProposal }); setCityProposal(null); toast({ title: `City set to ${cityProposal}`, description: 'Saved when you save your profile.' }) }}
-                            >
-                              <Check className="h-3 w-3 mr-1" /> Confirm
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={() => setCityProposal(null)}>
-                              Dismiss
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      <p className="text-[11px] text-muted-foreground">Detecting asks your browser for location once — nothing is stored until you confirm and save.</p>
-                    </div>
-                  )}
-                  {!showCityInput && form.city && !CITIES.includes(form.city) && (
-                    <p className="text-[11px] text-muted-foreground">Current: <b className="text-foreground">{form.city}</b></p>
-                  )}
-                </div>
+                <CityField value={form.city} onChange={(v) => setForm({ ...form, city: v })} label="City" hint="Pick a shortcut, type any city or township, or tag your location — nothing is stored until you save." />
               </div>
               <div className="space-y-1.5">
                 <Label>WhatsApp number</Label>

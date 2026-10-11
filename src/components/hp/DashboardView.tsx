@@ -199,6 +199,30 @@ export default function DashboardView() {
         </Card>
       </div>
 
+      {/* AI-scout teaser — real leads from the seller's own website, for an empty pipeline */}
+      {k.pipelineCount === 0 && (
+        <Card
+          className="cursor-pointer hover:shadow-md transition border-brand/40 bg-brand/5"
+          onClick={() => {
+            setView('leads')
+            window.dispatchEvent(new CustomEvent('hp:discover'))
+          }}
+        >
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="rounded-lg bg-brand/15 p-2 shrink-0"><Sparkles className="h-5 w-5 text-brand" /></div>
+              <div className="min-w-0">
+                <div className="font-medium">AI scout — real leads from your website</div>
+                <div className="text-xs text-muted-foreground">
+                  Gemini searches the live web for real businesses in your area that need what you sell. Real results, free to try — your welcome credits cover the first reveals.
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI row */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard

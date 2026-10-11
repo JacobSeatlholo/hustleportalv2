@@ -60,6 +60,10 @@ function htmlToText(html: string): string {
 export interface BusinessAnalysis {
   businessName?: string
   industry?: string
+  tagline?: string
+  city?: string
+  phone?: string
+  email?: string
   audience?: { summary?: string; demographics?: string; painPoints?: string[] }
   brand?: { voice?: string; personality?: string[] }
   positioning?: string
@@ -120,6 +124,10 @@ export async function POST(req: NextRequest) {
     prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText}\n\n=== TASK ===\nDissect this business for its owner. Return ONLY this JSON (omit a field rather than inventing it):\n{
   "businessName": "name as shown on the site",
   "industry": "one label",
+  "tagline": "their slogan or one-line promise, verbatim if present",
+  "city": "city/town the business operates from, if the text says so",
+  "phone": "public contact phone in international format, if shown",
+  "email": "public contact email, if shown",
   "audience": { "summary": "who actually buys from them, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] },
   "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] },
   "positioning": "one professional paragraph: what they sell, to whom, and why it wins",

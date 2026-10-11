@@ -90,6 +90,35 @@ async function readDomainProof(): Promise<boolean> {
   }
 }
 
+const LAST_SEND_KEY = 'MAIL_LAST_SYSTEM_SEND'
+
+/**
+ * Durable record of the last system email (password resets etc.): recipient, subject,
+ * time, outcome. This is how we answer "the email never arrived" without a full-access
+ * Resend key — the send either fired (with the exact address it went to) or it didn't.
+ */
+async function stampLastSystemSend(entry: { to: string; subject: string; ok: boolean; via?: string; error?: string }): Promise<void> {
+  try {
+    await db.platformConfig.upsert({
+      where: { key: LAST_SEND_KEY },
+      create: { key: LAST_SEND_KEY, value: JSON.stringify({ ...entry, at: new Date().toISOString() }) },
+      update: { key: LAST_SEND_KEY, value: JSON.stringify({ ...entry, at: new Date().toISOString() }) },
+    })
+  } catch {
+    // best-effort — never break a send over bookkeeping
+  }
+}
+
+export async function readLastSystemSend(): Promise<{ to: string; subject: string; ok: boolean; via?: string; error?: string; at: string } | null> {
+  try {
+    const row = await db.platformConfig.findUnique({ where: { key: LAST_SEND_KEY } })
+    if (!row?.value) return null
+    return JSON.parse(row.value)
+  } catch {
+    return null
+  }
+}
+
 async function fetchResendDomains(apiKey: string): Promise<MailDomainRow[]> {
   try {
     const res = await fetch('https://api.resend.com/domains', {
@@ -398,14 +427,20 @@ export async function sendSystemMail(
       rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
     }
     await stampDomainProof()
+    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: 'branded' })
     return { ok: true }
   }
   if (/from|domain|verif|422|403/i.test(first.raw)) {
     const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
-    if (second.ok) return { ok: true }
+    if (second.ok) {
+      await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: 'sandbox-sender' })
+      return { ok: true }
+    }
     console.error('[mail] system mail failed (both senders):', second.raw.slice(0, 200))
+    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: second.raw.slice(0, 160) })
     return { ok: false, error: classifyPlatformError(second.raw, await readDomainProof()) }
   }
   console.error('[mail] system mail failed:', first.raw.slice(0, 200))
+  await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: first.raw.slice(0, 160) })
   return { ok: false, error: classifyPlatformError(first.raw, await readDomainProof()) }
 }

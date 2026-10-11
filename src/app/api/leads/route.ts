@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { company, contactName, email, phone, website, industry, city, country, source, teamId, value, notes, externalId, unlocked, score } = body
+  const { company, contactName, email, phone, website, industry, city, country, source, teamId, value, notes, externalId, unlocked, score, why } = body
   if (!company || !String(company).trim()) {
     return NextResponse.json({ error: 'Company name is required.' }, { status: 400 })
   }
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       country: country || 'South Africa',
       source: source || 'MANUAL',
       value: Number(value) || 0,
-      notes: notes || null,
+      notes: notes || why || null, // AI scout's "why they need you" lands as the first note
       externalId: externalId || null,
       unlocked: Boolean(unlocked),
       score: score ?? null,

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useHp, type ViewKey } from './store'
-import { rands } from './shared'
+import { api, rands } from './shared'
 import DashboardView from './DashboardView'
 import LeadsView from './LeadsView'
 import TasksView from './TasksView'
@@ -314,6 +314,17 @@ function ProjectSwitcher() {
   )
 }
 
+const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
+  key: 'admin',
+  label: 'Admin',
+  icon: <ShieldCheck className="h-4 w-4" />,
+}
+
+/**
+ * SidebarContent — the user's personal menu.
+ * Long-press (hold ~1/3s) any menu item, then drag to sort the menu YOUR priority order.
+ * Click still navigates; the order persists per user (UserSetting: NAV_ORDER).
+ */
 function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout }: {
   view: ViewKey
   setView: (v: ViewKey) => void
@@ -322,9 +333,117 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
   totalChallenges: number
   logout: () => Promise<void>
 }) {
-  const nav = session.user.role === 'ADMIN'
-    ? [...NAV, { key: 'admin' as ViewKey, label: 'Admin', icon: <ShieldCheck className="h-4 w-4" /> }]
-    : NAV
+  const isAdmin = session.user.role === 'ADMIN'
+
+  // personal menu order (persisted per user)
+  const [order, setOrder] = useState<ViewKey[] | null>(null)
+  const orderRef = useRef<ViewKey[] | null>(null)
+  const [dragKey, setDragKey] = useState<ViewKey | null>(null)
+  const itemRefs = useRef(new Map<ViewKey, HTMLButtonElement>())
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pressPos = useRef({ x: 0, y: 0 })
+  const suppressClick = useRef(false)
+
+  useEffect(() => {
+    api<{ settings: { key: string; value: string }[] }>('/api/settings')
+      .then((r) => {
+        const row = r.settings.find((s) => s.key === 'NAV_ORDER')
+        if (!row) return
+        try {
+          const parsed = JSON.parse(row.value)
+          if (Array.isArray(parsed) && parsed.length) {
+            const clean = parsed.filter((k): k is ViewKey => typeof k === 'string')
+            orderRef.current = clean
+            setOrder(clean)
+          }
+        } catch { /* corrupt order — fall back to default */ }
+      })
+      .catch(() => {})
+  }, [])
+
+  const nav = useMemo(() => {
+    if (!order || order.length === 0) return NAV
+    const known = NAV.filter((n) => order.includes(n.key)).sort(
+      (a, b) => order.indexOf(a.key) - order.indexOf(b.key)
+    )
+    const rest = NAV.filter((n) => !order.includes(n.key))
+    return [...known, ...rest]
+  }, [order])
+
+  // While dragging, stop the browser scrolling the menu out from under the finger.
+  useEffect(() => {
+    if (!dragKey) return
+    const stop = (e: TouchEvent) => e.preventDefault()
+    document.addEventListener('touchmove', stop, { passive: false })
+    return () => document.removeEventListener('touchmove', stop)
+  }, [dragKey])
+
+  function applyOrder(next: ViewKey[], persist: boolean) {
+    orderRef.current = next
+    setOrder(next)
+    if (persist) {
+      api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ key: 'NAV_ORDER', value: JSON.stringify(next) }),
+      }).catch(() => {})
+    }
+  }
+
+  function reorderAt(key: ViewKey, clientY: number) {
+    const list = orderRef.current
+      ? NAV.filter((n) => orderRef.current!.includes(n.key)).sort(
+          (a, b) => orderRef.current!.indexOf(a.key) - orderRef.current!.indexOf(b.key)
+        ).concat(NAV.filter((n) => !orderRef.current!.includes(n.key)))
+      : NAV
+    const fromIdx = list.findIndex((n) => n.key === key)
+    if (fromIdx < 0) return
+    let toIdx = fromIdx
+    for (let i = 0; i < list.length; i++) {
+      const el = itemRefs.current.get(list[i].key)
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (clientY < r.top + r.height / 2) { toIdx = i; break }
+      toIdx = i
+    }
+    if (toIdx !== fromIdx) {
+      const nextKeys = [...list]
+      nextKeys.splice(toIdx, 0, nextKeys.splice(fromIdx, 1)[0])
+      applyOrder(nextKeys.map((n) => n.key), false) // persist once, on drop
+    }
+  }
+
+  function onItemPointerDown(e: React.PointerEvent, key: ViewKey) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    pressPos.current = { x: e.clientX, y: e.clientY }
+    clearTimeout(pressTimer.current)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not fatal */ }
+    pressTimer.current = setTimeout(() => {
+      setDragKey(key)
+      try { navigator.vibrate?.(25) } catch { /* no haptics — fine */ }
+    }, 320)
+  }
+
+  function onItemPointerMove(e: React.PointerEvent, key: ViewKey) {
+    if (dragKey === key) {
+      e.preventDefault()
+      reorderAt(key, e.clientY)
+      return
+    }
+    // drifted before activation — that is a scroll, not a hold
+    const dx = e.clientX - pressPos.current.x
+    const dy = e.clientY - pressPos.current.y
+    if (dx * dx + dy * dy > 100) clearTimeout(pressTimer.current)
+  }
+
+  function endItemInteraction(key: ViewKey, cancelled: boolean) {
+    clearTimeout(pressTimer.current)
+    if (dragKey === key) {
+      suppressClick.current = true
+      setDragKey(null)
+      if (!cancelled && orderRef.current) applyOrder(orderRef.current, true)
+      setTimeout(() => { suppressClick.current = false }, 250)
+    }
+  }
 
   return (
     <>
@@ -340,16 +459,40 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
         {nav.map((n) => (
           <button
             key={n.key}
-            onClick={() => setView(n.key)}
-            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              view === n.key
-                ? 'bg-brand text-black'
-                : 'text-white/70 hover:bg-white/10 hover:text-white'
-            }`}
+            ref={(el) => { if (el) itemRefs.current.set(n.key, el); else itemRefs.current.delete(n.key) }}
+            onClick={() => { if (suppressClick.current) return; setView(n.key) }}
+            onPointerDown={(e) => onItemPointerDown(e, n.key)}
+            onPointerMove={(e) => onItemPointerMove(e, n.key)}
+            onPointerUp={() => endItemInteraction(n.key, false)}
+            onPointerCancel={() => endItemInteraction(n.key, true)}
+            onContextMenu={(e) => { if (dragKey) e.preventDefault() }}
+            style={{ touchAction: dragKey === n.key ? 'none' : undefined }}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition select-none ${
+              dragKey === n.key
+                ? 'relative z-10 bg-brand text-black ring-2 ring-brand shadow-lg scale-[1.02]'
+                : view === n.key
+                  ? 'bg-brand text-black'
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+            } ${dragKey && dragKey !== n.key ? 'transition-transform' : ''}`}
           >
             {n.icon} {n.label}
           </button>
         ))}
+        {isAdmin && (
+          <button
+            onClick={() => setView(ADMIN_NAV.key)}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              view === ADMIN_NAV.key
+                ? 'bg-brand text-black'
+                : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            {ADMIN_NAV.icon} {ADMIN_NAV.label}
+          </button>
+        )}
+        <p className="text-[10px] text-white/30 px-3 pt-2 pb-1 leading-relaxed">
+          Hold a menu item and drag it to sort your menu your way.
+        </p>
       </nav>
 
       <div className="px-3">

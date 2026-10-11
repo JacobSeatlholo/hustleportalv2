@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, STAGES, type Lead, type TopUpPack } from './shared'
 import { useHp } from './store'
+import CityField from './CityField'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin,
@@ -53,7 +54,11 @@ export default function LeadsView() {
 
   useEffect(() => {
     load()
-     
+
+    // Dashboard AI-scout teaser card (and any touchpoint) can open the Lead Finder
+    const openDiscover = () => setShowDiscover(true)
+    window.addEventListener('hp:discover', openDiscover)
+    return () => window.removeEventListener('hp:discover', openDiscover)
   }, [scope])
 
   async function moveStage(lead: Lead, stage: string) {
@@ -69,14 +74,22 @@ export default function LeadsView() {
 
   async function reveal(lead: Lead) {
     try {
-      const res = await api<{ lead: Lead; spent: number }>('/api/leads/reveal', {
+      const res = await api<{ lead: Lead; spent: number; charged?: boolean; message?: string; sourceNote?: string }>('/api/leads/reveal', {
         method: 'POST',
         body: JSON.stringify({ leadId: lead.id }),
       })
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? res.lead : l)))
       setDetail(res.lead)
-      toast({ title: 'Contact revealed', description: `${rands(res.spent)} spent from your wallet` })
-      loadSession()
+      if (res.charged === false) {
+        // Honesty contract: nothing verified → nothing charged.
+        toast({ title: 'Nothing charged', description: res.message || 'No verified public contact found.' })
+      } else {
+        toast({
+          title: 'Contact revealed',
+          description: `${rands(res.spent)} spent from your wallet${res.sourceNote ? ` · ${res.sourceNote}` : ''}`,
+        })
+        loadSession()
+      }
     } catch (e) {
       const err = e as Error & { status?: number; data?: { price?: number } }
       if (err.status === 402) {
@@ -264,16 +277,14 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
           <div className="space-y-1.5"><Label>Company *</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Nkosi Brands" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Contact</Label><Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="Sipho Nkosi" /></div>
-            <div className="space-y-1.5"><Label>City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="e.g. Johannesburg" /></div>
+            <div className="space-y-1.5"><Label>Industry</Label><Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} /></div>
           </div>
+          <CityField value={form.city} onChange={(v) => setForm({ ...form, city: v })} hint="" />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>Industry</Label><Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>Deal value (R)</Label><Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
-          </div>
+          <div className="space-y-1.5"><Label>Deal value (R)</Label><Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
           <Button onClick={save} disabled={busy || !form.company.trim()} className="w-full">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save lead'}
           </Button>
@@ -286,35 +297,44 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
 interface DiscoverResult {
   company: string
   contactName?: string
+  email?: string
+  phone?: string
+  website?: string
   industry?: string
   city?: string
+  why?: string
   score?: number
 }
+
+type DiscoverMode = 'AI_SEARCH' | 'LIVE' | 'NONE'
 
 function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
   const { session } = useHp()
   const { toast } = useToast()
   const [definition, setDefinition] = useState('')
-  const [city, setCity] = useState(session?.user.city || 'Johannesburg')
+  const [city, setCity] = useState(session?.user.city || '')
   const [limit, setLimit] = useState('10')
   const [busy, setBusy] = useState(false)
   const [results, setResults] = useState<DiscoverResult[]>([])
-  const [mode, setMode] = useState<'LIVE' | 'DEMO'>('DEMO')
+  const [mode, setMode] = useState<DiscoverMode>('NONE')
+  const [resSource, setResSource] = useState('WEB')
   const [note, setNote] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
   async function search() {
-    if (!definition.trim()) return
+    // Empty description is allowed — the server then scouts from the saved profile
+    // (website, offerings, city) and returns REAL businesses as a free teaser.
     setBusy(true)
     setResults([])
     try {
-      const res = await api<{ leads: DiscoverResult[]; mode: 'LIVE' | 'DEMO'; note?: string }>('/api/leads/discover', {
+      const res = await api<{ leads: DiscoverResult[]; mode: DiscoverMode; source?: string; note?: string }>('/api/leads/discover', {
         method: 'POST',
         body: JSON.stringify({ definition, city, limit: parseInt(limit) }),
       })
       setResults(res.leads)
       setMode(res.mode)
+      setResSource(res.source || (res.mode === 'LIVE' ? 'EXPLEE' : 'WEB'))
       setNote(res.note || '')
       setSelected(new Set(res.leads.map((l) => l.company)))
     } catch (e) {
@@ -332,7 +352,13 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         if (!selected.has(r.company)) continue
         await api('/api/leads', {
           method: 'POST',
-          body: JSON.stringify({ ...r, country: 'South Africa', source: 'EXPLEE' }),
+          body: JSON.stringify({
+            ...r,
+            country: 'South Africa',
+            source: resSource,
+            // Contact details the search itself surfaced are real public info — free, like manual capture.
+            unlocked: Boolean(r.email || r.phone),
+          }),
         })
         added++
       }
@@ -354,7 +380,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> AI Lead Finder</DialogTitle>
           <DialogDescription>
-            Describe who you want to sell to — the AI finds matching businesses.
+            Describe who you want to sell to — Gemini searches the live web and returns REAL, publicly findable businesses. Leave it empty to scout straight from your saved website &amp; profile.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -367,18 +393,13 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               rows={2}
             />
           </div>
+          <CityField
+            label="City focus"
+            value={city}
+            onChange={setCity}
+            hint="Type any city, township or suburb — or tag your location. Leave empty to search all of SA."
+          />
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>City focus</Label>
-              <Select value={city} onValueChange={setCity}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Anywhere in SA'].map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-1.5">
               <Label>How many</Label>
               <Select value={limit} onValueChange={setLimit}>
@@ -391,10 +412,15 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               </Select>
             </div>
           </div>
-          <Button onClick={search} disabled={busy || !definition.trim()} className="w-full">
+          <Button onClick={search} disabled={busy} className="w-full">
             {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
-            {busy ? 'Searching…' : 'Find leads'}
+            {busy ? 'Searching the live web…' : definition.trim() ? 'Find leads' : 'Scout real leads from my profile'}
           </Button>
+          {!definition.trim() && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              Uses your saved website &amp; profile to find a few REAL businesses in your area — free.
+            </p>
+          )}
 
           {note && (
             <p className="text-xs text-muted-foreground bg-muted rounded-lg p-2">{note}</p>
@@ -404,13 +430,13 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span>{results.length} matches found</span>
-                <Badge className={mode === 'LIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-brand/20 text-brand'}>
-                  {mode === 'LIVE' ? 'Live verified data' : 'Demo data'}
+                <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-brand/20 text-brand'}>
+                  {mode === 'AI_SEARCH' ? 'Live web results' : 'Verified data'}
                 </Badge>
               </div>
               <div className="max-h-64 overflow-y-auto hp-scroll space-y-1.5">
                 {results.map((r) => (
-                  <label key={r.company} className="flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/40">
+                  <label key={r.company} className="flex items-start gap-3 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/40">
                     <input
                       type="checkbox"
                       checked={selected.has(r.company)}
@@ -420,13 +446,15 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                         else next.delete(r.company)
                         setSelected(next)
                       }}
-                      className="h-4 w-4 accent-brand"
+                      className="h-4 w-4 accent-brand mt-0.5"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{r.company}</div>
                       <div className="text-xs text-muted-foreground">{r.industry || 'Business'} · {r.city || 'SA'}</div>
+                      {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
+                      {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
                     </div>
-                    {r.score != null && <Badge variant="outline" className="text-[10px]">fit {r.score}/5</Badge>}
+                    {r.score != null && <Badge variant="outline" className="text-[10px] mt-0.5">fit {r.score}/5</Badge>}
                   </label>
                 ))}
               </div>

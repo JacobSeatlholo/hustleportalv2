@@ -4,14 +4,24 @@ import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import Landing from '@/components/hp/Landing'
 import AppShell from '@/components/hp/AppShell'
-import { useHp } from '@/components/hp/store'
+import { useHp, type ViewKey } from '@/components/hp/store'
+
+const VALID_VIEWS: ViewKey[] = [
+  'dashboard', 'leads', 'clients', 'tasks', 'finance', 'ai', 'mail', 'calendar',
+  'invoices', 'reports', 'integrations', 'store', 'resources', 'services',
+  'wallet', 'grow', 'profile', 'admin',
+]
 
 export default function Home() {
   const { session, sessionLoading, loadSession } = useHp()
 
   useEffect(() => {
+    // PWA / shortcut deep-links: /?view=leads opens that module directly
+    // (start_url is "/" — /dashboard etc. do not exist in this single-page app).
+    const params = new URLSearchParams(window.location.search)
+    const target = params.get('view') as ViewKey | null
+    if (target && VALID_VIEWS.includes(target)) useHp.getState().setView(target)
     loadSession()
-     
   }, [])
 
   if (sessionLoading) {

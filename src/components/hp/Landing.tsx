@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { api } from './shared'
 import { useHp } from './store'
+import CityField from './CityField'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
   Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket, MailCheck,
@@ -24,7 +25,7 @@ const SERVICE_ICONS: Record<string, React.ReactNode> = {
 }
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
-const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Cape Town', 'Port Elizabeth', 'Other']
+
 
 export default function Landing() {
   const { loadSession } = useHp()
@@ -37,7 +38,7 @@ export default function Landing() {
   const [name, setName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [industry, setIndustry] = useState('')
-  const [city, setCity] = useState('Johannesburg')
+  const [city, setCity] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [refApplied, setRefApplied] = useState<string | null>(null)
@@ -158,7 +159,7 @@ export default function Landing() {
 
           <div className="flex flex-wrap gap-6 text-sm">
             <div className="flex items-center gap-2"><Star className="h-4 w-4 text-brand" /> Proudly South African</div>
-            <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Starter credits included</div>
+            <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> R99 in free lead credits</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Secure payments by Yoco</div>
           </div>
         </div>
@@ -258,21 +259,7 @@ export default function Landing() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>City</Label>
-                      <div className="flex flex-wrap gap-1">
-                        {CITIES.slice(0, 4).map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => setCity(c)}
-                            className={`text-xs px-2 py-1 rounded-full border transition ${city === c ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
-                          >
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <CityField value={city} onChange={setCity} label="City" hint="Pick a shortcut or type any city, township or suburb — or tag your location." />
                   </div>
                 </>
               )}
@@ -299,7 +286,7 @@ export default function Landing() {
               </Button>
               <p className="text-xs text-center text-muted-foreground">
                 {mode === 'register'
-                  ? 'Free account · starter credits included · no card required'
+                  ? 'Free account · R99 in lead credits to start · no card required'
                   : 'Welcome back.'}
               </p>
               {mode === 'login' && (
@@ -531,7 +518,7 @@ export default function Landing() {
         <h2 className="font-display text-4xl md:text-5xl">Start free. Get organised. Get paid.</h2>
         <p className="text-brand font-display text-xl tracking-wide">Free to start. Ready when you are.</p>
         <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-          A free account with starter credits to reveal your first leads, and every tool above included. Upgrade only when the pipeline demands it.
+          A free account with R99 in lead credits to reveal your first real leads, and every tool above included. Upgrade only when the pipeline demands it.
         </p>
         <div className="flex flex-wrap justify-center gap-3 pt-1">
           <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:brightness-110 transition">
