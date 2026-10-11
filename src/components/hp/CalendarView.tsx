@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge'
 import { api, type Appointment } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
+import ScanDiaryDialog from './ScanDiaryDialog'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen,
 } from 'lucide-react'
 
 type SpeechRecognitionLike = {
@@ -176,12 +177,18 @@ export default function CalendarView() {
   }
 
   const voiceSupported = typeof window !== 'undefined' && !!((window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition)
+  const [scanOpen, setScanOpen] = useState(false)
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display text-2xl">Calendar</h2>
-        <p className="text-sm text-muted-foreground">Appointments with shareable Jitsi meets, Google Calendar sync and voice capture.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-2xl">Calendar</h2>
+          <p className="text-sm text-muted-foreground">Appointments with shareable Jitsi meets, Google Calendar sync and voice capture.</p>
+        </div>
+        <Button variant="outline" onClick={() => setScanOpen(true)}>
+          <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Snap a diary page
+        </Button>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
@@ -252,6 +259,8 @@ export default function CalendarView() {
           <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} past />
         </div>
       </div>
+
+      <ScanDiaryDialog open={scanOpen} onOpenChange={setScanOpen} onDone={() => { bumpRefresh(); load() }} />
     </div>
   )
 }

@@ -85,6 +85,60 @@ export async function geminiGenerate(
   }
 }
 
+/**
+ * Vision call — extract structured data from a photo/screenshot (OCR+understanding).
+ * Same key chain + error contract as geminiGenerate. Low temperature for extraction.
+ */
+export async function geminiVision(
+  userId: string,
+  opts: { imageBase64: string; mimeType: string; system?: string; prompt: string; json?: boolean },
+): Promise<GeminiResult> {
+  const { key } = await resolveGeminiKey(userId)
+  if (!key) {
+    return {
+      ok: false,
+      error:
+        'NO_KEY: HustlePortal AI is not switched on yet — try again soon. You can also add your own free Gemini key under Integrations to go live instantly.',
+    }
+  }
+  try {
+    const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inline_data: { mime_type: opts.mimeType || 'image/jpeg', data: opts.imageBase64 } },
+              { text: opts.prompt },
+            ],
+          },
+        ],
+        ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2400,
+          ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+        },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      return { ok: false, error: `Gemini API ${res.status}: ${body.slice(0, 200)}` }
+    }
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[]
+    }
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || ''
+    if (!text.trim()) return { ok: false, error: 'Gemini returned an empty response.' }
+    return { ok: true, text }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gemini request failed' }
+  }
+}
+
 /** Parse a JSON object out of a Gemini response (tolerates ``` fences). */
 export function parseJsonLoose<T>(text: string): T | null {
   const cleaned = text.replace(/```json|```/g, '').trim()

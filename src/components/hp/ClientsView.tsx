@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast'
 import { parseContactList, normalizePhone, waLink, waGreeting } from '@/lib/whatsapp'
 import { api, rands } from './shared'
 import { useHp } from './store'
-import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText } from 'lucide-react'
+import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera } from 'lucide-react'
 
 interface Client {
   id: string
@@ -59,6 +59,8 @@ export default function ClientsView() {
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [scanBusy, setScanBusy] = useState(false)
+  const [scanThumb, setScanThumb] = useState<string | null>(null)
   const businessName = useHp((s) => s.session?.user?.businessName) ?? null
 
   // Live parse preview — same engine the server runs on import
@@ -113,7 +115,47 @@ export default function ClientsView() {
   function openImport() {
     setImportText('')
     setImportResult(null)
+    setScanThumb(null)
     setImportOpen(true)
+  }
+
+  // "Scan my WhatsApp" — screenshot in, contacts out (AI vision),
+  // results land in the SAME preview/commit pipeline as a paste.
+  async function scanScreenshot(f: File | undefined) {
+    if (!f) return
+    if (!f.type.startsWith('image/')) {
+      toast({ title: 'That is not an image', description: 'Upload a screenshot (PNG/JPG) of your WhatsApp contacts.', variant: 'destructive' })
+      return
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      toast({ title: 'Image too big (max 8 MB)', description: 'Screenshot only the part of the list you need.', variant: 'destructive' })
+      return
+    }
+    setScanBusy(true)
+    setScanThumb(URL.createObjectURL(f))
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result || ''))
+        r.onerror = () => reject(new Error('Could not read the image'))
+        r.readAsDataURL(f)
+      })
+      const res = await api<{ ok: boolean; contacts: { name: string; phone: string; email: string | null; note: string | null }[] }>(
+        '/api/ai/ocr-contacts',
+        { method: 'POST', body: JSON.stringify({ imageBase64: b64, mimeType: f.type || 'image/jpeg' }) }
+      )
+      if (!res.contacts?.length) {
+        toast({ title: 'No contacts found in that screenshot', description: 'Make sure names/numbers are visible and try a tighter screenshot.', variant: 'destructive' })
+        return
+      }
+      const lines = res.contacts.map((c) => [c.name || '', c.phone, c.email || ''].filter(Boolean).join(', '))
+      setImportText((prev) => (prev.trim() ? `${prev.trim()}\n${lines.join('\n')}` : lines.join('\n')))
+      toast({ title: `AI read ${res.contacts.length} contact${res.contacts.length === 1 ? '' : 's'} ✓`, description: 'Check the preview below, edit if needed, then import.' })
+    } catch (e) {
+      toast({ title: 'Scan failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setScanBusy(false)
+    }
   }
 
   async function readFile(f: File | undefined) {
@@ -427,7 +469,39 @@ export default function ClientsView() {
             </div>
           ) : (
             <div className="space-y-3">
-              <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 p-4 cursor-pointer hover:border-brand/50 transition-colors">
+              {/* AI screenshot scan — fastest path: no typing, no export */}
+              <label
+                className={`relative flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3 cursor-pointer hover:border-brand/60 transition-colors ${scanBusy ? 'pointer-events-none opacity-70' : ''}`}
+              >
+                {scanThumb ? (
+                  <img src={scanThumb} alt="Screenshot preview" className="h-12 w-12 rounded object-cover border" />
+                ) : (
+                  <span className="flex h-12 w-12 items-center justify-center rounded bg-brand/10">
+                    {scanBusy ? <Loader2 className="h-5 w-5 animate-spin text-brand" /> : <Camera className="h-5 w-5 text-brand" />}
+                  </span>
+                )}
+                <span className="flex-1">
+                  <span className="block text-sm font-medium">Scan a WhatsApp screenshot</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {scanBusy ? 'AI is reading your screenshot…' : 'Screenshot your chat list or contact page — AI types the names & numbers in for you'}
+                  </span>
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    scanScreenshot(e.target.files?.[0])
+                    e.currentTarget.value = ''
+                  }}
+                />
+              </label>
+
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span className="h-px flex-1 bg-border" /> or the classic way <span className="h-px flex-1 bg-border" />
+              </div>
+
+              <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 p-3 cursor-pointer hover:border-brand/50 transition-colors">
                 <Upload className="h-4 w-4 text-brand" />
                 <span className="text-xs text-muted-foreground">Upload contacts file (.vcf, .csv, .txt — from your phone or WhatsApp)</span>
                 <input

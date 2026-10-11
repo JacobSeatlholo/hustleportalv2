@@ -15,7 +15,8 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { api, PRIORITIES, type Task } from './shared'
 import { useHp } from './store'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon } from 'lucide-react'
+import ScanDiaryDialog from './ScanDiaryDialog'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen } from 'lucide-react'
 
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
@@ -31,6 +32,7 @@ export default function TasksView() {
   const [teamId, setTeamId] = useState<string>('personal')
   const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -111,12 +113,17 @@ export default function TasksView() {
           <h1 className="font-display text-3xl">Tasks</h1>
           <p className="text-sm text-muted-foreground">{open.length} open · {done.length} done</p>
         </div>
-        <Tabs value={scope} onValueChange={(v) => setScope(v as 'mine' | 'team')}>
-          <TabsList>
-            <TabsTrigger value="mine" className="gap-1"><UserIcon className="h-3.5 w-3.5" /> My tasks</TabsTrigger>
-            <TabsTrigger value="team" className="gap-1" disabled={!session?.team}><Users className="h-3.5 w-3.5" /> Team tasks</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setScanOpen(true)}>
+            <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Scan diary
+          </Button>
+          <Tabs value={scope} onValueChange={(v) => setScope(v as 'mine' | 'team')}>
+            <TabsList>
+              <TabsTrigger value="mine" className="gap-1"><UserIcon className="h-3.5 w-3.5" /> My tasks</TabsTrigger>
+              <TabsTrigger value="team" className="gap-1" disabled={!session?.team}><Users className="h-3.5 w-3.5" /> Team tasks</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       {!session?.team && (
@@ -206,6 +213,8 @@ export default function TasksView() {
           )}
         </div>
       )}
+
+      <ScanDiaryDialog open={scanOpen} onOpenChange={setScanOpen} onDone={() => load()} />
     </div>
   )
 }
