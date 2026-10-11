@@ -4,22 +4,36 @@
  * A user's own key (UserSetting: GEMINI_API_KEY, Integrations hub) is an OPTIONAL
  * override — power users can run AI on their own quota.
  *
- * RESILIENCE (fixes "scan returns 403" class of failures):
- *  - Model chain: Google retires model IDs; we try an alias-first chain and cache
- *    whichever model answered for this server instance.
- *  - Key chain: if the user's own key is rejected (invalid key, API not enabled,
- *    referrer-restricted, out of quota) we transparently retry on the platform key
- *    so the feature keeps working instead of surfacing a raw 403.
- *  - When everything fails we return ONE actionable, professional message.
+ * RESILIENCE (fixes the "models/gemini-2.0-flash is no longer available" class of failures):
+ *  - Dynamic model discovery: Google retires model IDs over time (2.0-flash retired, 3.x shipped).
+ *    Before the first call on an instance we ask ListModels what THIS key can actually see and pick
+ *    the best flash-tier model from our preference list — so a Google-side retirement self-heals
+ *    instead of hard-failing. Re-verified every 30 minutes; a cached winner that starts returning
+ *    404 mid-flight is evicted immediately.
+ *  - Key chain: the user's own key is tried first; if it is rejected (invalid key, restrictions,
+ *    quota, suspended project) we transparently retry on the platform key.
+ *  - Error prioritisation: when everything fails we surface the MOST actionable cause
+ *    (a bad user key beats a platform problem; "model retired" is never blamed on the user's key).
  */
 import { db } from '@/lib/db'
 
-/** Alias-first chain: gemini-flash-latest always tracks Google's current stable Flash model. */
-const MODEL_CHAIN = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'] as const
+/**
+ * Preference order — alias first (tracks Google's current stable Flash), then numbered
+ * generations as fallbacks. Only entries the key can actually SEE get called (discovery),
+ * so stale names here are harmless.
+ */
+const MODEL_PREFERENCE = [
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.5-flash',
+] as const
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
-/** First model that answered on this server instance — avoids repeat fallback rounds. */
+/** Winner cache — verified against ListModels, refreshed on this TTL. */
 let cachedModel: string | null = null
+let cachedModelAt = 0
+const MODEL_TTL_MS = 30 * 60 * 1000
 
 export async function getUserGeminiKey(userId: string): Promise<string | null> {
   const row = await db.userSetting.findUnique({
@@ -54,8 +68,9 @@ export interface GeminiHistoryTurn {
 type ErrorClass = 'KEY_INVALID' | 'PERMISSION' | 'MODEL' | 'QUOTA' | 'EMPTY' | 'OTHER'
 
 function classify(status: number, body: string): ErrorClass {
-  const b = body.slice(0, 600)
-  if (status === 400 && /API_KEY_INVALID|API key not valid|api_key/i.test(b)) return 'KEY_INVALID'
+  const b = body.slice(0, 800)
+  if (status === 400 && /API_KEY_INVALID|API_KEY_EXPIRED|API_KEY_SERVICE_BLOCKED|API key not valid|API key blocked|api key expired/i.test(b))
+    return 'KEY_INVALID'
   if (status === 401) return 'KEY_INVALID'
   if (status === 403) return 'PERMISSION'
   if (status === 404) return 'MODEL'
@@ -73,15 +88,99 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'PERMISSION':
       return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it.' : ' The platform AI key\'s Google project is currently restricted or suspended — the operator must issue a fresh project key. You can add your own free Gemini key under Integrations to go live instantly.'}`
     case 'QUOTA':
-      return `Gemini is rate-limited right now (429). We retried on the fallback key — please try again in a minute.${own}`
+      return `Gemini is rate-limited right now (429). We tried the fallback key too — please try again in a minute.${own}`
+    case 'MODEL':
+      // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.
+      return 'Google is rotating its AI models (one was retired mid-flight, 404) and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically — please try again in a minute.'
+    case 'EMPTY':
+      return 'Gemini returned an empty response — try rephrasing, or attach a clearer image.'
     default:
       return `Gemini request failed (Google ${status}). ${detail.slice(0, 140)}${own}`
   }
 }
 
+interface Failure {
+  cls: ErrorClass
+  ownKey: boolean
+  status: number
+  detail: string
+}
+
 /**
- * One hardened request: walks (user key → platform key) × (cached model → chain),
- * retries only on HTTP-status failures, returns the best actionable error.
+ * Pick the failure the user can actually DO something about:
+ * their own key's problems first (fixable in Integrations), platform problems next
+ * (operator/add-a-key advice), "model retired" last (nobody's fault, self-heals).
+ */
+function bestError(failures: Failure[]): string {
+  if (failures.length === 0) return 'Gemini request failed'
+  const rank = (f: Failure): number => {
+    switch (f.cls) {
+      case 'KEY_INVALID': return f.ownKey ? 10 : 6
+      case 'PERMISSION': return f.ownKey ? 9 : 7
+      case 'QUOTA': return f.ownKey ? 8 : 5
+      case 'EMPTY': return 4
+      case 'MODEL': return 3
+      default: return f.ownKey ? 4 : 2
+    }
+  }
+  const best = failures.reduce((a, b) => (rank(b) > rank(a) ? b : a))
+  return friendlyError(best.cls, best.status, best.detail, best.ownKey)
+}
+
+/**
+ * What can THIS key actually call right now? ListModels once per TTL, pick the best
+ * preference entry the key can see. Discovery is best-effort — any failure falls back
+ * to the static preference chain.
+ */
+async function resolveModels(key: string): Promise<string[]> {
+  const now = Date.now()
+  if (cachedModel && now - cachedModelAt < MODEL_TTL_MS) {
+    return [cachedModel, ...MODEL_PREFERENCE.filter((m) => m !== cachedModel)]
+  }
+  try {
+    const res = await fetch(
+      `${BASE}/models?key=${encodeURIComponent(key)}&pageSize=1000`,
+      { signal: AbortSignal.timeout(10_000) }
+    )
+    if (res.ok) {
+      const data = (await res.json()) as {
+        models?: { name?: string; supportedGenerationMethods?: string[] }[]
+      }
+      const usable = new Set(
+        (data.models || [])
+          .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map((m) => (m.name || '').replace(/^models\//, ''))
+      )
+      const pick = MODEL_PREFERENCE.find((m) => usable.has(m))
+      if (pick) {
+        cachedModel = pick
+        cachedModelAt = now
+        return [pick, ...MODEL_PREFERENCE.filter((m) => m !== pick)]
+      }
+      // None of our preferred names are visible — ride the newest flash-tier model Google offers.
+      const anyFlash = (data.models || [])
+        .map((m) => (m.name || '').replace(/^models\//, ''))
+        .filter(
+          (n) =>
+            /flash/i.test(n) &&
+            !/tts|image|embed|transcribe|robotics|computer|omni|banana|lyria|preview|customtools/i.test(n)
+        )
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]
+      if (anyFlash) {
+        cachedModel = anyFlash
+        cachedModelAt = now
+        return [anyFlash, ...MODEL_PREFERENCE.filter((m) => m !== anyFlash)]
+      }
+    }
+  } catch {
+    // discovery is best-effort — fall through to the static chain
+  }
+  return [...MODEL_PREFERENCE]
+}
+
+/**
+ * One hardened request: walks (user key → platform key) × (discovered model chain),
+ * retries only on HTTP-status failures, returns the most actionable error.
  */
 async function callGemini(
   userId: string,
@@ -101,13 +200,11 @@ async function callGemini(
     }
   }
 
-  let bestErr = ''
+  const failures: Failure[] = []
   let timedOut = false
 
   for (const { key, ownKey } of keys) {
-    const models = cachedModel && MODEL_CHAIN.includes(cachedModel as (typeof MODEL_CHAIN)[number])
-      ? [cachedModel, ...MODEL_CHAIN.filter((m) => m !== cachedModel)]
-      : [...MODEL_CHAIN]
+    const models = await resolveModels(key)
     for (const model of models) {
       try {
         const res = await fetch(`${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
@@ -119,10 +216,15 @@ async function callGemini(
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
           const cls = classify(res.status, raw)
-          bestErr = friendlyError(cls, res.status, raw, ownKey)
+          failures.push({ cls, ownKey, status: res.status, detail: raw })
+          // A cached winner that Google just retired — evict so the next request re-discovers.
+          if (cls === 'MODEL' && model === cachedModel) {
+            cachedModel = null
+            cachedModelAt = 0
+          }
           // Key-level fatals: no point trying other models with the same key.
           if (cls === 'KEY_INVALID') break
-          // Model-level: try the next model on this key.
+          // Model-level / permission-level: try the next model on this key.
           continue
         }
         const data = (await res.json()) as {
@@ -130,21 +232,22 @@ async function callGemini(
         }
         const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || ''
         if (!text.trim()) {
-          bestErr = 'Gemini returned an empty response — try rephrasing or a clearer image.'
+          failures.push({ cls: 'EMPTY', ownKey, status: res.status, detail: '' })
           continue
         }
         cachedModel = model
+        cachedModelAt = Date.now()
         return { ok: true, text }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Gemini request failed'
-        bestErr = `Gemini request failed: ${msg}`
+        failures.push({ cls: 'OTHER', ownKey, status: 0, detail: msg })
         if (/abort|timeout|TimeoutError/i.test(msg)) { timedOut = true; break }
       }
     }
     if (timedOut) break // connectivity problem — don't hammer the chain
   }
 
-  return { ok: false, error: bestErr || 'Gemini request failed' }
+  return { ok: false, error: bestError(failures) }
 }
 
 export async function geminiGenerate(

@@ -89,7 +89,7 @@ export async function GET() {
     }
 
     // 2) Live 1-shot generate on the alias-first chain — catches retired-model 404s
-    const tryModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash']
+    const tryModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash']
     let liveOk = false
     for (const model of tryModels) {
       try {
