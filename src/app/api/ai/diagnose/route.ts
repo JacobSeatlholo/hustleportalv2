@@ -108,7 +108,16 @@ export async function GET() {
           report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: 404, detail: 'Model not available for this key — trying the next model in the chain.' })
           continue
         } else {
-          report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: res.status, detail: raw.slice(0, 200) || `Google returned ${res.status}.` })
+          report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: res.status, detail: raw.slice(0, 300) || `Google returned ${res.status}.` })
+          if (res.status === 403) {
+            if (/denied access/i.test(raw)) {
+              report.advice.push(`OPERATOR ACTION (platform key): Google has DENIED the whole key's project ("Your project has been denied access"). The key itself is valid — the Google Cloud project behind it is suspended/flagged. Fix: create a NEW project at aistudio.google.com, generate a fresh API key, and replace GEMINI_API_KEY in Vercel environment variables, then redeploy. Users can also add their own working key under Integrations to run AI immediately.`)
+            } else {
+              report.advice.push(`Platform AI call blocked (403). Enable the "Generative Language API" for the key's project and clear API/website restrictions on the key (aistudio.google.com / Cloud console).`)
+            }
+          } else if (res.status === 429) {
+            report.advice.push('Platform key is rate-limited (429) — quota exhausted on the Google project. Wait or raise the quota.')
+          }
           break
         }
       } catch (e) {

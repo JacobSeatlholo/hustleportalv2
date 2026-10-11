@@ -71,7 +71,7 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'KEY_INVALID':
       return `Your Gemini key was rejected by Google (invalid, deleted or mistyped).${own ? ' Update it under Integrations, or remove it to use HustlePortal AI.' : ' The platform AI key looks misconfigured — the operator has been alerted by this message.'}`
     case 'PERMISSION':
-      return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it.' : ' The platform AI key needs the Generative Language API enabled or its restrictions cleared — shown in diagnostics under Integrations.'}`
+      return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it.' : ' The platform AI key\'s Google project is currently restricted or suspended — the operator must issue a fresh project key. You can add your own free Gemini key under Integrations to go live instantly.'}`
     case 'QUOTA':
       return `Gemini is rate-limited right now (429). We retried on the fallback key — please try again in a minute.${own}`
     default:
