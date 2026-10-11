@@ -117,3 +117,20 @@ export async function sendMail(
   }
   return sendViaPlatform(userId, payload)
 }
+
+/** The Business Hustle team inbox (service requests land here). Override with TEAM_INBOX_EMAIL env. */
+export const TEAM_INBOX = process.env.TEAM_INBOX_EMAIL?.trim() || 'team@businesshustle.co.za'
+
+/**
+ * Internal team notification (e.g. service requests) — platform delivery only,
+ * NO referral signature, Reply-To the requesting user so the team can answer
+ * straight from their inbox.
+ */
+export async function sendTeamMail(
+  userId: string,
+  mail: { subject: string; body: string },
+): Promise<{ ok: true; provider: 'PLATFORM'; to: string } | { ok: false; error: string; to: string }> {
+  const r = await sendViaPlatform(userId, { to: TEAM_INBOX, subject: mail.subject, body: mail.body })
+  if (r.ok) return { ...r, to: TEAM_INBOX }
+  return { ok: false, error: r.error, to: TEAM_INBOX }
+}

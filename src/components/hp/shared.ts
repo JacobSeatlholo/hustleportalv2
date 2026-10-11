@@ -90,6 +90,7 @@ export interface Invoice {
   taxRate: number
   total: number
   logoUrl: string | null
+  bankDetails: string | null
   notes: string | null
   issuedAt: string
   dueAt: string | null

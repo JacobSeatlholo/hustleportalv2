@@ -20,6 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hustleportal.online"),
   title: "HustlePortal™ — Business OS for South African Entrepreneurs",
   description:
     "Leads, clients, invoicing, tasks and finance in one professional system. Source leads with AI, reveal verified contacts with prepaid credits. Built in South Africa.",
@@ -28,6 +29,21 @@ export const metadata: Metadata = {
     "AI business plan", "SME tools South Africa", "business OS", "township economy",
   ],
   authors: [{ name: "Business Hustle — Simple Eternity Holdings (Pty) Ltd" }],
+  manifest: "/manifest.webmanifest",
+  applicationName: "HustlePortal",
+  appleWebApp: {
+    capable: true,
+    title: "HustlePortal",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   openGraph: {
     title: "HustlePortal™ — Business OS for South African Entrepreneurs",
     description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI — built for South African businesses.",
@@ -39,6 +55,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0b",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

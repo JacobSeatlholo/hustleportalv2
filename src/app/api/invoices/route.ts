@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
       total,
       notes: body.notes || null,
       logoUrl: typeof body.logoUrl === 'string' && body.logoUrl.startsWith('data:image/') ? body.logoUrl : null,
+      // Bank details snapshot: printed on this invoice forever, even if settings change later.
+      bankDetails: typeof body.bankDetails === 'string' && body.bankDetails.trim() ? body.bankDetails.slice(0, 600) : null,
       status: body.status === 'SENT' ? 'SENT' : 'DRAFT',
       dueAt,
     },

@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useHp } from './store'
+import { openInstallTutorial } from './InstallApp'
 import {
-  Target, Sparkles, Mail, Users, ArrowRight, Rocket, Trophy, Zap,
+  Target, Sparkles, Mail, Users, ArrowRight, Rocket, Trophy, Zap, Smartphone,
 } from 'lucide-react'
 
 const TOUR_KEY = 'hp_tour_done_v2'
@@ -87,6 +88,14 @@ export default function WelcomeTour() {
       body: 'Teams that grow together, win together. Share your invite link — when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
       cta: 'Get my invite link',
       goTo: () => setView('grow'),
+    },
+    {
+      icon: <Smartphone className="h-7 w-7 text-brand" />,
+      kicker: 'One-tap access',
+      title: 'Take HustlePortal home',
+      body: 'Add HustlePortal to your phone\'s home screen — it opens full screen like a proper app, one tap away. iPhone: Share → Add to Home Screen. Android: menu → Install app.',
+      cta: 'Show me how (30 sec)',
+      goTo: openInstallTutorial,
     },
     {
       icon: <Trophy className="h-7 w-7 text-brand" />,

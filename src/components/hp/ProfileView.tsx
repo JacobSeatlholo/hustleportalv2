@@ -12,13 +12,25 @@ import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass } from 'lucide-react'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, MapPin, Globe, Copy, Check, ScanSearch } from 'lucide-react'
 
 interface TeamInfo {
   id: string
   name: string
   role: string
   members: { id: string; name: string; email: string; role: string }[]
+}
+
+interface UrlAnalysis {
+  businessName?: string
+  industry?: string
+  audience?: { summary?: string; demographics?: string; painPoints?: string[] }
+  brand?: { voice?: string; personality?: string[] }
+  positioning?: string
+  pitches?: { type?: string; subject?: string; body?: string }[]
+  keywords?: string[]
+  sourceUrl?: string
+  analyzedAt?: string
 }
 
 const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
@@ -47,6 +59,17 @@ export default function ProfileView() {
   const [pitching, setPitching] = useState(false)
   const [newWsName, setNewWsName] = useState('')
 
+  // AI business-URL dissection
+  const [urlInput, setUrlInput] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState<UrlAnalysis | null>(null)
+  const [copiedPitch, setCopiedPitch] = useState<number | null>(null)
+
+  // city geolocation capture + confirm
+  const [showCityInput, setShowCityInput] = useState(false)
+  const [locating, setLocating] = useState(false)
+  const [cityProposal, setCityProposal] = useState<string | null>(null)
+
   useEffect(() => {
     if (!activeProjectId) return
     api<{ project: ProjectFull }>(`/api/projects/${activeProjectId}`)
@@ -63,7 +86,12 @@ export default function ProfileView() {
           contactPhone: r.project.contactPhone || '',
         })
         setSalesPitch(r.project.salesPitch || '')
+        setUrlInput(r.project.website || '')
       })
+      .catch(() => {})
+    // load last saved analysis for this workspace
+    api<{ analysis: UrlAnalysis | null }>(`/api/ai/business-url${activeProjectId ? `?projectId=${activeProjectId}` : ''}`)
+      .then((r) => setAnalysis(r.analysis))
       .catch(() => {})
   }, [activeProjectId])
 
@@ -168,6 +196,67 @@ export default function ProfileView() {
     } finally {
       setPitching(false)
     }
+  }
+
+  async function analyzeUrl() {
+    if (!urlInput.trim()) {
+      toast({ title: 'Add your web address first', description: 'e.g. bloombeauty.co.za — the AI reads the site and does the rest.', variant: 'destructive' })
+      return
+    }
+    setAnalyzing(true)
+    try {
+      const r = await api<{ analysis: UrlAnalysis }>('/api/ai/business-url', {
+        method: 'POST',
+        body: JSON.stringify({ url: urlInput, projectId: activeProjectId }),
+      })
+      setAnalysis(r.analysis)
+      toast({ title: 'Business analysis complete ✓', description: 'Audience, brand and three ready-to-send pitches — saved to this workspace.' })
+    } catch (e) {
+      toast({ title: 'Analysis failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  async function copyPitch(idx: number, subject: string, body: string) {
+    try {
+      await navigator.clipboard.writeText(`${subject}\n\n${body}`)
+      setCopiedPitch(idx)
+      setTimeout(() => setCopiedPitch(null), 1500)
+    } catch {
+      toast({ title: 'Could not copy — select the text manually', variant: 'destructive' })
+    }
+  }
+
+  function detectCity() {
+    if (!navigator.geolocation) {
+      toast({ title: 'Location not available', description: 'Your browser does not support location — type your city instead.', variant: 'destructive' })
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude.toFixed(4)}&longitude=${pos.coords.longitude.toFixed(4)}&localityLanguage=en`,
+            { signal: AbortSignal.timeout(10_000) }
+          )
+          const data = (await res.json()) as { city?: string; locality?: string; principalSubdivision?: string }
+          const city = (data.city || data.locality || '').trim()
+          if (!city) throw new Error('no city')
+          setCityProposal(data.principalSubdivision && !city.includes(data.principalSubdivision) ? `${city}, ${data.principalSubdivision}` : city)
+        } catch {
+          toast({ title: 'Could not read your city', description: 'Location worked but the lookup failed — type your city instead.', variant: 'destructive' })
+        } finally {
+          setLocating(false)
+        }
+      },
+      () => {
+        setLocating(false)
+        toast({ title: 'Location permission declined', description: 'No problem — type your city manually below.', variant: 'destructive' })
+      },
+      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 300_000 }
+    )
   }
 
   async function createWorkspace() {
@@ -282,13 +371,60 @@ export default function ProfileView() {
                       <button
                         key={c}
                         type="button"
-                        onClick={() => setForm({ ...form, city: c })}
+                        onClick={() => {
+                          if (c === 'Other') {
+                            setShowCityInput(true)
+                            return
+                          }
+                          setShowCityInput(false)
+                          setCityProposal(null)
+                          setForm({ ...form, city: c })
+                        }}
                         className={`text-xs px-2 py-1 rounded-full border transition ${form.city === c ? 'bg-brand border-brand text-black font-medium' : 'bg-transparent text-muted-foreground hover:border-brand/60'}`}
                       >
                         {c}
                       </button>
                     ))}
                   </div>
+                  {showCityInput && (
+                    <div className="space-y-2 rounded-lg border p-2.5 mt-1">
+                      <div className="flex gap-2">
+                        <Input
+                          value={form.city === 'Other' ? '' : !CITIES.includes(form.city) ? form.city : ''}
+                          onChange={(e) => setForm({ ...form, city: e.target.value })}
+                          placeholder="Type your city or town…"
+                          aria-label="City"
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={detectCity} disabled={locating} className="shrink-0">
+                          {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                          Detect
+                        </Button>
+                      </div>
+                      {cityProposal && (
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand/30 bg-brand/5 px-2.5 py-2 text-xs">
+                          <MapPin className="h-3.5 w-3.5 text-brand shrink-0" />
+                          <span>We found <b>{cityProposal}</b>. Use it?</span>
+                          <div className="flex gap-1.5 ml-auto">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs bg-brand text-black hover:brightness-110"
+                              onClick={() => { setForm({ ...form, city: cityProposal }); setCityProposal(null); toast({ title: `City set to ${cityProposal}`, description: 'Saved when you save your profile.' }) }}
+                            >
+                              <Check className="h-3 w-3 mr-1" /> Confirm
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={() => setCityProposal(null)}>
+                              Dismiss
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">Detecting asks your browser for location once — nothing is stored until you confirm and save.</p>
+                    </div>
+                  )}
+                  {!showCityInput && form.city && !CITIES.includes(form.city) && (
+                    <p className="text-[11px] text-muted-foreground">Current: <b className="text-foreground">{form.city}</b></p>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -387,6 +523,104 @@ export default function ProfileView() {
                     Fill in the profile above, then generate — Gemini writes a pitch grounded only in what you put here.
                     Needs a Gemini API key in Integrations.
                   </p>
+                )}
+              </div>
+
+              {/* AI business-URL dissection */}
+              <div className="rounded-xl border border-brand/25 bg-brand/5 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium flex items-center gap-1.5">
+                    <ScanSearch className="h-3.5 w-3.5 text-brand" /> AI website analysis — audience, brand &amp; pitches
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paste your business web address and the AI studies your site: who buys from you, what your brand sounds like,
+                  and three ready-to-send sales pitches. Everything is saved to this workspace and quietly sharpens every AI draft.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="yourbusiness.co.za"
+                    aria-label="Business website"
+                  />
+                  <Button size="sm" variant="outline" onClick={analyzeUrl} disabled={analyzing} className="shrink-0">
+                    {analyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
+                    {analyzing ? 'Reading your site…' : 'Analyze'}
+                  </Button>
+                </div>
+                {analysis && (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      {analysis.audience?.summary && (
+                        <div className="rounded-lg border bg-card p-2.5">
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Your audience</p>
+                          <p className="text-xs leading-relaxed">{analysis.audience.summary}</p>
+                          {analysis.audience.demographics && <p className="text-[11px] text-muted-foreground mt-1">{analysis.audience.demographics}</p>}
+                        </div>
+                      )}
+                      {analysis.brand?.voice && (
+                        <div className="rounded-lg border bg-card p-2.5">
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Brand voice</p>
+                          <p className="text-xs leading-relaxed">{analysis.brand.voice}</p>
+                          {analysis.brand.personality && analysis.brand.personality.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {analysis.brand.personality.slice(0, 6).map((p) => (
+                                <Badge key={p} variant="secondary" className="text-[10px]">{p}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {analysis.audience?.painPoints && analysis.audience.painPoints.length > 0 && (
+                      <div className="rounded-lg border bg-card p-2.5">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">What your buyers struggle with</p>
+                        <ul className="text-xs space-y-1">
+                          {analysis.audience.painPoints.slice(0, 5).map((pp) => (
+                            <li key={pp} className="flex gap-1.5"><CheckCircle2 className="h-3 w-3 text-brand mt-0.5 shrink-0" />{pp}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {analysis.positioning && (
+                      <div className="rounded-lg border bg-card p-2.5">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Positioning</p>
+                        <p className="text-xs leading-relaxed">{analysis.positioning}</p>
+                      </div>
+                    )}
+                    {analysis.pitches && analysis.pitches.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Ready-to-send pitches</p>
+                        {analysis.pitches.slice(0, 4).map((p, i) => (
+                          <div key={i} className="rounded-lg border bg-card p-2.5 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">{p.type || 'Pitch'}</Badge>
+                              <button
+                                className="text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1 text-[11px]"
+                                onClick={() => copyPitch(i, p.subject || '', p.body || '')}
+                              >
+                                {copiedPitch === i ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                {copiedPitch === i ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
+                            {p.subject && <p className="text-xs font-medium">{p.subject}</p>}
+                            {p.body && <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">{p.body}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {analysis.keywords && analysis.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {analysis.keywords.slice(0, 8).map((k) => (
+                          <Badge key={k} variant="secondary" className="text-[10px]">{k}</Badge>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">
+                      {analysis.sourceUrl ? `Analyzed from ${analysis.sourceUrl}` : 'Saved to this workspace'} — every AI draft now grounds on this research.
+                    </p>
+                  </div>
                 )}
               </div>
 

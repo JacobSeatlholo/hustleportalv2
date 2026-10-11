@@ -12,6 +12,7 @@ export type ProjectShape = {
   contactEmail: string | null
   contactPhone: string | null
   salesPitch: string | null
+  audienceInsight?: string | null
   isDefault: boolean
 }
 
@@ -85,6 +86,7 @@ export function profileText(p: ProjectShape | {
   website: string | null
   contactEmail: string | null
   contactPhone: string | null
+  audienceInsight?: string | null
 }): string {
   const lines = [
     `Business: ${p.name}`,
@@ -97,5 +99,8 @@ export function profileText(p: ProjectShape | {
     p.contactEmail ? `Contact email: ${p.contactEmail}` : null,
     p.contactPhone ? `Contact phone: ${p.contactPhone}` : null,
   ].filter(Boolean)
+  if ('audienceInsight' in p && p.audienceInsight) {
+    lines.push(`AI audience & brand research (from their website):\n${p.audienceInsight.slice(0, 2500)}`)
+  }
   return lines.join('\n')
 }

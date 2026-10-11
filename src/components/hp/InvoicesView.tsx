@@ -6,12 +6,48 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { api, rands, randsPlain, type Invoice, type ProjectFull } from './shared'
+import { api, rands, randsPlain, type Invoice, type ProjectFull, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, ReceiptText, Printer, Send, Trash2, Upload, X } from 'lucide-react'
 
 type Item = { description: string; quantity: number; unitPrice: number }
+type BankDetails = {
+  bankName: string
+  accountName: string
+  accountNumber: string
+  branchCode: string
+  accountType: string
+  reference: string
+}
+
+const EMPTY_BANK: BankDetails = { bankName: '', accountName: '', accountNumber: '', branchCode: '', accountType: '', reference: '' }
+
+/** Flat, print-ready rendering of the banking block (one fact per line). */
+function bankLines(b: Partial<BankDetails>): string[] {
+  return [
+    b.bankName ? `Bank: ${b.bankName}` : '',
+    b.accountName ? `Account name: ${b.accountName}` : '',
+    b.accountNumber ? `Account number: ${b.accountNumber}` : '',
+    b.branchCode ? `Branch code: ${b.branchCode}` : '',
+    b.accountType ? `Account type: ${b.accountType}` : '',
+    b.reference ? `Payment reference: ${b.reference}` : '',
+  ].filter(Boolean)
+}
+
+function parseBank(raw: string | null | undefined): BankDetails {
+  if (!raw) return { ...EMPTY_BANK }
+  try {
+    const p = JSON.parse(raw) as Partial<BankDetails>
+    return {
+      bankName: String(p.bankName || ''), accountName: String(p.accountName || ''),
+      accountNumber: String(p.accountNumber || ''), branchCode: String(p.branchCode || ''),
+      accountType: String(p.accountType || ''), reference: String(p.reference || ''),
+    }
+  } catch {
+    return { ...EMPTY_BANK }
+  }
+}
 
 function itemsOf(inv: Invoice): Item[] {
   if (typeof inv.items === 'string') {
@@ -36,6 +72,10 @@ export default function InvoicesView() {
   const [showCreate, setShowCreate] = useState(false)
   const [printable, setPrintable] = useState<Invoice | null>(null)
   const [profile, setProfile] = useState<ProjectFull | null>(null)
+  const [bank, setBank] = useState<BankDetails>({ ...EMPTY_BANK })
+  const [showBank, setShowBank] = useState(false)
+  const [bankSaving, setBankSaving] = useState(false)
+  const bankAutoRef = useRef(false)
 
   // create form
   const [clientName, setClientName] = useState('')
@@ -56,6 +96,18 @@ export default function InvoicesView() {
       ])
       setInvoices(inv.invoices)
       if (proj) setProfile(proj.project)
+      try {
+        const s = await api<{ settings: IntegrationSetting[] }>('/api/settings')
+        const row = s.settings.find((r) => r.key === 'INVOICE_BANK')
+        const parsed = parseBank(row?.value)
+        setBank(parsed)
+        if (!bankAutoRef.current) {
+          bankAutoRef.current = true
+          setShowBank(!bankLines(parsed).length)
+        }
+      } catch {
+        bankAutoRef.current = true
+      }
     } catch (e) {
       toast({ title: 'Could not load invoices', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -77,6 +129,19 @@ export default function InvoicesView() {
     setTaxRate(15); setNotes(''); setLogoUrl(null); setSendAfter(false)
   }
 
+  async function saveBank() {
+    setBankSaving(true)
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key: 'INVOICE_BANK', value: JSON.stringify(bank) }) })
+      toast({ title: 'Banking details saved ✓', description: 'Every new invoice prints them automatically.' })
+      setShowBank(false)
+    } catch (e) {
+      toast({ title: 'Could not save banking details', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBankSaving(false)
+    }
+  }
+
   async function create(status: 'DRAFT' | 'SENT') {
     if (!clientName.trim()) {
       toast({ title: 'Who is this for?', description: 'Add a client name.', variant: 'destructive' })
@@ -93,6 +158,7 @@ export default function InvoicesView() {
         body: JSON.stringify({
           clientName, clientEmail, items, taxRate, notes, logoUrl,
           status, projectId: activeProjectId,
+          bankDetails: bankLines(bank).join('\n'),
         }),
       })
       toast({ title: `${res.invoice.number} created ✓`, description: status === 'SENT' ? 'Marked as sent.' : 'Saved as draft.' })
@@ -152,6 +218,66 @@ export default function InvoicesView() {
         <Button onClick={() => setShowCreate((s) => !s)}>
           <Plus className="h-4 w-4" /> New invoice
         </Button>
+      </div>
+
+      {/* Banking details — printed on every new invoice */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-medium text-sm">Your banking details</h3>
+              <p className="text-xs text-muted-foreground">Saved once — printed automatically on every invoice you create.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {bankLines(bank).length > 0 ? (
+                <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">ON INVOICES</Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">NOT SET YET</Badge>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowBank((s) => !s)}>
+                {showBank ? 'Hide' : bankLines(bank).length ? 'Edit' : 'Add bank details'}
+              </Button>
+            </div>
+          </div>
+          {bankLines(bank).length > 0 && !showBank && (
+            <div className="rounded-lg border border-brand/20 bg-brand/5 p-2.5 text-xs whitespace-pre-line">{bankLines(bank).join('\n')}</div>
+          )}
+          {showBank && (
+            <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-name">Bank</Label>
+                  <Input id="bk-name" placeholder="FNB / Capitec / Standard Bank" value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-accname">Account name</Label>
+                  <Input id="bk-accname" placeholder="Your business name" value={bank.accountName} onChange={(e) => setBank({ ...bank, accountName: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-accno">Account number</Label>
+                  <Input id="bk-accno" placeholder="e.g. 62841234567" value={bank.accountNumber} onChange={(e) => setBank({ ...bank, accountNumber: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-branch">Branch code</Label>
+                  <Input id="bk-branch" placeholder="e.g. 250655" value={bank.branchCode} onChange={(e) => setBank({ ...bank, branchCode: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-type">Account type</Label>
+                  <Input id="bk-type" placeholder="Cheque / Savings" value={bank.accountType} onChange={(e) => setBank({ ...bank, accountType: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bk-ref">Payment reference</Label>
+                  <Input id="bk-ref" placeholder="e.g. INV-number or your business name" value={bank.reference} onChange={(e) => setBank({ ...bank, reference: e.target.value })} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveBank} disabled={bankSaving || !bank.accountNumber.trim() || !bank.accountName.trim()}>
+                  {bankSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save banking details'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowBank(false)}>Cancel</Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Stored privately on your account. Each invoice keeps a snapshot, so old invoices always show the details they were paid with.</p>
+            </div>
+          )}
       </div>
 
       {showCreate && (
@@ -280,14 +406,20 @@ export default function InvoicesView() {
       </div>
 
       {/* Printable template (also drives window.print) */}
-      {printable && <InvoicePrint invoice={printable} profile={profile} onDone={() => setPrintable(null)} />}
+      {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
     </div>
   )
 }
 
-function InvoicePrint({ invoice, profile, onDone }: { invoice: Invoice; profile: ProjectFull | null }) {
+function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; onDone: () => void }) {
   const items = itemsOf(invoice)
   const vat = invoice.total - invoice.subtotal
+  // Prefer the snapshot saved on the invoice; fall back to current settings for older invoices.
+  const bankBlock = invoice.bankDetails?.trim()
+    ? invoice.bankDetails.trim()
+    : bankFallback
+      ? bankLines(bankFallback).join('\n')
+      : ''
   return (
     <div className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:text-black print:p-0 print:z-auto">
       <div className="max-w-[820px] mx-auto bg-white text-black rounded-lg shadow-2xl print:shadow-none print:rounded-none print:max-w-none">
@@ -348,9 +480,15 @@ function InvoicePrint({ invoice, profile, onDone }: { invoice: Invoice; profile:
             </div>
           </div>
 
+          {bankBlock && (
+            <div className="mt-6 rounded border border-neutral-200 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1.5">Banking details</p>
+              <div className="text-xs text-neutral-700 whitespace-pre-line font-mono">{bankBlock}</div>
+            </div>
+          )}
           {invoice.notes && <div className="mt-6 text-xs text-neutral-500 whitespace-pre-line">{invoice.notes}</div>}
           <p className="mt-8 text-center text-[10px] text-neutral-400">
-            Powered by HustlePortal™ · Business Hustle · Simple Eternity Holdings (Pty) Ltd
+            Powered by Business Hustle · www.businesshustle.co.za
           </p>
         </div>
       </div>

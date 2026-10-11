@@ -10,7 +10,7 @@ import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
   KeyRound, Loader2, Mail, Sparkles, Database, CalendarCheck2, Trash2,
-  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope,
 } from 'lucide-react'
 
 const INTEGRATIONS: {
@@ -229,6 +229,69 @@ function WhatsAppCard() {
   )
 }
 
+interface DiagReport {
+  checkedAt: string
+  keys: { userKey: { present: boolean; masked?: string }; platformKey: { present: boolean; masked?: string } }
+  checks: { source: string; test: string; ok: boolean; status: number | null; detail: string; models?: string[] }[]
+  advice: string[]
+  verdict: string
+}
+
+/** AI diagnostics — reproduces the exact call chain the scan/AI features use and explains failures in plain language. */
+function AIDiagnosticsCard() {
+  const { toast } = useToast()
+  const [report, setReport] = useState<DiagReport | null>(null)
+  const [running, setRunning] = useState(false)
+
+  async function run() {
+    setRunning(true)
+    try {
+      const res = await api<DiagReport>('/api/ai/diagnose')
+      setReport(res)
+    } catch (e) {
+      toast({ title: 'Diagnostics failed to run', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <Stethoscope className="h-4 w-4 text-brand" />
+          <h3 className="font-medium text-sm">AI diagnostics</h3>
+          <span className="text-[11px] text-muted-foreground">Scans or AI drafts failing? Run this first.</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={run} disabled={running}>
+          {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Run AI diagnostics'}
+        </Button>
+      </div>
+      {report && (
+        <div className="space-y-2 text-xs">
+          <div className={`rounded-lg border p-2.5 ${report.checks.some((c) => c.ok && c.test.startsWith('live-generate')) ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-500' : 'border-amber-500/40 bg-amber-500/5 text-amber-500'}`}>
+            <b>Verdict:</b> {report.verdict}
+          </div>
+          <div className="rounded-lg border p-2.5 space-y-1.5 font-mono">
+            {report.checks.map((c, i) => (
+              <div key={i} className="flex flex-wrap items-start gap-1.5">
+                <span className={c.ok ? 'text-emerald-500' : 'text-rose-500'}>{c.ok ? 'PASS' : 'FAIL'}</span>
+                <span className="text-muted-foreground">[{c.source}] {c.test}{c.status ? ` · HTTP ${c.status}` : ''}</span>
+                <span className="basis-full text-[11px] text-muted-foreground font-sans">{c.detail}</span>
+              </div>
+            ))}
+          </div>
+          {report.advice.length > 0 && (
+            <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+              {report.advice.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function IntegrationsView() {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
@@ -294,6 +357,7 @@ export default function IntegrationsView() {
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
       ) : (
         <div className="space-y-3">
+          <AIDiagnosticsCard />
           <WhatsAppCard />
           {INTEGRATIONS.map((intg) => {
             const row = settings.find((s) => s.key === intg.key)

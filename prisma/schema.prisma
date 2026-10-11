@@ -65,6 +65,7 @@ model Project {
   contactEmail String?
   contactPhone String?
   salesPitch   String? // AI-generated pitch (ProfileView → /api/ai/sales-pitch)
+  audienceInsight String? // AI business-URL analysis: audience, brand voice + pitch pack (JSON)
   isDefault    Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -243,6 +244,7 @@ model Invoice {
   taxRate     Float     @default(15)
   total       Float     @default(0)
   logoUrl     String?   // data URL for the printable template
+  bankDetails String?   // banking details snapshot printed on the invoice (plain text lines)
   notes       String?
   issuedAt    DateTime  @default(now())
   dueAt       DateTime?

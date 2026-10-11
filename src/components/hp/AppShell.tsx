@@ -24,6 +24,7 @@ import ReportsView from './ReportsView'
 import IntegrationsView from './IntegrationsView'
 import GrowView from './GrowView'
 import WelcomeTour from './WelcomeTour'
+import InstallApp from './InstallApp'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
@@ -350,6 +351,10 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
           </button>
         ))}
       </nav>
+
+      <div className="px-3">
+        <InstallApp />
+      </div>
 
       {/* challenges mini-widget */}
       <div className="mx-3 mb-3 rounded-xl bg-white/5 border border-white/10 p-3">
