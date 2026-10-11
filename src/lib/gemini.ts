@@ -6,7 +6,7 @@
  */
 import { db } from '@/lib/db'
 
-const MODEL = 'gemini-2.0-flash'
+const MODEL = 'gemini-3.8-flash' // gemini-2.0-flash retired (Google 404) — keep current per API guidance
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 export async function getUserGeminiKey(userId: string): Promise<string | null> {
