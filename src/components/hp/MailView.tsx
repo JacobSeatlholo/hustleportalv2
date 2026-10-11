@@ -82,11 +82,14 @@ export default function MailView() {
     }
     setSending(true)
     try {
-      await api('/api/emails', {
+      const res = await api<{ email: EmailLogRow; notice?: string | null }>('/api/emails', {
         method: 'POST',
         body: JSON.stringify({ draftId, to, subject, body, projectId: activeProjectId }),
       })
-      toast({ title: 'Sent ✓', description: `${subject} → ${to}` })
+      toast({
+        title: 'Sent ✓',
+        description: res.notice || `${subject} → ${to}`,
+      })
       setSubject(''); setBody(''); setTo(''); setDraftId(null)
       load()
     } catch (e) {

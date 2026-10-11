@@ -25,6 +25,42 @@ async function buildSignature(userId: string): Promise<string> {
 
 export type MailCreds = { user: string; appPassword: string }
 
+export type MailSendResult =
+  | { ok: true; provider: 'GMAIL' | 'PLATFORM'; notice?: string }
+  | { ok: false; error: string }
+
+/** Trim Google SMTP's debug wall to one readable line. */
+function firstLine(s: string): string {
+  const cut = s.split(/https:\/\/|\s-\s+gsmtp|\n/)[0].trim()
+  return (cut || s.trim()).slice(0, 180)
+}
+
+/**
+ * Translate raw SMTP/transport failures into one actionable line.
+ * The classic case: 535 BadCredentials — Gmail refuses NORMAL passwords for
+ * sending; only App Passwords work (2-Step Verification required).
+ */
+function classifyGmailError(msg: string): string {
+  if (/535|BadCredentials|Username and Password not accepted|Invalid login|EAUTH/i.test(msg)) {
+    return 'Google rejected your Gmail login. Gmail blocks normal passwords for sending — use an App Password: turn on 2-Step Verification (myaccount.google.com/security), create one at myaccount.google.com/apppasswords, and paste it under Integrations → Gmail app password (no spaces).'
+  }
+  if (/ENOTFOUND|ETIMEDOUT|ECONNREFUSED|socket|timeout/i.test(msg)) {
+    return 'Could not reach Gmail\'s mail servers from here — check this deployment\'s outbound network, or remove your Gmail under Integrations to let the HustlePortal engine send instead.'
+  }
+  return `Gmail rejected the send: ${firstLine(msg)}`
+}
+
+/** Resend's sandbox restricts sends until the sender domain is verified. */
+function classifyPlatformError(msg: string): string {
+  if (/testing emails|only send.*own email|403/i.test(msg)) {
+    return 'The HustlePortal engine is in Resend\'s sandbox until the sender domain is verified — it can only deliver to your own account email right now. Operator: verify businesshustle.co.za at resend.com/domains and set RESEND_FROM.'
+  }
+  if (/422|"from"|validation/i.test(msg)) {
+    return 'The HustlePortal engine\'s sender address is not accepted yet — operator must verify the sending domain at resend.com/domains.'
+  }
+  return `HustlePortal engine error: ${firstLine(msg)}`
+}
+
 export async function getUserMailCreds(userId: string): Promise<MailCreds | null> {
   const rows = await db.userSetting.findMany({
     where: { userId, key: { in: ['GMAIL_USER', 'GMAIL_APP_PASSWORD'] } },
@@ -54,7 +90,8 @@ async function sendViaUserGmail(
     })
     return { ok: true, provider: 'GMAIL' }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Failed to send email' }
+    const msg = e instanceof Error ? e.message : 'Failed to send email'
+    return { ok: false, error: classifyGmailError(msg) }
   }
 }
 
@@ -88,22 +125,24 @@ async function sendViaPlatform(
     })
     if (!res.ok) {
       const detail = (await res.text().catch(() => '')).slice(0, 300)
-      return { ok: false, error: `Email service error ${res.status}: ${detail}` }
+      return { ok: false, error: classifyPlatformError(`Email service error ${res.status}: ${detail}`) }
     }
     return { ok: true, provider: 'PLATFORM' }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Failed to send email' }
+    return { ok: false, error: classifyPlatformError(e instanceof Error ? e.message : 'Failed to send email') }
   }
 }
 
 /**
  * One-call send used by /api/emails.
- * Tries the user's own Gmail first (their voice); falls back to platform sending.
+ * Tries the user's own Gmail first (their voice); if Gmail is rejected it falls
+ * back to the platform engine so the send still happens — and says so honestly
+ * via `notice`. When BOTH fail, the error names the two causes + their fixes.
  */
 export async function sendMail(
   userId: string,
   mail: { to: string; subject: string; body: string },
-): Promise<{ ok: true; provider: 'GMAIL' | 'PLATFORM' } | { ok: false; error: string }> {
+): Promise<MailSendResult> {
   const signature = await buildSignature(userId)
   const payload = { ...mail, body: mail.body + signature }
   const creds = await getUserMailCreds(userId)
@@ -112,8 +151,17 @@ export async function sendMail(
     if (r.ok) return r
     // their Gmail failed — fall through to platform so the send still happens
     const fb = await sendViaPlatform(userId, payload)
-    if (fb.ok) return fb
-    return { ok: false, error: `Gmail: ${r.error}` }
+    if (fb.ok) {
+      return {
+        ok: true,
+        provider: 'PLATFORM',
+        notice: `Sent via the HustlePortal engine — your Gmail login was rejected, so replies route to your account email. Fix it under Integrations (App Password).`,
+      }
+    }
+    return {
+      ok: false,
+      error: `${r.error}\n\nAlso tried the HustlePortal engine: ${fb.error}`,
+    }
   }
   return sendViaPlatform(userId, payload)
 }

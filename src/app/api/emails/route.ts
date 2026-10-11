@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error, email }, { status: 400 })
   }
-  return NextResponse.json({ email })
+  return NextResponse.json({ email, notice: result.notice || null })
 }
 
 // DELETE /api/emails?id= → remove a draft/log row

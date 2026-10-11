@@ -33,7 +33,7 @@ const INTEGRATIONS: {
     title: 'Gmail app password (optional)',
     icon: <KeyRound className="h-4 w-4 text-brand" />,
     placeholder: '16-character app password',
-    helper: 'Only if you connect your Gmail above: Google Account → Security → 2-Step Verification → App passwords. Stored only on your account.',
+    helper: 'Google rejects normal passwords for sending — you MUST use a 16-character App Password: Google Account → Security → 2-Step Verification ON → App passwords (myaccount.google.com/apppasswords). Paste it without spaces. Stored only on your account.',
     secret: true,
   },
   {

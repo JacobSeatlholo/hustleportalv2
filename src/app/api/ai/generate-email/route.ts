@@ -2,7 +2,58 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { resolveProject, profileText } from '@/lib/workspace'
-import { geminiGenerate } from '@/lib/gemini'
+import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
+
+/** Escape real control characters that appear INSIDE string literals (common Gemini breakage). */
+function escapeBreaksInStrings(s: string): string | null {
+  let out = ''
+  let inStr = false
+  let esc = false
+  for (const ch of s) {
+    if (esc) { out += ch; esc = false; continue }
+    if (ch === '\\' && inStr) { out += ch; esc = true; continue }
+    if (ch === '"') { inStr = !inStr; out += ch; continue }
+    if (inStr && ch === '\n') { out += '\\n'; continue }
+    if (inStr && ch === '\r') { out += '\\r'; continue }
+    if (inStr && ch === '\t') { out += '\\t'; continue }
+    out += ch
+  }
+  return out === s ? null : out
+}
+
+/**
+ * Robust {subject, body} extraction — Gemini occasionally wraps the JSON in
+ * prose, emits real newlines inside strings, or drops an escape. Never let raw
+ * JSON land in the user's composer.
+ */
+export function extractDraftJson(text: string): { subject?: string; body?: string } | null {
+  const t = text.replace(/```json|```/g, '').trim()
+  // 1) strict parse
+  try {
+    const p = JSON.parse(t) as { subject?: string; body?: string }
+    if (p && (p.subject || p.body)) return p
+  } catch {}
+  // 2) loose parse (tolerates prose/fences around the object)
+  const loose = parseJsonLoose<{ subject?: string; body?: string }>(t)
+  if (loose && (loose.subject || loose.body)) return loose
+  // 3) repair: escape real newlines/tabs inside string literals, re-parse
+  const repaired = escapeBreaksInStrings(t)
+  if (repaired) {
+    try {
+      const p = JSON.parse(repaired) as { subject?: string; body?: string }
+      if (p && (p.subject || p.body)) return p
+    } catch {}
+  }
+  // 4) regex field extraction (survives unescaped quotes inside body)
+  const m = t.match(/"subject"\s*:\s*"([\s\S]*?)"\s*,\s*(?:"body"|"emailBody")\s*:\s*"([\s\S]*?)"\s*\}?\s*$/)
+  if (m) {
+    return {
+      subject: m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+      body: m[2].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+    }
+  }
+  return null
+}
 
 export const maxDuration = 60
 
@@ -54,13 +105,19 @@ export async function POST(req: NextRequest) {
 
   let subject = 'Hello from ' + project.name
   let emailBody = result.text
-  try {
-    const parsed = JSON.parse(result.text.replace(/```json|```/g, '').trim()) as { subject?: string; body?: string }
-    if (parsed.subject) subject = parsed.subject
-    if (parsed.body) emailBody = parsed.body
-  } catch {
-    // fall through with raw text as body
+  let parsed = extractDraftJson(result.text)
+  if (!parsed) {
+    // One self-repair round: ask the model to re-emit its own output as valid JSON.
+    const retry = await geminiGenerate(userId, {
+      system:
+        'You repair broken AI drafts. Return ONLY valid JSON: { "subject": string, "body": string }. Preserve the original wording and all \\n line breaks — change nothing except JSON validity. No markdown, no commentary.',
+      prompt: `The following text was meant to be JSON with a "subject" and a "body" but is malformed. Repair it and return ONLY the corrected JSON:\n\n${result.text.slice(0, 2400)}`,
+      json: true,
+    })
+    if (retry.ok) parsed = extractDraftJson(retry.text)
   }
+  if (parsed?.subject) subject = parsed.subject
+  if (parsed?.body) emailBody = parsed.body
 
   const log = await db.emailLog.create({
     data: {
