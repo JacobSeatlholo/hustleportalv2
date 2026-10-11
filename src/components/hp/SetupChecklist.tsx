@@ -57,6 +57,7 @@ export default function SetupChecklist() {
   const [done, setDone] = useState<Record<string, boolean>>({})
   const [registering, setRegistering] = useState(false)
   const [hasAny, setHasAny] = useState(false)
+  const [keyBad, setKeyBad] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -65,12 +66,15 @@ export default function SetupChecklist() {
         const map: Record<string, boolean> = {}
         for (const s of res.settings || []) map[s.key] = Boolean(s.configured)
         let webhooks = false
+        let badKey = false
         try {
-          const wh = await api<{ configured: boolean }>('/api/webhooks/yoco')
+          const wh = await api<{ configured: boolean; secretKey?: { present: boolean; validFormat: boolean } }>('/api/webhooks/yoco')
           webhooks = Boolean(wh.configured)
+          badKey = Boolean(wh.secretKey && wh.secretKey.present && !wh.secretKey.validFormat)
         } catch { /* non-admin or error → treat as unknown, hide row */ }
         map['YOCO_WEBHOOK'] = webhooks
         setDone(map)
+        setKeyBad(badKey)
         const missing = ITEMS.some((i) => !map[i.id]) || map['YOCO_WEBHOOK'] === false
         setHasAny(missing)
         const ack = localStorage.getItem('hp_setup_ack')
@@ -135,13 +139,17 @@ export default function SetupChecklist() {
               </div>
             </div>
             {i.id === 'YOCO_WEBHOOK' ? (
-              <button
-                onClick={registerWebhook}
-                disabled={registering}
-                className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110 transition disabled:opacity-50"
-              >
-                {registering ? 'Registering…' : 'Register now'}
-              </button>
+              keyBad ? (
+                <span className="shrink-0 text-xs text-amber-500 max-w-36 text-right">Fix YOCO_SECRET_KEY in Vercel — must start with sk_test_ / sk_live_</span>
+              ) : (
+                <button
+                  onClick={registerWebhook}
+                  disabled={registering}
+                  className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110 transition disabled:opacity-50"
+                >
+                  {registering ? 'Registering…' : 'Register now'}
+                </button>
+              )
             ) : (
               <button
                 onClick={() => setView('integrations')}

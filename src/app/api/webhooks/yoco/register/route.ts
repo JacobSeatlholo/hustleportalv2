@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { setConfig, getConfig, CONFIG_KEYS } from '@/lib/config'
-import { getYocoSecretKey, registerYocoWebhook, getYocoWebhookSecret, YocoError } from '@/lib/yoco'
+import { getYocoSecretKey, registerYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, YocoError } from '@/lib/yoco'
 
 /** GET /api/webhooks/yoco/register — webhook config status (admin). */
 export async function GET() {
@@ -30,10 +30,13 @@ export async function POST(req: NextRequest) {
   const user = await db.user.findUnique({ where: { id: me }, select: { role: true } })
   if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const status = getYocoSecretKeyStatus()
   const secretKey = getYocoSecretKey()
   if (!secretKey) {
     return NextResponse.json(
-      { error: 'YOCO_SECRET_KEY is not set. Add the sk_test_ / sk_live_ key in environment variables first.' },
+      { error: status.present
+          ? 'YOCO_SECRET_KEY is set but does not look like a secret key — it must start with sk_test_ or sk_live_. Check the value in Vercel → Settings → Environment Variables, then redeploy.'
+          : 'YOCO_SECRET_KEY is not set. Add the sk_test_ / sk_live_ key in Vercel → Settings → Environment Variables first, then redeploy.' },
       { status: 400 },
     )
   }

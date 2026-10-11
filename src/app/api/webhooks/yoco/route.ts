@@ -3,14 +3,19 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { awardXp } from '@/lib/gamification'
-import { verifyYocoWebhook, getYocoWebhookSecret, type YocoWebhookEvent } from '@/lib/yoco'
+import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, type YocoWebhookEvent } from '@/lib/yoco'
 
 /** GET /api/webhooks/yoco — config status (authenticated). */
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const secret = await getYocoWebhookSecret()
-  return NextResponse.json({ ok: true, configured: Boolean(secret), source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none' })
+  return NextResponse.json({
+    ok: true,
+    configured: Boolean(secret),
+    source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none',
+    secretKey: getYocoSecretKeyStatus(),
+  })
 }
 
 /**

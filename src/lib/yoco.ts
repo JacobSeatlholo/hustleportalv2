@@ -23,6 +23,12 @@ export function getYocoSecretKey(): string | null {
   return trimmed
 }
 
+/** Distinguish "env var missing" from "env var set but not a sk_ secret key". */
+export function getYocoSecretKeyStatus(): { present: boolean; validFormat: boolean } {
+  const raw = process.env.YOCO_SECRET_KEY?.trim()
+  return { present: Boolean(raw), validFormat: Boolean(raw && raw.startsWith('sk_')) }
+}
+
 /** Webhook secret: env var wins, otherwise the one stored by the register endpoint. */
 export async function getYocoWebhookSecret(): Promise<string | null> {
   const env = process.env.YOCO_WEBHOOK_SECRET?.trim()
