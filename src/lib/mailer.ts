@@ -247,7 +247,16 @@ async function sendViaPlatform(
   }
   const branded = process.env.RESEND_FROM?.trim() || BRANDED_FROM
   const first = await resendSend(apiKey, branded, userId, mail)
-  if (first.ok) return { ok: true, provider: 'PLATFORM' }
+  if (first.ok) {
+    // Branded from accepted → the domain IS verified at Resend. Prime the status
+    // cache so the UI flips to LIVE even if the domains API can't be read.
+    const d = sendingDomain()
+    domainCache = {
+      at: Date.now(),
+      rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
+    }
+    return { ok: true, provider: 'PLATFORM' }
+  }
   // From-domain rejection (unverified) → retry once with the test sender
   if (/from|domain|verif|422|403/i.test(first.raw)) {
     const second = await resendSend(apiKey, SANDBOX_FROM, userId, mail)
