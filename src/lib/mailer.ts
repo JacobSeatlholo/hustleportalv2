@@ -196,25 +196,15 @@ async function sendViaUserGmail(
   }
 }
 
-async function resendSend(
+async function resendPost(
   apiKey: string,
-  from: string,
-  userId: string,
-  mail: { to: string; subject: string; body: string },
+  payload: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; raw: string }> {
-  // Reply-To the sender's real account so client responses reach THEM
-  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from,
-        to: [mail.to],
-        subject: mail.subject,
-        text: mail.body,
-        ...(user?.email ? { reply_to: user.email } : {}),
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(20_000),
     })
     if (!res.ok) {
@@ -225,6 +215,23 @@ async function resendSend(
   } catch (e) {
     return { ok: false, raw: e instanceof Error ? e.message : 'Failed to send email' }
   }
+}
+
+async function resendSend(
+  apiKey: string,
+  from: string,
+  userId: string,
+  mail: { to: string; subject: string; body: string },
+): Promise<{ ok: true } | { ok: false; raw: string }> {
+  // Reply-To the sender's real account so client responses reach THEM
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+  return resendPost(apiKey, {
+    from,
+    to: [mail.to],
+    subject: mail.subject,
+    text: mail.body,
+    ...(user?.email ? { reply_to: user.email } : {}),
+  })
 }
 
 /**
@@ -325,4 +332,39 @@ export async function sendTeamMail(
   const r = await sendViaPlatform(userId, { to: TEAM_INBOX, subject: mail.subject, body: mail.body })
   if (r.ok) return { ...r, to: TEAM_INBOX }
   return { ok: false, error: r.error, to: TEAM_INBOX }
+}
+
+/**
+ * System emails (password resets, receipts, alerts) — platform engine only,
+ * branded from, NO referral signature, Reply-To the team inbox.
+ * Same zero-config ladder as user mail: branded from first, test sender while
+ * the domain verifies.
+ */
+export async function sendSystemMail(
+  mail: { to: string; subject: string; body: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    console.error('[mail] system mail skipped — RESEND_API_KEY missing')
+    return { ok: false, error: 'Email engine is not configured.' }
+  }
+  const from = process.env.RESEND_FROM?.trim() || BRANDED_FROM
+  const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
+  if (first.ok) {
+    // Branded from accepted → domain verified; keep the status cache truthful.
+    const d = sendingDomain()
+    domainCache = {
+      at: Date.now(),
+      rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
+    }
+    return { ok: true }
+  }
+  if (/from|domain|verif|422|403/i.test(first.raw)) {
+    const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
+    if (second.ok) return { ok: true }
+    console.error('[mail] system mail failed (both senders):', second.raw.slice(0, 200))
+    return { ok: false, error: classifyPlatformError(second.raw) }
+  }
+  console.error('[mail] system mail failed:', first.raw.slice(0, 200))
+  return { ok: false, error: classifyPlatformError(first.raw) }
 }

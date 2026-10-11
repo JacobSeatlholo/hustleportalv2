@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, verifyPassword } from '@/lib/auth'
 import { ensureWallet, addCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
 import { attributeSignup } from '@/lib/referral'
+import { sendSystemMail } from '@/lib/mailer'
+
+const RESET_TTL_MS = 30 * 60 * 1000
+
+function sha256(s: string): string {
+  return crypto.createHash('sha256').update(s).digest('hex')
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,6 +74,76 @@ export async function POST(req: NextRequest) {
       await createSession(user.id)
       await ensureWallet(user.id)
       await bumpChallenge(user.id, 'login')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'forgot') {
+      const email = String(body.email || '').toLowerCase().trim()
+      if (!email || !email.includes('@')) {
+        return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
+      }
+      const user = await db.user.findUnique({ where: { email } })
+      if (user) {
+        // Single-use token: only its sha256 is stored, 30-minute window.
+        const token = crypto.randomBytes(32).toString('hex')
+        await db.user.update({
+          where: { id: user.id },
+          data: {
+            resetTokenHash: sha256(token),
+            resetTokenExpiry: new Date(Date.now() + RESET_TTL_MS),
+          },
+        })
+        const base = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://hustleportal.online'
+        const resetUrl = `${base}/reset?token=${token}`
+        const sent = await sendSystemMail({
+          to: user.email,
+          subject: 'Reset your HustlePortal password',
+          body: [
+            `Hi ${user.name || 'there'},`,
+            '',
+            'Someone (hopefully you) asked to reset the password for your HustlePortal account.',
+            '',
+            'Reset it here — the link works for 30 minutes and can be used once:',
+            resetUrl,
+            '',
+            'If you didn\'t ask for this, ignore this email — your password stays as it was.',
+            '',
+            '— HustlePortal · the Business OS for South African businesses',
+          ].join('\n'),
+        })
+        if (!sent.ok) console.error('[auth] reset email failed for', email)
+      }
+      // Same response whether or not the account exists — no account enumeration.
+      return NextResponse.json({
+        ok: true,
+        message: 'If an account exists for that email, a reset link is on its way — check your inbox (and spam, just in case).',
+      })
+    }
+
+    if (action === 'reset') {
+      const token = String(body.token || '').trim()
+      const password = String(body.password || '')
+      if (!token) return NextResponse.json({ error: 'Reset link is missing its token.' }, { status: 400 })
+      if (password.length < 6) {
+        return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 })
+      }
+      const user = await db.user.findFirst({
+        where: { resetTokenHash: sha256(token), resetTokenExpiry: { gt: new Date() } },
+      })
+      if (!user) {
+        return NextResponse.json({ error: 'This reset link is invalid or has expired — request a fresh one.' }, { status: 400 })
+      }
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: await hashPassword(password),
+          resetTokenHash: null,
+          resetTokenExpiry: null,
+        },
+      })
+      // Sign them straight in — one less step on a small screen.
+      await createSession(user.id)
+      await ensureWallet(user.id)
       return NextResponse.json({ ok: true })
     }
 

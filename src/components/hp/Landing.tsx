@@ -10,7 +10,7 @@ import { api } from './shared'
 import { useHp } from './store'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
-  Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket,
+  Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket, MailCheck,
 } from 'lucide-react'
 import { BH_SERVICES } from '@/data/services'
 
@@ -29,8 +29,9 @@ const CITIES = ['Johannesburg', 'Durban', 'Pretoria', 'Cape Town', 'Port Elizabe
 export default function Landing() {
   const { loadSession } = useHp()
   const { toast } = useToast()
-  const [mode, setMode] = useState<'login' | 'register'>('register')
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register')
   const [busy, setBusy] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
 
   // register fields
   const [name, setName] = useState('')
@@ -70,6 +71,22 @@ export default function Landing() {
       await loadSession(true)
     } catch (e) {
       toast({ title: 'Couldn’t sign you in', description: e instanceof Error ? e.message : 'Please check your details and try again.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function sendResetLink() {
+    setBusy(true)
+    try {
+      const res = await api<{ ok: boolean; message?: string }>('/api/auth', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'forgot', email }),
+      })
+      setForgotSent(true)
+      toast({ title: 'Check your inbox', description: res.message || 'Reset link sent if the account exists.' })
+    } catch (e) {
+      toast({ title: 'Couldn’t send the reset link', description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -164,6 +181,54 @@ export default function Landing() {
               </button>
             </div>
 
+            {mode === 'forgot' ? (
+              forgotSent ? (
+                <div className="space-y-4 text-center py-6">
+                  <MailCheck className="h-9 w-9 text-brand mx-auto" />
+                  <p className="text-sm text-muted-foreground">
+                    If an account exists for <b className="text-foreground">{email}</b>, a reset link is on its way.
+                    Check your inbox — and spam, just in case. The link works for 30 minutes.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => { setMode('login'); setForgotSent(false) }}
+                  >
+                    Back to sign in
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Enter the email on your account and we&apos;ll send you a secure reset link. It works for 30 minutes and can be used once.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="f-email">Email</Label>
+                    <Input
+                      id="f-email" type="email" placeholder="you@business.co.za" value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendResetLink()}
+                    />
+                  </div>
+                  <Button
+                    onClick={sendResetLink}
+                    disabled={busy || !email.includes('@')}
+                    className="w-full h-11 text-base font-semibold"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send reset link'}
+                    {!busy && <ArrowRight className="h-4 w-4 ml-1" />}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                  >
+                    ← Back to sign in
+                  </button>
+                </div>
+              )
+            ) : (
+            <>
             <div className="space-y-4">
               {mode === 'register' && (
                 <>
@@ -237,7 +302,18 @@ export default function Landing() {
                   ? 'Free account · starter credits included · no card required'
                   : 'Welcome back.'}
               </p>
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => setMode('forgot')}
+                  className="text-xs text-muted-foreground hover:text-brand w-full text-center transition"
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
       </div>
