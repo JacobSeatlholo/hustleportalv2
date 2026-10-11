@@ -43,6 +43,9 @@ interface HpState {
   bumpRefresh: () => void
   activeProjectId: string | null
   setActiveProject: (id: string) => void
+  /** Deep-link target: a shop item title a touchpoint wants the Store to open. */
+  storeFocus: string | null
+  setStoreFocus: (title: string | null) => void
 }
 
 export const useHp = create<HpState>((set) => ({
@@ -71,6 +74,8 @@ export const useHp = create<HpState>((set) => ({
   },
   aiBarQuery: '',
   setAiBarQuery: (q) => set({ aiBarQuery: q }),
+  storeFocus: null,
+  setStoreFocus: (title) => set({ storeFocus: title }),
   refreshTick: 0,
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 }))

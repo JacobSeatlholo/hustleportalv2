@@ -45,7 +45,7 @@ export async function searchLeads(
         return {
           leads: demoLeads(definition, city, limit),
           mode: 'DEMO',
-          note: `Explee API error ${res.status} — showing demo leads instead.`,
+          note: `Live lead source hiccup (${res.status}) — showing sample data instead.`,
         }
       }
       const data = await res.json()
@@ -57,14 +57,14 @@ export async function searchLeads(
       return {
         leads: demoLeads(definition, city, limit),
         mode: 'DEMO',
-        note: 'Could not reach Explee — showing demo leads instead.',
+        note: 'Could not reach the live lead source — showing sample data instead.',
       }
     }
   }
   return {
     leads: demoLeads(definition, city, limit),
     mode: 'DEMO',
-    note: 'Demo mode — add your Explee API key in Admin to pull live leads.',
+    note: 'Sample data — live verified leads switch on automatically once the platform is connected.',
   }
 }
 

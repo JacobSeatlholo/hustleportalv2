@@ -384,22 +384,23 @@ export default function Landing() {
           Not sure what you need? WhatsApp us for a free business assessment — we&apos;ll recommend the right solution.
         </p>
       </section>
-      {/* ===== Explee trust ===== */}
+      {/* ===== Pipeline promise ===== */}
       <section id="trust" className="rounded-2xl border border-brand/25 bg-brand/5 p-6 md:p-8 space-y-3">
-        <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Verified leads, properly sourced</div>
-        <h2 className="font-display text-3xl">Explee feeds the pipeline. HustlePortal runs the business.</h2>
+        <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Your pipeline, handled</div>
+        <h2 className="font-display text-3xl">We feed your pipeline. You run your business.</h2>
         <p className="text-sm text-muted-foreground max-w-3xl">
-          HustlePortal integrates <span className="text-foreground font-medium">Explee as a background verified-leads source only</span>:
-          when you connect it, verified contact data quietly tops up your pipeline. That's all it does — by design.
+          Verified leads land in your CRM ready to work — sourced, checked and delivered by the team behind
+          HustlePortal. <span className="text-foreground font-medium">You see the results, not the plumbing.</span>
         </p>
         <p className="text-sm text-muted-foreground max-w-3xl">
           HustlePortal is <span className="text-brand font-medium">not another leads database</span>. It is your Business OS:
-          CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers. Explee is simply one data source that feeds it.
+          CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers — with a pipeline that stays
+          full behind the scenes.
         </p>
         <div className="flex flex-wrap gap-6 pt-1 text-sm">
-          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Verified contacts, your control</div>
-          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Optional — everything works without it</div>
-          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Your keys, stored on your account only</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Verified contacts, delivered to your CRM</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Your data, your control — export anytime</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> The team behind it is one tap away, in-app</div>
         </div>
       </section>
 
@@ -470,7 +471,7 @@ export default function Landing() {
       <footer className="border-t bg-background/60 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-muted-foreground flex flex-wrap justify-between gap-2">
           <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
-          <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> <span className="text-brand tracking-wide">Explore. Adapt. Evolve.</span></span>
+          <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> <span className="text-brand tracking-wide">We feed your pipeline. You run your business.</span></span>
           <span>© {new Date().getFullYear()} HustlePortal™</span>
         </div>
       </footer>

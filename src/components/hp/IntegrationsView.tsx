@@ -9,7 +9,7 @@ import { api, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
-  KeyRound, Loader2, Mail, Sparkles, Database, CalendarCheck2, Trash2,
+  KeyRound, Loader2, Mail, Sparkles, CalendarCheck2, Trash2,
   MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope,
 } from 'lucide-react'
 
@@ -42,14 +42,6 @@ const INTEGRATIONS: {
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza…',
     helper: 'The AI Co-Founder, plans and drafts already run on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com) to run AI on your own quota.',
-    secret: true,
-  },
-  {
-    key: 'EXPLEE_API_KEY',
-    title: 'Explee API key (optional)',
-    icon: <Database className="h-4 w-4 text-brand" />,
-    placeholder: 'explee_…',
-    helper: 'Explee is a background verified-leads source ONLY — it quietly tops up your lead list. We are not trying to be another Explee; HustlePortal is your full Business OS.',
     secret: true,
   },
   {
@@ -400,11 +392,10 @@ export default function IntegrationsView() {
       )}
 
       <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 text-xs text-muted-foreground space-y-1.5">
-        <p className="font-medium text-foreground">About Explee &amp; verified leads</p>
+        <p className="font-medium text-foreground">About verified leads</p>
         <p>
-          Explee integration is a <b>background verified-leads source only</b> — when set, it quietly enriches your lead list
-          with verified contact data. We are not trying to be another Explee: HustlePortal is your Business OS, and Explee is
-          simply one pipe that can feed it.
+          Verified leads are sourced, checked and delivered to your pipeline <b>by the HustlePortal team behind the
+          scenes</b> — you see the results, not the plumbing. We feed your pipeline. You run your business.
         </p>
       </div>
     </div>

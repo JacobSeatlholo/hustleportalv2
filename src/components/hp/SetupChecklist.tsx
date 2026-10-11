@@ -15,13 +15,6 @@ interface Item {
 
 const ITEMS: Item[] = [
   {
-    id: 'EXPLEE_API_KEY',
-    label: 'Explee API key',
-    why: 'Live verified leads in the Lead Finder (demo leads without it).',
-    how: 'Optional upgrade — your Explee account → API keys.',
-    link: 'https://explee.com',
-  },
-  {
     id: 'GCAL_OAUTH_TOKEN',
     label: 'Google Calendar token',
     why: 'Two-way appointment sync (Jitsi links and .ics work without it).',

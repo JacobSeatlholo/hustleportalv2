@@ -3,16 +3,13 @@
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { useToast } from '@/hooks/use-toast'
 import { useHp } from './store'
 import { BH_SERVICES, waLink, type BhService } from '@/data/services'
 import {
-  Target, Laptop, TrendingUp, Camera, Handshake, Brain, ChevronDown, MessageCircle, Sparkles, ExternalLink, Loader2, Send,
+  Target, Laptop, TrendingUp, Camera, Handshake, Brain, ChevronDown, MessageCircle, Sparkles, ExternalLink, Send,
 } from 'lucide-react'
 import { api as hpApi } from './shared'
+import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
 
 const ICONS: Record<string, React.ReactNode> = {
   target: <Target className="h-5 w-5" />,
@@ -23,27 +20,12 @@ const ICONS: Record<string, React.ReactNode> = {
   brain: <Brain className="h-5 w-5" />,
 }
 
-const URGENCY_OPTIONS: { key: 'ASAP' | 'THIS_WEEK' | 'PLANNING'; label: string; hint: string }[] = [
-  { key: 'ASAP', label: 'ASAP — urgent', hint: 'The team prioritises it immediately' },
-  { key: 'THIS_WEEK', label: 'This week', hint: 'Most popular' },
-  { key: 'PLANNING', label: 'Just planning', hint: 'Get a quote, no rush' },
-]
-
-interface RequestState {
-  open: boolean
-  service: { id: string; title: string } | null
-  urgency: 'ASAP' | 'THIS_WEEK' | 'PLANNING'
-  message: string
-  submitting: boolean
-}
-
 export default function ServicesView() {
-  const { bumpRefresh, session } = useHp()
-  const { toast } = useToast()
+  const { bumpRefresh } = useHp()
   const [openId, setOpenId] = useState<string | null>(null)
-  const [req, setReq] = useState<RequestState>({
-    open: false, service: null, urgency: 'THIS_WEEK', message: '', submitting: false,
-  })
+  const [reqOpen, setReqOpen] = useState(false)
+  const [reqService, setReqService] = useState<RequestedService | null>(null)
+  const [reqPreset, setReqPreset] = useState<string | undefined>(undefined)
 
   function markExplored() {
     // "Explore Our Services" daily challenge
@@ -63,36 +45,11 @@ export default function ServicesView() {
     })
   }
 
-  function openRequest(service: { id: string; title: string } | null, preset?: string) {
+  function openRequest(service: RequestedService | null, preset?: string) {
     markExplored()
-    setReq({ open: true, service, urgency: 'THIS_WEEK', message: preset ?? '', submitting: false })
-  }
-
-  async function submitRequest() {
-    if (!req.service) return
-    setReq((r) => ({ ...r, submitting: true }))
-    try {
-      const res = await hpApi<{ ok: true; ref: string; emailSent: boolean }>('/api/service-requests', {
-        method: 'POST',
-        body: JSON.stringify({
-          serviceId: req.service.id,
-          serviceTitle: req.service.title,
-          urgency: req.urgency,
-          message: req.message,
-        }),
-      })
-      setReq((r) => ({ ...r, open: false, submitting: false }))
-      toast({
-        title: `Request ${res.ref} sent ✓`,
-        description:
-          'Tracked on your Tasks with its urgency level — the Business Hustle team replies to ' +
-          (session?.user.email || 'your email') + '.',
-      })
-      bumpRefresh()
-    } catch (e) {
-      setReq((r) => ({ ...r, submitting: false }))
-      toast({ title: 'Could not send your request', description: e instanceof Error ? e.message : '', variant: 'destructive' })
-    }
+    setReqService(service)
+    setReqPreset(preset)
+    setReqOpen(true)
   }
 
   return (
@@ -188,55 +145,8 @@ export default function ServicesView() {
         you always have a paper trail. Services are quoted per project before any work starts.
       </p>
 
-      {/* Service request dialog */}
-      <Dialog open={req.open} onOpenChange={(v) => setReq((r) => ({ ...r, open: v }))}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display text-2xl">
-              {req.service ? `Request: ${req.service.title}` : 'Request a service'}
-            </DialogTitle>
-            <DialogDescription>
-              Tell us how urgent this is — the request is emailed to the team and added to your Tasks so nothing gets lost.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>How urgent is it?</Label>
-              <div className="grid gap-1.5">
-                {URGENCY_OPTIONS.map((o) => (
-                  <button
-                    key={o.key}
-                    type="button"
-                    onClick={() => setReq((r) => ({ ...r, urgency: o.key }))}
-                    className={`text-left rounded-lg border px-3 py-2 transition ${req.urgency === o.key ? 'border-brand bg-brand/10' : 'hover:border-brand/40'}`}
-                  >
-                    <div className="text-sm font-medium">{o.label}</div>
-                    <div className="text-[11px] text-muted-foreground">{o.hint}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sr-msg">What do you need? (optional)</Label>
-              <Textarea
-                id="sr-msg"
-                rows={4}
-                placeholder="One or two lines about your business and the outcome you want. Prices, timelines and next steps come from the team."
-                value={req.message}
-                onChange={(e) => setReq((r) => ({ ...r, message: e.target.value }))}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setReq((r) => ({ ...r, open: false }))}>Cancel</Button>
-              <Button onClick={submitRequest} disabled={req.submitting}>
-                {req.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send request
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Service request dialog — shared with conversion touchpoints app-wide */}
+      <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} presetMessage={reqPreset} />
     </div>
   )
 }

@@ -405,7 +405,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               <div className="flex items-center justify-between text-sm">
                 <span>{results.length} matches found</span>
                 <Badge className={mode === 'LIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-brand/20 text-brand'}>
-                  {mode === 'LIVE' ? 'Explee live data' : 'Demo data'}
+                  {mode === 'LIVE' ? 'Live verified data' : 'Demo data'}
                 </Badge>
               </div>
               <div className="max-h-64 overflow-y-auto hp-scroll space-y-1.5">

@@ -14,10 +14,24 @@ import { ExternalLink, Loader2, MessageCircle, Search, ShoppingCart, Sparkles } 
 
 export default function StoreView() {
   const bumpRefresh = useHp((s) => s.bumpRefresh)
+  const storeFocus = useHp((s) => s.storeFocus)
+  const setStoreFocus = useHp((s) => s.setStoreFocus)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<string>('All')
   const [active, setActive] = useState<ShopItem | null>(null)
   const [imgError, setImgError] = useState<Record<string, boolean>>({})
+
+  // Deep-link from conversion touchpoints: open the suggested package straight away.
+  useEffect(() => {
+    if (!storeFocus) return
+    const item = SHOP_ITEMS.find((i) => i.title.toLowerCase() === storeFocus.toLowerCase())
+    if (item) {
+      setQ('')
+      setCat('All')
+      setActive(item)
+    }
+    setStoreFocus(null)
+  }, [storeFocus, setStoreFocus])
 
   // "Browse the Store" daily challenge
   useEffect(() => {

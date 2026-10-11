@@ -10,6 +10,9 @@ import { api, rands, randsPlain, type Invoice, type ProjectFull, type Integratio
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, ReceiptText, Printer, Send, Trash2, Upload, X } from 'lucide-react'
+import { tpCanShow, tpMarkShown } from './touchpoints'
+import { TouchpointCard, TouchpointAction } from './TouchpointCard'
+import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
 
 type Item = { description: string; quantity: number; unitPrice: number }
 type BankDetails = {
@@ -64,7 +67,7 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 export default function InvoicesView() {
-  const { activeProjectId, bumpRefresh } = useHp()
+  const { activeProjectId, bumpRefresh, setView, setStoreFocus } = useHp()
   const { toast } = useToast()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,6 +90,34 @@ export default function InvoicesView() {
   const [sendAfter, setSendAfter] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Conversion touchpoints — quiet, frequency-capped, never blocking (see touchpoints.ts)
+  // invoice-logo is DERIVED: latest invoice without a logo + frequency gate → the card
+  // survives navigation and reappears until its 2-show cap (or snooze/retire) ends it.
+  const [logoNudgeNumber, setLogoNudgeNumber] = useState('')
+  const logoMarkedRef = useRef('')
+  const [firstPayNudge, setFirstPayNudge] = useState(false)
+  const [reqOpen, setReqOpen] = useState(false)
+  const [reqService, setReqService] = useState<RequestedService | null>(null)
+  const [reqPreset, setReqPreset] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (logoNudgeNumber && logoMarkedRef.current !== logoNudgeNumber) {
+      logoMarkedRef.current = logoNudgeNumber
+      tpMarkShown('invoice-logo', 2)
+    }
+  }, [logoNudgeNumber])
+
+  function goStore(focus?: string) {
+    if (focus) setStoreFocus(focus)
+    setView('store')
+  }
+
+  function openRequest(service: RequestedService, preset?: string) {
+    setReqService(service)
+    setReqPreset(preset)
+    setReqOpen(true)
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -95,6 +126,10 @@ export default function InvoicesView() {
         activeProjectId ? api<{ project: ProjectFull }>(`/api/projects/${activeProjectId}`).catch(() => null) : Promise.resolve(null),
       ])
       setInvoices(inv.invoices)
+      // Touchpoint: latest invoice without a logo → one quiet, professional prompt
+      // (frequency-capped in localStorage; survives navigation until capped).
+      const latest = inv.invoices[0]
+      setLogoNudgeNumber(latest && !latest.logoUrl && tpCanShow('invoice-logo') ? latest.number : '')
       if (proj) setProfile(proj.project)
       try {
         const s = await api<{ settings: IntegrationSetting[] }>('/api/settings')
@@ -165,7 +200,7 @@ export default function InvoicesView() {
       resetForm()
       setShowCreate(false)
       bumpRefresh()
-      load()
+      load() // load() re-derives the invoice-logo touchpoint from the fresh list
     } catch (e) {
       toast({ title: 'Could not create invoice', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -174,9 +209,15 @@ export default function InvoicesView() {
   }
 
   async function setStatus(inv: Invoice, status: 'SENT' | 'PAID') {
+    const isFirstPaid = status === 'PAID' && inv.status !== 'PAID' && invoices.filter((i) => i.status === 'PAID').length === 0
     try {
       await api(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       toast({ title: `${inv.number} → ${status}` })
+      // Touchpoint: first money in — the natural moment to suggest reinvesting in growth.
+      if (isFirstPaid && tpCanShow('first-paid')) {
+        tpMarkShown('first-paid', 1)
+        setFirstPayNudge(true)
+      }
       load()
     } catch (e) {
       toast({ title: 'Update failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
@@ -290,6 +331,21 @@ export default function InvoicesView() {
               {logoUrl && <img src={logoUrl} alt="logo preview" className="h-6 rounded" />}
             </label>
           </div>
+          {!logoUrl && (
+            <p className="text-[11px] text-muted-foreground">
+              Tip — invoices with a logo read as established and get paid faster.{' '}
+              <button type="button" className="underline underline-offset-2 hover:text-brand" onClick={() => goStore('Content Creation')}>
+                See packages from R1,550
+              </button>{' '}or{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-brand"
+                onClick={() => openRequest({ id: 'graphic-design', title: 'Graphic Design' }, "I'd like a logo / brand mark for my invoices and documents. Here's my business in one line: ")}
+              >
+                ask our team to design one
+              </button>.
+            </p>
+          )}
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="i-client">Client name</Label>
@@ -363,6 +419,50 @@ export default function InvoicesView() {
         </div>
       )}
 
+      {/* Touchpoints — quiet conversions at the moment they matter */}
+      {logoNudgeNumber && (
+        <TouchpointCard
+          id="invoice-logo"
+          title={`${logoNudgeNumber} is out — without your logo`}
+          body="Invoices that look established get paid faster. A logo and consistent branding make every document read as a real business."
+          snoozeDays={7}
+          footer="Quoted before any work starts · tracked on your Tasks · replies come to your email"
+        >
+          <TouchpointAction primary onClick={() => goStore('Content Creation')}>
+            See content packages · R1,550
+          </TouchpointAction>
+          <TouchpointAction
+            onClick={() => openRequest(
+              { id: 'graphic-design', title: 'Graphic Design' },
+              "I'd like a logo / brand mark for my invoices and documents. Here's my business in one line: "
+            )}
+          >
+            Request something custom
+          </TouchpointAction>
+        </TouchpointCard>
+      )}
+      {firstPayNudge && (
+        <TouchpointCard
+          id="first-paid"
+          title="First payment in — well run."
+          body="Cashflow is fuel, and owners who reinvest early grow fastest. Content and marketing packages turn this month's invoices into next month's customers."
+          snoozeDays={30}
+          footer="Free assessment — our team reviews where your business is and recommends the next step"
+        >
+          <TouchpointAction primary onClick={() => goStore()}>
+            Browse growth packages
+          </TouchpointAction>
+          <TouchpointAction
+            onClick={() => openRequest(
+              { id: 'free-assessment', title: 'Free Business Assessment' },
+              "My first payment just came through HustlePortal. Here's where my business is right now: "
+            )}
+          >
+            Get a free assessment
+          </TouchpointAction>
+        </TouchpointCard>
+      )}
+
       {/* List */}
       <div className="rounded-xl border bg-card overflow-hidden">
         {loading ? (
@@ -407,6 +507,9 @@ export default function InvoicesView() {
 
       {/* Printable template (also drives window.print) */}
       {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
+
+      {/* Direct line to the team — shared with every touchpoint on the platform */}
+      <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} presetMessage={reqPreset} />
     </div>
   )
 }

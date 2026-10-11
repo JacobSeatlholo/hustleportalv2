@@ -227,7 +227,7 @@ export default function AppShell() {
         <footer className="mt-auto border-t bg-background/60 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground flex flex-wrap justify-between gap-2">
             <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
-            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — <span className="text-brand font-medium tracking-wide">Explore. Adapt. Evolve.</span></span>
+            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
           </div>
         </footer>
       </div>

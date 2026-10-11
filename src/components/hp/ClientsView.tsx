@@ -18,6 +18,9 @@ import { useToast } from '@/hooks/use-toast'
 import { parseContactList, normalizePhone, waLink, waGreeting } from '@/lib/whatsapp'
 import { api, rands } from './shared'
 import { useHp } from './store'
+import { tpCanShow, tpMarkShown } from './touchpoints'
+import { TouchpointCard, TouchpointAction } from './TouchpointCard'
+import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
 import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera } from 'lucide-react'
 
 interface Client {
@@ -61,6 +64,10 @@ export default function ClientsView() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [scanBusy, setScanBusy] = useState(false)
   const [scanThumb, setScanThumb] = useState<string | null>(null)
+  const [relNudge, setRelNudge] = useState(false)
+  const [relCount, setRelCount] = useState(0)
+  const [reqOpen, setReqOpen] = useState(false)
+  const [reqService, setReqService] = useState<RequestedService | null>(null)
   const businessName = useHp((s) => s.session?.user?.businessName) ?? null
 
   // Live parse preview — same engine the server runs on import
@@ -75,6 +82,13 @@ export default function ClientsView() {
     try {
       const data = await api<{ clients: Client[] }>('/api/clients')
       setClients(data.clients)
+      // Touchpoint: a real book of relationships is the natural moment to offer
+      // automated follow-ups — once, quietly, and never again if dismissed.
+      if (data.clients.length >= 5 && tpCanShow('clients-relations')) {
+        tpMarkShown('clients-relations', 1)
+        setRelCount(data.clients.length)
+        setRelNudge(true)
+      }
     } catch {
       toast({ title: 'Failed to load clients', variant: 'destructive' })
     } finally {
@@ -271,6 +285,23 @@ export default function ClientsView() {
           </Button>
         </div>
       </div>
+
+      {relNudge && (
+        <TouchpointCard
+          id="clients-relations"
+          title={`You know ${relCount} people who pay you.`}
+          body="Relationships pay the bills — staying in touch is what turns one job into repeat work. Our team can set up follow-up messages that go out on time, every time."
+          snoozeDays={14}
+          footer="Quoted before any work starts · tracked on your Tasks"
+        >
+          <TouchpointAction
+            primary
+            onClick={() => { setReqService({ id: 'digital-marketing', title: 'Digital Marketing' }); setReqOpen(true) }}
+          >
+            See follow-up campaigns
+          </TouchpointAction>
+        </TouchpointCard>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
@@ -548,6 +579,9 @@ export default function ClientsView() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Direct line to the team — shared with every touchpoint on the platform */}
+      <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} />
     </div>
   )
 }
