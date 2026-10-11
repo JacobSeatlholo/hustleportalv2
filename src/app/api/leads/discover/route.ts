@@ -179,8 +179,8 @@ export async function POST(req: NextRequest) {
       mode: 'NONE',
       note:
         (ai.ok
-          ? 'The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services").'
-          : `${ai.error} — the map directory also had nothing for that description. Try naming the business type and area more directly.`),
+          ? `The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services"). ${osm.note || ''}`.trim()
+          : `${ai.error} — the map directory also had nothing (${osm.note || 'no area match'}). Try naming the business type and area more directly.`),
     },
     { status: 200 }
   )
