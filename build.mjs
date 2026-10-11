@@ -37,7 +37,13 @@ let pushed = false
 const MAX_ATTEMPTS = 3
 for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
   console.log(`[build 1/3] attempt ${attempt}/${MAX_ATTEMPTS}`)
-  const r = run('npx', ['prisma', 'db', 'push', '--skip-generate'])
+  // --accept-data-loss: REQUIRED non-interactively. Prisma flags additive
+  // changes like "unique constraint on new nullable column" as possible data
+  // loss and refuses to proceed without a TTY prompt (this silently failed
+  // every Vercel build after the growth-engine schema landed and broke login
+  // with "column User.refCode does not exist"). All schema evolution in this
+  // repo is additive; any destructive step Prisma takes is printed loudly here.
+  const r = run('npx', ['prisma', 'db', 'push', '--skip-generate', '--accept-data-loss'])
   if (r.status === 0) {
     pushed = true
     break

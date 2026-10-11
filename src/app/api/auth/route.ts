@@ -72,12 +72,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
   } catch (e) {
     console.error('auth error', e)
-    // TEMP DIAGNOSTIC (revert after outage resolved): sanitized error class only
-    const raw = e instanceof Error ? `${e.message}` : String(e)
-    const sanitized = raw
-      .replace(/postgresql?:\/\/[^\s"']+/g, '[conn]')
-      .replace(/([a-zA-Z0-9-]+\.)+(neon|aws|amazonaws|tech|com|app)[^/\s"']*/g, '[host]')
-      .slice(0, 220)
-    return NextResponse.json({ error: 'Something went wrong. Try again.', debug: sanitized }, { status: 500 })
+    return NextResponse.json({ error: 'Something went wrong. Try again.' }, { status: 500 })
   }
 }

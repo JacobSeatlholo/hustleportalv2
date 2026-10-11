@@ -69,34 +69,10 @@ export async function GET() {
 
   try {
     const dbMod = await import('@/lib/db')
-    await step('lib:db', async () => undefined)
     await step('user.count', () => dbMod.db.user.count())
-    const authMod = await import('@/lib/auth')
-    await step('lib:auth', async () => undefined)
-    await step('lib:wallet', async () => {
-      await import('@/lib/wallet')
-    })
-    await step('lib:config', async () => {
-      await import('@/lib/config')
-    })
-    await step('lib:gamification', async () => {
-      await import('@/lib/gamification')
-    })
-    await step('lib:referral', async () => {
-      await import('@/lib/referral')
-    })
-    await step('wallet.findUnique(fresh user id)', () =>
-      dbMod.db.wallet.findUnique({ where: { userId: 'diag-nonexistent' } })
-    )
     await step('challengeProgress.findFirst', () =>
       dbMod.db.challengeProgress.findFirst({ select: { id: true } })
     )
-    await step('platformConfig.findFirst', () =>
-      dbMod.db.platformConfig.findFirst({ select: { key: true } }).catch(() => null)
-    )
-    await step('createSession(sign jwt)', () => authMod.createSession('diag-nonexistent').catch((e: unknown) => { throw e }))
-    // cookie set outside a real auth flow is harmless; delete it right after
-    await step('destroySession', () => authMod.destroySession().catch(() => undefined))
   } catch (e) {
     steps['diag-fatal'] = e instanceof Error ? e.message.slice(0, 120) : 'unknown'
   }
