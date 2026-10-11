@@ -20,25 +20,25 @@ const INTEGRATIONS: {
 }[] = [
   {
     key: 'GMAIL_USER',
-    title: 'Gmail address',
+    title: 'Gmail address (optional)',
     icon: <Mail className="h-4 w-4 text-brand" />,
     placeholder: 'you@gmail.com',
-    helper: 'Your Gmail address — Mail sends from this account.',
+    helper: 'Optional upgrade — Mail already sends via the HustlePortal engine. Add your Gmail to send from your own address instead.',
   },
   {
     key: 'GMAIL_APP_PASSWORD',
-    title: 'Gmail app password',
+    title: 'Gmail app password (optional)',
     icon: <KeyRound className="h-4 w-4 text-brand" />,
     placeholder: '16-character app password',
-    helper: 'Google Account → Security → 2-Step Verification → App passwords. Stored only on your account.',
+    helper: 'Only if you connect your Gmail above: Google Account → Security → 2-Step Verification → App passwords. Stored only on your account.',
     secret: true,
   },
   {
     key: 'GEMINI_API_KEY',
-    title: 'Gemini API key',
+    title: 'Gemini API key (optional)',
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza…',
-    helper: 'Powers AI drafts (Mail), the sales pitch and voice appointment capture. Free at aistudio.google.com.',
+    helper: 'The AI Co-Founder, plans and drafts already run on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com) to run AI on your own quota.',
     secret: true,
   },
   {
@@ -115,7 +115,8 @@ export default function IntegrationsView() {
       <div>
         <h2 className="font-display text-2xl">Integrations</h2>
         <p className="text-sm text-muted-foreground">
-          Your keys, your accounts. Everything is stored against your user only — nothing shared, nothing pooled.
+          Plug &amp; play — AI, email, calendar links and payments already work with zero setup. Everything below is an
+          optional upgrade. Your keys stay on your account only — nothing shared, nothing pooled.
         </p>
       </div>
 

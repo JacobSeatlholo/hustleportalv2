@@ -1,7 +1,8 @@
 /**
  * Gemini calls grounded in the user's business profile.
- * Uses the USER'S OWN Gemini API key (UserSetting: GEMINI_API_KEY), set in the
- * Integrations hub — HustlePortal ships no keys of its own.
+ * PLUG & PLAY: works out of the box with the platform key (Vercel env GEMINI_API_KEY).
+ * A user's own key (UserSetting: GEMINI_API_KEY, Integrations hub) is an OPTIONAL
+ * override — power users can run AI on their own quota.
  */
 import { db } from '@/lib/db'
 
@@ -15,6 +16,22 @@ export async function getUserGeminiKey(userId: string): Promise<string | null> {
   return row?.value || null
 }
 
+/** Platform key from the environment (set once on the server by the operator). */
+export function getPlatformGeminiKey(): string | null {
+  return process.env.GEMINI_API_KEY?.trim() || null
+}
+
+/** Resolution order: user's own key (override) → platform key → null. */
+export async function resolveGeminiKey(
+  userId: string
+): Promise<{ key: string | null; source: 'user' | 'platform' | 'none' }> {
+  const userKey = await getUserGeminiKey(userId)
+  if (userKey) return { key: userKey, source: 'user' }
+  const platformKey = getPlatformGeminiKey()
+  if (platformKey) return { key: platformKey, source: 'platform' }
+  return { key: null, source: 'none' }
+}
+
 export type GeminiResult = { ok: true; text: string } | { ok: false; error: string }
 
 export interface GeminiHistoryTurn {
@@ -26,9 +43,13 @@ export async function geminiGenerate(
   userId: string,
   opts: { system?: string; prompt: string; json?: boolean; history?: GeminiHistoryTurn[] },
 ): Promise<GeminiResult> {
-  const key = await getUserGeminiKey(userId)
+  const { key } = await resolveGeminiKey(userId)
   if (!key) {
-    return { ok: false, error: 'NO_KEY: Add your Gemini API key in Integrations to unlock AI drafts.' }
+    return {
+      ok: false,
+      error:
+        'NO_KEY: HustlePortal AI is not switched on yet — try again soon. You can also add your own free Gemini key under Integrations to go live instantly.',
+    }
   }
   try {
     const history = (opts.history || []).slice(-10).map((h) => ({

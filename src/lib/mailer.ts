@@ -1,8 +1,10 @@
 /**
- * Email sending via the USER'S OWN Gmail account (SMTP with an app password).
- * Credentials live in UserSetting (set in the Integrations hub):
- *   GMAIL_USER / GMAIL_APP_PASSWORD
- * HustlePortal never sends from its own domain — it's the user's Gmail, their voice.
+ * Email sending — PLUG & PLAY.
+ * Resolution order:
+ *   1. USER'S OWN Gmail (optional, Integrations hub) — their voice, replies land in their inbox.
+ *   2. PLATFORM sending via Resend (server env RESEND_API_KEY) — works for everyone, zero setup.
+ *      Replies go to the user's account email via Reply-To.
+ * HustlePortal never forces users to create app passwords or OAuth grants.
  */
 import { db } from '@/lib/db'
 
@@ -17,14 +19,10 @@ export async function getUserMailCreds(userId: string): Promise<MailCreds | null
   return { user: map.GMAIL_USER, appPassword: map.GMAIL_APP_PASSWORD }
 }
 
-export async function sendViaUserGmail(
-  userId: string,
+async function sendViaUserGmail(
+  creds: MailCreds,
   mail: { to: string; subject: string; body: string },
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const creds = await getUserMailCreds(userId)
-  if (!creds) {
-    return { ok: false, error: 'Gmail is not connected yet — add your address and app password in Integrations.' }
-  }
+): Promise<{ ok: true; provider: 'GMAIL' } | { ok: false; error: string }> {
   try {
     const nodemailer = await import('nodemailer')
     const transport = nodemailer.createTransport({
@@ -39,8 +37,66 @@ export async function sendViaUserGmail(
       subject: mail.subject,
       text: mail.body,
     })
-    return { ok: true }
+    return { ok: true, provider: 'GMAIL' }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Failed to send email' }
   }
+}
+
+async function sendViaPlatform(
+  userId: string,
+  mail: { to: string; subject: string; body: string },
+): Promise<{ ok: true; provider: 'PLATFORM' } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    return {
+      ok: false,
+      error:
+        'Email is not switched on yet — HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
+    }
+  }
+  const from = process.env.RESEND_FROM?.trim() || 'HustlePortal <onboarding@resend.dev>'
+  // Reply-To the sender's real account so client responses reach THEM
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from,
+        to: [mail.to],
+        subject: mail.subject,
+        text: mail.body,
+        ...(user?.email ? { reply_to: user.email } : {}),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 300)
+      return { ok: false, error: `Email service error ${res.status}: ${detail}` }
+    }
+    return { ok: true, provider: 'PLATFORM' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Failed to send email' }
+  }
+}
+
+/**
+ * One-call send used by /api/emails.
+ * Tries the user's own Gmail first (their voice); falls back to platform sending.
+ */
+export async function sendMail(
+  userId: string,
+  mail: { to: string; subject: string; body: string },
+): Promise<{ ok: true; provider: 'GMAIL' | 'PLATFORM' } | { ok: false; error: string }> {
+  const creds = await getUserMailCreds(userId)
+  if (creds) {
+    const r = await sendViaUserGmail(creds, mail)
+    if (r.ok) return r
+    // their Gmail failed — fall through to platform so the send still happens
+    const fb = await sendViaPlatform(userId, mail)
+    if (fb.ok) return fb
+    return { ok: false, error: `Gmail: ${r.error}` }
+  }
+  return sendViaPlatform(userId, mail)
 }

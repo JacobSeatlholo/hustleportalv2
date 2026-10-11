@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { sendViaUserGmail } from '@/lib/mailer'
+import { sendMail } from '@/lib/mailer'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -15,7 +15,8 @@ export async function GET() {
   return NextResponse.json({ emails })
 }
 
-// POST /api/emails → send a draft (or ad-hoc mail) via the user's own Gmail
+// POST /api/emails → send a draft (or ad-hoc mail) — plug & play:
+// user's own Gmail if connected, otherwise the HustlePortal mail engine sends for them.
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +27,8 @@ export async function POST(req: NextRequest) {
   if (!to || !to.includes('@')) return NextResponse.json({ error: 'A valid recipient email is required.' }, { status: 400 })
   if (!subject || !mailBody) return NextResponse.json({ error: 'Subject and body are required.' }, { status: 400 })
 
-  const result = await sendViaUserGmail(userId, { to, subject, body: mailBody })
+  const result = await sendMail(userId, { to, subject, body: mailBody })
+  const provider = result.ok ? result.provider : 'NONE'
 
   // If this send belongs to a logged draft, update it; otherwise log the send
   let email
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (draft) {
       email = await db.emailLog.update({
         where: { id: draft.id },
-        data: { toEmail: to, subject, body: mailBody, status: result.ok ? 'SENT' : 'FAILED', error: result.ok ? null : result.error },
+        data: { toEmail: to, subject, body: mailBody, status: result.ok ? 'SENT' : 'FAILED', provider, error: result.ok ? null : result.error },
       })
     }
   }
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
         subject,
         body: mailBody,
         status: result.ok ? 'SENT' : 'FAILED',
+        provider,
         error: result.ok ? null : result.error,
       },
     })

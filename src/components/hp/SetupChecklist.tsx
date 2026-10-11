@@ -15,24 +15,10 @@ interface Item {
 
 const ITEMS: Item[] = [
   {
-    id: 'GEMINI_API_KEY',
-    label: 'Gemini API key',
-    why: 'Powers the AI Co-Founder, business plans, email drafts and voice capture.',
-    how: 'Free at aistudio.google.com/apikey — takes 1 minute.',
-    link: 'https://aistudio.google.com/apikey',
-  },
-  {
-    id: 'GMAIL_APP_PASSWORD',
-    label: 'Gmail app password',
-    why: 'Sends real emails from your own address in the Mail view.',
-    how: 'Google Account → Security → 2-Step Verification → App passwords.',
-    link: 'https://myaccount.google.com/apppasswords',
-  },
-  {
     id: 'EXPLEE_API_KEY',
     label: 'Explee API key',
     why: 'Live verified leads in the Lead Finder (demo leads without it).',
-    how: 'Your Explee account → API keys.',
+    how: 'Optional upgrade — your Explee account → API keys.',
     link: 'https://explee.com',
   },
   {
@@ -112,9 +98,9 @@ export default function SetupChecklist() {
     <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 md:p-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-display text-lg leading-tight">Finish your setup — {remaining} step{remaining === 1 ? '' : 's'} left</div>
+          <div className="font-display text-lg leading-tight">Unlock even more — {remaining} step{remaining === 1 ? '' : 's'} left</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            The app works without these, but each one unlocks more. Takes a few minutes total.
+            AI, email, calendar and payments already work out of the box. These are optional upgrades.
           </p>
         </div>
         <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Dismiss setup checklist">
@@ -164,7 +150,7 @@ export default function SetupChecklist() {
 
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-        Already done: auth, database, payments keys, all 10 views live.
+        Already included free: AI Co-Founder, email sending, calendar invites, payments.
       </div>
     </div>
   )

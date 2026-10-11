@@ -110,7 +110,7 @@ export default function MailView() {
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-2xl">Mail</h2>
-        <p className="text-sm text-muted-foreground">Gemini drafts grounded in your business profile — sent from your own Gmail, your voice.</p>
+        <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile — sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
@@ -162,7 +162,7 @@ export default function MailView() {
             </div>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">
-                Sends via your Gmail (SMTP app password) — connect it in <b>Integrations</b>. Gemini key also lives there.
+                Sends via the HustlePortal mail engine — no setup needed. Want replies in your own inbox? Connect your Gmail in <b>Integrations</b>.
               </p>
               <Button onClick={send} disabled={sending || !subject || !body}>
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -219,8 +219,8 @@ export default function MailView() {
       <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <Mail className="h-4 w-4 text-brand shrink-0 mt-0.5" />
         <span>
-          HustlePortal never emails from its own domain — drafts go out through <b>your</b> Gmail with <b>your</b> name on them.
-          Connect Gmail + Gemini in Integrations; until then, drafts still work if a Gemini key is set.
+          Sending is included — HustlePortal mails for you and replies are routed back to your account email.
+          Prefer your own address on the label? Connect Gmail (and, optionally, your own AI key) in Integrations.
         </span>
       </div>
     </div>

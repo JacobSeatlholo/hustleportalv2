@@ -7,7 +7,7 @@ import { geminiGenerate, GeminiHistoryTurn } from '@/lib/gemini'
 export const maxDuration = 60
 
 const NO_KEY_MSG =
-  'The AI Co-Founder needs your free Gemini API key. Get one in 1 minute at aistudio.google.com/apikey, then paste it under Integrations.'
+  'HustlePortal AI is warming up and will be live shortly. You can also add your own free Gemini key at aistudio.google.com/apikey and paste it under Integrations to go live instantly.'
 
 // POST /api/ai/advisor — AI Co-Founder chat, grounded in the user's real data
 export async function POST(req: NextRequest) {
