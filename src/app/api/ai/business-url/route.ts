@@ -214,8 +214,9 @@ export async function POST(req: NextRequest) {
   const usable = (a: BusinessAnalysis | null): boolean =>
     !!a && (!!a.positioning || (!!a.audience && !!a.businessName))
 
-  if (usable(analysis)) {
+  if (analysis && usable(analysis)) {
     // Enrichment pass: pitch drafts + deeper audience reading, best-effort.
+    const profile = analysis
     const remaining = routeDeadline - Date.now()
     if (remaining > 15_000) {
       const enrich = await geminiGenerate(userId, {
@@ -223,11 +224,11 @@ export async function POST(req: NextRequest) {
         system,
         maxOutputTokens: 1600,
         timeoutMs: Math.min(remaining - 2_000, 24_000),
-        prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 9000)}\n\n=== BUSINESS ===\n${analysis.businessName || ''} · ${analysis.industry || ''} · ${analysis.positioning || ''}\n\n=== TASK ===\nReturn ONLY this JSON:\n{ "audience": { "summary": "who actually buys, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] }, "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] }, "pitches": [ { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" }, { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" }, { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" } ] }`,
+        prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 9000)}\n\n=== BUSINESS ===\n${profile.businessName || ''} · ${profile.industry || ''} · ${profile.positioning || ''}\n\n=== TASK ===\nReturn ONLY this JSON:\n{ "audience": { "summary": "who actually buys, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] }, "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] }, "pitches": [ { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" }, { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" }, { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" } ] }`,
       })
       if (enrich.ok) {
         const extra = parseJsonLoose<BusinessAnalysis>(enrich.text)
-        if (extra) {
+        if (extra && analysis) {
           analysis = {
             ...analysis,
             audience: extra.audience?.summary ? extra.audience : analysis.audience,
