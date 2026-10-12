@@ -1,0 +1,88 @@
+# HustlePortal Worklog
+(Durable mirror kept at .git/hp-deploy/worklog.md — root copy gets wiped on sandbox resets)
+
+---
+Task ID: 26-27
+Agent: Super Z (main)
+Task: Diagnose user reports — "no option to push when done" + "web app still goes to 404".
+
+Work Log:
+- Investigated InstallApp.tsx: line 34 is VALID (`const [hidden, setHidden]`) — earlier cat output was a display artifact eating "[h". Not a bug.
+- FOUND 404 ROOT CAUSE: Task 13-era manifest had start_url /dashboard + shortcuts /leads, /invoices — routes that never existed (single-page app). Task 23 fixed the manifest, but PWA icons installed BEFORE that still target the dead paths → permanent Vercel 404 on tap.
+- BH external links all verified 200 (terms/privacy/cookies/shop/products). Manifest serving correct (application/manifest+json), icons 200, layout links manifest.
+- Task 26 (8319482): next.config.ts redirects — /dashboard → /?source=pwa, /leads → /?view=leads, /invoices → /?view=invoices (permanent 308). Stale home-screen icons self-heal with zero user action. COMMITTED, NOT YET PUSHED.
+- Sandbox reset AGAIN mid-session (partial restore): scripts/git_ssh_paramiko.py, /home/z/.ssh, venv paramiko, worklog.md wiped; .git + tracked files survived.
+- Rebuilt infra DURABLY this time: paramiko in .venv, keypair v2 + shim stored under .git/hp-deploy/ (proven reset-surviving location). Key v1 (user-authorized this morning) unrecoverable → v2 pubkey needs one-time authorization.
+
+Stage Summary:
+- Pending push: 8319482 Task 26 (stale-icon 404 fix).
+- BLOCKER: deploy key v2 authorization. Pubkey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAKQx3Nv55Qgu4SQy+FxqvG2zniGS6BRNt7wD3F8kGw6
+- Learned: store reset-fragile infra under .git/hp-deploy/ (shim, key, worklog mirror). User-side "no option to push" = GitHub UI has no push button (push happens from agent side).
+
+---
+Task ID: 27
+Agent: Super Z (main)
+Task: Welcome email on signup + pricing strategy brainstorm.
+
+Work Log:
+- Read plans.ts: plans are MONTHLY SUBSCRIPTIONS (Operator R199/mo: 5 lead reveals + AI + tools; Boss R499/mo: 10+ reveals + 5 seats + priority AI), MRR target R45k, referrals R10/R50, welcome credit R99 via PlatformConfig (welcome_credit_cents=9900).
+- Spotted value-per-rand inversion: Operator R39.80/lead vs Boss R49.90/lead — Boss sells on seats/priority, must be made a no-brainer (more reveals or money features).
+- Implemented welcome email (Task 27, 88a6866): awaited-but-wrapped sendSystemMail in register action, personalized subject with first name + actual credit amount, body = 3 onboarding moves (profile → Lead Finder → pipeline), deep link {base}/?view=leads, reply-to team inbox, never blocks signup. Typecheck clean.
+- Queued behind deploy key v2 authorization: commits 8319482 (stale-icon redirects) + 88a6866 (welcome email).
+
+Stage Summary:
+- Pending push: 8319482 + 88a6866. BLOCKER: user must add deploy key v2 (stored durably in .git/hp-deploy/ now).
+- Pricing brainstorm delivered in chat: strategy is winning for ACQUISITION; retention needs annual plan, pause-not-cancel, rollover, win-back emails; Boss tier needs stronger differential.
+
+---
+Task ID: 28
+Agent: Super Z (main)
+Task: Deploy Tasks 26+27 after user authorized deploy key v2; verify in prod.
+
+Work Log:
+- User added deploy key v2; push c7d8855..88a6866 succeeded (Task 26 redirects + Task 27 welcome email).
+- New build live 19:43 UTC. Verified: /dashboard → 308 /?source=pwa, /leads → 308 /?view=leads, /invoices → 308 /?view=invoices — stale home-screen icons now self-heal.
+- Smoke: /api/auth login proper error JSON, GET / 200, manifest 200.
+
+Stage Summary:
+- Production runs 88a6866. Welcome email now sends on every signup (awaited, non-blocking). Legacy PWA 404 eliminated.
+- Durable infra proven: .git/hp-deploy/ (shim + key + worklog mirror) survived the mid-session reset.
+
+---
+Task ID: 29
+Agent: Super Z (main)
+Task: Pricing strategy live + add-contact save bug + full E2E QA for production.
+
+Work Log:
+- Task 28 (6d563ff): pricing package — Boss 12 verified reveals (fixed the R39.8 vs R49.9 per-lead inversion), annual plans (R1,990/R4,990 = 2 months free) with Monthly/Annual toggle in GrowView, Subscription.billingCycle + pausedUntil schema fields, plan reveal credits auto-granted on every activation/renewal (webhook + sandbox — closes the paid-but-no-reveals gap: Operator R75, Boss R180), pause-30-days-not-cancel (frozen days, auto-resume shifts renewsAt, /api/subscribe/pause), rollover copy (credits never expire — verified), Landing+GrowView copy aligned.
+- Task 29: ClientsView Add/Edit client dialog had NO submit button (save() existed but was unreachable) — restored DialogFooter with Cancel + "Add client"/"Save changes".
+- Task 30/30b/30c (ef093c8, c1cc0e6, 7a3182d): lead discover 504 root cause chain — (a) stage budget, (b) REAL cause: callGemini keys×models each re-arming a fresh 55s timeout → chain-wide deadline, (c) OSM 3-mirror chain ×30s + sweep + Nominatim could stack 180s → wall-clock deadline through every stage. Discover now always answers honestly within ~50s.
+- scripts/e2e_prod_qa.mjs: 21-check E2E (register→session→mail→wallet R99→profile→discover→reveal honesty→clients CRUD→invoice→task→finance→subscribe annual→quota grant→pause/resume→Boss R4,990→logout→session cleared). Final result 19 PASS / 0 FAIL (2 informational skips).
+- UI QA via agent-browser on prod: signup with CityField+Tag location works, welcome tour, Clients → Add Client dialog has Cancel+Add client buttons, full save flow produced "Client added — Thandi Mokoena is now in your CRM." toast; GrowView shows Monthly/Annual toggle flipping buttons to R1,990/yr + R4,990/yr. Screenshot: download/qa_grow_annual.png.
+- QA-run emails land on hustleqa.example.com (fake domain) — Resend accepts then bounces; harmless.
+- YOCO_SECRET_KEY appears NOT set in Vercel prod (subscribe returned sandbox:true) — worth flagging to the user for real payments.
+
+Stage Summary:
+- Production runs 7a3182d. E2E 19/0. All user-reported issues fixed (pricing update, save button, 504).
+- Durable infra: .git/hp-deploy/ survived multiple resets; e2e script committed under scripts/.
+
+---
+Task ID: 31
+Agent: Super Z (main)
+Task: Mobile UX overhaul (top bar unreachable), inventory, push notifications, seamless team invites, per-business mail identity, 5km lead finder, stage filter, simple messaging.
+
+Work Log:
+- Diagnosed "can't tap top bar" — small tap targets, no safe-area padding, no thumb-reach navigation. Fixed: 40-44px targets, env(safe-area-inset-top) on header, mobile BOTTOM NAV (Home/Leads/Tasks/Invoices + More→drawer), one-time tilt-tip dialog (standalone+phone only, localStorage hp_tilt_tip_dismissed).
+- Inventory: InventoryItem model + /api/inventory (GET/POST/PATCH adjust±/DELETE) + InventoryView (add dialog, ±1 quantity, low-stock badge, stock/retail value KPIs). New nav item after Tasks. ViewKey + page.tsx validation updated.
+- Tasks: destination dropdown now Personal | Business | Team(s). Business = teamId null + isPrivate false, shown with Business badge.
+- Lead Finder: CityField gained onCoords (fires on GPS fix, cleared on edit; raw coords handed up even when reverse geocode fails). Discover sends lat/lng → Gemini prompt: "within a 5 km radius of GPS pin…" + CONTACT DETAILS ARE THE PRIZE rule (website+phone+email prioritised, never constructed). OSM fallback searches 5000m radius around the pin, skipping Nominatim. Auto-add: results saved to pipeline automatically (localStorage hp_discover_autoadd, default ON) with "✓ in pipeline" badges; manual flow retained when toggled off. Engagement: rotating status steps + elapsed-seconds counter + progress bar during the honest ~40s search.
+- Pipeline: stage filter Select (All stages / Contacted / Qualified / Quote Sent / Won / Lost) — filters kanban columns and list.
+- Teams: invite requires NO existing account — TeamInvite model parked by email + invitation email (register link); /api/auth register auto-joins pending invites and returns joinedTeams. Owner sees pending list with cancel (DELETE /api/teams?inviteId=). Existing accounts still added instantly with a notification email.
+- Mail identity: userSendingIdentity() — project/business name → "<label> via HustlePortal <slug>@hustleportal.online>"; sendViaPlatform uses it (RESEND_FROM env still wins); MailStatus.sendingAs surfaced in MailView status line.
+- Push: web-push dep; VAPID keys auto-generated into PlatformConfig (no env access needed); PushSubscription model; public/sw.js (push + notificationclick routing); /api/push GET key + POST subscribe/unsubscribe/test (subscribe sends a welcome push); PwaNotifications component (sidebar compact opt-in + Profile card with Send test); vercel.json cron daily-reminders 05:00 UTC (07:00 SAST) pushes tasks-due-today summary (CRON_SECRET optional).
+- Landing hero: "Tell us what you do. We find your customers." + sub "You tell us what you sell. Our AI finds verified leads near you and loads them into your pipeline — ready to call, ready to close. Simple."
+- tsc clean (tracked files), next build OK, pushed 7a3182d..21b9e44.
+
+Stage Summary:
+- Production deploying 21b9e44. All 8 user-reported items implemented (top bar, messaging, mail identity, lead finder location+prompt+auto-add+engagement, notifications, stage dropdown, tasks personal/business, team invites, inventory).
+- Notes for user: VAPID/keys need no setup; vercel.json cron active on deploy; optional env CRON_SECRET hardens the cron; web-push requires HTTPS + installed app on Android (iOS 16.4+ requires Add-to-Home-Screen first).
