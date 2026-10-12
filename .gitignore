@@ -79,3 +79,16 @@ prompt
 /pgdata/
 /pgtools/
 tool-results/
+
+# Business-OS workstream leftovers (untracked on purpose): unauth API routes referencing
+# nonexistent Prisma models + dead components. Keep on disk, never deploy to prod.
+/src/app/api/expenses/
+/src/app/api/goals/
+/src/app/api/notes/
+/src/app/api/payments/
+/src/app/api/time-entries/
+/src/app/api/seed.ts
+/src/app/api/seed/
+/src/components/hustle/
+/src/lib/api.ts
+/src/lib/hooks.ts
