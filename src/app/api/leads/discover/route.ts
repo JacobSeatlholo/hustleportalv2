@@ -120,16 +120,11 @@ export async function POST(req: NextRequest) {
   })
 
   // 1) PRIMARY — grounded web search (real businesses only).
-  // One patient retry on a per-minute 429: rate limits usually clear in seconds,
-  // and this search is the heart of the teaser funnel — worth the wait.
-  // Deadline budget: Vercel caps this function at 60s — every stage below checks
-  // the clock so the caller always gets an honest response instead of a 504.
+  // Deadline budget: Vercel caps this function at 60s — the Gemini chain gets
+  // 30s (hard deadline inside callGemini too), leaving room for the OSM map
+  // fallback, so the caller always gets an honest response instead of a 504.
   const t0 = Date.now()
-  let ai = await geminiGenerate(userId, buildSearch())
-  if (!ai.ok && /429|rate-limited|quota/i.test(ai.error) && Date.now() - t0 < 25_000) {
-    await new Promise((r) => setTimeout(r, 12_000))
-    ai = await geminiGenerate(userId, buildSearch())
-  }
+  const ai = await geminiGenerate(userId, { ...buildSearch(), timeoutMs: 30_000 })
 
   if (ai.ok) {
     const parsed = parseJsonLoose<{ leads?: AiLead[] }>(ai.text)

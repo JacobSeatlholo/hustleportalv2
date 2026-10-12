@@ -220,16 +220,23 @@ async function callGemini(
 
   const failures: Failure[] = []
   let timedOut = false
+  // Hard deadline for the WHOLE chain: per-attempt timeouts shrink as the clock
+  // runs down, so (keys × models) can never stack past the caller's budget —
+  // the single biggest cause of Vercel 504s on slow paths.
+  const deadline = Date.now() + timeoutMs
 
   for (const { key, ownKey } of keys) {
+    if (Date.now() >= deadline) break
     const models = await resolveModels(key)
     for (const model of models) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 2_000) break
       try {
         const res = await fetch(`${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: AbortSignal.timeout(remaining),
         })
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
@@ -270,7 +277,7 @@ async function callGemini(
 
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[] },
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number },
 ): Promise<GeminiResult> {
   const history = (opts.history || []).slice(-10).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
@@ -289,7 +296,7 @@ export async function geminiGenerate(
     // Real-world grounding: Google Search results the model actually saw (real businesses).
     ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
   }
-  return callGemini(userId, body, opts.search ? 55_000 : 30_000)
+  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000))
 }
 
 /**
