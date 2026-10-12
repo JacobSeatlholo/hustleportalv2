@@ -122,8 +122,11 @@ export async function POST(req: NextRequest) {
   // 1) PRIMARY — grounded web search (real businesses only).
   // One patient retry on a per-minute 429: rate limits usually clear in seconds,
   // and this search is the heart of the teaser funnel — worth the wait.
+  // Deadline budget: Vercel caps this function at 60s — every stage below checks
+  // the clock so the caller always gets an honest response instead of a 504.
+  const t0 = Date.now()
   let ai = await geminiGenerate(userId, buildSearch())
-  if (!ai.ok && /429|rate-limited|quota/i.test(ai.error)) {
+  if (!ai.ok && /429|rate-limited|quota/i.test(ai.error) && Date.now() - t0 < 25_000) {
     await new Promise((r) => setTimeout(r, 12_000))
     ai = await geminiGenerate(userId, buildSearch())
   }
@@ -166,7 +169,8 @@ export async function POST(req: NextRequest) {
 
   // 2) FALLBACK A — OpenStreetMap: real, keyless directory listings (Gemini only
   //    helped translate the need into map tags; Overpass supplies the actual data).
-  const osm = await searchOsmLeads(area, definition, cap)
+  //    Only started when there is still runway (the chain needs ~15s of its own).
+  const osm = Date.now() - t0 < 35_000 ? await searchOsmLeads(area, definition, cap) : { leads: [], note: 'skipped — the web search used the time budget' }
   if (osm.leads.length > 0) {
     return NextResponse.json({
       leads: osm.leads,
@@ -177,7 +181,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
-  const ex = await searchLeads(definition, city || undefined, cap)
+  const ex = Date.now() - t0 < 50_000 ? await searchLeads(definition, city || undefined, cap) : { leads: [] }
   if (ex.leads.length > 0) {
     return NextResponse.json({ ...ex, source: 'EXPLEE' })
   }
@@ -189,7 +193,7 @@ export async function POST(req: NextRequest) {
       note:
         (ai.ok
           ? `The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services"). ${osm.note || ''}`.trim()
-          : `${ai.error} — the map directory also had nothing (${osm.note || 'no area match'}). Try naming the business type and area more directly.`),
+          : `${ai.error}${Date.now() - t0 > 50_000 ? ' (the search ran out of its time budget — try once more, it is usually quicker on a retry)' : ''} — the map directory also had nothing (${osm.note || 'no area match'}). Try naming the business type and area more directly.`),
     },
     { status: 200 }
   )
