@@ -191,52 +191,61 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 2) Gemini dissection — grounded ONLY in the page text. The full analysis
-  //    (profile + 3 pitch drafts + keywords) is a LARGE payload: it needs a real
-  //    token budget and a real clock, or bigger sites time out and the user sees
-  //    "the AI could not read my website". If the full pass still fails, a compact
-  //    pass (profile fields only) fills the profile anyway instead of erroring.
+  // 2) Gemini dissection — grounded ONLY in the page text, shaped for reality:
+  //    the profile fields the user actually needs are a SMALL, FAST output, so
+  //    they go first and land even on a slow free-tier minute. The pitch drafts
+  //    are a big payload that can outlive any sane timeout, so they run second,
+  //    only when the clock allows — a bonus, never the difference between a
+  //    filled profile and a dead end.
   const system =
     'You are a meticulous South African market analyst and direct-response copywriter. You research a business from its website text and produce precise, professional output. Never invent facts that are not supported by the text. When the text is thin, say less rather than guess. Write pitches in plain, confident English for WhatsApp and SMS length emails (South African small-business tone: warm, direct, no hype, no emojis).'
-  const full = await geminiGenerate(userId, {
+  const compact = await geminiGenerate(userId, {
     json: true,
     system,
-    maxOutputTokens: 3000,
-    timeoutMs: 40_000,
-    prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText}\n\n=== TASK ===\nDissect this business for its owner. Return ONLY this JSON (omit a field rather than inventing it):\n{\n  "businessName": "name as shown on the site",\n  "industry": "one label",\n  "tagline": "their slogan or one-line promise, verbatim if present",\n  "city": "city/town the business operates from, if the text says so",\n  "phone": "public contact phone in international format, if shown",\n  "email": "public contact email, if shown",\n  "audience": { "summary": "who actually buys from them, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] },\n  "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] },\n  "positioning": "one professional paragraph: what they sell, to whom, and why it wins",\n  "pitches": [\n    { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" },\n    { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" },\n    { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" }\n  ],\n  "keywords": ["5-8 search terms real customers would type"]\n}`,
+    maxOutputTokens: 900,
+    timeoutMs: 28_000,
+    prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 8000)}\n\n=== TASK ===\nReturn ONLY this JSON with the business profile facts visible on the page (omit a field rather than inventing it):\n{ "businessName": "", "industry": "", "tagline": "", "city": "", "phone": "", "email": "", "audience": { "summary": "who buys from them, 1-2 sentences" }, "brand": { "voice": "how the brand talks, 1 sentence" }, "positioning": "what they sell, to whom, and why it wins, 2-3 sentences", "keywords": ["5 search terms real customers would type"] }`,
   })
 
-  let analysis: BusinessAnalysis | null = full.ok ? parseJsonLoose<BusinessAnalysis>(full.text) : null
-  let geminiNotice = full.ok ? full.notice : undefined
+  let analysis: BusinessAnalysis | null = compact.ok ? parseJsonLoose<BusinessAnalysis>(compact.text) : null
+  let geminiNotice = compact.ok ? compact.notice : undefined
   let degraded = false
 
   const usable = (a: BusinessAnalysis | null): boolean =>
     !!a && (!!a.positioning || (!!a.audience && !!a.businessName))
 
-  if (!usable(analysis) && Date.now() < routeDeadline - 16_000) {
-    // Compact second pass: profile fields only. Small output, fast, and it still
-    // gives the user a filled profile instead of a dead end.
-    const compact = await geminiGenerate(userId, {
-      json: true,
-      system,
-      maxOutputTokens: 900,
-      timeoutMs: 14_000,
-      prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 8000)}\n\n=== TASK ===\nReturn ONLY this JSON with the business profile facts visible on the page (omit a field rather than inventing it):\n{ "businessName": "", "industry": "", "tagline": "", "city": "", "phone": "", "email": "", "audience": { "summary": "who buys from them, 1-2 sentences" }, "brand": { "voice": "how the brand talks, 1 sentence" }, "positioning": "what they sell, to whom, and why it wins, 2-3 sentences", "keywords": ["5 search terms real customers would type"] }`,
-    })
-    if (compact.ok) {
-      const c = parseJsonLoose<BusinessAnalysis>(compact.text)
-      if (usable(c)) {
-        analysis = c
-        degraded = true
-        geminiNotice = compact.notice || geminiNotice
+  if (usable(analysis)) {
+    // Enrichment pass: pitch drafts + deeper audience reading, best-effort.
+    const remaining = routeDeadline - Date.now()
+    if (remaining > 15_000) {
+      const enrich = await geminiGenerate(userId, {
+        json: true,
+        system,
+        maxOutputTokens: 1600,
+        timeoutMs: Math.min(remaining - 2_000, 24_000),
+        prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 9000)}\n\n=== BUSINESS ===\n${analysis.businessName || ''} · ${analysis.industry || ''} · ${analysis.positioning || ''}\n\n=== TASK ===\nReturn ONLY this JSON:\n{ "audience": { "summary": "who actually buys, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] }, "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] }, "pitches": [ { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" }, { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" }, { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" } ] }`,
+      })
+      if (enrich.ok) {
+        const extra = parseJsonLoose<BusinessAnalysis>(enrich.text)
+        if (extra) {
+          analysis = {
+            ...analysis,
+            audience: extra.audience?.summary ? extra.audience : analysis.audience,
+            brand: extra.brand?.voice ? extra.brand : analysis.brand,
+            pitches: Array.isArray(extra.pitches) && extra.pitches.length ? extra.pitches : analysis.pitches,
+          }
+          if (enrich.notice) geminiNotice = geminiNotice ? `${geminiNotice} ${enrich.notice}` : enrich.notice
+        }
       }
+    } else {
+      degraded = true
     }
   }
 
   if (!usable(analysis)) {
-    const err = full.ok
+    const err = compact.ok
       ? 'The AI could not read enough from that page. Try the homepage address, or fill the workspace profile manually.'
-      : full.error
+      : compact.error
     // Even on AI failure, the user must keep what we learned (e.g. the corrected address).
     return NextResponse.json(
       { error: err, ...(notices.length ? { notice: notices.join(' ') } : {}) },
