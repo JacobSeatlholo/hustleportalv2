@@ -121,12 +121,12 @@ export default function Landing() {
               <Zap className="h-3 w-3 text-brand" /> The Business OS for South African businesses
             </div>
             <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-3">
-              Run your business<br />
-              <span className="text-brand">like a business.</span>
+              Tell us what you do.<br />
+              <span className="text-brand">We find your customers.</span>
             </h1>
             <p className="text-muted-foreground mt-4 text-lg">
-              Leads, clients, invoicing, tasks and finance in one professional system —
-              with an AI co-founder that knows your numbers. Free to start, working in minutes.
+              You tell us what you sell. Our AI finds verified leads near you and loads them
+              into your pipeline — ready to call, ready to close. Simple.
             </p>
             {refApplied && (
               <div className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs text-foreground mt-2">
@@ -138,7 +138,7 @@ export default function Landing() {
 
           <div className="grid sm:grid-cols-2 gap-3">
             {[
-              { icon: Target, title: 'AI Lead Finder', desc: 'Describe your ideal client — get matched, verified businesses' },
+              { icon: Target, title: 'AI Lead Finder', desc: 'Tell us what you sell — verified leads, loaded into your pipeline' },
               { icon: Wallet, title: 'Pay-per-reveal credits', desc: 'Reveal real contacts only when you need them. No monthly lock-in.' },
               { icon: Users, title: 'Team workspace', desc: 'Share pipelines, tasks and clients with your team' },
               { icon: BrainCircuit, title: 'AI Co-Founder', desc: 'Plans, pricing and follow-ups grounded in your live data' },

@@ -29,7 +29,9 @@ export default function TasksView() {
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState('MEDIUM')
   const [isPrivate, setIsPrivate] = useState(false)
-  const [teamId, setTeamId] = useState<string>('personal')
+  // Where does this task belong? 'personal' = private to me · 'business' = workspace-shared
+  // (no team, not private) · otherwise the team's id.
+  const [dest, setDest] = useState<string>('personal')
   const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
@@ -58,21 +60,23 @@ export default function TasksView() {
     if (!title.trim()) return
     setAdding(true)
     try {
-      const isTeam = teamId !== 'personal'
+      const isTeam = dest !== 'personal' && dest !== 'business'
       await api('/api/tasks', {
         method: 'POST',
         body: JSON.stringify({
           title,
           priority,
           dueDate: dueDate || null,
-          isPrivate: !isTeam && isPrivate,
-          teamId: isTeam ? teamId : null,
+          isPrivate: dest === 'personal' && isPrivate,
+          teamId: isTeam ? dest : null,
           assigneeId: isTeam && assigneeId !== 'me' ? assigneeId : session?.user.id,
         }),
       })
       setTitle('')
       setDueDate('')
-      toast({ title: isTeam ? 'Shared with the team' : 'Task added' })
+      toast({
+        title: dest === 'personal' ? 'Task added' : dest === 'business' ? 'Business task added' : 'Shared with the team',
+      })
       load()
       bumpRefresh()
     } catch (e) {
@@ -104,7 +108,7 @@ export default function TasksView() {
 
   const open = tasks.filter((t) => t.status !== 'DONE')
   const done = tasks.filter((t) => t.status === 'DONE')
-  const teamMembers = teams.find((t) => t.id === teamId)?.members || []
+  const teamMembers = teams.find((t) => t.id === dest)?.members || []
 
   return (
     <div className="space-y-4">
@@ -145,16 +149,17 @@ export default function TasksView() {
               placeholder="Add a task… e.g. Follow up with Nkosi Brands"
               className="flex-1 min-w-[160px]"
             />
-            <Select value={teamId} onValueChange={setTeamId}>
-              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <Select value={dest} onValueChange={setDest}>
+              <SelectTrigger className="w-[150px]" aria-label="Task list"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="personal">Personal</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
                 {teams.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {teamId !== 'personal' && (
+            {dest !== 'personal' && dest !== 'business' && (
               <Select value={assigneeId} onValueChange={setAssigneeId}>
                 <SelectTrigger className="w-[150px]"><SelectValue placeholder="Assignee" /></SelectTrigger>
                 <SelectContent>
@@ -174,7 +179,7 @@ export default function TasksView() {
                 ))}
               </SelectContent>
             </Select>
-            {teamId === 'personal' && (
+            {dest === 'personal' && (
               <label className="flex items-center gap-1.5 text-sm text-muted-foreground px-1">
                 <Checkbox checked={isPrivate} onCheckedChange={(c) => setIsPrivate(c === true)} /> Private
               </label>
@@ -250,6 +255,7 @@ function TaskRow({ task, onToggle, onRemove, currentUserId }: {
             {task.priority === 'HIGH' && <Badge variant="destructive" className="text-[10px] h-4">High</Badge>}
             {task.priority === 'LOW' && <Badge variant="secondary" className="text-[10px] h-4">Low</Badge>}
             {task.team && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {task.team.name}</span>}
+            {!task.team && !task.isPrivate && <Badge variant="secondary" className="text-[10px] h-4">Business</Badge>}
             {task.isPrivate && <span className="text-[10px]">🔒 private</span>}
             {task.assignee && task.assignee.id !== currentUserId && <span>→ {task.assignee.name}</span>}
             {task.creatorId !== currentUserId && task.assignee?.id === currentUserId && <span>from {task.creator.name}</span>}

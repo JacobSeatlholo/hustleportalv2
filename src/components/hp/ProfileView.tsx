@@ -13,13 +13,15 @@ import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
 import CityField from './CityField'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch } from 'lucide-react'
+import PwaNotifications from './PwaNotifications'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell } from 'lucide-react'
 
 interface TeamInfo {
   id: string
   name: string
   role: string
   members: { id: string; name: string; email: string; role: string }[]
+  pending?: { id: string; email: string }[]
 }
 
 interface UrlAnalysis {
@@ -151,15 +153,33 @@ export default function ProfileView() {
     if (!inviteEmail.trim()) return
     setBusyTeam(true)
     try {
-      await api('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'invite', teamId, email: inviteEmail }) })
+      const res = await api<{ added?: boolean; invited?: boolean }>('/api/teams', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'invite', teamId, email: inviteEmail }),
+      })
       const r = await api<{ teams: TeamInfo[] }>('/api/teams')
       setTeams(r.teams)
       setInviteEmail('')
-      toast({ title: 'Teammate added to your team' })
+      toast(
+        res.added
+          ? { title: 'Teammate added to your team', description: 'They got an email with the news — shared tasks are live for them now.' }
+          : { title: 'Invitation sent', description: 'The moment they register with this email, they land in your team automatically.' }
+      )
     } catch (e) {
       toast({ title: 'Invite failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setBusyTeam(false)
+    }
+  }
+
+  async function cancelInvite(inviteId: string) {
+    try {
+      await api(`/api/teams?inviteId=${inviteId}`, { method: 'DELETE' })
+      const r = await api<{ teams: TeamInfo[] }>('/api/teams')
+      setTeams(r.teams)
+      toast({ title: 'Invite cancelled' })
+    } catch {
+      toast({ title: 'Could not cancel invite', variant: 'destructive' })
     }
   }
 
@@ -638,23 +658,50 @@ export default function ProfileView() {
                           {m.name} <span className="text-xs">({m.email})</span>
                         </div>
                       ))}
+                      {(t.pending || []).map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 text-sm text-muted-foreground/70">
+                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px]">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          </div>
+                          <span className="truncate">{p.email}</span>
+                          <span className="text-[10px] uppercase tracking-wide">pending</span>
+                          {t.role === 'OWNER' && (
+                            <button onClick={() => cancelInvite(p.id)} className="ml-auto text-xs hover:text-red-500 transition">cancel</button>
+                          )}
+                        </div>
+                      ))}
                     </div>
                     {t.role === 'OWNER' && (
-                      <div className="flex gap-2">
-                        <Input
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          placeholder="teammate@email.co.za"
-                          className="flex-1"
-                        />
-                        <Button variant="outline" onClick={() => invite(t.id)} disabled={busyTeam || !inviteEmail.trim()}>
-                          <UserPlus className="h-4 w-4 mr-1" /> Invite
-                        </Button>
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <Input
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                            placeholder="teammate@email.co.za"
+                            className="flex-1"
+                          />
+                          <Button variant="outline" onClick={() => invite(t.id)} disabled={busyTeam || !inviteEmail.trim()}>
+                            <UserPlus className="h-4 w-4 mr-1" /> Add member
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Already on HustlePortal? Added instantly. Not yet? They get an email — registering with this address drops them straight into your team.
+                        </p>
                       </div>
                     )}
                   </div>
                 ))
               )}
+            </CardContent>
+          </Card>
+
+          {/* Push notifications (installed app) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><Bell className="h-4 w-4" /> Notifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PwaNotifications />
             </CardContent>
           </Card>
         </div>

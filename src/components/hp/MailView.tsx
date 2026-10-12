@@ -21,6 +21,7 @@ const GOALS = [
 interface MailStatus {
   platformConfigured: boolean
   fromAddress: string
+  sendingAs?: string
   sendingDomain: string
   domainStatus: 'verified' | 'pending' | 'not_started' | 'failed' | 'unknown'
   domains: { name: string; status: string }[]
@@ -138,7 +139,11 @@ export default function MailView() {
     if (!mailStatus.platformConfigured) {
       return 'HustlePortal mail engine is warming up — connect Gmail under Integrations to send in the meantime.'
     }
-    if (engineReady) return `Email ready — goes out from ${mailStatus.fromAddress}. Replies route to your inbox.`
+    if (engineReady) {
+      return mailStatus.sendingAs
+        ? `Email ready — goes out from ${mailStatus.sendingAs} (your business's own address). Replies route to your inbox.`
+        : `Email ready — goes out from ${mailStatus.fromAddress}. Replies route to your inbox.`
+    }
     return `${mailStatus.sendingDomain} is verifying in Resend — your sends work to your own inbox meanwhile and open up to everyone the moment verification completes. Nothing for you to configure.`
   })()
 

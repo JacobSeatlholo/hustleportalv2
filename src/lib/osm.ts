@@ -136,7 +136,7 @@ export function buildNominatimQuery(definition: string): { kv?: { key: string; v
   return {}
 }
 
-function overpassQuery(place: { areaId?: number; lat?: number; lon?: number }, tagFilters: { key: string; regex: string }[], limit: number): string {
+function overpassQuery(place: { areaId?: number; lat?: number; lon?: number }, tagFilters: { key: string; regex: string }[], limit: number, useGpsPin = false): string {
   const filters = tagFilters.length
     ? tagFilters.map((t) => `nwr["name"]["${t.key}"~"${t.regex}",i](around.RADIUS,LAT,LON);`)
     : [
@@ -156,7 +156,8 @@ ${filters.map((f) => f.replace(/\(around\.RADIUS,LAT,LON\)/g, '(area.searchArea)
 );
 out tags center ${Math.max(limit * 6, 60)};`
   }
-  const radius = 8000 // metros/townships: 8 km around the resolved pin
+  // GPS pin → tight 5 km around the user's real position; city geocode → 8 km metro default
+  const radius = useGpsPin ? 5000 : 8000
   return `[out:json][timeout:25];
 (
 ${filters.map((f) => f.replace('RADIUS', String(radius)).replace('LAT', String(place.lat)).replace('LON', String(place.lon))).join('\n')}
@@ -237,7 +238,7 @@ export async function searchOsmLeads(
   area: string,
   definition: string,
   limit: number,
-  opts?: { deadlineAt?: number }
+  opts?: { deadlineAt?: number; lat?: number; lng?: number }
 ): Promise<{ leads: OsmLead[]; note?: string }> {
   // Wall-clock budget: the mirror chain (3 endpoints × up to 30s) + generic sweep
   // + Nominatim fallback can stack past any caller's timeout. Every stage checks
@@ -247,7 +248,12 @@ export async function searchOsmLeads(
   if (remaining() < 15_000) {
     return { leads: [], note: 'The map directory was out of time budget — try again in a minute.' }
   }
-  const place = await geocodePlace(area)
+  // GPS pin from the client skips Nominatim entirely — a 5 km radius around the
+  // real position beats geocoding a city name the user may have typed loosely.
+  const place =
+    opts?.lat !== undefined && opts?.lng !== undefined
+      ? { lat: opts.lat, lon: opts.lng }
+      : await geocodePlace(area)
   if (!place) return { leads: [], note: `Could not map "${area}" to a map area — check the spelling.` }
 
   const tagFilters = buildTagFilters(definition).tags
@@ -272,11 +278,11 @@ export async function searchOsmLeads(
     return { ok: false, status: 503 }
   }
   try {
-    let result = await runOverpass(overpassQuery(place, tagFilters, limit))
+    let result = await runOverpass(overpassQuery(place, tagFilters, limit, opts?.lat !== undefined))
     // Category too narrow for this area (common in townships) → one generic sweep of
     // ALL named businesses. Still 100% real directory data. Only while budget lasts.
     if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0 && remaining() > 20_000) {
-      result = await runOverpass(overpassQuery(place, [], limit))
+      result = await runOverpass(overpassQuery(place, [], limit, opts?.lat !== undefined))
     }
     if (!result.ok) {
       // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's

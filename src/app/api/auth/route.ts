@@ -101,7 +101,26 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error('[auth] welcome email failed for', normalized, e)
       }
-      return NextResponse.json({ ok: true })
+      // Seamless teams: any pending invites for this email attach the new account
+      // to those teams automatically — no "ask them to register first, then invite".
+      const joinedTeams: string[] = []
+      try {
+        const pending = await db.teamInvite.findMany({
+          where: { email: normalized, acceptedAt: null },
+          include: { team: { select: { name: true } } },
+        })
+        for (const inv of pending) {
+          const already = await db.teamMember.findUnique({
+            where: { teamId_userId: { teamId: inv.teamId, userId: user.id } },
+          })
+          if (!already) {
+            await db.teamMember.create({ data: { teamId: inv.teamId, userId: user.id, role: inv.role } })
+            joinedTeams.push(inv.team.name)
+          }
+          await db.teamInvite.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } })
+        }
+      } catch { /* team attach must never block registration */ }
+      return NextResponse.json({ ok: true, joinedTeams })
     }
 
     if (action === 'login') {

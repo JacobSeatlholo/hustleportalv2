@@ -50,6 +50,8 @@ model User {
   referralsMade      Referral[]    @relation("Referrer")
   referralsReceived  Referral[]    @relation("Invitee")
   waMessages         WaMessage[]
+  inventoryItems     InventoryItem[]
+  pushSubs           PushSubscription[]
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============
@@ -93,6 +95,7 @@ model Team {
   members TeamMember[]
   tasks   Task[]
   leads   Lead[]
+  invites TeamInvite[]
 }
 
 model TeamMember {
@@ -105,6 +108,23 @@ model TeamMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+}
+
+// Pending teammate invitations — emails invited before they have an account.
+// When someone registers with a invited email they are attached to the team automatically.
+model TeamInvite {
+  id          String    @id @default(cuid())
+  teamId      String
+  email       String    // lowercased at creation
+  role        String    @default("MEMBER")
+  invitedById String
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([email])
 }
 
 // ============ LEADS / CRM ============
@@ -458,4 +478,41 @@ model Referral {
 
   @@index([referrerId])
   @@index([invitedUserId])
+}
+
+// ============ INVENTORY (stock management) ============
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  sku         String?  // stock code / barcode
+  quantity    Float    @default(0)
+  unit        String?  // "units", "kg", "litres"…
+  costPrice   Float    @default(0) // rands per unit
+  sellPrice   Float    @default(0) // rands per unit
+  lowStockAt  Float    @default(0) // alert when quantity <= this
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============ PUSH NOTIFICATIONS (installed PWA) ============
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique // push service URL — one row per device
+  p256dh    String   // subscription keys
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

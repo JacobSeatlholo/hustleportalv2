@@ -23,12 +23,15 @@ export default function CityField({
   label = 'City',
   placeholder = 'Type your city, township or suburb…',
   hint = 'Chips are shortcuts — you can type any city, township or suburb, or tag your location.',
+  /** Optional: fires with the tagged GPS position (cleared with null when the value is edited). */
+  onCoords,
 }: {
   value: string
   onChange: (v: string) => void
   label?: string
   placeholder?: string
   hint?: string
+  onCoords?: (c: { lat: number; lng: number } | null) => void
 }) {
   const { toast } = useToast()
   const [locating, setLocating] = useState(false)
@@ -47,6 +50,7 @@ export default function CityField({
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
         try {
           const res = await fetch(
             `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude.toFixed(4)}&longitude=${pos.coords.longitude.toFixed(4)}&localityLanguage=en`,
@@ -54,6 +58,7 @@ export default function CityField({
           )
           const data = (await res.json()) as { city?: string; locality?: string; principalSubdivision?: string }
           const city = (data.city || data.locality || '').trim()
+          onCoords?.(coords)
           if (!city) throw new Error('no city')
           setProposal(
             data.principalSubdivision && !city.includes(data.principalSubdivision)
@@ -61,10 +66,13 @@ export default function CityField({
               : city
           )
         } catch {
+          // Reverse geocode failed, but the GPS fix itself is good — hand the raw
+          // coordinates up (Lead Finder searches a 5 km radius around the pin).
+          onCoords?.(coords)
+          setLocating(false)
           toast({
-            title: 'Could not read your city',
-            description: 'Location worked but the lookup failed — type your city instead.',
-            variant: 'destructive',
+            title: 'Location tagged',
+            description: 'We have your GPS position. If the city name looks wrong, just type it.',
           })
         } finally {
           setLocating(false)
@@ -92,6 +100,7 @@ export default function CityField({
             type="button"
             onClick={() => {
               setProposal(null)
+              onCoords?.(null)
               onChange(c)
             }}
             className={`text-xs px-2 py-1 rounded-full border transition ${
@@ -107,6 +116,7 @@ export default function CityField({
           type="button"
           onClick={() => {
             setProposal(null)
+            onCoords?.(null)
             if (QUICK_CITIES.includes(value)) onChange('')
             inputRef.current?.focus()
           }}
@@ -126,6 +136,7 @@ export default function CityField({
           value={value}
           onChange={(e) => {
             setProposal(null)
+            onCoords?.(null)
             onChange(e.target.value)
           }}
           placeholder={placeholder}

@@ -8,6 +8,7 @@ export type ViewKey =
   | 'leads'
   | 'clients'
   | 'tasks'
+  | 'inventory'
   | 'finance'
   | 'ai'
   | 'mail'

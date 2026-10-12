@@ -32,6 +32,7 @@ export default function LeadsView() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [scope, setScope] = useState<'all' | 'mine' | 'team'>('all')
+  const [stageFilter, setStageFilter] = useState<string>('ALL')
   const [q, setQ] = useState('')
 
   // dialogs
@@ -110,6 +111,8 @@ export default function LeadsView() {
   }
 
   const pipelineValue = leads.filter((l) => !['WON', 'LOST'].includes(l.stage)).reduce((a, l) => a + l.value, 0)
+  const filteredLeads = stageFilter === 'ALL' ? leads : leads.filter((l) => l.stage === stageFilter)
+  const visibleStages = stageFilter === 'ALL' ? STAGES : STAGES.filter((s) => s.key === stageFilter)
 
   return (
     <div className="space-y-4">
@@ -149,6 +152,15 @@ export default function LeadsView() {
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search company…" className="pl-9" />
         </div>
+        <Select value={stageFilter} onValueChange={setStageFilter}>
+          <SelectTrigger className="w-[170px]" aria-label="Filter by stage"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All stages</SelectItem>
+            {STAGES.map((s) => (
+              <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button variant="ghost" size="icon" onClick={load} title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
       </div>
 
@@ -157,8 +169,8 @@ export default function LeadsView() {
         <div className="flex gap-3 overflow-hidden">{[...Array(4)].map((_, i) => <Skeleton key={i} className="kanban-col h-72 rounded-xl" />)}</div>
       ) : view === 'kanban' ? (
         <div className="flex gap-3 overflow-x-auto hp-scroll pb-3">
-          {STAGES.map((s) => {
-            const items = leads.filter((l) => l.stage === s.key)
+          {visibleStages.map((s) => {
+            const items = filteredLeads.filter((l) => l.stage === s.key)
             return (
               <div key={s.key} className="kanban-col shrink-0">
                 <div className="flex items-center justify-between px-1 py-2">
@@ -186,7 +198,7 @@ export default function LeadsView() {
         <Card>
           <CardContent className="p-0">
             <div className="divide-y">
-              {leads.map((l) => (
+              {filteredLeads.map((l) => (
                 <button key={l.id} className="w-full text-left p-4 hover:bg-muted/40 flex items-center gap-4" onClick={() => setDetail(l)}>
                   <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
                     {l.company.slice(0, 1).toUpperCase()}
@@ -199,7 +211,7 @@ export default function LeadsView() {
                   <span className="text-sm font-medium w-20 text-right">{l.value > 0 ? randsPlain(l.value) : '—'}</span>
                 </button>
               ))}
-              {leads.length === 0 && (
+              {filteredLeads.length === 0 && (
                 <div className="p-10 text-center text-sm text-muted-foreground">No leads found.</div>
               )}
             </div>
@@ -308,35 +320,93 @@ interface DiscoverResult {
 
 type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'NONE'
 
+const DISCOVER_STEPS = [
+  'Scanning the live web for real businesses…',
+  'Checking public directories near you…',
+  'Pulling websites, phone numbers and emails…',
+  'Verifying every business is real…',
+  'Ranking the best fits for you…',
+]
+
 function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
   const { session } = useHp()
   const { toast } = useToast()
   const [definition, setDefinition] = useState('')
   const [city, setCity] = useState(session?.user.city || '')
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [limit, setLimit] = useState('10')
   const [busy, setBusy] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [step, setStep] = useState(0)
   const [results, setResults] = useState<DiscoverResult[]>([])
   const [mode, setMode] = useState<DiscoverMode>('NONE')
   const [resSource, setResSource] = useState('WEB')
   const [note, setNote] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  // Seamless by default: finds land in the pipeline the moment the search answers.
+  // Persisted so the user chooses once and the app remembers.
+  const [autoAdd, setAutoAdd] = useState(true)
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    try { setAutoAdd(localStorage.getItem('hp_discover_autoadd') !== '0') } catch { /* default on */ }
+  }, [])
+
+  // Engagement loop while the search runs: rotating status + a live seconds counter
+  // (the honest search can take up to ~40s — silence would feel like a hang).
+  useEffect(() => {
+    if (!busy) { setElapsed(0); setStep(0); return }
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000)
+    const s = setInterval(() => setStep((i) => (i + 1) % DISCOVER_STEPS.length), 4000)
+    return () => { clearInterval(t); clearInterval(s) }
+  }, [busy])
+
+  async function saveLeads(list: DiscoverResult[]) {
+    let added = 0
+    for (const r of list) {
+      await api('/api/leads', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...r,
+          country: 'South Africa',
+          source: resSource,
+          // Contact details the search itself surfaced are real public info — free, like manual capture.
+          unlocked: Boolean(r.email || r.phone),
+        }),
+      })
+      added++
+    }
+    return added
+  }
 
   async function search() {
     // Empty description is allowed — the server then scouts from the saved profile
     // (website, offerings, city) and returns REAL businesses as a free teaser.
     setBusy(true)
     setResults([])
+    setAddedKeys(new Set())
     try {
       const res = await api<{ leads: DiscoverResult[]; mode: DiscoverMode; source?: string; note?: string }>('/api/leads/discover', {
         method: 'POST',
-        body: JSON.stringify({ definition, city, limit: parseInt(limit) }),
+        body: JSON.stringify({
+          definition,
+          city,
+          limit: parseInt(limit),
+          ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+        }),
       })
       setResults(res.leads)
       setMode(res.mode)
       setResSource(res.source || (res.mode === 'LIVE' ? 'EXPLEE' : 'WEB'))
       setNote(res.note || '')
       setSelected(new Set(res.leads.map((l) => l.company)))
+      if (autoAdd && res.leads.length > 0) {
+        const added = await saveLeads(res.leads)
+        setAddedKeys(new Set(res.leads.map((l) => l.company)))
+        toast({ title: `${added} lead${added === 1 ? '' : 's'} added to your pipeline`, description: 'They are waiting in Leads & Pipeline — start with the best fit.' })
+        onSaved()
+      }
     } catch (e) {
       toast({ title: 'Search failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -347,22 +417,10 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   async function saveSelected() {
     setSaving(true)
     try {
-      let added = 0
-      for (const r of results) {
-        if (!selected.has(r.company)) continue
-        await api('/api/leads', {
-          method: 'POST',
-          body: JSON.stringify({
-            ...r,
-            country: 'South Africa',
-            source: resSource,
-            // Contact details the search itself surfaced are real public info — free, like manual capture.
-            unlocked: Boolean(r.email || r.phone),
-          }),
-        })
-        added++
-      }
-      toast({ title: `${added} leads added to your pipeline` })
+      const picked = results.filter((r) => selected.has(r.company) && !addedKeys.has(r.company))
+      const added = await saveLeads(picked)
+      setAddedKeys((prev) => new Set([...prev, ...picked.map((r) => r.company)]))
+      toast({ title: `${added} lead${added === 1 ? '' : 's'} added to your pipeline` })
       onOpenChange(false)
       setResults([])
       setDefinition('')
@@ -394,11 +452,17 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             />
           </div>
           <CityField
-            label="City focus"
+            label="Location focus"
             value={city}
             onChange={setCity}
-            hint="Type any city, township or suburb — or tag your location. Leave empty to search all of SA."
+            onCoords={setCoords}
+            hint="Type any city, township or suburb — or tap Tag location to search a 5 km radius around you. Leave empty to search all of SA."
           />
+          {coords && (
+            <p className="text-xs text-emerald-600 bg-emerald-500/10 rounded-lg p-2 flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5" /> Searching within 5 km of your GPS location{city ? ` (${city})` : ''}.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>How many</Label>
@@ -414,12 +478,43 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           </div>
           <Button onClick={search} disabled={busy} className="w-full">
             {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
-            {busy ? 'Searching the live web…' : definition.trim() ? 'Find leads' : 'Scout real leads from my profile'}
+            {busy ? `Searching… ${elapsed}s` : definition.trim() ? 'Find leads' : 'Scout real leads from my profile'}
           </Button>
-          {!definition.trim() && (
+
+          {/* Engagement while the (honest, up-to-~40s) search runs — never a silent hang */}
+          {busy && (
+            <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 space-y-2" aria-live="polite">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Loader2 className="h-4 w-4 animate-spin text-brand" />
+                {DISCOVER_STEPS[step]}
+              </div>
+              <div className="h-1.5 rounded-full bg-brand/15 overflow-hidden">
+                <div className="h-full bg-brand rounded-full animate-pulse" style={{ width: `${Math.min(92, 12 + elapsed * 2.5)}%` }} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {elapsed}s so far — the AI is reading live search results, not a cached list. Real businesses take a moment.
+              </p>
+            </div>
+          )}
+          {!busy && !definition.trim() && (
             <p className="text-[11px] text-muted-foreground text-center">
               Uses your saved website &amp; profile to find a few REAL businesses in your area — free.
             </p>
+          )}
+
+          {!busy && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoAdd}
+                onChange={(e) => {
+                  setAutoAdd(e.target.checked)
+                  try { localStorage.setItem('hp_discover_autoadd', e.target.checked ? '1' : '0') } catch { /* private mode */ }
+                }}
+                className="h-4 w-4 accent-brand"
+              />
+              Add found leads to my pipeline automatically
+            </label>
           )}
 
           {note && (
@@ -429,38 +524,55 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           {results.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>{results.length} matches found</span>
+                <span>
+                  {results.length} matches found
+                  {autoAdd && <span className="text-emerald-600 font-medium"> · already in your pipeline</span>}
+                </span>
                 <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : mode === 'OSM' ? 'bg-sky-500/15 text-sky-400' : 'bg-brand/20 text-brand'}>
                   {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : 'Verified data'}
                 </Badge>
               </div>
               <div className="max-h-64 overflow-y-auto hp-scroll space-y-1.5">
-                {results.map((r) => (
-                  <label key={r.company} className="flex items-start gap-3 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/40">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(r.company)}
-                      onChange={(e) => {
-                        const next = new Set(selected)
-                        if (e.target.checked) next.add(r.company)
-                        else next.delete(r.company)
-                        setSelected(next)
-                      }}
-                      className="h-4 w-4 accent-brand mt-0.5"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{r.company}</div>
-                      <div className="text-xs text-muted-foreground">{r.industry || 'Business'} · {r.city || 'SA'}</div>
-                      {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
-                      {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
-                    </div>
-                    {r.score != null && <Badge variant="outline" className="text-[10px] mt-0.5">fit {r.score}/5</Badge>}
-                  </label>
-                ))}
+                {results.map((r) => {
+                  const alreadyIn = addedKeys.has(r.company)
+                  return (
+                    <label key={r.company} className={`flex items-start gap-3 rounded-lg border p-2.5 ${alreadyIn ? 'border-emerald-500/40 bg-emerald-500/5' : 'cursor-pointer hover:bg-muted/40'}`}>
+                      <input
+                        type="checkbox"
+                        checked={alreadyIn || selected.has(r.company)}
+                        disabled={alreadyIn}
+                        onChange={(e) => {
+                          const next = new Set(selected)
+                          if (e.target.checked) next.add(r.company)
+                          else next.delete(r.company)
+                          setSelected(next)
+                        }}
+                        className="h-4 w-4 accent-brand mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{r.company}</div>
+                        <div className="text-xs text-muted-foreground">{r.industry || 'Business'} · {r.city || 'SA'}</div>
+                        {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
+                        {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
+                        <div className="flex gap-2 mt-1 text-[11px]">
+                          {r.phone && <span className="text-muted-foreground">☎ {r.phone}</span>}
+                          {r.email && <span className="text-muted-foreground truncate">✉ {r.email}</span>}
+                        </div>
+                      </div>
+                      {alreadyIn ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-600 text-[10px] mt-0.5">✓ in pipeline</Badge>
+                      ) : r.score != null ? (
+                        <Badge variant="outline" className="text-[10px] mt-0.5">fit {r.score}/5</Badge>
+                      ) : null}
+                    </label>
+                  )
+                })}
               </div>
-              <Button onClick={saveSelected} disabled={saving || selected.size === 0} className="w-full">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Add ${selected.size} leads to pipeline`}
-              </Button>
+              {addedKeys.size < results.length && (
+                <Button onClick={saveSelected} disabled={saving || selected.size === 0} className="w-full">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Add ${selected.size} leads to pipeline`}
+                </Button>
+              )}
             </div>
           )}
         </div>

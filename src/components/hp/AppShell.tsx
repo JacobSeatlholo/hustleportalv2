@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { useHp, type ViewKey } from './store'
 import { api, rands } from './shared'
 import DashboardView from './DashboardView'
@@ -23,12 +26,15 @@ import InvoicesView from './InvoicesView'
 import ReportsView from './ReportsView'
 import IntegrationsView from './IntegrationsView'
 import GrowView from './GrowView'
+import InventoryView from './InventoryView'
 import WelcomeTour from './WelcomeTour'
 import InstallApp from './InstallApp'
+import PwaNotifications from './PwaNotifications'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
+  Boxes, LayoutGrid,
 } from 'lucide-react'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
@@ -36,6 +42,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'leads', label: 'Leads & CRM', icon: <Target className="h-4 w-4" /> },
   { key: 'clients', label: 'Clients', icon: <Users className="h-4 w-4" /> },
   { key: 'tasks', label: 'Tasks', icon: <ListTodo className="h-4 w-4" /> },
+  { key: 'inventory', label: 'Inventory', icon: <Boxes className="h-4 w-4" /> },
   { key: 'calendar', label: 'Calendar', icon: <CalendarDays className="h-4 w-4" /> },
   { key: 'invoices', label: 'Invoices', icon: <ReceiptText className="h-4 w-4" /> },
   { key: 'finance', label: 'Finance', icon: <TrendingUp className="h-4 w-4" /> },
@@ -51,6 +58,16 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Profile & Team', icon: <UserCog className="h-4 w-4" /> },
 ]
 
+/** Thumb-reach bottom bar (phones only): the 4 most-used views + More → opens the full menu. */
+const BOTTOM_NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'dashboard', label: 'Home', icon: <LayoutDashboard className="h-5 w-5" /> },
+  { key: 'leads', label: 'Leads', icon: <Target className="h-5 w-5" /> },
+  { key: 'tasks', label: 'Tasks', icon: <ListTodo className="h-5 w-5" /> },
+  { key: 'invoices', label: 'Invoices', icon: <ReceiptText className="h-5 w-5" /> },
+]
+
+const TILT_TIP_KEY = 'hp_tilt_tip_dismissed'
+
 // XP level that nudges the user to link their Yoco card
 const CARD_LINK_XP_LEVEL = 3 // Operator level @ 300 XP
 const CARD_BANNER_KEY = 'hp_card_banner_dismissed'
@@ -59,11 +76,32 @@ export default function AppShell() {
   const { session, view, setView, logout, loadSession } = useHp()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cardBannerDismissed, setCardBannerDismissed] = useState(true)
+  const [showTiltTip, setShowTiltTip] = useState(false)
 
   useEffect(() => {
     queueMicrotask(() => {
       setCardBannerDismissed(localStorage.getItem(CARD_BANNER_KEY) === '1')
     })
+  }, [])
+
+  // Push notifications: register the service worker once per session.
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+  }, [])
+
+  // One-time reachability tip (installed app on a phone): the user asked for a
+  // prompt suggesting the tilt trick — but the honest fix is the bottom menu bar.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const standalone = window.matchMedia('(display-mode: standalone)').matches
+        const phone = window.matchMedia('(max-width: 767px)').matches
+        if (standalone && phone && localStorage.getItem(TILT_TIP_KEY) !== '1') setShowTiltTip(true)
+      } catch { /* private mode — skip the tip */ }
+    }, 4000)
+    return () => clearTimeout(t)
   }, [])
 
   // wallet navigation from anywhere + tour replay
@@ -111,6 +149,7 @@ export default function AppShell() {
       case 'leads': return <LeadsView />
       case 'clients': return <ClientsView />
       case 'tasks': return <TasksView />
+      case 'inventory': return <InventoryView />
       case 'finance': return <FinanceView />
       case 'ai': return <AiView />
       case 'mail': return <MailView />
@@ -165,10 +204,10 @@ export default function AppShell() {
 
       {/* Main */}
       <div className="flex-1 md:ml-60 min-w-0 flex flex-col">
-        {/* Topbar */}
-        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSidebarOpen(true)}>
+        {/* Topbar — taller touch targets + safe-area padding so nothing hides under a notch */}
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <div className="flex items-center gap-2 px-3 py-2.5 min-h-[56px]">
+            <Button variant="ghost" size="icon" className="md:hidden h-11 w-11" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
             <div className="font-display text-lg md:hidden">
@@ -178,14 +217,14 @@ export default function AppShell() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setView('wallet')}
-                className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
+                className="rounded-full border bg-card px-3.5 min-h-[40px] text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
               >
                 <Wallet className="h-3.5 w-3.5 text-brand" />
                 {rands(session.wallet.balance)}
               </button>
               <button
                 onClick={() => setView('profile')}
-                className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
+                className="rounded-full border bg-card px-3.5 min-h-[40px] text-xs font-medium hover:border-brand transition flex items-center gap-1.5"
                 title={`${session.level.name} · ${session.user.xp} XP`}
               >
                 <span>{session.level.icon}</span>
@@ -218,11 +257,70 @@ export default function AppShell() {
           )}
         </header>
 
-        <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">
+        <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto pb-24 md:pb-6">
           {content}
         </main>
 
         <WelcomeTour />
+
+        {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons
+            being out of comfortable reach on tall screens. */}
+        <nav
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          aria-label="Main menu"
+        >
+          <div className="grid grid-cols-5">
+            {BOTTOM_NAV.map((n) => (
+              <button
+                key={n.key}
+                onClick={() => setView(n.key)}
+                className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition min-h-[56px] justify-center ${
+                  view === n.key ? 'text-brand' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {n.icon}
+                {n.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition min-h-[56px] justify-center ${
+                BOTTOM_NAV.some((n) => n.key === view) ? 'text-muted-foreground hover:text-foreground' : 'text-brand'
+              }`}
+            >
+              <LayoutGrid className="h-5 w-5" />
+              More
+            </button>
+          </div>
+        </nav>
+
+        {/* One-time reachability tip — the user asked for the tilt trick prompt */}
+        <Dialog open={showTiltTip} onOpenChange={(o) => { if (!o) { localStorage.setItem(TILT_TIP_KEY, '1'); setShowTiltTip(false) } }}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> Quick tip for your phone</DialogTitle>
+              <DialogDescription>
+                If buttons at the top of the screen feel out of reach, tilt your screen back slightly — that usually does the trick.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm space-y-1.5">
+                <p className="font-medium">Even better: the menu is now at the bottom.</p>
+                <p className="text-muted-foreground text-[13px]">
+                  Home, Leads, Tasks and Invoices sit in the bar at the bottom of the screen — thumb distance on any phone.
+                  Tap <b>More</b> for the full menu, and hold-and-drag menu items to sort them your way.
+                </p>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => { localStorage.setItem(TILT_TIP_KEY, '1'); setShowTiltTip(false) }}
+              >
+                Got it
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <footer className="mt-auto border-t bg-background/60 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5">
@@ -504,6 +602,11 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
 
       <div className="px-3">
         <InstallApp />
+      </div>
+
+      {/* Push notifications opt-in (installed app) */}
+      <div className="px-3 mt-1">
+        <PwaNotifications compact />
       </div>
 
       {/* challenges mini-widget */}

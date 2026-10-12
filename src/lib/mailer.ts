@@ -38,6 +38,41 @@ const BRANDED_FROM = 'HustlePortal <noreply@hustleportal.online>'
 /** Resend's test sender — delivers to the account's own inbox while the domain verifies. */
 const SANDBOX_FROM = 'HustlePortal <onboarding@resend.dev>'
 
+/**
+ * Per-user sending identity — every business mails from ITS OWN address on our domain:
+ * "Nkosi Brands" → nkosi-brands@hustleportal.online. The domain is verified, Resend
+ * accepts any local part on it, and DKIM/SPF sign the send. Reply-To stays the user's
+ * real account email, so replies land in THEIR inbox (set in resendSend).
+ */
+export async function userSendingIdentity(userId: string): Promise<{ from: string; address: string; label: string }> {
+  try {
+    const [user, project] = await Promise.all([
+      db.user.findUnique({ where: { id: userId }, select: { name: true, businessName: true } }),
+      db.project.findFirst({
+        where: { userId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        select: { name: true },
+      }),
+    ])
+    const label = (project?.name || user?.businessName || user?.name || 'HustlePortal').trim().slice(0, 40)
+    const slug =
+      label
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 24)
+        .replace(/-+$/, '') || 'owner'
+    return {
+      from: `${label} via HustlePortal <${slug}@hustleportal.online>`,
+      address: `${slug}@hustleportal.online`,
+      label,
+    }
+  } catch {
+    return { from: BRANDED_FROM, address: 'noreply@hustleportal.online', label: 'HustlePortal' }
+  }
+}
+
 /** The domain sends are labelled from (RESEND_FROM wins if the operator set one). */
 export function sendingDomain(): string {
   const from = process.env.RESEND_FROM?.trim()
@@ -51,6 +86,8 @@ export type MailDomainRow = { name: string; status: string }
 export type MailStatus = {
   platformConfigured: boolean
   fromAddress: string
+  /** The user's own address on our domain, e.g. nkosi-brands@hustleportal.online */
+  sendingAs?: string
   sendingDomain: string
   domainStatus: 'verified' | 'pending' | 'not_started' | 'failed' | 'unknown'
   domains: MailDomainRow[]
@@ -173,9 +210,11 @@ export async function getMailStatus(userId: string): Promise<MailStatus> {
           ? 'pending'
           : 'unknown'
   const creds = await getUserMailCreds(userId)
+  const identity = await userSendingIdentity(userId)
   return {
     platformConfigured: !!apiKey,
-    fromAddress: process.env.RESEND_FROM?.trim() || BRANDED_FROM,
+    fromAddress: process.env.RESEND_FROM?.trim() || identity.from,
+    sendingAs: process.env.RESEND_FROM?.trim() ? undefined : identity.address,
     sendingDomain: domain,
     domainStatus: status,
     domains: rows,
@@ -336,7 +375,9 @@ async function sendViaPlatform(
         'Email is not switched on yet — HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
     }
   }
-  const branded = process.env.RESEND_FROM?.trim() || BRANDED_FROM
+  // USER mail goes out from the business's own identity on our domain; the
+  // RESEND_FROM env (operator override) still wins when explicitly set.
+  const branded = process.env.RESEND_FROM?.trim() || (await userSendingIdentity(userId)).from
   const first = await resendSend(apiKey, branded, userId, mail)
   if (first.ok) {
     // Branded from accepted → the domain IS verified at Resend. Prime the status

@@ -7,7 +7,7 @@ import AppShell from '@/components/hp/AppShell'
 import { useHp, type ViewKey } from '@/components/hp/store'
 
 const VALID_VIEWS: ViewKey[] = [
-  'dashboard', 'leads', 'clients', 'tasks', 'finance', 'ai', 'mail', 'calendar',
+  'dashboard', 'leads', 'clients', 'tasks', 'inventory', 'finance', 'ai', 'mail', 'calendar',
   'invoices', 'reports', 'integrations', 'store', 'resources', 'services',
   'wallet', 'grow', 'profile', 'admin',
 ]

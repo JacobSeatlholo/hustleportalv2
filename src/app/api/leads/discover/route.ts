@@ -68,6 +68,11 @@ export async function POST(req: NextRequest) {
   const cap = Math.min(Math.max(parseInt(body.limit) || 10, 1), 20)
   let definition = String(body.definition || '').trim()
   let city = String(body.city || '').trim()
+  // GPS radius mode: the client tags the user's live position (CityField "Tag location")
+  // and the search concentrates on businesses within ~5 km of that pin.
+  const lat = Number.isFinite(parseFloat(body.lat)) ? parseFloat(body.lat) : undefined
+  const lng = Number.isFinite(parseFloat(body.lng)) ? parseFloat(body.lng) : undefined
+  const hasPin = lat !== undefined && lng !== undefined && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -101,6 +106,9 @@ export async function POST(req: NextRequest) {
     )
   }
   const area = city && !/^anywhere/i.test(city) ? city : 'South Africa'
+  const pinArea = hasPin
+    ? `within a 5 km radius of GPS pin ${lat!.toFixed(4)},${lng!.toFixed(4)}${city ? ` (${city}, South Africa)` : ' (South Africa)'} — use the coordinates to reason about the neighbourhood, suburb and surrounding streets`
+    : null
 
   const buildSearch = () => ({
     search: true,
@@ -108,11 +116,11 @@ export async function POST(req: NextRequest) {
     system:
       'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live Google Search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number or email. When unsure, return fewer leads rather than risk a fake one. South African context first (townships, suburbs, metros).',
     prompt:
-      `Find up to ${cap} real businesses in ${area} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
+      `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
       `Rules:\n` +
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
-      `- Include the website when a result shows one.\n` +
-      `- Include phone/email ONLY when they appear in the results — never construct an address from a pattern.\n` +
+      `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
+      `- NEVER construct an address from a pattern — if the phone/email is not in the results, omit the field.\n` +
       `- "why" = one line on why THIS business likely needs the seller (reference what you saw).\n` +
       `- score = 1-5 fit for the seller.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
@@ -156,8 +164,8 @@ export async function POST(req: NextRequest) {
         mode: 'AI_SEARCH',
         source: 'WEB',
         note: teaser
-          ? `Scouted live from the web using your saved profile${city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
-          : 'Live web results grounded in Google Search — real, publicly findable businesses.',
+          ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
+          : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
       })
     }
   }
@@ -165,13 +173,16 @@ export async function POST(req: NextRequest) {
   // 2) FALLBACK A — OpenStreetMap: real, keyless directory listings (Gemini only
   //    helped translate the need into map tags; Overpass supplies the actual data).
   //    Only started when there is still runway (the chain needs ~15s of its own).
-  const osm = Date.now() - t0 < 35_000 ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000 }) : { leads: [], note: 'skipped — the web search used the time budget' }
+  //    With a GPS pin we search a tight 5 km radius around it instead of geocoding the city name.
+  const osm = Date.now() - t0 < 35_000
+    ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
+    : { leads: [], note: 'skipped — the web search used the time budget' }
   if (osm.leads.length > 0) {
     return NextResponse.json({
       leads: osm.leads,
       mode: 'OSM',
       source: 'OSM',
-      note: `Real businesses from the OpenStreetMap directory${area ? ` in ${area}` : ''} — publicly mappable, contact details as listed. Search grounding was busy, so these come from the map instead.`,
+      note: `Real businesses from the OpenStreetMap directory${pinArea ? ' within 5 km of your location' : area ? ` in ${area}` : ''} — publicly mappable, contact details as listed. Search grounding was busy, so these come from the map instead.`,
     })
   }
 
