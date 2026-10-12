@@ -28,7 +28,7 @@ interface RefsData {
 
 interface PlansData {
   plan: string
-  subscription: { plan: string; status: string; amountCents: number; renewsAt: string | null } | null
+  subscription: { plan: string; status: string; billingCycle?: string; amountCents: number; renewsAt: string | null; pausedUntil?: string | null } | null
 }
 
 const PLANS = [
@@ -36,11 +36,12 @@ const PLANS = [
     id: 'HUSTLER',
     name: 'Operator',
     price: 'R199',
+    annual: 'R1,990',
     tagline: 'For owner-operators building steady momentum.',
     icon: <Sparkles className="h-5 w-5 text-brand" />,
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '5 verified lead reveals every month',
+      '5 verified lead reveals every month — unused ones roll over',
       'Invoices, calendar, reports, exports',
       'R50 credit for every business owner you refer',
       'Your business listed in the public directory',
@@ -50,12 +51,13 @@ const PLANS = [
     id: 'BOSS',
     name: 'Boss',
     price: 'R499',
+    annual: 'R4,990',
     tagline: 'For teams ready to outscale the competition.',
     icon: <Crown className="h-5 w-5 text-brand" />,
     highlight: true,
     perks: [
       'Everything in Operator',
-      '10+ verified lead reveals every month',
+      '12 verified lead reveals every month — the best per-lead price, unused ones roll over',
       'Up to 5 team seats, shared pipeline',
       'Priority AI — faster, longer answers',
       'Founding Member badge',
@@ -71,6 +73,8 @@ export default function GrowView() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [subscribing, setSubscribing] = useState<string | null>(null)
+  const [cycle, setCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
+  const [planBusy, setPlanBusy] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -115,7 +119,7 @@ export default function GrowView() {
     try {
       const res = await api<{ ok: boolean; sandbox?: boolean; redirectUrl?: string }>('/api/subscribe', {
         method: 'POST',
-        body: JSON.stringify({ plan: planId }),
+        body: JSON.stringify({ plan: planId, cycle }),
       })
       if (res.redirectUrl) {
         window.location.href = res.redirectUrl
@@ -128,6 +132,23 @@ export default function GrowView() {
       toast({ title: 'Could not subscribe', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setSubscribing(null)
+    }
+  }
+
+  async function planAction(action: 'pause' | 'resume') {
+    setPlanBusy(action)
+    try {
+      const res = await api<{ ok: boolean; note?: string }>('/api/subscribe/pause', {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      })
+      toast({ title: action === 'pause' ? 'Plan paused' : 'Plan resumed', description: res.note || 'Your days are frozen, not lost.' })
+      bumpRefresh()
+      await load()
+    } catch (e) {
+      toast({ title: 'Could not update plan', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setPlanBusy(null)
     }
   }
 
@@ -197,18 +218,56 @@ export default function GrowView() {
           <h3 className="font-display text-lg">Go further, faster</h3>
           {active ? (
             <Badge className="bg-brand text-black hover:bg-brand">ACTIVE · {getPlan(active.plan)?.name || active.plan}</Badge>
+          ) : plans?.subscription?.status === 'PAUSED' ? (
+            <Badge variant="outline" className="border-amber-500/40 text-amber-500">PAUSED{plans.subscription.pausedUntil ? ` · resumes ${new Date(plans.subscription.pausedUntil).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}` : ''}</Badge>
           ) : (
             <Badge variant="outline">Free plan</Badge>
           )}
         </div>
-        {active && active.renewsAt && (
+        {(active || plans?.subscription?.status === 'PAUSED') && plans?.subscription?.renewsAt && (
           <p className="text-xs text-muted-foreground">
-            Renews {new Date(active.renewsAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })} · cancel anytime, your data stays yours.
+            Renews {new Date(plans.subscription.renewsAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })} · never auto-charged — you choose to renew · your data stays yours.
           </p>
         )}
+        {active && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={planBusy === 'pause'} onClick={() => planAction('pause')}>
+              {planBusy === 'pause' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Pause 30 days
+            </Button>
+            <span className="text-[11px] text-muted-foreground self-center">Dead season? Freeze your plan — every paid day is kept.</span>
+          </div>
+        )}
+        {plans?.subscription?.status === 'PAUSED' && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={planBusy === 'resume'} onClick={() => planAction('resume')}>
+              {planBusy === 'resume' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Resume now
+            </Button>
+            <span className="text-[11px] text-muted-foreground self-center">Resuming restores your plan instantly — no paid days lost.</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2 justify-center">
+          <div className="inline-flex rounded-lg border p-1">
+            <button
+              onClick={() => setCycle('MONTHLY')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${cycle === 'MONTHLY' ? 'bg-brand text-black' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setCycle('ANNUAL')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${cycle === 'ANNUAL' ? 'bg-brand text-black' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Annual · 2 months free
+            </button>
+          </div>
+        </div>
         <div className="grid md:grid-cols-2 gap-4">
           {PLANS.map((p) => {
-            const isCurrent = active?.plan === p.id
+            const isCurrent = plans?.subscription && ['ACTIVE', 'PAUSED'].includes(plans.subscription.status)
+              ? plans.subscription.plan === p.id : false
+            const isAnnual = cycle === 'ANNUAL'
             return (
               <div
                 key={p.id}
@@ -225,8 +284,8 @@ export default function GrowView() {
                     <p className="text-xs text-muted-foreground mt-1">{p.tagline}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-display text-2xl">{p.price}</div>
-                    <div className="text-[10px] text-muted-foreground">per month</div>
+                    <div className="font-display text-2xl">{isAnnual ? p.annual : p.price}</div>
+                    <div className="text-[10px] text-muted-foreground">{isAnnual ? 'per year — 2 months free' : 'per month'}</div>
                   </div>
                 </div>
                 <ul className="space-y-1.5">
@@ -239,17 +298,23 @@ export default function GrowView() {
                 </ul>
                 <Button
                   className="w-full bg-brand text-black hover:brightness-110 font-semibold"
-                  disabled={subscribing === p.id || isCurrent}
+                  disabled={subscribing === p.id || (isCurrent && plans?.subscription?.billingCycle === cycle)}
                   onClick={() => subscribe(p.id)}
                 >
-                  {subscribing === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isCurrent ? 'Current plan' : `Go ${p.name} — ${p.price}/mo`}
+                  {subscribing === p.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isCurrent && plans?.subscription?.billingCycle === cycle ? (
+                    'Current plan'
+                  ) : (
+                    `Go ${p.name} — ${isAnnual ? `${p.annual}/yr` : `${p.price}/mo`}`
+                  )}
                 </Button>
               </div>
             )
           })}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Secure card payments by Yoco · cancel anytime · your CRM data is always exportable — the platform earns your loyalty, it doesn't lock it.
+          Secure card payments by Yoco · never auto-charged · pause anytime · unused lead reveals roll over · your CRM data is always exportable — the platform earns your loyalty, it doesn't lock it.
         </p>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { addCredits } from '@/lib/wallet'
 import { awardXp } from '@/lib/gamification'
 import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, type YocoWebhookEvent } from '@/lib/yoco'
 import { rewardOnSubscribe } from '@/lib/referral'
+import { getPlan, grantPlanRevealCredits } from '@/lib/plans'
 
 /** GET /api/webhooks/yoco — config status (authenticated). */
 export async function GET() {
@@ -53,12 +54,16 @@ export async function POST(req: NextRequest) {
       const sub = await db.subscription.findUnique({ where: { id: String(payment.metadata.subscriptionId) } })
       if (sub) {
         // Idempotent claim: only transition PENDING -> ACTIVE once.
+        const renewDays = sub.billingCycle === 'ANNUAL' ? 370 : 35
         const claim = await db.subscription.updateMany({
           where: { id: sub.id, status: 'PENDING' },
-          data: { status: 'ACTIVE', startedAt: new Date(), renewsAt: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000) },
+          data: { status: 'ACTIVE', startedAt: new Date(), pausedUntil: null, renewsAt: new Date(Date.now() + renewDays * 24 * 60 * 60 * 1000) },
         })
         if (claim.count > 0) {
           await rewardOnSubscribe(sub.userId).catch(() => {}) // R50 to whoever invited this user
+          // Deliver the plan's promised lead reveals for this paid month/year.
+          const plan = getPlan(sub.plan)
+          if (plan) await grantPlanRevealCredits(sub.userId, plan).catch(() => {})
         }
         return NextResponse.json({ ok: true, activated: claim.count > 0, subscriptionId: sub.id })
       }

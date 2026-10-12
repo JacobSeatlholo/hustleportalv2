@@ -421,18 +421,20 @@ model PlatformConfig {
 // ============ SUBSCRIPTIONS (predictable MRR) ============
 
 model Subscription {
-  id          String    @id @default(cuid())
-  userId      String    @unique // one plan per user (upsert on renewal/upgrade)
-  plan        String    // HUSTLER | BOSS
-  status      String    @default("PENDING") // PENDING | ACTIVE | PAST_DUE | CANCELED
-  amountCents Int
-  provider    String    @default("YOCO")
-  reference   String    // platform reference (HPSUB-...)
-  providerRef String?   // Yoco checkout/payment id for reconciliation
-  startedAt   DateTime?
-  renewsAt    DateTime? // monthly anniversary; renewal nudge fires 5 days before
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  userId       String    @unique // one plan per user (upsert on renewal/upgrade)
+  plan         String    // HUSTLER | BOSS
+  status       String    @default("PENDING") // PENDING | ACTIVE | PAUSED | PAST_DUE | CANCELED
+  billingCycle String    @default("MONTHLY") // MONTHLY | ANNUAL (annual = 2 months free)
+  amountCents  Int
+  provider     String    @default("YOCO")
+  reference    String    // platform reference (HPSUB-...)
+  providerRef  String?   // Yoco checkout/payment id for reconciliation
+  pausedUntil  DateTime? // while PAUSED: plan is frozen; auto-resumes with zero lost days
+  startedAt    DateTime?
+  renewsAt     DateTime? // monthly (+35d grace) or annual (+370d grace) anniversary
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

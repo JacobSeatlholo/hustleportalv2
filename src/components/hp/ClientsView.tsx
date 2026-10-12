@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -21,7 +21,7 @@ import { useHp } from './store'
 import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
-import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera } from 'lucide-react'
+import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera, Check } from 'lucide-react'
 
 interface Client {
   id: string
@@ -458,6 +458,13 @@ export default function ClientsView() {
               <Input id="c-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What are you doing for them?" />
             </div>
           </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-brand text-black hover:brightness-110 font-semibold">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {editing ? 'Save changes' : 'Add client'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

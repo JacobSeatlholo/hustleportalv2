@@ -1,7 +1,13 @@
 /**
  * Subscription plans — the predictable-MRR engine.
  * Target: R45,000/month. e.g. 100 Operator + 50 Boss = R44,850, or 226 Operator.
- * ZAR only. Monthly plans sold via Yoco Checkout; renewal nudged in-app 5 days out.
+ * ZAR only. Plans sold via Yoco Checkout (manual renewal — the user is never
+ * auto-charged); renewal nudged in-app + by email 5 days out.
+ *
+ * Lead-reveal delivery: each successful plan activation/renewal grants the
+ * month's reveal quota as wallet credits (revealCredits, priced at the lead
+ * reveal price). Credits NEVER expire — unused reveals roll over for as long
+ * as the plan stays active. That makes the subscription an asset, not a rental.
  */
 
 export interface PlanDef {
@@ -9,8 +15,19 @@ export interface PlanDef {
   name: string
   tagline: string
   priceCents: number
+  /** Annual price in cents = 10 months (2 months free). */
+  annualCents: number
+  /** Lead-reveal credits granted on every activation/renewal (cents of wallet credit). */
+  revealCredits: number
   perks: string[]
   highlight?: boolean
+}
+
+/** Wallet-cent price of one verified lead reveal (keep in sync with CONFIG_KEYS.LEAD_PRICE default). */
+export const LEAD_REVEAL_PRICE_CENTS = 1500
+
+function annualOf(priceCents: number): number {
+  return priceCents * 10
 }
 
 export const PLANS: PlanDef[] = [
@@ -19,9 +36,11 @@ export const PLANS: PlanDef[] = [
     name: 'Operator',
     tagline: 'For owner-operators building steady momentum.',
     priceCents: 19900, // R199
+    annualCents: annualOf(19900), // R1,990/yr — 2 months free
+    revealCredits: 5 * LEAD_REVEAL_PRICE_CENTS, // 5 verified reveals
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '5 verified lead reveals every month',
+      '5 verified lead reveals every month — unused ones roll over',
       'Invoices, calendar, reports, exports',
       'Invite & earn R50 per paying member',
       'Your business listed in the public business directory',
@@ -32,9 +51,11 @@ export const PLANS: PlanDef[] = [
     name: 'Boss',
     tagline: 'For teams ready to outscale the competition.',
     priceCents: 49900, // R499
+    annualCents: annualOf(49900), // R4,990/yr — 2 months free
+    revealCredits: 12 * LEAD_REVEAL_PRICE_CENTS, // 12 verified reveals — the better per-lead deal
     perks: [
       'Everything in Operator',
-      '10+ verified lead reveals every month',
+      '12 verified lead reveals every month — the best per-lead price, unused ones roll over',
       'Up to 5 team seats, shared pipeline',
       'Priority AI (longer context, faster replies)',
       'Founding Member badge on your profile',
@@ -45,6 +66,22 @@ export const PLANS: PlanDef[] = [
 
 export function getPlan(id: string): PlanDef | undefined {
   return PLANS.find((p) => p.id === id)
+}
+
+/**
+ * Deliver the plan's monthly lead-reveal quota as wallet credits. Called once
+ * per successful activation/renewal (idempotent via the PENDING→ACTIVE claim),
+ * so every paid month lands the promised reveals in the wallet automatically.
+ */
+export async function grantPlanRevealCredits(userId: string, plan: PlanDef): Promise<void> {
+  const { addCredits } = await import('@/lib/wallet')
+  const reveals = Math.round(plan.revealCredits / LEAD_REVEAL_PRICE_CENTS)
+  await addCredits(
+    userId,
+    plan.revealCredits,
+    'BONUS',
+    `${plan.name} plan — ${reveals} verified lead reveals${reveals >= 12 ? ' (best per-lead price)' : ''}`,
+  )
 }
 
 /** Monthly recurring revenue target for the platform owner, in cents. */

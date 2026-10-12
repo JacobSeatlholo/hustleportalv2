@@ -481,12 +481,12 @@ export default function Landing() {
             {
               name: 'Operator', price: 'R199', icon: <Rocket className="h-5 w-5 text-brand" />,
               tagline: 'For owner-operators building steady momentum.',
-              perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
+              perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month — unused ones roll over', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
             },
             {
               name: 'Boss', price: 'R499', icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
               tagline: 'For teams ready to outscale the competition.',
-              perks: ['Everything in Operator', '10+ verified lead reveals every month', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
+              perks: ['Everything in Operator', '12 verified lead reveals every month — the best per-lead price, unused ones roll over', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
             },
           ].map((p) => (
             <div key={p.name} className={`rounded-2xl border p-6 space-y-4 ${p.highlight ? 'border-brand/50 bg-brand/5' : 'bg-card'}`}>
@@ -510,7 +510,7 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          Secure card payments by Yoco · cancel anytime · your data is always exportable — the platform earns your loyalty, it doesn&apos;t lock it.
+          Go annual and get 2 months free — R1,990 Operator · R4,990 Boss. Secure card payments by Yoco · never auto-charged · pause anytime · your data is always exportable — the platform earns your loyalty, it doesn&apos;t lock it.
         </p>
       </section>
 
