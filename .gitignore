@@ -78,3 +78,4 @@ prompt
 # embedded postgres (sandbox-local dev database)
 /pgdata/
 /pgtools/
+tool-results/
