@@ -236,20 +236,31 @@ async function searchNominatimLeads(
 export async function searchOsmLeads(
   area: string,
   definition: string,
-  limit: number
+  limit: number,
+  opts?: { deadlineAt?: number }
 ): Promise<{ leads: OsmLead[]; note?: string }> {
+  // Wall-clock budget: the mirror chain (3 endpoints × up to 30s) + generic sweep
+  // + Nominatim fallback can stack past any caller's timeout. Every stage checks
+  // the clock so the chain always returns within the caller's remaining budget.
+  const deadlineAt = opts?.deadlineAt ?? Date.now() + 60_000
+  const remaining = () => deadlineAt - Date.now()
+  if (remaining() < 15_000) {
+    return { leads: [], note: 'The map directory was out of time budget — try again in a minute.' }
+  }
   const place = await geocodePlace(area)
   if (!place) return { leads: [], note: `Could not map "${area}" to a map area — check the spelling.` }
 
   const tagFilters = buildTagFilters(definition).tags
   const runOverpass = async (query: string): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
     for (const endpoint of OVERPASS_ENDPOINTS) {
+      const left = remaining()
+      if (left < 5_000) break // no budget for another mirror — bail honestly
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA, Accept: 'application/json' },
           body: 'data=' + encodeURIComponent(query),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(Math.min(30_000, left)),
         })
         if (!res.ok) continue // mirror busy/blocked — try the next one
         const json = (await res.json()) as { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }
@@ -263,16 +274,18 @@ export async function searchOsmLeads(
   try {
     let result = await runOverpass(overpassQuery(place, tagFilters, limit))
     // Category too narrow for this area (common in townships) → one generic sweep of
-    // ALL named businesses. Still 100% real directory data.
-    if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0) {
+    // ALL named businesses. Still 100% real directory data. Only while budget lasts.
+    if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0 && remaining() > 20_000) {
       result = await runOverpass(overpassQuery(place, [], limit))
     }
     if (!result.ok) {
       // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
       // category search (same OSM data, indexer-friendly) picks up the slack.
-      const nom = await searchNominatimLeads(area, definition, limit)
-      if (nom.leads.length > 0) return nom
-      return { leads: [], note: 'The map directory is busy right now — try again in a minute.' }
+      if (remaining() > 20_000) {
+        const nom = await searchNominatimLeads(area, definition, limit)
+        if (nom.leads.length > 0) return nom
+      }
+      return { leads: [], note: remaining() > 0 ? 'The map directory is busy right now — try again in a minute.' : 'The map directory was out of time budget — try again in a minute.' }
     }
     const data = result.data!
     const seen = new Set<string>()

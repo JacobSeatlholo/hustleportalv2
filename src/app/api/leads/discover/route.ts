@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
   // 2) FALLBACK A — OpenStreetMap: real, keyless directory listings (Gemini only
   //    helped translate the need into map tags; Overpass supplies the actual data).
   //    Only started when there is still runway (the chain needs ~15s of its own).
-  const osm = Date.now() - t0 < 35_000 ? await searchOsmLeads(area, definition, cap) : { leads: [], note: 'skipped — the web search used the time budget' }
+  const osm = Date.now() - t0 < 35_000 ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000 }) : { leads: [], note: 'skipped — the web search used the time budget' }
   if (osm.leads.length > 0) {
     return NextResponse.json({
       leads: osm.leads,
