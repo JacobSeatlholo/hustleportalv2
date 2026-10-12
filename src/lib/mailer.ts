@@ -39,6 +39,35 @@ const BRANDED_FROM = 'HustlePortal <noreply@hustleportal.online>'
 const SANDBOX_FROM = 'HustlePortal <onboarding@resend.dev>'
 
 /**
+ * The legal footer every email leaving the hustleportal.online domain carries:
+ * the Business Hustle sign-off, the six point disclaimer, the copyright of
+ * Simple Eternity Holdings (Pty) Ltd, and the website's own terms and privacy
+ * pages. Legally sound, plain text, no images needed to be valid.
+ */
+function legalFooter(fromAddress: string): string {
+  return [
+    '',
+    '',
+    "We want to help you manage risk better, communicate more effectively, work less, and radically increase your team's productivity.",
+    '',
+    'Best regards',
+    'Business Hustle Support · Corporate Communications',
+    'www.businesshustle.co.za',
+    '',
+    'Disclaimer:',
+    `1) Confidentiality: This email, sent from ${fromAddress}, is confidential and may contain privileged or copyright information. You may not present this message to another party without consent from the sender. If you are not the intended recipient, please notify team@businesshustle.co.za and delete this email. You are notified that disclosing, copying, distributing or taking any action in reliance on the contents of this information is strictly prohibited.`,
+    "2) Liability: This email is not a binding agreement and does not conclude an agreement without the express confirmation by the sender's superior or a director of the Company.",
+    '3) Viruses: The Company does not certify that this email is free of viruses or defects.',
+    '4) Unsolicited email: The Company does not consent to its employees sending unsolicited emails which contravene the law. In the event that you feel this email is such, please notify the Company in order for the appropriate corrective action to be taken.',
+    "5) Advice: Any views or opinions presented in this email are solely those of the author and do not necessarily represent those of the Company. Any actions taken on the basis of this email are at the reader's own risk.",
+    '6) Conduct: The sender of this email is expressly required not to make any defamatory statements. Any such communication is contrary to company policy and outside the scope of the employment of the individual concerned. The Company will not accept any liability in respect of such communication, and the employee responsible will be personally liable for any damages or other liability arising.',
+    '',
+    '© Business Hustle Worldwide. A product of Simple Eternity Holdings (Pty) Ltd.',
+    'Terms: https://businesshustle.co.za/terms · Privacy: https://businesshustle.co.za/privacy',
+  ].join('\n')
+}
+
+/**
  * Per-user sending identity — every business mails from ITS OWN address on our domain:
  * "Nkosi Brands" → nkosi-brands@hustleportal.online. The domain is verified, Resend
  * accepts any local part on it, and DKIM/SPF sign the send. Reply-To stays the user's
@@ -378,7 +407,11 @@ async function sendViaPlatform(
   // USER mail goes out from the business's own identity on our domain; the
   // RESEND_FROM env (operator override) still wins when explicitly set.
   const branded = process.env.RESEND_FROM?.trim() || (await userSendingIdentity(userId)).from
-  const first = await resendSend(apiKey, branded, userId, mail)
+  // Every send from our domain carries the legal footer (the address in the
+  // confidentiality clause matches the address the email really went out from).
+  const footerAddress = branded.match(/<([^>]+)>/)?.[1] || 'noreply@hustleportal.online'
+  const payload = { ...mail, body: mail.body + legalFooter(footerAddress) }
+  const first = await resendSend(apiKey, branded, userId, payload)
   if (first.ok) {
     // Branded from accepted → the domain IS verified at Resend. Prime the status
     // cache so the UI flips to LIVE even if the domains API can't be read.
@@ -392,7 +425,7 @@ async function sendViaPlatform(
   }
   // From-domain rejection (unverified) → retry once with the test sender
   if (/from|domain|verif|422|403/i.test(first.raw)) {
-    const second = await resendSend(apiKey, SANDBOX_FROM, userId, mail)
+    const second = await resendSend(apiKey, SANDBOX_FROM, userId, payload)
     if (second.ok) return { ok: true, provider: 'PLATFORM', viaFallback: true }
     return { ok: false, error: classifyPlatformError(second.raw, await readDomainProof()) }
   }
@@ -475,7 +508,9 @@ export async function sendSystemMail(
     return { ok: false, error: 'Email engine is not configured.' }
   }
   const from = process.env.RESEND_FROM?.trim() || BRANDED_FROM
-  const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
+  const fromAddress = from.match(/<([^>]+)>/)?.[1] || 'noreply@hustleportal.online'
+  const body = mail.body + legalFooter(fromAddress)
+  const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
   if (first.ok) {
     // Branded from accepted → domain verified; keep the status cache truthful.
     const d = sendingDomain()
@@ -488,7 +523,7 @@ export async function sendSystemMail(
     return { ok: true }
   }
   if (/from|domain|verif|422|403/i.test(first.raw)) {
-    const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: mail.body, reply_to: TEAM_INBOX })
+    const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
     if (second.ok) {
       await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: 'sandbox-sender' })
       return { ok: true }

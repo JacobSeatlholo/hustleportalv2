@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api } from './shared'
 import { useHp } from './store'
 import CityField from './CityField'
+import { useCurrency } from './useCurrency'
 import {
   Target, Zap, Users, Wallet, BrainCircuit, Trophy, Loader2, ArrowRight, Star, Check,
   Laptop, TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket, MailCheck,
@@ -30,6 +31,7 @@ const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'C
 export default function Landing() {
   const { loadSession } = useHp()
   const { toast } = useToast()
+  const currency = useCurrency()
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register')
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
@@ -482,12 +484,12 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
           {[
             {
-              name: 'Operator', price: 'R199', icon: <Rocket className="h-5 w-5 text-brand" />,
+              name: 'Operator', priceCents: 19900, icon: <Rocket className="h-5 w-5 text-brand" />,
               tagline: 'For owner-operators building steady momentum.',
               perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month, unused ones roll over', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
             },
             {
-              name: 'Boss', price: 'R499', icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
+              name: 'Boss', priceCents: 49900, icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
               tagline: 'For teams ready to outscale the competition.',
               perks: ['Everything in Operator', '12 verified lead reveals every month, the best per-lead price, unused ones roll over', 'Up to 5 team seats, shared pipeline', 'Priority AI, faster and longer answers'],
             },
@@ -496,7 +498,7 @@ export default function Landing() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">{p.icon}<h3 className="font-display text-xl">{p.name}</h3></div>
                 <div className="text-right">
-                  <div className="font-display text-3xl">{p.price}</div>
+                  <div className="font-display text-3xl">{currency.price(p.priceCents)}</div>
                   <div className="text-[10px] text-muted-foreground">per month</div>
                 </div>
               </div>
@@ -513,9 +515,10 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          Go annual and get 2 months free: R1,990 Operator · R4,990 Boss. Registered nonprofits pay 30% less with their NPO number.
+          Go annual and get 2 months free: {currency.price(199000)} Operator · {currency.price(499000)} Boss. Registered nonprofits pay 30% less with their NPO number.
           Secure card payments by Yoco · never auto-charged · pause anytime · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
+        {currency.note && <p className="text-center text-[11px] text-muted-foreground/80">{currency.note}</p>}
       </section>
 
       <section className="text-center space-y-4 py-6">
@@ -550,6 +553,9 @@ export default function Landing() {
             <a href="https://app.businesshustle.co.za/wp-content/uploads/2025/12/BHW-PAIA-Manual-Integrated-with-POPIA.pdf" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">PAIA Manual</a>
             <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
           </div>
+          <p className="text-[11px] text-muted-foreground/80">
+            We measure anonymous usage of the app to make it better. Analytics data is processed under our Privacy &amp; POPIA notice and never sold.
+          </p>
         </div>
       </footer>
     </div>

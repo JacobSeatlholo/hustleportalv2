@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bebas_Neue, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import GaAnalytics from "@/components/hp/GaAnalytics";
 
 const displayFont = Bebas_Neue({
   variable: "--font-display",
@@ -70,6 +71,7 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        <GaAnalytics />
       </body>
     </html>
   );

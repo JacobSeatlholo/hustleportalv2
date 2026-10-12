@@ -16,11 +16,17 @@ export type ProjectShape = {
   isDefault: boolean
 }
 
-/** List the user's company workspaces, default first. */
+/** List the user's company workspaces, default first, with counts + assigned members. */
 export async function listProjects(userId: string) {
   const projects = await db.project.findMany({
     where: { userId },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    include: {
+      members: {
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      },
+    },
   })
   const counts = await Promise.all(
     projects.map(async (p) => ({
@@ -33,6 +39,7 @@ export async function listProjects(userId: string) {
   return projects.map((p) => ({
     ...p,
     counts: counts.find((c) => c.id === p.id) ?? { id: p.id, leads: 0, clients: 0, invoices: 0 },
+    members: p.members.map((m) => ({ id: m.id, userId: m.userId, name: m.user.name, email: m.user.email })),
   }))
 }
 

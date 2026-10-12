@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -16,7 +17,8 @@ import { useToast } from '@/hooks/use-toast'
 import { api, PRIORITIES, type Task, type TaskCommentRow, type TaskEventRow } from './shared'
 import { useHp } from './store'
 import ScanDiaryDialog from './ScanDiaryDialog'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock } from 'lucide-react'
+import { useVoiceInput } from './useVoiceInput'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft } from 'lucide-react'
 
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
@@ -27,6 +29,9 @@ export default function TasksView() {
   const [title, setTitle] = useState('')
   const [assigneeId, setAssigneeId] = useState(session?.user.id || 'me')
   const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
+  const [notes, setNotes] = useState('')
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [priority, setPriority] = useState('MEDIUM')
   const [isPrivate, setIsPrivate] = useState(false)
   // Where does this task belong? 'personal' = private to me · 'business' = workspace-shared
@@ -35,6 +40,10 @@ export default function TasksView() {
   const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
+
+  // Voice dictation — title mic and description mic write straight into the fields
+  const titleVoice = useVoiceInput(setTitle)
+  const notesVoice = useVoiceInput(setNotes)
   // Live comment counts per task (list payload ships the DB count; the thread updates it locally)
   const [counts, setCounts] = useState<Record<string, number>>({})
 
@@ -64,21 +73,30 @@ export default function TasksView() {
     setAdding(true)
     try {
       const isTeam = dest !== 'personal' && dest !== 'business'
+      // Date + time combine into one exact moment, resolved in THIS browser's
+      // timezone and sent as a UTC instant, so a 14:00 reminder means 14:00 to the user.
+      const dueIso = dueDate
+        ? new Date(dueTime ? `${dueDate}T${dueTime}` : `${dueDate}T00:00`).toISOString()
+        : null
       await api('/api/tasks', {
         method: 'POST',
         body: JSON.stringify({
           title,
+          notes: notes.trim() || null,
           priority,
-          dueDate: dueDate || null,
+          dueDate: dueIso,
           isPrivate: dest === 'personal' && isPrivate,
           teamId: isTeam ? dest : null,
           assigneeId: isTeam && assigneeId !== 'me' ? assigneeId : session?.user.id,
         }),
       })
       setTitle('')
+      setNotes('')
       setDueDate('')
+      setDueTime('')
       toast({
         title: dest === 'personal' ? 'Task added' : dest === 'business' ? 'Business task added' : 'Shared with the team',
+        description: dueIso && dueTime ? 'A reminder fires in the app when it is due.' : undefined,
       })
       load()
       bumpRefresh()
@@ -143,15 +161,30 @@ export default function TasksView() {
 
       {/* Add task bar */}
       <Card>
-        <CardContent className="p-3">
+        <CardContent className="p-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addTask()}
-              placeholder="Add a task… e.g. Follow up with Nkosi Brands"
-              className="flex-1 min-w-[160px]"
-            />
+            <div className="relative flex-1 min-w-[160px]">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && addTask()}
+                placeholder="Add a task… e.g. Follow up with Nkosi Brands"
+                className="pr-10"
+              />
+              {titleVoice.supported && (
+                <button
+                  type="button"
+                  onClick={titleVoice.toggle}
+                  aria-label={titleVoice.listening ? 'Stop voice typing' : 'Type with your voice'}
+                  title={titleVoice.listening ? 'Stop voice typing' : 'Speak the task title'}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center transition ${
+                    titleVoice.listening ? 'bg-red-500/15 text-red-500 animate-pulse' : 'text-muted-foreground hover:text-brand'
+                  }`}
+                >
+                  {titleVoice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
             <Select value={dest} onValueChange={setDest}>
               <SelectTrigger className="w-[150px]" aria-label="Task list"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -190,7 +223,59 @@ export default function TasksView() {
             <Button onClick={addTask} disabled={adding || !title.trim()}>
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Add
             </Button>
+            <button
+              type="button"
+              onClick={() => setDetailsOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand transition px-1"
+              aria-expanded={detailsOpen}
+            >
+              <AlignLeft className="h-3.5 w-3.5" /> Details
+              {detailsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
           </div>
+
+          {detailsOpen && (
+            <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+              <div className="relative">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Describe the task so the person who gets it knows exactly what done looks like. Tap the mic and just talk."
+                  className="pr-10 text-sm"
+                />
+                {notesVoice.supported && (
+                  <button
+                    type="button"
+                    onClick={notesVoice.toggle}
+                    aria-label={notesVoice.listening ? 'Stop voice typing' : 'Dictate the description'}
+                    title={notesVoice.listening ? 'Stop voice typing' : 'Speak the description'}
+                    className={`absolute right-2 top-2 h-7 w-7 rounded-full flex items-center justify-center transition ${
+                      notesVoice.listening ? 'bg-red-500/15 text-red-500 animate-pulse' : 'text-muted-foreground hover:text-brand'
+                    }`}
+                  >
+                    {notesVoice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
+              {(titleVoice.error || notesVoice.error) && (
+                <p className="text-[11px] text-amber-500">{titleVoice.error || notesVoice.error}</p>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" /> Due time
+                  <Input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className="w-[110px] h-8" />
+                </label>
+                <span className="text-[11px] text-muted-foreground">
+                  {dueDate
+                    ? dueTime
+                      ? 'The reminder fires in the app at this exact time.'
+                      : 'Add a time and the reminder fires at that exact moment.'
+                    : 'Pick a date first, then set the time.'}
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -234,7 +319,10 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   onCommentCountChange: (taskId: string, count: number) => void
   currentUserId: string
 }) {
-  const overdue = task.dueDate && task.status !== 'DONE' && new Date(task.dueDate) < new Date()
+  const due = task.dueDate ? new Date(task.dueDate) : null
+  const overdue = due && task.status !== 'DONE' && due < new Date()
+  const hasTime = due !== null && (due.getHours() !== 0 || due.getMinutes() !== 0)
+  const [descOpen, setDescOpen] = useState(false)
   const [threadOpen, setThreadOpen] = useState(false)
   const [comments, setComments] = useState<TaskCommentRow[] | null>(null)
   const [loadingComments, setLoadingComments] = useState(false)
@@ -313,10 +401,11 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
           <div className="min-w-0 flex-1">
             <div className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
-              {task.dueDate && (
+              {due && (
                 <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-500 font-medium' : ''}`}>
                   <CalendarDays className="h-3 w-3" />
-                  {new Date(task.dueDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
+                  {due.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
+                  {hasTime && ` · ${due.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}`}
                 </span>
               )}
               {task.priority === 'HIGH' && <Badge variant="destructive" className="text-[10px] h-4">High</Badge>}
@@ -333,6 +422,21 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 </span>
               )}
             </div>
+            {/* The brief: what done looks like, in the writer's own words */}
+            {task.notes && (
+              <div className="mt-1">
+                <button
+                  onClick={() => setDescOpen((v) => !v)}
+                  className={`text-xs text-left whitespace-pre-wrap break-words text-muted-foreground ${descOpen ? '' : 'line-clamp-2'}`}
+                  aria-expanded={descOpen}
+                >
+                  {task.notes}
+                </button>
+                {!descOpen && task.notes.length > 120 && (
+                  <button onClick={() => setDescOpen(true)} className="text-[11px] text-brand mt-0.5">Show more</button>
+                )}
+              </div>
+            )}
           </div>
           {/* Team discussion — comments happen IN context, not in a WhatsApp group */}
           <button

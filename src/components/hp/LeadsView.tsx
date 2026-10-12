@@ -333,6 +333,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   const { toast } = useToast()
   const [definition, setDefinition] = useState('')
   const [city, setCity] = useState(session?.user.city || '')
+  const [siteUrl, setSiteUrl] = useState('')
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [limit, setLimit] = useState('10')
   const [busy, setBusy] = useState(false)
@@ -392,6 +393,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         body: JSON.stringify({
           definition,
           city,
+          website: siteUrl.trim() || undefined,
           limit: parseInt(limit),
           ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
         }),
@@ -450,6 +452,19 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               placeholder="e.g. coffee shops and restaurants that need social media management"
               rows={2}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Your website — let the AI think like your business</Label>
+            <Input
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+              placeholder="yourbusiness.co.za (optional)"
+              inputMode="url"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              We read your site and hunt for businesses that need exactly what you sell — matched to your real offering, not a guess.
+            </p>
           </div>
           <CityField
             label="Location focus"

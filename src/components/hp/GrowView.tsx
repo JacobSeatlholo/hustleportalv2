@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
 import { useHp } from './store'
 import { getPlan, priceWithNpoDiscount } from '@/lib/plans'
+import { useCurrency } from './useCurrency'
 import {
   Users, Copy, Check, Loader2, Sparkles, Crown, MessageCircle, Gift, TrendingUp, CheckCircle2, HeartHandshake,
 } from 'lucide-react'
@@ -73,6 +74,7 @@ const PLANS = [
 export default function GrowView() {
   const { toast } = useToast()
   const bumpRefresh = useHp((s) => s.bumpRefresh)
+  const currency = useCurrency()
   const [refs, setRefs] = useState<RefsData | null>(null)
   const [plans, setPlans] = useState<PlansData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -357,15 +359,15 @@ export default function GrowView() {
                     {npoApplied ? (
                       <>
                         <div className="font-display text-2xl">
-                          {rands(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}
+                          {currency.price(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}
                         </div>
                         <div className="text-[10px] text-muted-foreground">
-                          <span className="line-through">{isAnnual ? p.annual : p.price}</span> · nonprofit 30% off
+                          <span className="line-through">{currency.price(isAnnual ? p.annualCents : p.priceCents)}</span> · nonprofit 30% off
                         </div>
                       </>
                     ) : (
                       <>
-                        <div className="font-display text-2xl">{isAnnual ? p.annual : p.price}</div>
+                        <div className="font-display text-2xl">{currency.price(isAnnual ? p.annualCents : p.priceCents)}</div>
                         <div className="text-[10px] text-muted-foreground">{isAnnual ? 'per year, 2 months free' : 'per month'}</div>
                       </>
                     )}
@@ -388,10 +390,8 @@ export default function GrowView() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : isCurrent && plans?.subscription?.billingCycle === cycle ? (
                     'Current plan'
-                  ) : npoApplied ? (
-                    `Go ${p.name} — ${rands(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}${isAnnual ? '/yr' : '/mo'}`
                   ) : (
-                    `Go ${p.name} — ${isAnnual ? `${p.annual}/yr` : `${p.price}/mo`}`
+                    `Go ${p.name} — ${currency.price(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}${isAnnual ? '/yr' : '/mo'}`
                   )}
                 </Button>
               </div>
@@ -401,6 +401,7 @@ export default function GrowView() {
         <p className="text-[11px] text-muted-foreground">
           Secure card payments by Yoco · never auto-charged · pause anytime · unused lead reveals roll over · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
+        {currency.note && <p className="text-[11px] text-muted-foreground/80">{currency.note}</p>}
       </div>
     </div>
   )

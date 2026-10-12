@@ -36,23 +36,39 @@ export async function GET(req: NextRequest) {
       status: { not: 'DONE' },
       dueDate: { gte: startUtc, lte: endUtc },
     },
-    select: { assigneeId: true, creatorId: true, title: true },
+    select: { assigneeId: true, creatorId: true, title: true, dueDate: true },
+    orderBy: { dueDate: 'asc' },
     take: 2000,
   })
 
-  // group per recipient: assignee wins, else creator
-  const perUser = new Map<string, number>()
+  // group per recipient: assignee wins, else creator — and keep the day's schedule
+  // (times shown in SAST, the timezone this whole customer base lives in)
+  const perUser = new Map<string, { count: number; lines: string[] }>()
   for (const t of due) {
     const uid = t.assigneeId || t.creatorId
     if (!uid) continue
-    perUser.set(uid, (perUser.get(uid) || 0) + 1)
+    const entry = perUser.get(uid) || { count: 0, lines: [] }
+    entry.count++
+    if (entry.lines.length < 3) {
+      const time = t.dueDate
+        ? new Date(t.dueDate).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' })
+        : null
+      const hasTime = t.dueDate && (new Date(t.dueDate).getUTCHours() !== 0 || new Date(t.dueDate).getUTCMinutes() !== 0)
+      entry.lines.push(`${hasTime && time ? `${time} ` : ''}${t.title.slice(0, 60)}`)
+    }
+    perUser.set(uid, entry)
   }
 
   let notified = 0
-  for (const [userId, count] of perUser) {
+  for (const [userId, { count, lines }] of perUser) {
+    const body = [
+      'Open HustlePortal to knock them out — small daily wins compound.',
+      lines.length ? lines.join('\n') : '',
+      count > lines.length ? `+ ${count - lines.length} more` : '',
+    ].filter(Boolean).join('\n')
     const r = await sendPushToUser(userId, {
       title: count === 1 ? '1 task due today 📌' : `${count} tasks due today 📌`,
-      body: 'Open HustlePortal to knock them out — small daily wins compound.',
+      body,
       url: '/?view=tasks',
       tag: 'daily-tasks',
     })

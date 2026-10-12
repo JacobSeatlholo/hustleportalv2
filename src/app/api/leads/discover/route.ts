@@ -61,6 +61,40 @@ function saneWebsite(v?: string): string | undefined {
   return s.replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
 }
 
+/**
+ * Read the seller's own website so the hunt is grounded in what they actually
+ * sell. Best effort, 8s cap: title, description and visible text — enough for
+ * the AI to reason about the offering. Never blocks the search on failure.
+ */
+async function readSellerSite(raw: string): Promise<{ url: string; text: string } | null> {
+  const host = saneWebsite(raw)
+  if (!host || !/\.[a-z]{2,}$/i.test(host)) return null
+  const url = `https://${host}`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HustlePortalBot/1.0)' },
+      signal: AbortSignal.timeout(8_000),
+      redirect: 'follow',
+    })
+    if (!res.ok) return { url, text: '' }
+    const html = (await res.text()).slice(0, 120_000)
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1200)
+    const meta = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1] || ''
+    const title = html.match(/<title[^>]*>([^<]+)/i)?.[1] || ''
+    return { url, text: [title.trim(), meta.trim(), text].filter(Boolean).join(' · ').slice(0, 1400) }
+  } catch {
+    return { url, text: '' }
+  }
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -104,6 +138,17 @@ export async function POST(req: NextRequest) {
       { error: 'Describe who you want to sell to — or save your website in Profile so the AI can scout for you.' },
       { status: 400 }
     )
+  }
+
+  // The seller's website grounds the whole hunt: we read what they actually sell
+  // (title, meta description, on-page text) and hand it to the AI as context.
+  const sellerSiteInput = String(body.website || '').trim()
+  const sellerSite = sellerSiteInput ? await readSellerSite(sellerSiteInput) : null
+  if (sellerSite) {
+    const siteContext = sellerSite.text
+      ? `The seller's website is ${sellerSite.url}. What their site says about them: """${sellerSite.text}"""`
+      : `The seller's website is ${sellerSite.url} (the page could not be read — judge only from the web address).`
+    definition = `${definition}\n\nSeller context: ${siteContext}`
   }
   const area = city && !/^anywhere/i.test(city) ? city : 'South Africa'
   const pinArea = hasPin

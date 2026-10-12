@@ -29,6 +29,7 @@ import GrowView from './GrowView'
 import InventoryView from './InventoryView'
 import WelcomeTour from './WelcomeTour'
 import SectionTutorial from './SectionTutorial'
+import TaskReminders from './TaskReminders'
 import InstallApp from './InstallApp'
 import PwaNotifications from './PwaNotifications'
 import {
@@ -264,6 +265,7 @@ export default function AppShell() {
 
         <WelcomeTour />
         <SectionTutorial />
+        <TaskReminders />
 
         {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons
             being out of comfortable reach on tall screens. */}

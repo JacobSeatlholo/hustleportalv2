@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     data: {
       userId,
       name,
+      description: body.description || null,
       industry: body.industry || null,
       valueProp: body.valueProp || null,
       targetMarket: body.targetMarket || null,

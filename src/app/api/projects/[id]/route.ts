@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({}))
   const data: Record<string, unknown> = {}
   for (const field of [
-    'name', 'industry', 'valueProp', 'targetMarket', 'offerings', 'tone',
+    'name', 'description', 'industry', 'valueProp', 'targetMarket', 'offerings', 'tone',
     'website', 'contactEmail', 'contactPhone', 'salesPitch',
   ]) {
     if (field in body) data[field] = body[field] === '' ? null : body[field]

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { replayTour } from './WelcomeTour'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
 import CityField from './CityField'
 import PwaNotifications from './PwaNotifications'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell } from 'lucide-react'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X } from 'lucide-react'
 
 interface TeamInfo {
   id: string
@@ -70,6 +70,29 @@ export default function ProfileView() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<UrlAnalysis | null>(null)
   const [copiedPitch, setCopiedPitch] = useState<number | null>(null)
+
+  // My Projects hub — every created project with its description, people and numbers
+  interface ProjectRow {
+    id: string; name: string; description: string | null; isDefault: boolean
+    counts: { leads: number; clients: number; invoices: number }
+    members: { id: string; userId: string; name: string; email: string }[]
+  }
+  const [projectRows, setProjectRows] = useState<ProjectRow[]>([])
+  const [descDraft, setDescDraft] = useState<Record<string, string>>({})
+  const [descSaving, setDescSaving] = useState<string | null>(null)
+  const [assigningTo, setAssigningTo] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const loadProjectRows = () => {
+    api<{ projects: ProjectRow[] }>('/api/projects')
+      .then((r) => setProjectRows(r.projects))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadProjectRows()
+  }, [activeProjectId, session])
 
   // (city geolocation + free-text live in the shared CityField component)
 
@@ -295,8 +318,79 @@ export default function ProfileView() {
       setActiveProject(r.project.id)
       toast({ title: 'Workspace created ✓', description: `${r.project.name} is now active.` })
       await loadSession(true)
+      loadProjectRows()
     } catch (e) {
       toast({ title: 'Could not create workspace', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    }
+  }
+
+  // ---- My Projects hub actions --------------------------------------------
+  const teamPool = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { id: string; name: string }[] = []
+    for (const t of teams) {
+      for (const m of t.members) {
+        if (m.id === session?.user.id || seen.has(m.id)) continue
+        seen.add(m.id)
+        out.push({ id: m.id, name: m.name })
+      }
+    }
+    return out
+  }, [teams, session])
+
+  async function saveDescription(pid: string) {
+    setDescSaving(pid)
+    try {
+      const description = (descDraft[pid] ?? '').trim() || null
+      await api(`/api/projects/${pid}`, { method: 'PATCH', body: JSON.stringify({ description }) })
+      setProjectRows((rows) => rows.map((r) => (r.id === pid ? { ...r, description } : r)))
+      setDescDraft((d) => ({ ...d, [pid]: '' }))
+      toast({ title: 'Description saved' })
+    } catch (e) {
+      toast({ title: 'Could not save', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setDescSaving(null)
+    }
+  }
+
+  async function assignMember(pid: string, userId: string) {
+    setAssigningTo(pid)
+    try {
+      await api(`/api/projects/${pid}/members`, { method: 'POST', body: JSON.stringify({ userId }) })
+      loadProjectRows()
+      toast({ title: 'Teammate assigned to the project' })
+    } catch (e) {
+      toast({ title: 'Could not assign', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setAssigningTo(null)
+    }
+  }
+
+  async function unassignMember(pid: string, userId: string) {
+    try {
+      await api(`/api/projects/${pid}/members?userId=${userId}`, { method: 'DELETE' })
+      setProjectRows((rows) => rows.map((r) => (r.id === pid ? { ...r, members: r.members.filter((m) => m.userId !== userId) } : r)))
+    } catch {
+      toast({ title: 'Could not remove', variant: 'destructive' })
+    }
+  }
+
+  async function deleteProject(pid: string) {
+    setDeleting(true)
+    try {
+      await api(`/api/projects/${pid}`, { method: 'DELETE' })
+      const rows = projectRows.filter((r) => r.id !== pid)
+      setProjectRows(rows)
+      setConfirmDelete(null)
+      const def = rows.find((r) => r.isDefault)
+      if (activeProjectId === pid && def) setActiveProject(def.id)
+      toast({ title: 'Project deleted', description: 'Its leads, clients and invoices moved to the default workspace.' })
+      await loadSession(true)
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not delete', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -624,6 +718,117 @@ export default function ProfileView() {
                   <Button variant="outline" onClick={createWorkspace} disabled={!newWsName.trim()}>Create</Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* My Projects — every project you run: description, people, numbers */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-brand" /> My Projects
+                <Badge variant="secondary" className="ml-auto">{projectRows.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {projectRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Create a project above and it lands here with its people and numbers.</p>
+              ) : (
+                projectRows.map((p) => {
+                  const isActive = p.id === activeProjectId || (!activeProjectId && p.isDefault)
+                  const available = teamPool.filter((t) => !p.members.some((m) => m.userId === t.id))
+                  const descValue = descDraft[p.id] ?? p.description ?? ''
+                  return (
+                    <div key={p.id} className="rounded-xl border p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          className="font-medium hover:text-brand transition text-left"
+                          onClick={() => { setActiveProject(p.id); toast({ title: `${p.name} is now your active workspace` }) }}
+                          title="Make this the active workspace"
+                        >
+                          {p.name}
+                        </button>
+                        {p.isDefault && <Badge variant="secondary" className="text-[10px]">default</Badge>}
+                        {isActive && <Badge className="bg-brand text-black hover:bg-brand text-[10px]">Active</Badge>}
+                        {confirmDelete === p.id ? (
+                          <span className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            Delete? Records move to the default workspace.
+                            <Button size="sm" variant="destructive" onClick={() => deleteProject(p.id)} disabled={deleting}>
+                              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Yes, delete'}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(null)}>Keep</Button>
+                          </span>
+                        ) : (
+                          <button
+                            className="ml-auto text-muted-foreground hover:text-red-500 transition disabled:opacity-30"
+                            onClick={() => setConfirmDelete(p.id)}
+                            disabled={p.isDefault}
+                            title={p.isDefault ? 'The default workspace cannot be deleted' : 'Delete this project'}
+                            aria-label="Delete project"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Textarea
+                          rows={2}
+                          value={descValue}
+                          onChange={(e) => setDescDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          placeholder="What is this project about? e.g. Launch the Soweto pop-up store, doors open 15 November."
+                          className="text-sm"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => saveDescription(p.id)}
+                            disabled={descSaving === p.id || descValue === (p.description ?? '')}
+                          >
+                            {descSaving === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save description'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px]">{p.counts.leads} leads</Badge>
+                        <Badge variant="outline" className="text-[10px]">{p.counts.clients} clients</Badge>
+                        <Badge variant="outline" className="text-[10px]">{p.counts.invoices} invoices</Badge>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {p.members.map((m) => (
+                          <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-card pl-1 pr-2 py-0.5 text-xs">
+                            <span className="h-5 w-5 rounded-full bg-brand/15 text-brand flex items-center justify-center text-[9px] font-bold">
+                              {m.name.slice(0, 1).toUpperCase()}
+                            </span>
+                            {m.name}
+                            <button onClick={() => unassignMember(p.id, m.userId)} className="text-muted-foreground hover:text-red-500 transition" aria-label={`Remove ${m.name}`}>
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                        {available.length > 0 ? (
+                          <select
+                            value=""
+                            onChange={(e) => e.target.value && assignMember(p.id, e.target.value)}
+                            disabled={assigningTo === p.id}
+                            className="h-7 rounded-full border bg-transparent px-2 text-xs text-muted-foreground hover:border-brand/60 transition"
+                            aria-label="Assign a teammate to this project"
+                          >
+                            <option value="">+ Assign teammate…</option>
+                            {available.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                          </select>
+                        ) : teamPool.length === 0 ? (
+                          <span className="text-[11px] text-muted-foreground">Create a team below, then assign your people here in one tap.</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </CardContent>
           </Card>
 
