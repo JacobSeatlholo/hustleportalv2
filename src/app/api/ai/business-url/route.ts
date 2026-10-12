@@ -91,7 +91,7 @@ async function probeReachable(url: string): Promise<boolean> {
   }
 }
 
-async function fetchPage(url: string): Promise<{ text: string; finalUrl: string } | { error: string; dns?: boolean }> {
+async function fetchPage(url: string): Promise<{ text: string; html: string; finalUrl: string } | { error: string; dns?: boolean }> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -106,10 +106,56 @@ async function fetchPage(url: string): Promise<{ text: string; finalUrl: string 
       return { error: `That site responded with HTTP ${res.status}. Check the address, or paste the business info manually and use Generate instead.` }
     }
     const html = (await res.text()).slice(0, MAX_HTML_BYTES)
-    return { text: htmlToText(html).slice(0, MAX_TEXT_CHARS), finalUrl: res.url || url }
+    return { text: htmlToText(html).slice(0, MAX_TEXT_CHARS), html, finalUrl: res.url || url }
   } catch (e) {
     if (isDnsFailure(e)) return { error: 'We could not find that web address on the internet (it may be misspelled).', dns: true }
     return { error: 'That website took too long to respond (it may be offline or very slow). Try again in a moment.' }
+  }
+}
+
+function metaContent(html: string, name: string): string {
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=["']([^"']*)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${name}["']`, 'i'),
+  ]
+  for (const p of patterns) {
+    const m = html.match(p)
+    if (m?.[1]) return m[1].trim()
+  }
+  return ''
+}
+
+/**
+ * The no-AI floor: read the site's own meta tags and contact links directly.
+ * When the AI minute is rate-limited, this still fills the profile with facts
+ * the site itself states — name, tagline, contact email, phone. Nothing is
+ * invented; whatever the site does not say stays empty.
+ */
+function extractFromHtml(html: string, text: string, finalUrl: string): BusinessAnalysis {
+  const title = (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || '').trim()
+  const siteName = metaContent(html, 'og:site_name')
+  const description = metaContent(html, 'description') || metaContent(html, 'og:description')
+  const businessName = siteName || (title ? title.split(/[|–—·::]/)[0].trim() : '')
+  const tagline = description.split(/(?<=[.!?])\s/)[0]?.slice(0, 160) || ''
+
+  const host = (() => { try { return new URL(finalUrl).hostname.replace(/^www\./, '') } catch { return '' } })()
+  const emails = [...text.matchAll(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)]
+    .map((m) => m[0].toLowerCase())
+    .filter((e) => !/\.(png|jpe?g|gif|svg|webp|css|js)$/.test(e))
+  const email = emails.find((e) => host && e.endsWith(`@${host}`)) || emails[0] || undefined
+
+  const telMatch = html.match(/href=["']tel:([^"']+)["']/i)?.[1] || text.match(/(?:\+27|0)\s?\d{1,2}[\s-]?\d{3}[\s-]?\d{4}/)?.[0]
+  let phone: string | undefined
+  if (telMatch) {
+    const digits = telMatch.replace(/[^\d+]/g, '')
+    phone = digits.startsWith('0') ? `+27${digits.slice(1)}` : digits
+  }
+
+  return {
+    businessName: businessName || undefined,
+    tagline: tagline || undefined,
+    email,
+    phone,
   }
 }
 
@@ -183,6 +229,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `${page.error}${hint}` }, { status: 400 })
   }
   const pageText = page.text
+  const pageHtml = page.html
   const finalUrl = page.finalUrl
   if (pageText.replace(/\s/g, '').length < 200) {
     return NextResponse.json(
@@ -212,7 +259,7 @@ export async function POST(req: NextRequest) {
   let degraded = false
 
   const usable = (a: BusinessAnalysis | null): boolean =>
-    !!a && (!!a.positioning || (!!a.audience && !!a.businessName))
+    !!a && !!(a.positioning || a.businessName || a.tagline)
 
   if (analysis && usable(analysis)) {
     // Enrichment pass: pitch drafts + deeper audience reading, best-effort.
@@ -240,6 +287,15 @@ export async function POST(req: NextRequest) {
       }
     } else {
       degraded = true
+    }
+  } else {
+    // The AI minute was busy (quota, rotation, or a hiccup): the profile still
+    // fills from the site's own meta tags and contact links. Facts only.
+    const facts = extractFromHtml(pageHtml, pageText, finalUrl)
+    if (facts.businessName || facts.tagline || facts.email || facts.phone) {
+      analysis = { ...(analysis || {}), ...facts }
+      degraded = true
+      notices.push('The AI minute was busy, so we read your website directly and saved the facts we could confirm: name, tagline and contact details. Run Generate again soon for the full positioning and pitch drafts.')
     }
   }
 
