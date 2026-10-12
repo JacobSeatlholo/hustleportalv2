@@ -148,6 +148,16 @@ export interface Task {
   creator: { id: string; name: string }
   assignee?: { id: string; name: string } | null
   team?: { id: string; name: string } | null
+  _count?: { comments: number } // Prisma _count include on the list payload
+}
+
+export interface TaskCommentRow {
+  id: string
+  taskId: string
+  userId: string
+  body: string
+  createdAt: string
+  user: { id: string; name: string }
 }
 
 export interface CreditTx {

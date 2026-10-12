@@ -13,10 +13,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { api, PRIORITIES, type Task } from './shared'
+import { api, PRIORITIES, type Task, type TaskCommentRow } from './shared'
 import { useHp } from './store'
 import ScanDiaryDialog from './ScanDiaryDialog'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
@@ -35,12 +35,15 @@ export default function TasksView() {
   const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
+  // Live comment counts per task (list payload ships the DB count; the thread updates it locally)
+  const [counts, setCounts] = useState<Record<string, number>>({})
 
   async function load() {
     setLoading(true)
     try {
       const res = await api<{ tasks: Task[] }>(`/api/tasks?scope=${scope}`)
       setTasks(res.tasks)
+      setCounts(Object.fromEntries(res.tasks.map((t) => [t.id, t._count?.comments || 0])))
     } catch {
       toast({ title: 'Failed to load tasks', variant: 'destructive' })
     } finally {
@@ -204,14 +207,14 @@ export default function TasksView() {
             </Card>
           )}
           {open.map((t) => (
-            <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} currentUserId={session?.user.id || ''} />
+            <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} />
           ))}
           {done.length > 0 && (
             <div className="pt-2">
               <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Completed</p>
               <div className="space-y-2">
                 {done.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} currentUserId={session?.user.id || ''} />
+                  <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} />
                 ))}
               </div>
             </div>
@@ -224,46 +227,158 @@ export default function TasksView() {
   )
 }
 
-function TaskRow({ task, onToggle, onRemove, currentUserId }: {
+function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId }: {
   task: Task
   onToggle: (t: Task) => void
   onRemove: (t: Task) => void
+  onCommentCountChange: (taskId: string, count: number) => void
   currentUserId: string
 }) {
   const overdue = task.dueDate && task.status !== 'DONE' && new Date(task.dueDate) < new Date()
+  const [threadOpen, setThreadOpen] = useState(false)
+  const [comments, setComments] = useState<TaskCommentRow[] | null>(null)
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [posting, setPosting] = useState(false)
+
+  const commentCount = comments ? comments.length : task._count?.comments || 0
+
+  async function openThread() {
+    setThreadOpen((v) => !v)
+    if (!threadOpen && comments === null) {
+      setLoadingComments(true)
+      try {
+        const res = await api<{ comments: TaskCommentRow[] }>(`/api/tasks/${task.id}/comments`)
+        setComments(res.comments)
+        onCommentCountChange(task.id, res.comments.length)
+      } catch {
+        setComments([])
+      } finally {
+        setLoadingComments(false)
+      }
+    }
+  }
+
+  async function postComment() {
+    const body = draft.trim()
+    if (!body) return
+    setPosting(true)
+    try {
+      const res = await api<{ comment: TaskCommentRow }>(`/api/tasks/${task.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      })
+      setComments((prev) => [...(prev || []), res.comment])
+      onCommentCountChange(task.id, (comments?.length || 0) + 1)
+      setDraft('')
+    } catch {
+      // non-fatal — the draft stays in the input
+    } finally {
+      setPosting(false)
+    }
+  }
+
   return (
     <Card className={task.status === 'DONE' ? 'opacity-60' : ''}>
-      <CardContent className="p-3 flex items-center gap-3">
-        <button
-          onClick={() => onToggle(task)}
-          className={`h-5 w-5 rounded-md border-2 flex items-center justify-center shrink-0 transition ${
-            task.status === 'DONE' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-500 hover:border-brand'
-          }`}
-          aria-label={task.status === 'DONE' ? 'Mark as not done' : 'Mark as done'}
-        >
-          {task.status === 'DONE' && '✓'}
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
-            {task.dueDate && (
-              <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-500 font-medium' : ''}`}>
-                <CalendarDays className="h-3 w-3" />
-                {new Date(task.dueDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
-              </span>
-            )}
-            {task.priority === 'HIGH' && <Badge variant="destructive" className="text-[10px] h-4">High</Badge>}
-            {task.priority === 'LOW' && <Badge variant="secondary" className="text-[10px] h-4">Low</Badge>}
-            {task.team && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {task.team.name}</span>}
-            {!task.team && !task.isPrivate && <Badge variant="secondary" className="text-[10px] h-4">Business</Badge>}
-            {task.isPrivate && <span className="text-[10px]">🔒 private</span>}
-            {task.assignee && task.assignee.id !== currentUserId && <span>→ {task.assignee.name}</span>}
-            {task.creatorId !== currentUserId && task.assignee?.id === currentUserId && <span>from {task.creator.name}</span>}
+      <CardContent className="p-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onToggle(task)}
+            className={`h-5 w-5 rounded-md border-2 flex items-center justify-center shrink-0 transition ${
+              task.status === 'DONE' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-500 hover:border-brand'
+            }`}
+            aria-label={task.status === 'DONE' ? 'Mark as not done' : 'Mark as done'}
+          >
+            {task.status === 'DONE' && '✓'}
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+              {task.dueDate && (
+                <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-500 font-medium' : ''}`}>
+                  <CalendarDays className="h-3 w-3" />
+                  {new Date(task.dueDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
+                </span>
+              )}
+              {task.priority === 'HIGH' && <Badge variant="destructive" className="text-[10px] h-4">High</Badge>}
+              {task.priority === 'LOW' && <Badge variant="secondary" className="text-[10px] h-4">Low</Badge>}
+              {task.team && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {task.team.name}</span>}
+              {!task.team && !task.isPrivate && <Badge variant="secondary" className="text-[10px] h-4">Business</Badge>}
+              {task.isPrivate && <span className="text-[10px]">🔒 private</span>}
+              {task.assignee && task.assignee.id !== currentUserId && <span>→ {task.assignee.name}</span>}
+              {task.creatorId !== currentUserId && task.assignee?.id === currentUserId && <span>from {task.creator.name}</span>}
+            </div>
           </div>
+          {/* Team discussion — comments happen IN context, not in a WhatsApp group */}
+          <button
+            onClick={openThread}
+            className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
+              threadOpen || commentCount > 0
+                ? 'border-brand/50 text-brand bg-brand/5'
+                : 'border-stone-600/60 text-muted-foreground hover:border-brand hover:text-brand'
+            }`}
+            aria-label={threadOpen ? 'Hide discussion' : `Discussion — ${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+            aria-expanded={threadOpen}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {commentCount > 0 && <span>{commentCount}</span>}
+            {threadOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          <Button variant="ghost" size="icon" onClick={() => onRemove(task)} className="text-muted-foreground hover:text-red-600 shrink-0">
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => onRemove(task)} className="text-muted-foreground hover:text-red-600 shrink-0">
-          <Trash2 className="h-4 w-4" />
-        </Button>
+
+        {threadOpen && (
+          <div className="mt-3 border-t pt-3 space-y-2.5">
+            {loadingComments ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading discussion…
+              </div>
+            ) : !comments || comments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No comments yet — start the discussion. Everyone on this task sees it here, in context.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto hp-scroll pr-1">
+                {comments.map((c) => {
+                  const mine = c.userId === currentUserId
+                  return (
+                    <div key={c.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                          mine ? 'bg-brand/15 border border-brand/30' : 'bg-white/5 border'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-[11px] font-medium ${mine ? 'text-brand' : 'text-foreground'}`}>
+                            {mine ? 'You' : c.user.name}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(c.createdAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-wrap break-words">{c.body}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() } }}
+                placeholder="Add a comment… e.g. Quoted them R1 200, waiting for Friday"
+                className="flex-1"
+              />
+              <Button onClick={postComment} disabled={posting || !draft.trim()} size="icon" className="shrink-0" aria-label="Send comment">
+                {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

@@ -206,12 +206,15 @@ export default function ProfileView() {
     if (!activeProjectId) return
     setPitching(true)
     try {
-      const r = await api<{ pitch: string }>('/api/ai/sales-pitch', {
+      const r = await api<{ pitch: string; notice?: string }>('/api/ai/sales-pitch', {
         method: 'POST',
         body: JSON.stringify({ projectId: activeProjectId }),
       })
       setSalesPitch(r.pitch)
-      toast({ title: 'Sales pitch generated ✓', description: 'Grounded in your workspace profile.' })
+      toast({
+        title: 'Sales pitch generated ✓',
+        description: r.notice || 'Grounded in your workspace profile.',
+      })
     } catch (e) {
       toast({ title: 'Pitch failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -226,7 +229,7 @@ export default function ProfileView() {
     }
     setAnalyzing(true)
     try {
-      const r = await api<{ analysis: UrlAnalysis }>('/api/ai/business-url', {
+      const r = await api<{ analysis: UrlAnalysis; notice?: string }>('/api/ai/business-url', {
         method: 'POST',
         body: JSON.stringify({ url: urlInput, projectId: activeProjectId }),
       })
@@ -259,10 +262,10 @@ export default function ProfileView() {
       if (filled.length > 0) {
         toast({
           title: 'Profile drafted from your website ✓',
-          description: `Filled: ${filled.join(', ')}. Check each field, then press Save changes to confirm.`,
+          description: `${r.notice ? r.notice + ' ' : ''}Filled: ${filled.join(', ')}. Check each field, then press Save changes to confirm.`,
         })
       } else {
-        toast({ title: 'Business analysis complete ✓', description: 'Your profile fields were already filled — review them and save.' })
+        toast({ title: 'Business analysis complete ✓', description: r.notice || 'Your profile fields were already filled — review them and save.' })
       }
     } catch (e) {
       toast({ title: 'Analysis failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })

@@ -41,7 +41,7 @@ const INTEGRATIONS: {
     title: 'Gemini API key (optional)',
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza…',
-    helper: 'The AI Co-Founder, plans and drafts already run on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com) to run AI on your own quota.',
+    helper: 'The AI already runs on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
     secret: true,
   },
   {
@@ -413,6 +413,7 @@ export default function IntegrationsView() {
   const [saving, setSaving] = useState<string | null>(null)
   const [mailTesting, setMailTesting] = useState(false)
   const [mailVerdict, setMailVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [geminiVerdict, setGeminiVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -431,14 +432,30 @@ export default function IntegrationsView() {
   async function save(key: string) {
     const value = (drafts[key] ?? '').trim()
     setSaving(key)
+    if (key === 'GEMINI_API_KEY') setGeminiVerdict(null)
     try {
-      const res = await api<{ setting: IntegrationSetting }>('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ key, value }),
-      })
+      const res = await api<{ setting: IntegrationSetting; validation?: { ok: boolean; message: string } | null }>(
+        '/api/settings',
+        {
+          method: 'PUT',
+          body: JSON.stringify({ key, value }),
+        },
+      )
       setSettings((rows) => [...rows.filter((r) => r.key !== key), res.setting])
       setDrafts((d) => ({ ...d, [key]: '' }))
-      toast({ title: 'Saved ✓', description: `${key} stored securely on your account.` })
+      if (key === 'GEMINI_API_KEY' && res.validation) {
+        // The verdict IS the toast — a blocked key is named in the same minute it's pasted.
+        setGeminiVerdict({ ok: res.validation.ok, msg: res.validation.message })
+        toast({
+          title: res.validation.ok ? 'Gemini key verified ✓' : 'Key saved — but Google rejected it',
+          description: res.validation.ok
+            ? 'AI will now run on your own quota.'
+            : 'HustlePortal AI automatically covers the gap, so nothing breaks. See the note under the key for the fix.',
+          variant: res.validation.ok ? 'default' : 'destructive',
+        })
+      } else {
+        toast({ title: 'Saved ✓', description: `${key} stored securely on your account.` })
+      }
       bumpRefresh()
     } catch (e) {
       toast({ title: 'Could not save', description: e instanceof Error ? e.message : '', variant: 'destructive' })
@@ -525,6 +542,18 @@ export default function IntegrationsView() {
                     {saving === intg.key ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
                   </Button>
                 </div>
+                {intg.key === 'GEMINI_API_KEY' && geminiVerdict && (
+                  <p
+                    className={`text-xs rounded-md border px-2.5 py-2 leading-relaxed ${
+                      geminiVerdict.ok
+                        ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/5'
+                        : 'border-amber-500/40 text-amber-400 bg-amber-500/5'
+                    }`}
+                  >
+                    {geminiVerdict.ok ? '✓ ' : '⚠ '}
+                    {geminiVerdict.msg}
+                  </p>
+                )}
                 {intg.key === 'GMAIL_APP_PASSWORD' && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">

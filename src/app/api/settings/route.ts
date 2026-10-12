@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { validateGeminiKey } from '@/lib/gemini'
 
 const ALLOWED_KEYS = [
   'GMAIL_USER',
@@ -60,12 +61,23 @@ export async function PUT(req: NextRequest) {
     update: { value },
     create: { userId, key, value },
   })
+
+  // A pasted Gemini key is probed against Google the moment it's saved — a
+  // 403-blocked key is flagged HERE, not three screens later when a scan fails.
+  // The key is still stored: the user may enable the API on Google's side and the
+  // SAME key starts working, and the platform chain covers the gap meanwhile.
+  let validation: Awaited<ReturnType<typeof validateGeminiKey>> | null = null
+  if (key === 'GEMINI_API_KEY') {
+    validation = await validateGeminiKey(value)
+  }
+
   return NextResponse.json({
     setting: {
       key: setting.key,
       value: SECRET_KEYS.has(key) ? mask(value) : value,
       configured: value.length > 0,
     },
+    validation,
   })
 }
 

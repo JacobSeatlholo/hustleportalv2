@@ -387,7 +387,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     setResults([])
     setAddedKeys(new Set())
     try {
-      const res = await api<{ leads: DiscoverResult[]; mode: DiscoverMode; source?: string; note?: string }>('/api/leads/discover', {
+      const res = await api<{ leads: DiscoverResult[]; mode: DiscoverMode; source?: string; note?: string; notice?: string }>('/api/leads/discover', {
         method: 'POST',
         body: JSON.stringify({
           definition,
@@ -399,7 +399,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
       setResults(res.leads)
       setMode(res.mode)
       setResSource(res.source || (res.mode === 'LIVE' ? 'EXPLEE' : 'WEB'))
-      setNote(res.note || '')
+      setNote(res.notice ? `${res.notice} ${res.note || ''}`.trim() : res.note || '')
       setSelected(new Set(res.leads.map((l) => l.company)))
       if (autoAdd && res.leads.length > 0) {
         const added = await saveLeads(res.leads)

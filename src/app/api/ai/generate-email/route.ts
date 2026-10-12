@@ -130,5 +130,5 @@ export async function POST(req: NextRequest) {
       status: 'DRAFT',
     },
   })
-  return NextResponse.json({ draft: { id: log.id, subject, body: emailBody, toEmail, leadId, projectId: project.id } })
+  return NextResponse.json({ draft: { id: log.id, subject, body: emailBody, toEmail, leadId, projectId: project.id }, ...(result.notice ? { notice: result.notice } : {}) })
 }

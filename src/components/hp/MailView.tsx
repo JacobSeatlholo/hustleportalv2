@@ -16,7 +16,9 @@ const GOALS = [
   'Follow up on a quote I sent',
   'Re-engage a cold prospect',
   'Pitch a specific offering',
+  '__custom__', // “Write my own…” — free-text goal, e.g. “Welcome email for my team”
 ]
+const CUSTOM_GOAL = '__custom__'
 
 interface MailStatus {
   platformConfigured: boolean
@@ -43,6 +45,7 @@ export default function MailView() {
   const [leadId, setLeadId] = useState('')
   const [to, setTo] = useState('')
   const [goal, setGoal] = useState(GOALS[0])
+  const [customGoal, setCustomGoal] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [draftId, setDraftId] = useState<string | null>(null)
@@ -68,13 +71,19 @@ export default function MailView() {
   useEffect(() => { load() }, [load])
 
   async function draftWithGemini() {
+    // A typed goal wins — the presets are just the fast path.
+    const effectiveGoal = goal === CUSTOM_GOAL ? customGoal.trim() : goal
+    if (goal === CUSTOM_GOAL && !effectiveGoal) {
+      toast({ title: 'Write your goal first', description: 'One line is enough — e.g. "Welcome email for my team".', variant: 'destructive' })
+      return
+    }
     setDrafting(true)
     try {
       const res = await api<{ draft: { id: string; subject: string; body: string; toEmail: string } }>(
         '/api/ai/generate-email',
         {
           method: 'POST',
-          body: JSON.stringify({ leadId: leadId || undefined, to, goal, projectId: activeProjectId }),
+          body: JSON.stringify({ leadId: leadId || undefined, to, goal: effectiveGoal, projectId: activeProjectId }),
         },
       )
       setSubject(res.draft.subject)
@@ -178,9 +187,29 @@ export default function MailView() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="m-goal">Goal</Label>
-              <select id="m-goal" value={goal} onChange={(e) => setGoal(e.target.value)} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
-                {GOALS.map((g) => <option key={g} value={g}>{g}</option>)}
+              <select
+                id="m-goal"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                {GOALS.map((g) => (
+                  <option key={g} value={g}>{g === CUSTOM_GOAL ? '✍ Write my own goal…' : g}</option>
+                ))}
               </select>
+              {goal === CUSTOM_GOAL && (
+                <Input
+                  id="m-goal-custom"
+                  value={customGoal}
+                  onChange={(e) => setCustomGoal(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && draftWithGemini()}
+                  placeholder="e.g. Welcome email for my team"
+                  className="mt-2"
+                />
+              )}
+              {goal === CUSTOM_GOAL && (
+                <p className="text-[11px] text-muted-foreground">Any goal works — the AI drafts around it. Presets stay one click away.</p>
+              )}
             </div>
           </div>
           <Button onClick={draftWithGemini} disabled={drafting} className="w-full sm:w-fit">

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       creator: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
+      _count: { select: { comments: true } },
     },
     take: 300,
   })
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
       creator: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
+      _count: { select: { comments: true } },
     },
   })
   await bumpChallenge(userId, 'add_task')

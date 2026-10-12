@@ -31,5 +31,5 @@ export async function POST(req: NextRequest) {
 
   const pitch = result.text.trim()
   const updated = await db.project.update({ where: { id: project.id }, data: { salesPitch: pitch } })
-  return NextResponse.json({ pitch, project: updated })
+  return NextResponse.json({ pitch, project: updated, ...(result.notice ? { notice: result.notice } : {}) })
 }

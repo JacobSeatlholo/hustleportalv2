@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     data: { audienceInsight: insight },
   })
 
-  return NextResponse.json({ ok: true, analysis, project: updated })
+  return NextResponse.json({ ok: true, analysis, project: updated, ...(result.notice ? { notice: result.notice } : {}) })
 }
 
 // GET → last saved analysis for the active workspace

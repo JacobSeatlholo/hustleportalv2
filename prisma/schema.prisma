@@ -52,6 +52,7 @@ model User {
   waMessages         WaMessage[]
   inventoryItems     InventoryItem[]
   pushSubs           PushSubscription[]
+  taskComments       TaskComment[]
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============
@@ -198,12 +199,27 @@ model Task {
   creator  User  @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  comments TaskComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([creatorId, status])
   @@index([teamId, status])
+}
+
+// Team discussion threads ON tasks — the in-context alternative to WhatsApp groups.
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
 }
 
 // ============ FINANCE ============

@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
         leads,
         mode: 'AI_SEARCH',
         source: 'WEB',
+        ...(ai.notice ? { notice: ai.notice } : {}),
         note: teaser
           ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
           : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
@@ -182,6 +183,7 @@ export async function POST(req: NextRequest) {
       leads: osm.leads,
       mode: 'OSM',
       source: 'OSM',
+      ...(ai.notice ? { notice: ai.notice } : {}),
       note: `Real businesses from the OpenStreetMap directory${pinArea ? ' within 5 km of your location' : area ? ` in ${area}` : ''} — publicly mappable, contact details as listed. Search grounding was busy, so these come from the map instead.`,
     })
   }
@@ -196,6 +198,7 @@ export async function POST(req: NextRequest) {
     {
       leads: [],
       mode: 'NONE',
+      ...(ai.notice ? { notice: ai.notice } : {}),
       note:
         (ai.ok
           ? `The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services"). ${osm.note || ''}`.trim()
