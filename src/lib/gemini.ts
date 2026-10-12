@@ -299,7 +299,7 @@ async function callGemini(
 
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number },
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number; maxOutputTokens?: number },
 ): Promise<GeminiResult> {
   const history = (opts.history || []).slice(-10).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
@@ -310,7 +310,10 @@ export async function geminiGenerate(
     ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
     generationConfig: {
       temperature: opts.json ? 0.4 : 0.8,
-      maxOutputTokens: opts.search ? 2000 : 1200,
+      // Callers producing big structured payloads (site analysis with 3 pitches,
+      // business plans) MUST be able to raise this — a truncated JSON document
+      // fails to parse and reads to the user as "the AI could not read the page".
+      maxOutputTokens: opts.maxOutputTokens ?? (opts.search ? 2000 : 1200),
       // NOTE: JSON mime mode is incompatible with search grounding on many model
       // versions — when searching, we ask for raw JSON in the prompt and parse loosely.
       ...(opts.json && !opts.search ? { responseMimeType: 'application/json' } : {}),

@@ -86,3 +86,23 @@ Work Log:
 Stage Summary:
 - Production deploying 21b9e44. All 8 user-reported items implemented (top bar, messaging, mail identity, lead finder location+prompt+auto-add+engagement, notifications, stage dropdown, tasks personal/business, team invites, inventory).
 - Notes for user: VAPID/keys need no setup; vercel.json cron active on deploy; optional env CRON_SECRET hardens the cron; web-push requires HTTPS + installed app on Android (iOS 16.4+ requires Add-to-Home-Screen first).
+
+---
+Task ID: 32
+Agent: Super Z (main)
+Task: AI 403 "Google blocked the AI request" root-fix + per-section tutorials + custom email goals + task comment threads.
+
+Work Log:
+- DIAGNOSIS (prod probes, scripts/diag_ai_403*.mjs): user's own Gemini key under Integrations is 403-blocked by Google (Generative Language API disabled/restrictions) AND platform key search-grounded calls were 429-quota-limited; plain generateContent was healthy (pitch 200 in 7.6s). bestError ranked the user 403 (9) over platform 429/timeout and returned EMPTY second-cause clause for OTHER → user saw ONLY the 403 advice; the 429 chain also burned the 30s budget and starved the OSM fallback (discover → 0 leads).
+- gemini.ts hardening: 403/429 now key-level fatals (break to next key immediately — no 4-model retry on a blocked key); shortOtherCause never empty (covers PERMISSION with exact fix, EMPTY, OTHER/timeout); fallback-success returns notice ("your key was blocked — this answer came from HustlePortal AI"); exported validateGeminiKey (ListModels probe + AIza shape check).
+- Save-time validation: PUT /api/settings validates GEMINI_API_KEY instantly; IntegrationsView shows green/amber verdict card + toast with the exact Google fix (fresh key at aistudio.google.com/apikey / enable Generative Language API / clear restrictions). Key still saved — starts working the moment Google-side is fixed.
+- Notice surfacing: discover/business-url/sales-pitch/generate-email forward `notice`; LeadsView prepends to the results note; ProfileView toasts it on analysis/pitch success.
+- SectionTutorial system: tutorials.ts registry (19 sections, brand-voice steps) + SectionTutorial.tsx (floating thumb-reach Tutorial button, auto-opens ONCE for 8 core views via hp_tut_seen_<view>, hp:section-tutorial event for replay); mounted in AppShell next to WelcomeTour.
+- MailView custom goal: "✍ Write my own goal…" option with free-text input (e.g. "Welcome email for my team"); generate-email already accepted arbitrary goals.
+- Task comments: TaskComment model (schema additive) + /api/tasks/[id]/comments GET/POST (creator/assignee/team-member visibility) + TasksView inline discussion threads (bubble with live count, chat-style, Enter-to-send) + _count includes on task list/create.
+- Schema push happens on Vercel via build.mjs step 1 (db push with prod DATABASE_URL). tsc clean, next build clean.
+- Deployed: e417a7b..8a0ba1e (8a0ba1e).
+
+Stage Summary:
+- User-facing: their 403 key is now diagnosed at paste-time with the exact fix; even with a broken key every AI feature keeps working on the platform key WITH an honest notice; platform 429 no longer starves the map fallback; every section has a Tutorial button + one-time walkthroughs; email goals are free-typable; tasks have team comment threads.
+- Follow-ups for user: (a) their own Gemini key still needs the Google-side fix (or remove it — AI keeps working); (b) platform search-grounding 429 is quota-cooldown, retry clears it, OSM fallback covers meanwhile.
