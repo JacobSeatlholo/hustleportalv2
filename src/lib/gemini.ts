@@ -80,6 +80,14 @@ function classify(status: number, body: string): ErrorClass {
   return 'OTHER'
 }
 
+/** Google sometimes names a short retryDelay in the 429 body — honour it when tiny (≤8s). */
+function quotaRetryDelayMs(raw: string): number | null {
+  const m = raw.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)
+  if (!m) return null
+  const s = parseFloat(m[1])
+  return s > 0 && s <= 8 ? Math.ceil(s * 1000) : null
+}
+
 function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: boolean): string {
   const own = ownKey
     ? ' This happened with YOUR Gemini key — you can remove it under Integrations to ride on HustlePortal AI again.'
@@ -228,6 +236,7 @@ async function callGemini(
   const failures: Failure[] = []
   let userKeyFailure: Failure | null = null // remember WHY the user's key was bypassed → honest notice on fallback success
   let timedOut = false
+  const quotaRetried = new Set<string>() // (key:model) pairs already given their named-delay retry
   // Hard deadline for the WHOLE chain: per-attempt timeouts shrink as the clock
   // runs down, so (keys × models) can never stack past the caller's budget —
   // the single biggest cause of Vercel 504s on slow paths.
@@ -258,9 +267,21 @@ async function callGemini(
             cachedModelAt = 0
           }
           // Key-level fatals: no point trying other models with the same key —
-          // a permission-blocked (403) or rate-limited (429) project rejects EVERY
-          // model, and burning the clock here starves the fallbacks downstream.
-          if (cls === 'KEY_INVALID' || cls === 'PERMISSION' || cls === 'QUOTA') break
+          // a permission-blocked (403) or invalid key rejects EVERY model.
+          if (cls === 'KEY_INVALID' || cls === 'PERMISSION') break
+          if (cls === 'QUOTA') {
+            // 429 is a PER-MODEL quota bucket on free tier, not key-wide: the next
+            // Flash model usually still has headroom, so rotate instead of giving
+            // up. If Google names a short retryDelay for this model, honour it once.
+            const delayMs = quotaRetryDelayMs(raw)
+            const tag = `${ownKey ? 'u' : 'p'}:${model}`
+            if (delayMs !== null && !quotaRetried.has(tag) && Date.now() + delayMs < deadline - 2_000) {
+              quotaRetried.add(tag)
+              await new Promise((r) => setTimeout(r, delayMs))
+              continue // same model, after the delay Google asked for
+            }
+            continue // next model — separate quota bucket
+          }
           // Model-level problems (404 etc.): try the next model on this key.
           continue
         }

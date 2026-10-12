@@ -237,7 +237,11 @@ export async function POST(req: NextRequest) {
     const err = full.ok
       ? 'The AI could not read enough from that page. Try the homepage address, or fill the workspace profile manually.'
       : full.error
-    return NextResponse.json({ error: err }, { status: err.startsWith('NO_KEY') ? 503 : 400 })
+    // Even on AI failure, the user must keep what we learned (e.g. the corrected address).
+    return NextResponse.json(
+      { error: err, ...(notices.length ? { notice: notices.join(' ') } : {}) },
+      { status: err.startsWith('NO_KEY') ? 503 : 400 }
+    )
   }
   if (degraded) {
     notices.push('We saved the core profile from your site. The three ready made pitch drafts will appear when you run Generate again with a steadier connection.')
