@@ -225,9 +225,16 @@ export default function AppShell() {
         <WelcomeTour />
 
         <footer className="mt-auto border-t bg-background/60 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground flex flex-wrap justify-between gap-2">
-            <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
-            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
+          <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5">
+            <div className="flex flex-wrap justify-between gap-2">
+              <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
+              <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <a href="https://businesshustle.co.za/terms" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Terms of Service</a>
+              <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Privacy &amp; POPIA</a>
+              <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
+            </div>
           </div>
         </footer>
       </div>
@@ -415,7 +422,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
   function onItemPointerDown(e: React.PointerEvent, key: ViewKey) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     pressPos.current = { x: e.clientX, y: e.clientY }
-    clearTimeout(pressTimer.current)
+    if (pressTimer.current) clearTimeout(pressTimer.current)
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not fatal */ }
     pressTimer.current = setTimeout(() => {
       setDragKey(key)
@@ -432,11 +439,11 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
     // drifted before activation — that is a scroll, not a hold
     const dx = e.clientX - pressPos.current.x
     const dy = e.clientY - pressPos.current.y
-    if (dx * dx + dy * dy > 100) clearTimeout(pressTimer.current)
+    if (dx * dx + dy * dy > 100 && pressTimer.current) clearTimeout(pressTimer.current)
   }
 
   function endItemInteraction(key: ViewKey, cancelled: boolean) {
-    clearTimeout(pressTimer.current)
+    if (pressTimer.current) clearTimeout(pressTimer.current)
     if (dragKey === key) {
       suppressClick.current = true
       setDragKey(null)

@@ -373,11 +373,21 @@ function MailEngineCard() {
       )}
       {lastSend && (
         <p className={`text-xs leading-relaxed rounded-lg border px-2.5 py-2 ${lastSend.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
-          <b>Last system email</b> ({lastSend.ok ? 'accepted by the engine' : 'failed'}){lastSend.via ? ` · via ${lastSend.via}` : ''}:{' '}
-          <b>{lastSend.to}</b> — “{lastSend.subject}” at {new Date(lastSend.at).toLocaleString('en-ZA')}.
-          {lastSend.ok
-            ? ' Accepted means Resend took it — if it never lands, check spam and confirm this is the exact address you check.'
-            : ` Engine error: ${lastSend.error || 'unknown'}`}
+          {lastSend.via === 'no-account' ? (
+            <>
+              <b>Last reset request — no account match.</b> Someone asked to reset the password for <b>{lastSend.to}</b>{' '}
+              at {new Date(lastSend.at).toLocaleString('en-ZA')}, but no HustlePortal account uses that address, so nothing was sent.
+              If that was you: check the address for a typo, or sign up fresh — the reset link only goes to the exact email on the account.
+            </>
+          ) : (
+            <>
+              <b>Last system email</b> ({lastSend.ok ? 'accepted by the engine' : 'failed'}){lastSend.via ? ` · via ${lastSend.via}` : ''}:{' '}
+              <b>{lastSend.to}</b> — “{lastSend.subject}” at {new Date(lastSend.at).toLocaleString('en-ZA')}.
+              {lastSend.ok
+                ? ' Accepted means Resend took it — if it never lands, check spam and confirm this is the exact address you check.'
+                : ` Engine error: ${lastSend.error || 'unknown'}`}
+            </>
+          )}
         </p>
       )}
       <p className="text-xs text-muted-foreground">

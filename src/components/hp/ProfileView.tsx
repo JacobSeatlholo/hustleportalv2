@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
+import CityField from './CityField'
 import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch } from 'lucide-react'
 
 interface TeamInfo {

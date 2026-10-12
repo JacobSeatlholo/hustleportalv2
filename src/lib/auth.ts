@@ -59,6 +59,13 @@ export async function getSessionUser() {
   return user
 }
 
+/** Lightweight current-user lookup (id + role) for capability checks. */
+export async function getUser(): Promise<{ id: string; role: string } | null> {
+  const userId = await getUserId()
+  if (!userId) return null
+  return db.user.findUnique({ where: { id: userId }, select: { id: true, role: true } })
+}
+
 export function publicUser(u: {
   id: string
   email: string

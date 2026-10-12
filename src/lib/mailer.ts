@@ -119,6 +119,22 @@ export async function readLastSystemSend(): Promise<{ to: string; subject: strin
   }
 }
 
+/**
+ * A reset was requested for an email that matches NO account — the most common
+ * "the email never arrived" cause. Stamp it so diagnostics show the request
+ * happened and nothing was sent (admin-only view). Never reveals whether an
+ * account exists to the requester — the API response stays identical.
+ */
+export async function recordNoAccountReset(email: string): Promise<void> {
+  await stampLastSystemSend({
+    to: email,
+    subject: 'Password reset requested',
+    ok: false,
+    via: 'no-account',
+    error: 'No HustlePortal account matches this address — nothing was sent. Check for a typo or a different signup email.',
+  })
+}
+
 async function fetchResendDomains(apiKey: string): Promise<MailDomainRow[]> {
   try {
     const res = await fetch('https://api.resend.com/domains', {

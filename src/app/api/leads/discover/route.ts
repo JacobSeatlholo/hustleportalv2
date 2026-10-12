@@ -102,8 +102,7 @@ export async function POST(req: NextRequest) {
   }
   const area = city && !/^anywhere/i.test(city) ? city : 'South Africa'
 
-  // 1) PRIMARY — grounded web search (real businesses only)
-  const ai = await geminiGenerate(userId, {
+  const buildSearch = () => ({
     search: true,
     json: true,
     system:
@@ -120,6 +119,15 @@ export async function POST(req: NextRequest) {
       `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","why":"","score":3}]}`,
   })
 
+  // 1) PRIMARY — grounded web search (real businesses only).
+  // One patient retry on a per-minute 429: rate limits usually clear in seconds,
+  // and this search is the heart of the teaser funnel — worth the wait.
+  let ai = await geminiGenerate(userId, buildSearch())
+  if (!ai.ok && /429|rate-limited|quota/i.test(ai.error)) {
+    await new Promise((r) => setTimeout(r, 12_000))
+    ai = await geminiGenerate(userId, buildSearch())
+  }
+
   if (ai.ok) {
     const parsed = parseJsonLoose<{ leads?: AiLead[] }>(ai.text)
     const seen = new Set<string>()
@@ -135,7 +143,8 @@ export async function POST(req: NextRequest) {
         why: clean(l.why),
         score: typeof l.score === 'number' ? Math.max(1, Math.min(5, Math.round(l.score))) : undefined,
       }))
-      .filter((l): l is AiLead & { company: string } => Boolean(l.company))
+      // a lead without a company name is unusable — drop it (no fabrication)
+      .filter((l): l is typeof l & { company: string } => Boolean(l.company))
       .filter((l) => {
         const key = l.company.toLowerCase().replace(/[^a-z0-9]/g, '')
         if (!key || seen.has(key)) return false

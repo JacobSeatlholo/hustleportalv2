@@ -6,7 +6,7 @@ import { ensureWallet, addCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
 import { attributeSignup } from '@/lib/referral'
-import { sendSystemMail } from '@/lib/mailer'
+import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 
 const RESET_TTL_MS = 30 * 60 * 1000
 
@@ -83,6 +83,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
       }
       const user = await db.user.findUnique({ where: { email } })
+      if (!user) {
+        // Diagnostic truth-stamp: the request happened, but no account matches —
+        // the #1 cause of "the reset email never arrived". Admins see it in
+        // Integrations → Mail; the requester still gets the same neutral reply.
+        await recordNoAccountReset(email).catch(() => {})
+      }
       if (user) {
         // Single-use token: only its sha256 is stored, 30-minute window.
         const token = crypto.randomBytes(32).toString('hex')

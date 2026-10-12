@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getUserId } from '@/lib/auth'
+import { getUserId, getUser } from '@/lib/auth'
 import { getMailStatus, readLastSystemSend } from '@/lib/mailer'
 
 /**
@@ -12,7 +12,11 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const status = await getMailStatus(userId)
-    const lastSend = await readLastSystemSend()
+    // The last system send is a PLATFORM-wide record (reset emails name their
+    // recipient). Admins get it for diagnostics; regular users don't need
+    // another user's email address on their screen.
+    const me = await getUser()
+    const lastSend = me?.role === 'ADMIN' ? await readLastSystemSend() : null
     return NextResponse.json({ status, lastSend })
   } catch {
     // Never block the Mail screen on a status hiccup

@@ -36,10 +36,10 @@ export function buildICS(events: IcsEvent[]): string {
       `DTSTART:${icsDate(e.startsAt)}`,
       `DTEND:${icsDate(end)}`,
       `SUMMARY:${escapeText(e.title)}`,
-      e.description ? `DESCRIPTION:${escapeText(e.description)}` : null,
-      e.location ? `LOCATION:${escapeText(e.location)}` : null,
-      'END:VEVENT',
     )
+    if (e.description) lines.push(`DESCRIPTION:${escapeText(e.description)}`)
+    if (e.location) lines.push(`LOCATION:${escapeText(e.location)}`)
+    lines.push('END:VEVENT')
   }
   lines.push('END:VCALENDAR')
   return lines.filter(Boolean).join('\r\n')
