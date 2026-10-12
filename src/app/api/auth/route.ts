@@ -59,6 +59,48 @@ export async function POST(req: NextRequest) {
       try {
         await attributeSignup(user.id, normalized, body.refCode)
       } catch { /* attribution must never block registration */ }
+      // Welcome email — the first branded message of the relationship. Awaited
+      // (serverless freezes unawaited promises after the response) but wrapped
+      // so a failed send can never block registration.
+      try {
+        const first = String(name).trim().split(/\s+/)[0] || 'there'
+        const base = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://hustleportal.online'
+        const creditRand = Math.round(welcomeCents / 100)
+        await sendSystemMail({
+          to: normalized,
+          subject: `Welcome${first !== 'there' ? ` ${first}` : ''} — your R${creditRand} lead credit is ready`,
+          body: [
+            `Hi ${first},`,
+            '',
+            'Welcome to HustlePortal — your Business OS is live.',
+            '',
+            `Your wallet is already loaded with R${creditRand} in lead credits. That is real`,
+            'finding power: open the AI Lead Finder, type your city, and reveal verified',
+            "businesses around you. If a lead can't be verified, you're not charged for it.",
+            'No gimmicks — only leads that answer back.',
+            '',
+            'Three quick moves to make this week:',
+            '',
+            '1. Complete your profile — the more the AI knows about your business,',
+            '   the sharper your leads and emails get. Two minutes, biggest pay-off.',
+            '2. Run your first Lead Finder search — pick your city and industry,',
+            '   then reveal the businesses that fit what you sell.',
+            '3. Save your best find to the pipeline — invoices, tasks and finance',
+            '   all hang off that pipeline.',
+            '',
+            `Start here — it drops you straight into the Lead Finder:`,
+            `${base}/?view=leads`,
+            '',
+            'Stuck on anything? Just reply to this email — a human reads every reply.',
+            '',
+            'Go get paid,',
+            'The HustlePortal team',
+            'Business Hustle · businesshustle.co.za',
+          ].join('\n'),
+        })
+      } catch (e) {
+        console.error('[auth] welcome email failed for', normalized, e)
+      }
       return NextResponse.json({ ok: true })
     }
 
