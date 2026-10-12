@@ -200,6 +200,7 @@ model Task {
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
   comments TaskComment[]
+  events   TaskEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -220,6 +221,28 @@ model TaskComment {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
+}
+
+// Sealed accountability record for tasks. Append-only, hash-chained: every event
+// seals the previous one (sha256), so editing or deleting a row breaks the chain
+// and the task's history reads as tampered. Actor names are denormalised so the
+// record survives members leaving. The team answer to "who dropped the ball".
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  seq       Int      // 1..n within the task; the chain walks in this order
+  type      String   // CREATED | SENT | OPENED | STATUS | COMMENT | EDIT
+  actorId   String?
+  actorName String   // denormalised: the record survives member changes
+  detail    String   // human line: "sent to Sipho", "opened it", "moved to Done"
+  prevHash  String   @default("")
+  hash      String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, seq])
+  @@index([taskId, type])
 }
 
 // ============ FINANCE ============
@@ -466,6 +489,7 @@ model Subscription {
   provider     String    @default("YOCO")
   reference    String    // platform reference (HPSUB-...)
   providerRef  String?   // Yoco checkout/payment id for reconciliation
+  npoNumber    String?   // registered nonprofit number: 30% off while it stands
   pausedUntil  DateTime? // while PAUSED: plan is frozen; auto-resumes with zero lost days
   startedAt    DateTime?
   renewsAt     DateTime? // monthly (+35d grace) or annual (+370d grace) anniversary

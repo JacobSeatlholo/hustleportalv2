@@ -149,6 +149,17 @@ export interface Task {
   assignee?: { id: string; name: string } | null
   team?: { id: string; name: string } | null
   _count?: { comments: number } // Prisma _count include on the list payload
+  _openedAt?: string | null // first time the assigned person opened the record
+}
+
+export interface TaskEventRow {
+  id: string
+  seq: number
+  type: string // CREATED | SENT | OPENED | STATUS | COMMENT | EDIT
+  actorName: string
+  detail: string
+  createdAt: string
+  hash: string
 }
 
 export interface TaskCommentRow {

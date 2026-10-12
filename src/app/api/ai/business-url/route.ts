@@ -38,6 +38,81 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
+function isDnsFailure(e: unknown): boolean {
+  if (!(e instanceof Error)) return false
+  const name = (e as Error & { name?: string }).name || ''
+  if (name === 'TimeoutError') return false
+  const code = (e as Error & { cause?: { code?: string } }).cause?.code || ''
+  return /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET/i.test(code) || /fetch failed/i.test(e.message)
+}
+
+/**
+ * South African addresses are routinely mistyped: "mybusiness.co.za" typed as
+ * "mybusinessco.za" (the dot before "co" vanishes) or the www left off an apex
+ * that only answers on www. Instead of bouncing the user with "could not reach
+ * that website", we probe the most likely corrected forms of their address and
+ * read the first one that answers. The caller is told whenever a correction was
+ * applied so the user can save the right address on their profile.
+ */
+function domainCandidates(hostname: string): string[] {
+  const host = hostname.toLowerCase().replace(/^www\./, '')
+  const labels = host.split('.')
+  const out: string[] = []
+  if (labels.length >= 2) {
+    const base = labels.slice(0, -1).join('.')
+    const tld = labels[labels.length - 1]
+    const singleLabel = !base.includes('.')
+    // "businesshustleco.za" -> base "businesshustleco", tld "za"
+    if (tld === 'za' && singleLabel && base.endsWith('co') && base.length > 4) {
+      out.push(`${base.slice(0, -2)}.co.za`)
+    }
+    if (tld === 'za' && singleLabel && base.length > 2) {
+      out.push(`${base}.co.za`)
+    }
+    if (tld === 'co.za' && !host.startsWith('www.')) {
+      out.push(`www.${host}`)
+    }
+    if (!host.startsWith('www.')) out.push(`www.${host}`)
+    if (host.startsWith('www.')) out.push(host)
+  }
+  return [...new Set(out)].filter((c) => c !== hostname.toLowerCase())
+}
+
+async function probeReachable(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HustlePortalBot/1.0; +https://hustleportal.online)', Accept: 'text/html' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(6_000),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function fetchPage(url: string): Promise<{ text: string; finalUrl: string } | { error: string; dns?: boolean }> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; HustlePortalBot/1.0; +https://hustleportal.online)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-ZA,en;q=0.9',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) {
+      return { error: `That site responded with HTTP ${res.status}. Check the address, or paste the business info manually and use Generate instead.` }
+    }
+    const html = (await res.text()).slice(0, MAX_HTML_BYTES)
+    return { text: htmlToText(html).slice(0, MAX_TEXT_CHARS), finalUrl: res.url || url }
+  } catch (e) {
+    if (isDnsFailure(e)) return { error: 'We could not find that web address on the internet (it may be misspelled).', dns: true }
+    return { error: 'That website took too long to respond (it may be offline or very slow). Try again in a moment.' }
+  }
+}
+
 function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -81,34 +156,34 @@ export async function POST(req: NextRequest) {
   }
   const project = await resolveProject(userId, body.projectId)
 
-  // 1) Fetch the page (browser-like headers; many SA small-business sites need them)
-  let pageText = ''
-  let finalUrl = url
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; HustlePortalBot/1.0; +https://hustleportal.online)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-ZA,en;q=0.9',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(15_000),
-    })
-    finalUrl = res.url || url
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `That site responded with HTTP ${res.status}. Check the address — or paste the business info manually and use "Generate" instead.` },
-        { status: 400 }
-      )
+  const notices: string[] = []
+  const routeDeadline = Date.now() + 55_000
+
+  // 1) Fetch the page. When the address does not resolve, probe the likely
+  //    corrected forms ("businesshustleco.za" really means "businesshustle.co.za")
+  //    and read the one that answers, telling the user what we did.
+  let page = await fetchPage(url)
+  if ('error' in page && page.dns) {
+    const candidates = domainCandidates(new URL(url).hostname).slice(0, 2)
+    for (const c of candidates) {
+      const candidateUrl = `https://${c}/`
+      if (!(await probeReachable(candidateUrl))) continue
+      const rescued = await fetchPage(candidateUrl)
+      if ('text' in rescued) {
+        page = rescued
+        notices.push(`We could not find ${new URL(url).hostname}, so we read ${new URL(rescued.finalUrl).hostname} instead. That is the address worth saving on your profile.`)
+        break
+      }
     }
-    const html = (await res.text()).slice(0, MAX_HTML_BYTES)
-    pageText = htmlToText(html).slice(0, MAX_TEXT_CHARS)
-  } catch {
-    return NextResponse.json(
-      { error: 'Could not reach that website (timeout or offline). Check the address and try again.' },
-      { status: 400 }
-    )
   }
+  if ('error' in page) {
+    const hint = page.dns && domainCandidates(new URL(url).hostname).length
+      ? ' Double check the spelling. South African sites usually end in .co.za, for example businesshustle.co.za.'
+      : ''
+    return NextResponse.json({ error: `${page.error}${hint}` }, { status: 400 })
+  }
+  const pageText = page.text
+  const finalUrl = page.finalUrl
   if (pageText.replace(/\s/g, '').length < 200) {
     return NextResponse.json(
       { error: 'That page has too little text to analyse. Try the homepage, or fill the workspace profile manually.' },
@@ -116,39 +191,56 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 2) Gemini dissection — grounded ONLY in the page text
-  const result = await geminiGenerate(userId, {
+  // 2) Gemini dissection — grounded ONLY in the page text. The full analysis
+  //    (profile + 3 pitch drafts + keywords) is a LARGE payload: it needs a real
+  //    token budget and a real clock, or bigger sites time out and the user sees
+  //    "the AI could not read my website". If the full pass still fails, a compact
+  //    pass (profile fields only) fills the profile anyway instead of erroring.
+  const system =
+    'You are a meticulous South African market analyst and direct-response copywriter. You research a business from its website text and produce precise, professional output. Never invent facts that are not supported by the text. When the text is thin, say less rather than guess. Write pitches in plain, confident English for WhatsApp and SMS length emails (South African small-business tone: warm, direct, no hype, no emojis).'
+  const full = await geminiGenerate(userId, {
     json: true,
-    system:
-      'You are a meticulous South African market analyst and direct-response copywriter. You research a business from its website text and produce precise, professional output — never invent facts that are not supported by the text. When the text is thin, say less rather than guess. Write pitches in plain, confident English for WhatsApp/SMS-length emails (South African small-business tone: warm, direct, no hype, no emojis).',
-    prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText}\n\n=== TASK ===\nDissect this business for its owner. Return ONLY this JSON (omit a field rather than inventing it):\n{
-  "businessName": "name as shown on the site",
-  "industry": "one label",
-  "tagline": "their slogan or one-line promise, verbatim if present",
-  "city": "city/town the business operates from, if the text says so",
-  "phone": "public contact phone in international format, if shown",
-  "email": "public contact email, if shown",
-  "audience": { "summary": "who actually buys from them, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] },
-  "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] },
-  "positioning": "one professional paragraph: what they sell, to whom, and why it wins",
-  "pitches": [
-    { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" },
-    { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" },
-    { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" }
-  ],
-  "keywords": ["5-8 search terms real customers would type"]
-}`,
+    system,
+    maxOutputTokens: 3000,
+    timeoutMs: 40_000,
+    prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText}\n\n=== TASK ===\nDissect this business for its owner. Return ONLY this JSON (omit a field rather than inventing it):\n{\n  "businessName": "name as shown on the site",\n  "industry": "one label",\n  "tagline": "their slogan or one-line promise, verbatim if present",\n  "city": "city/town the business operates from, if the text says so",\n  "phone": "public contact phone in international format, if shown",\n  "email": "public contact email, if shown",\n  "audience": { "summary": "who actually buys from them, 2 sentences max", "demographics": "location/income/device realities, 1 sentence", "painPoints": ["3-5 short buyer pain points"] },\n  "brand": { "voice": "how the brand talks, 1 sentence", "personality": ["3-5 adjectives"] },\n  "positioning": "one professional paragraph: what they sell, to whom, and why it wins",\n  "pitches": [\n    { "type": "cold intro", "subject": "email subject under 45 chars", "body": "60-90 word email with a clear call to action" },\n    { "type": "follow-up", "subject": "email subject under 45 chars", "body": "40-70 word polite follow-up" },\n    { "type": "upsell", "subject": "email subject under 45 chars", "body": "50-80 word upsell for existing clients" }\n  ],\n  "keywords": ["5-8 search terms real customers would type"]\n}`,
   })
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.error.startsWith('NO_KEY') ? 503 : 400 })
+
+  let analysis: BusinessAnalysis | null = full.ok ? parseJsonLoose<BusinessAnalysis>(full.text) : null
+  let geminiNotice = full.ok ? full.notice : undefined
+  let degraded = false
+
+  const usable = (a: BusinessAnalysis | null): boolean =>
+    !!a && (!!a.positioning || (!!a.audience && !!a.businessName))
+
+  if (!usable(analysis) && Date.now() < routeDeadline - 16_000) {
+    // Compact second pass: profile fields only. Small output, fast, and it still
+    // gives the user a filled profile instead of a dead end.
+    const compact = await geminiGenerate(userId, {
+      json: true,
+      system,
+      maxOutputTokens: 900,
+      timeoutMs: 14_000,
+      prompt: `=== WEBSITE TEXT (${finalUrl}) ===\n${pageText.slice(0, 8000)}\n\n=== TASK ===\nReturn ONLY this JSON with the business profile facts visible on the page (omit a field rather than inventing it):\n{ "businessName": "", "industry": "", "tagline": "", "city": "", "phone": "", "email": "", "audience": { "summary": "who buys from them, 1-2 sentences" }, "brand": { "voice": "how the brand talks, 1 sentence" }, "positioning": "what they sell, to whom, and why it wins, 2-3 sentences", "keywords": ["5 search terms real customers would type"] }`,
+    })
+    if (compact.ok) {
+      const c = parseJsonLoose<BusinessAnalysis>(compact.text)
+      if (usable(c)) {
+        analysis = c
+        degraded = true
+        geminiNotice = compact.notice || geminiNotice
+      }
+    }
   }
 
-  const analysis = parseJsonLoose<BusinessAnalysis>(result.text)
-  if (!analysis || !analysis.audience || !analysis.positioning) {
-    return NextResponse.json(
-      { error: 'The AI could not read enough from that page. Try the homepage URL, or fill the workspace profile manually.' },
-      { status: 400 }
-    )
+  if (!usable(analysis)) {
+    const err = full.ok
+      ? 'The AI could not read enough from that page. Try the homepage address, or fill the workspace profile manually.'
+      : full.error
+    return NextResponse.json({ error: err }, { status: err.startsWith('NO_KEY') ? 503 : 400 })
+  }
+  if (degraded) {
+    notices.push('We saved the core profile from your site. The three ready made pitch drafts will appear when you run Generate again with a steadier connection.')
   }
 
   // 3) Persist to the workspace so every later AI draft grounds on it
@@ -158,7 +250,8 @@ export async function POST(req: NextRequest) {
     data: { audienceInsight: insight },
   })
 
-  return NextResponse.json({ ok: true, analysis, project: updated, ...(result.notice ? { notice: result.notice } : {}) })
+  const allNotices = [...(geminiNotice ? [geminiNotice] : []), ...notices]
+  return NextResponse.json({ ok: true, analysis, project: updated, ...(allNotices.length ? { notice: allNotices.join(' ') } : {}) })
 }
 
 // GET → last saved analysis for the active workspace

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
+import { recordTaskEvent, STATUS_LABEL } from '@/lib/taskrecord'
 
 async function canEditTask(taskId: string, userId: string) {
   const task = await db.task.findUnique({ where: { id: taskId } })
@@ -40,6 +41,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       team: { select: { id: true, name: true } },
     },
   })
+  // The record witnesses every change of hands and state.
+  if (data.status && String(data.status) !== task.status) {
+    await recordTaskEvent(id, 'STATUS', userId, `moved to ${STATUS_LABEL[String(data.status)] || String(data.status)}`)
+  }
+  if ('assigneeId' in data) {
+    const newAssignee = data.assigneeId ? String(data.assigneeId) : null
+    if (newAssignee && newAssignee !== task.assigneeId) {
+      const u = await db.user.findUnique({ where: { id: newAssignee }, select: { name: true } })
+      await recordTaskEvent(id, 'SENT', userId, `sent to ${u?.name || 'a teammate'}`)
+    }
+  }
+  const detailEdits = ['title', 'notes', 'priority', 'dueDate', 'isPrivate'].filter((k) => k in data)
+  if (detailEdits.length > 0) {
+    await recordTaskEvent(id, 'EDIT', userId, 'updated the details')
+  }
   if (data.status === 'DONE' && task.status !== 'DONE') {
     await bumpChallenge(userId, 'complete_task')
   }

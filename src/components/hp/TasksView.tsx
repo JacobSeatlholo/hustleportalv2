@@ -13,10 +13,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { api, PRIORITIES, type Task, type TaskCommentRow } from './shared'
+import { api, PRIORITIES, type Task, type TaskCommentRow, type TaskEventRow } from './shared'
 import { useHp } from './store'
 import ScanDiaryDialog from './ScanDiaryDialog'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock } from 'lucide-react'
 
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
@@ -240,6 +240,10 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   const [loadingComments, setLoadingComments] = useState(false)
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
+  // The sealed record: timestamps a team can hold each other to
+  const [record, setRecord] = useState<{ events: TaskEventRow[]; verified: boolean } | null>(null)
+  const [recordOpen, setRecordOpen] = useState(false)
+  const [loadingRecord, setLoadingRecord] = useState(false)
 
   const commentCount = comments ? comments.length : task._count?.comments || 0
 
@@ -255,6 +259,21 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
         setComments([])
       } finally {
         setLoadingComments(false)
+      }
+    }
+  }
+
+  async function openRecord() {
+    setRecordOpen((v) => !v)
+    if (!recordOpen && record === null) {
+      setLoadingRecord(true)
+      try {
+        const res = await api<{ events: TaskEventRow[]; verified: boolean }>(`/api/tasks/${task.id}/record`)
+        setRecord(res)
+      } catch {
+        setRecord({ events: [], verified: false })
+      } finally {
+        setLoadingRecord(false)
       }
     }
   }
@@ -307,6 +326,12 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
               {task.isPrivate && <span className="text-[10px]">🔒 private</span>}
               {task.assignee && task.assignee.id !== currentUserId && <span>→ {task.assignee.name}</span>}
               {task.creatorId !== currentUserId && task.assignee?.id === currentUserId && <span>from {task.creator.name}</span>}
+              {/* Accountability at a glance: the record shows exactly when it was opened */}
+              {task._openedAt && (
+                <span className="inline-flex items-center gap-1 text-emerald-500" title={`First opened ${new Date(task._openedAt).toLocaleString('en-ZA')}`}>
+                  <ShieldCheck className="h-3 w-3" /> Opened
+                </span>
+              )}
             </div>
           </div>
           {/* Team discussion — comments happen IN context, not in a WhatsApp group */}
@@ -323,6 +348,21 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
             <MessageSquare className="h-3.5 w-3.5" />
             {commentCount > 0 && <span>{commentCount}</span>}
             {threadOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {/* The sealed record — sent, opened, done: who did what, and exactly when */}
+          <button
+            onClick={openRecord}
+            className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
+              recordOpen
+                ? 'border-emerald-500/50 text-emerald-500 bg-emerald-500/5'
+                : 'border-stone-600/60 text-muted-foreground hover:border-emerald-500 hover:text-emerald-500'
+            }`}
+            aria-label={recordOpen ? 'Hide record' : 'Sealed record'}
+            aria-expanded={recordOpen}
+            title="Sealed record: who sent it, who opened it, when"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {recordOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           <Button variant="ghost" size="icon" onClick={() => onRemove(task)} className="text-muted-foreground hover:text-red-600 shrink-0">
             <Trash2 className="h-4 w-4" />
@@ -377,6 +417,50 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
               </Button>
             </div>
+          </div>
+        )}
+
+        {recordOpen && (
+          <div className="mt-3 border-t pt-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <ShieldCheck className={`h-3.5 w-3.5 ${record?.verified ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+                Sealed record
+                {record && (
+                  <span className={record.verified ? 'text-emerald-500' : 'text-amber-500'}>
+                    {record.verified ? '· verified' : '· checking'}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-muted-foreground">Every entry is timestamped and sealed in order</span>
+            </div>
+            {loadingRecord ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Opening the record…
+              </div>
+            ) : !record || record.events.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nothing sealed yet. The moment this task is sent, opened or moved, it lands here with the exact time.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {record.events.map((e) => (
+                  <div key={e.id} className="flex items-start gap-2 text-xs">
+                    <Clock className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{e.actorName}</span>{' '}
+                      <span className="text-muted-foreground">{e.detail}</span>{' '}
+                      <span className="text-muted-foreground/70">
+                        {new Date(e.createdAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[9px] text-muted-foreground/50 shrink-0 mt-0.5" title={`Seal ${e.hash.slice(0, 16)}…`}>
+                      #{e.hash.slice(0, 6)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
+import { recordTaskEvent } from '@/lib/taskrecord'
 
 // GET /api/tasks?scope=mine|team
 export async function GET(req: NextRequest) {
@@ -39,7 +40,20 @@ export async function GET(req: NextRequest) {
     },
     take: 300,
   })
-  return NextResponse.json({ tasks })
+  // Accountability at a glance: when each task was first opened by its person.
+  const ids = tasks.map((t) => t.id)
+  const opened = ids.length
+    ? await db.taskEvent.findMany({
+        where: { taskId: { in: ids }, type: 'OPENED' },
+        select: { taskId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+  const firstOpen = new Map<string, Date>()
+  for (const o of opened) if (!firstOpen.has(o.taskId)) firstOpen.set(o.taskId, o.createdAt)
+  return NextResponse.json({
+    tasks: tasks.map((t) => ({ ...t, _openedAt: firstOpen.get(t.id)?.toISOString() || null })),
+  })
 }
 
 // POST /api/tasks — create (personal or team)
@@ -77,5 +91,12 @@ export async function POST(req: NextRequest) {
     },
   })
   await bumpChallenge(userId, 'add_task')
-  return NextResponse.json({ task })
+  // The record starts the moment the task exists: either it was SENT to a teammate
+  // (the accountability clock starts at the send) or the owner CREATED it for self.
+  if (task.assignee && task.assignee.id !== userId) {
+    await recordTaskEvent(task.id, 'SENT', userId, `sent to ${task.assignee.name}`)
+  } else {
+    await recordTaskEvent(task.id, 'CREATED', userId, 'created it')
+  }
+  return NextResponse.json({ task: { ...task, _openedAt: null } })
 }

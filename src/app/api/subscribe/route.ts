@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { getPlan, grantPlanRevealCredits } from '@/lib/plans'
+import { getPlan, grantPlanRevealCredits, isValidNpoNumber, normalizeNpoNumber, priceWithNpoDiscount } from '@/lib/plans'
 import { getYocoSecretKey, createYocoCheckout, YocoError } from '@/lib/yoco'
 import { rewardOnSubscribe } from '@/lib/referral'
 
@@ -14,20 +14,31 @@ function requestOrigin(req: NextRequest) {
   return `${proto}://${host}`
 }
 
-// POST /api/subscribe { plan: 'HUSTLER' | 'BOSS', cycle?: 'MONTHLY' | 'ANNUAL' }
+// POST /api/subscribe { plan: 'HUSTLER' | 'BOSS', cycle?: 'MONTHLY' | 'ANNUAL', npoNumber?: string }
 //  - YOCO_SECRET_KEY set  -> PENDING Subscription + Yoco Checkout redirectUrl.
 //  - No key configured    -> sandbox mode: activates instantly (demo environments).
 // Annual = 10x the monthly price (2 months free); renewsAt = +370 days.
+// Registered nonprofits pass their NPO number and pay 30% less, every cycle.
 // The user is NEVER auto-charged: renewal is a fresh checkout, nudged 5 days out.
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { plan: planId, cycle: rawCycle } = await req.json().catch(() => ({}))
+  const { plan: planId, cycle: rawCycle, npoNumber: rawNpo } = await req.json().catch(() => ({}))
   const plan = getPlan(String(planId || ''))
   if (!plan) return NextResponse.json({ error: 'Unknown plan.' }, { status: 400 })
   const cycle = String(rawCycle).toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
-  const amountCents = cycle === 'ANNUAL' ? plan.annualCents : plan.priceCents
+
+  const npoRaw = String(rawNpo || '').trim()
+  if (npoRaw && !isValidNpoNumber(npoRaw)) {
+    return NextResponse.json(
+      { error: 'That NPO number does not look right. Registered South African nonprofits have 6 digits, like 044-291 or 123456. Leave it empty to subscribe at full price.' },
+      { status: 400 }
+    )
+  }
+  const npoNumber = npoRaw ? normalizeNpoNumber(npoRaw) : null
+  const baseCents = cycle === 'ANNUAL' ? plan.annualCents : plan.priceCents
+  const amountCents = npoNumber ? priceWithNpoDiscount(baseCents) : baseCents
 
   const reference = `HPSUB-${Date.now().toString(36).toUpperCase()}`
   const secretKey = getYocoSecretKey()
@@ -35,8 +46,8 @@ export async function POST(req: NextRequest) {
   if (secretKey) {
     const sub = await db.subscription.upsert({
       where: { userId },
-      create: { userId, plan: plan.id, billingCycle: cycle, amountCents, status: 'PENDING', provider: 'YOCO', reference },
-      update: { plan: plan.id, billingCycle: cycle, amountCents, status: 'PENDING', provider: 'YOCO', reference, startedAt: null, renewsAt: null },
+      create: { userId, plan: plan.id, billingCycle: cycle, amountCents, status: 'PENDING', provider: 'YOCO', reference, npoNumber },
+      update: { plan: plan.id, billingCycle: cycle, amountCents, status: 'PENDING', provider: 'YOCO', reference, npoNumber, startedAt: null, renewsAt: null },
     })
     const origin = requestOrigin(req)
     try {
@@ -46,10 +57,10 @@ export async function POST(req: NextRequest) {
         successUrl: `${origin}/?sub=success`,
         cancelUrl: `${origin}/?sub=cancelled`,
         failureUrl: `${origin}/?sub=failed`,
-        metadata: { subscriptionId: sub.id, userId, plan: plan.id, cycle, reference },
+        metadata: { subscriptionId: sub.id, userId, plan: plan.id, cycle, reference, ...(npoNumber ? { npoNumber } : {}) },
         clientReferenceId: reference,
         idempotencyKey: sub.id,
-        name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}`,
+        name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
       })
       await db.subscription.update({ where: { id: sub.id }, data: { providerRef: checkout.id } })
       return NextResponse.json({ ok: true, mode: checkout.mode ?? 'test', redirectUrl: checkout.redirectUrl, subscription: sub })
@@ -66,11 +77,11 @@ export async function POST(req: NextRequest) {
     where: { userId },
     create: {
       userId, plan: plan.id, billingCycle: cycle, amountCents, status: 'ACTIVE',
-      provider: 'SANDBOX', reference, startedAt: new Date(), renewsAt,
+      provider: 'SANDBOX', reference, npoNumber, startedAt: new Date(), renewsAt,
     },
     update: {
       plan: plan.id, billingCycle: cycle, amountCents, status: 'ACTIVE', provider: 'SANDBOX',
-      reference, startedAt: new Date(), renewsAt, pausedUntil: null,
+      reference, npoNumber, startedAt: new Date(), renewsAt, pausedUntil: null,
     },
   })
   // Same reward + quota paths as the live webhook.
@@ -80,7 +91,9 @@ export async function POST(req: NextRequest) {
     ok: true,
     sandbox: true,
     subscription: sub,
-    note: 'Sandbox activation. Set YOCO_SECRET_KEY to enable live Yoco Checkout.',
+    note: npoNumber
+      ? `Sandbox activation at the nonprofit rate for ${npoNumber}: 30% off, every cycle. Set YOCO_SECRET_KEY to enable live Yoco Checkout.`
+      : 'Sandbox activation. Set YOCO_SECRET_KEY to enable live Yoco Checkout.',
   })
 }
 

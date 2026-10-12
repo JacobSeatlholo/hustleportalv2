@@ -126,24 +126,27 @@ export default function Landing() {
             </h1>
             <p className="text-muted-foreground mt-4 text-lg">
               You tell us what you sell. Our AI finds verified leads near you and loads them
-              into your pipeline — ready to call, ready to close. Simple.
+              into your pipeline. Ready to call, ready to close. Simple.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Built for owner-operators, growing teams and organisations of any size, including registered nonprofits.
             </p>
             {refApplied && (
               <div className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs text-foreground mt-2">
                 <Gift className="h-3.5 w-3.5 text-brand" />
-                Invite code <b className="text-brand font-mono">{refApplied}</b> applied — your welcome credit will be added after signup.
+                Invite code <b className="text-brand font-mono">{refApplied}</b> applied. Your welcome credit lands after signup.
               </div>
             )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
             {[
-              { icon: Target, title: 'AI Lead Finder', desc: 'Tell us what you sell — verified leads, loaded into your pipeline' },
+              { icon: Target, title: 'AI Lead Finder', desc: 'Tell us what you sell. Verified leads, loaded straight into your pipeline' },
               { icon: Wallet, title: 'Pay-per-reveal credits', desc: 'Reveal real contacts only when you need them. No monthly lock-in.' },
-              { icon: Users, title: 'Team workspace', desc: 'Share pipelines, tasks and clients with your team' },
+              { icon: Users, title: 'Team workspace', desc: 'Share pipelines, tasks and clients. Every task carries a sealed timestamp record.' },
               { icon: BrainCircuit, title: 'AI Co-Founder', desc: 'Plans, pricing and follow-ups grounded in your live data' },
               { icon: Trophy, title: 'Daily challenges', desc: 'Guided daily actions that keep your pipeline moving' },
-              { icon: Zap, title: 'You own your data', desc: 'Your account, your pipeline, your numbers — exportable anytime' },
+              { icon: Zap, title: 'You own your data', desc: 'Your account, your pipeline, your numbers. Exportable anytime.' },
             ].map((f) => (
               <div key={f.title} className="flex gap-3 items-start rounded-xl border border-white/10 bg-card/70 backdrop-blur p-3">
                 <div className="rounded-lg bg-brand/15 p-2 shrink-0">
@@ -312,14 +315,14 @@ export default function Landing() {
           <h2 className="font-display text-3xl mt-1">Disorganisation is expensive</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             Leads buried in WhatsApp. Invoices in Word. Expenses in your head and a shoebox of slips.
-            By the time you catch up, the month is gone — and so is the money.
+            By the time you catch up, the month is gone. And so is the money.
           </p>
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
           {[
-            { icon: '💬', title: 'Leads slip through the cracks', desc: 'Hot prospects scattered across WhatsApp, DMs and missed calls — no pipeline, no follow-up, no closure.' },
-            { icon: '💸', title: 'Profit is a guess, not a number', desc: 'No invoice trail and no expense record means you never know which clients actually pay — or where the month went.' },
-            { icon: '🧍', title: 'Admin eats the evenings', desc: 'Quotes, scheduling, follow-ups and filing — all on you, all after hours. The busywork crowds out the billable work.' },
+            { icon: '💬', title: 'Leads slip through the cracks', desc: 'Hot prospects scattered across WhatsApp, DMs and missed calls. No pipeline, no follow-up, no closure.' },
+            { icon: '💸', title: 'Profit is a guess, not a number', desc: 'No invoice trail and no expense record means you never know which clients actually pay, or where the month went.' },
+            { icon: '🧍', title: 'Admin eats the evenings', desc: 'Quotes, scheduling, follow-ups and filing, all on you, all after hours. The busywork crowds out the billable work.' },
           ].map((p) => (
             <div key={p.title} className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-5">
               <div className="text-2xl">{p.icon}</div>
@@ -329,8 +332,8 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          HustlePortal gives it all <span className="text-brand font-medium">one home</span> — pipeline, payments, tasks,
-          appointments and AI in a single Business OS, built for South African businesses.
+          HustlePortal gives it all <span className="text-brand font-medium">one home</span>: pipeline, payments, tasks,
+          appointments and AI in a single Business OS, built for South African businesses and organisations of any size.
         </p>
       </section>
 
@@ -364,7 +367,7 @@ export default function Landing() {
           <div>
             <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Our Solutions</div>
             <h2 className="font-display text-3xl mt-1">Everything your business needs</h2>
-            <p className="text-sm text-muted-foreground mt-1">Professional products and services for South African businesses — pay securely with Yoco, or order on WhatsApp.</p>
+            <p className="text-sm text-muted-foreground mt-1">Professional products and services for South African businesses. Pay securely with Yoco, or order on WhatsApp.</p>
           </div>
           <a
             href="https://app.businesshustle.co.za/shop"
@@ -379,12 +382,12 @@ export default function Landing() {
           {[
             {
               emoji: '🛠️', title: 'Project Execution', price: 'From R5,000',
-              desc: 'Fixed-scope builds delivered by the Business Hustle team — brands, landing pages and launches, live in days.',
+              desc: 'Fixed-scope builds delivered by the Business Hustle team: brands, landing pages and launches, live in days.',
               url: 'https://businesshustle.co.za'
             },
             {
               emoji: '📖', title: 'Hustle Basics eBook', price: 'R270',
-              desc: 'The essential business toolkit — 20% off this month.',
+              desc: 'The essential business toolkit. 20% off this month.',
               url: 'https://app.businesshustle.co.za/product/hustle-basics-ebook/'
             },
             {
@@ -394,7 +397,7 @@ export default function Landing() {
             },
             {
               emoji: '🧭', title: 'Strategy & Structuring', price: 'From R2,500',
-              desc: 'Business cases, company structuring and go-to-market plans — the thinking before the doing.',
+              desc: 'Business cases, company structuring and go-to-market plans. The thinking before the doing.',
               url: 'https://businesshustle.co.za'
             },
           ].map((s) => (
@@ -413,7 +416,7 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Inside the app you&apos;ll find the full Store — 15 packages from R249 to R21,000 — plus a Resource Hub of 50+ free tools &amp; guides.
+          Inside the app you&apos;ll find the full Store: 15 packages from R249 to R21,000, plus a Resource Hub of 50+ free tools &amp; guides.
         </p>
       </section>
 
@@ -422,7 +425,7 @@ export default function Landing() {
         <div>
           <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Services</div>
           <h2 className="font-display text-3xl mt-1">Expert services, done for you</h2>
-          <p className="text-sm text-muted-foreground mt-1">Professional services for South African businesses — quoted per project, delivered by <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a>.</p>
+          <p className="text-sm text-muted-foreground mt-1">Professional services for South African businesses, quoted per project and delivered by <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a>.</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {BH_SERVICES.map((svc) => (
@@ -444,7 +447,7 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Not sure what you need? WhatsApp us for a free business assessment — we&apos;ll recommend the right solution.
+          Not sure what you need? WhatsApp us for a free business assessment. We will recommend the right solution.
         </p>
       </section>
       {/* ===== Pipeline promise ===== */}
@@ -452,17 +455,17 @@ export default function Landing() {
         <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Your pipeline, handled</div>
         <h2 className="font-display text-3xl">We feed your pipeline. You run your business.</h2>
         <p className="text-sm text-muted-foreground max-w-3xl">
-          Verified leads land in your CRM ready to work — sourced, checked and delivered by the team behind
+          Verified leads land in your CRM ready to work, sourced, checked and delivered by the team behind
           HustlePortal. <span className="text-foreground font-medium">You see the results, not the plumbing.</span>
         </p>
         <p className="text-sm text-muted-foreground max-w-3xl">
           HustlePortal is <span className="text-brand font-medium">not another leads database</span>. It is your Business OS:
-          CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers — with a pipeline that stays
+          CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers, with a pipeline that stays
           full behind the scenes.
         </p>
         <div className="flex flex-wrap gap-6 pt-1 text-sm">
           <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Verified contacts, delivered to your CRM</div>
-          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Your data, your control — export anytime</div>
+          <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Your data, your control. Export anytime.</div>
           <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> The team behind it is one tap away, in-app</div>
         </div>
       </section>
@@ -481,12 +484,12 @@ export default function Landing() {
             {
               name: 'Operator', price: 'R199', icon: <Rocket className="h-5 w-5 text-brand" />,
               tagline: 'For owner-operators building steady momentum.',
-              perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month — unused ones roll over', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
+              perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month, unused ones roll over', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
             },
             {
               name: 'Boss', price: 'R499', icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
               tagline: 'For teams ready to outscale the competition.',
-              perks: ['Everything in Operator', '12 verified lead reveals every month — the best per-lead price, unused ones roll over', 'Up to 5 team seats, shared pipeline', 'Priority AI — faster, longer answers'],
+              perks: ['Everything in Operator', '12 verified lead reveals every month, the best per-lead price, unused ones roll over', 'Up to 5 team seats, shared pipeline', 'Priority AI, faster and longer answers'],
             },
           ].map((p) => (
             <div key={p.name} className={`rounded-2xl border p-6 space-y-4 ${p.highlight ? 'border-brand/50 bg-brand/5' : 'bg-card'}`}>
@@ -510,7 +513,8 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          Go annual and get 2 months free — R1,990 Operator · R4,990 Boss. Secure card payments by Yoco · never auto-charged · pause anytime · your data is always exportable — the platform earns your loyalty, it doesn&apos;t lock it.
+          Go annual and get 2 months free: R1,990 Operator · R4,990 Boss. Registered nonprofits pay 30% less with their NPO number.
+          Secure card payments by Yoco · never auto-charged · pause anytime · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
       </section>
 

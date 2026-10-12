@@ -69,6 +69,27 @@ export function getPlan(id: string): PlanDef | undefined {
 }
 
 /**
+ * Nonprofit rate — registered NPOs (and NGOs) run their organisation on
+ * HustlePortal at 30% off every plan, monthly or annual. The number is taken
+ * on honour, stored on the subscription, and may be re-checked before renewal.
+ */
+export const NPO_DISCOUNT_RATE = 0.3
+
+export function priceWithNpoDiscount(cents: number): number {
+  return Math.round(cents * (1 - NPO_DISCOUNT_RATE))
+}
+
+/** SA NPO numbers look like 044-291, 123-456, NPO 078-112 or plain 123456. */
+export function isValidNpoNumber(v: string): boolean {
+  const s = v.trim().toUpperCase().replace(/^NPO[\s-]*/, '')
+  return /^\d{2,3}[\s-]?\d{3,4}$/.test(s)
+}
+
+export function normalizeNpoNumber(v: string): string {
+  return v.trim().toUpperCase().replace(/^NPO[\s-]*/, 'NPO ')
+}
+
+/**
  * Deliver the plan's monthly lead-reveal quota as wallet credits. Called once
  * per successful activation/renewal (idempotent via the PENDING→ACTIVE claim),
  * so every paid month lands the promised reveals in the wallet automatically.

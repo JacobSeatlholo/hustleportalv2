@@ -10,12 +10,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
 import { useHp } from './store'
-import { getPlan } from '@/lib/plans'
+import { getPlan, priceWithNpoDiscount } from '@/lib/plans'
 import {
-  Users, Copy, Check, Loader2, Sparkles, Crown, MessageCircle, Gift, TrendingUp, CheckCircle2,
+  Users, Copy, Check, Loader2, Sparkles, Crown, MessageCircle, Gift, TrendingUp, CheckCircle2, HeartHandshake,
 } from 'lucide-react'
 
 interface RefsData {
@@ -28,7 +29,7 @@ interface RefsData {
 
 interface PlansData {
   plan: string
-  subscription: { plan: string; status: string; billingCycle?: string; amountCents: number; renewsAt: string | null; pausedUntil?: string | null } | null
+  subscription: { plan: string; status: string; billingCycle?: string; amountCents: number; renewsAt: string | null; pausedUntil?: string | null; npoNumber?: string | null } | null
 }
 
 const PLANS = [
@@ -37,11 +38,13 @@ const PLANS = [
     name: 'Operator',
     price: 'R199',
     annual: 'R1,990',
+    priceCents: 19900,
+    annualCents: 199000,
     tagline: 'For owner-operators building steady momentum.',
     icon: <Sparkles className="h-5 w-5 text-brand" />,
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '5 verified lead reveals every month — unused ones roll over',
+      '5 verified lead reveals every month, unused ones roll over',
       'Invoices, calendar, reports, exports',
       'R50 credit for every business owner you refer',
       'Your business listed in the public directory',
@@ -52,14 +55,16 @@ const PLANS = [
     name: 'Boss',
     price: 'R499',
     annual: 'R4,990',
+    priceCents: 49900,
+    annualCents: 499000,
     tagline: 'For teams ready to outscale the competition.',
     icon: <Crown className="h-5 w-5 text-brand" />,
     highlight: true,
     perks: [
       'Everything in Operator',
-      '12 verified lead reveals every month — the best per-lead price, unused ones roll over',
+      '12 verified lead reveals every month, the best per-lead price, unused ones roll over',
       'Up to 5 team seats, shared pipeline',
-      'Priority AI — faster, longer answers',
+      'Priority AI, faster and longer answers',
       'Founding Member badge',
     ],
   },
@@ -75,6 +80,10 @@ export default function GrowView() {
   const [subscribing, setSubscribing] = useState<string | null>(null)
   const [cycle, setCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
   const [planBusy, setPlanBusy] = useState<string | null>(null)
+  // Nonprofit rate: 30% off while a valid NPO number stands
+  const [npoInput, setNpoInput] = useState('')
+  const [npoApplied, setNpoApplied] = useState<string | null>(null)
+  const [npoBusy, setNpoBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -85,6 +94,12 @@ export default function GrowView() {
       ])
       setRefs(r)
       setPlans(p)
+      // The rate stays across visits: subscription first, then the saved number
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('hp_npo_number') : null
+      setNpoApplied(p.subscription?.npoNumber || stored)
+      if (p.subscription?.npoNumber && typeof window !== 'undefined') {
+        window.localStorage.setItem('hp_npo_number', p.subscription.npoNumber)
+      }
     } catch (e) {
       toast({ title: 'Could not load', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -117,15 +132,15 @@ export default function GrowView() {
   async function subscribe(planId: string) {
     setSubscribing(planId)
     try {
-      const res = await api<{ ok: boolean; sandbox?: boolean; redirectUrl?: string }>('/api/subscribe', {
+      const res = await api<{ ok: boolean; sandbox?: boolean; redirectUrl?: string; note?: string }>('/api/subscribe', {
         method: 'POST',
-        body: JSON.stringify({ plan: planId, cycle }),
+        body: JSON.stringify({ plan: planId, cycle, npoNumber: npoApplied || undefined }),
       })
       if (res.redirectUrl) {
         window.location.href = res.redirectUrl
         return
       }
-      toast({ title: 'Plan activated ✓', description: 'Sandbox mode — set YOCO_SECRET_KEY for live payments.' })
+      toast({ title: 'Plan activated ✓', description: res.note || 'Sandbox mode — set YOCO_SECRET_KEY for live payments.' })
       bumpRefresh()
       await load()
     } catch (e) {
@@ -133,6 +148,27 @@ export default function GrowView() {
     } finally {
       setSubscribing(null)
     }
+  }
+
+  function applyNpo() {
+    const v = npoInput.trim()
+    if (!v) {
+      setNpoApplied(null)
+      if (typeof window !== 'undefined') window.localStorage.removeItem('hp_npo_number')
+      return
+    }
+    setNpoBusy(true)
+    // Light client check mirrors the server rule: 6 digits, optionally dashed
+    const s = v.toUpperCase().replace(/^NPO[\s-]*/, '')
+    if (!/^\d{2,3}[\s-]?\d{3,4}$/.test(s)) {
+      toast({ title: 'That NPO number does not look right', description: 'Registered South African nonprofits have 6 digits, like 044-291 or 123456.', variant: 'destructive' })
+      setNpoBusy(false)
+      return
+    }
+    setNpoApplied(v.toUpperCase())
+    if (typeof window !== 'undefined') window.localStorage.setItem('hp_npo_number', v.toUpperCase())
+    toast({ title: 'Nonprofit rate applied ✓', description: '30% off every plan, monthly or annual. We may ask for the certificate before renewal.' })
+    setNpoBusy(false)
   }
 
   async function planAction(action: 'pause' | 'resume') {
@@ -263,6 +299,40 @@ export default function GrowView() {
             </button>
           </div>
         </div>
+        {/* Nonprofit rate — organisations of any size keep more of their budget */}
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <HeartHandshake className="h-4 w-4 text-emerald-500" />
+            <h4 className="text-sm font-semibold">Registered nonprofit? Pay 30% less.</h4>
+          </div>
+          {npoApplied ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant="outline" className="border-emerald-500/40 text-emerald-500">NPO {npoApplied.replace(/^NPO\s*/, '')} · 30% off</Badge>
+              <button
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={() => { setNpoInput(''); setNpoApplied(null); if (typeof window !== 'undefined') window.localStorage.removeItem('hp_npo_number') }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                value={npoInput}
+                onChange={(e) => setNpoInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyNpo()}
+                placeholder="Your NPO number, e.g. 044-291"
+                className="flex-1"
+              />
+              <Button variant="outline" onClick={applyNpo} disabled={npoBusy} className="shrink-0">
+                {npoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply 30% off'}
+              </Button>
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            For NPOs, NGOs, community organisations and faith groups of any size. We may ask for the registration certificate before renewal to keep the rate active.
+          </p>
+        </div>
         <div className="grid md:grid-cols-2 gap-4">
           {PLANS.map((p) => {
             const isCurrent = plans?.subscription && ['ACTIVE', 'PAUSED'].includes(plans.subscription.status)
@@ -284,8 +354,21 @@ export default function GrowView() {
                     <p className="text-xs text-muted-foreground mt-1">{p.tagline}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-display text-2xl">{isAnnual ? p.annual : p.price}</div>
-                    <div className="text-[10px] text-muted-foreground">{isAnnual ? 'per year — 2 months free' : 'per month'}</div>
+                    {npoApplied ? (
+                      <>
+                        <div className="font-display text-2xl">
+                          {rands(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          <span className="line-through">{isAnnual ? p.annual : p.price}</span> · nonprofit 30% off
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-display text-2xl">{isAnnual ? p.annual : p.price}</div>
+                        <div className="text-[10px] text-muted-foreground">{isAnnual ? 'per year, 2 months free' : 'per month'}</div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <ul className="space-y-1.5">
@@ -305,6 +388,8 @@ export default function GrowView() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : isCurrent && plans?.subscription?.billingCycle === cycle ? (
                     'Current plan'
+                  ) : npoApplied ? (
+                    `Go ${p.name} — ${rands(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}${isAnnual ? '/yr' : '/mo'}`
                   ) : (
                     `Go ${p.name} — ${isAnnual ? `${p.annual}/yr` : `${p.price}/mo`}`
                   )}
@@ -314,7 +399,7 @@ export default function GrowView() {
           })}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Secure card payments by Yoco · never auto-charged · pause anytime · unused lead reveals roll over · your CRM data is always exportable — the platform earns your loyalty, it doesn't lock it.
+          Secure card payments by Yoco · never auto-charged · pause anytime · unused lead reveals roll over · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
       </div>
     </div>

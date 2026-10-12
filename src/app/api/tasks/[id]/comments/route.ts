@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { recordTaskEvent } from '@/lib/taskrecord'
 
 /**
  * Discussion threads on tasks — the in-context alternative to WhatsApp groups.
@@ -57,5 +58,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     data: { taskId: id, userId, body },
     include: { user: { select: { id: true, name: true } } },
   })
+  await recordTaskEvent(id, 'COMMENT', userId, 'added a comment')
   return NextResponse.json({ comment })
 }
