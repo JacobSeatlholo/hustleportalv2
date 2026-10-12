@@ -106,3 +106,22 @@ Work Log:
 Stage Summary:
 - User-facing: their 403 key is now diagnosed at paste-time with the exact fix; even with a broken key every AI feature keeps working on the platform key WITH an honest notice; platform 429 no longer starves the map fallback; every section has a Tutorial button + one-time walkthroughs; email goals are free-typable; tasks have team comment threads.
 - Follow-ups for user: (a) their own Gemini key still needs the Google-side fix (or remove it — AI keeps working); (b) platform search-grounding 429 is quota-cooldown, retry clears it, OSM fallback covers meanwhile.
+
+---
+Task ID: 33
+Agent: Super Z (main)
+Task: "AI still not reading my business website" root-fix + sealed task records (sent/opened timestamps) + NPO 30% rate + dash-free outcome copy.
+
+Work Log:
+- DIAGNOSIS (prod probes): (a) user typed businesshustleco.za (dead address, HTTP 000) instead of businesshustle.co.za — app only said "could not reach"; (b) with the correct domain the 9,314-char site text WAS fetched but the single big AI payload (profile+3 pitches, 1,200 token default/30s) timed out; (c) platform key free-tier quota then drained to persistent 429s (per-model buckets).
+- business-url redesign: domain rescue (probe businesshustle.co.za / .co.za / www variants on DNS failure + notice "we read X instead"), profile-FIRST compact AI pass (900 tok/28s), pitch drafts as best-effort enrichment only if clock allows, and a NO-AI FLOOR: extractFromHtml reads og:site_name/title/description/mailto/tel/SA-phone so the profile fills from the site's own stated facts even when AI quota is gone. Rescue notice survives AI failure. tsc+build clean.
+- Sealed task records: TaskEvent model (append-only, sha256 hash chain, seq, denormalised actorName) + lib/taskrecord.ts (recordTaskEvent/verifyChain). Wired: create→SENT/CREATED, PATCH→STATUS ("moved to Done")/SENT on reassign/EDIT, comments→COMMENT, GET /api/tasks/[id]/record → seals OPENED on first non-creator read + returns {events, verified}. Tasks GET attaches _openedAt (earliest OPENED per task).
+- TasksView UI: ShieldCheck "record" button per task → timeline (actor, detail, en-ZA timestamp, #seal hash) + "verified" badge; emerald "Opened" chip on rows whose assignee opened.
+- NPO 30%: plans.ts (NPO_DISCOUNT_RATE/priceWithNpoDiscount/isValidNpoNumber/normalizeNpoNumber), Subscription.npoNumber, subscribe POST validates (6-digit, e.g. 044-291) + discounts both cycles (Operator R139.30, Boss R349.30, annual R1,393/R3,493), GrowView nonprofit card (apply/remove, localStorage persistence, struck-through originals, honest renewal-certificate line), landing pricing mentions it.
+- Copy pass (Landing+GrowView+new copy): removed every " — " separator, power-word outcome phrasing, vision line "owner-operators, growing teams and organisations of any size, including registered nonprofits".
+- gemini.ts 429 rework: 429 is per-model quota (not key-wide) → rotate to next Flash model + honour Google's named retryDelay when ≤8s (once per key:model); 403/KEY_INVALID stay key-level fatals.
+- Deploys: e16c722 → ed91ca1 → f33b282 → ccceac9 → 036951f. scripts/verify_task33.mjs: 21 PASS / 0 FAIL vs prod (rescue+facts, records chain incl. SENT "Alice Record sent to Ben Open"/OPENED "Ben Open opened it"/STATUS, NPO amountCents=13930).
+
+Stage Summary:
+- Production runs 036951f. The user's exact failing flow now works: www.businesshustleco.za → rescued → Business Hustle name+tagline saved to profile in ~5-29s, with or without AI quota.
+- Notes for user: (a) their own Gemini key under Integrations is STILL 403-blocked Google-side — remove it or paste a fresh key from aistudio.google.com/apikey to unlock full AI depth (positioning + pitch drafts) during busy minutes; (b) platform free quota recovers each minute/day — floor keeps profiles flowing meanwhile; (c) YOCO_SECRET_KEY still not set in Vercel prod (sandbox subscriptions).
