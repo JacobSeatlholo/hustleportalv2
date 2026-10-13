@@ -63,7 +63,12 @@ export default function ProfileView() {
   const [salesPitch, setSalesPitch] = useState('')
   const [wsSaving, setWsSaving] = useState(false)
   const [pitching, setPitching] = useState(false)
-  const [newWsName, setNewWsName] = useState('')
+
+  // My Projects: inline create form (the one place projects are born)
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectDesc, setNewProjectDesc] = useState('')
+  const [creatingProject, setCreatingProject] = useState(false)
 
   // AI business-URL dissection
   const [urlInput, setUrlInput] = useState('')
@@ -93,6 +98,18 @@ export default function ProfileView() {
   useEffect(() => {
     loadProjectRows()
   }, [activeProjectId, session])
+
+  // Workspace switcher hands off here: open the new project form on arrival
+  useEffect(() => {
+    if (sessionStorage.getItem('hp:open-new-project') === '1') {
+      sessionStorage.removeItem('hp:open-new-project')
+      setShowNewProject(true)
+      setTimeout(() => document.getElementById('my-projects-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    }
+    const open = () => setShowNewProject(true)
+    window.addEventListener('hp:open-new-project', open)
+    return () => window.removeEventListener('hp:open-new-project', open)
+  }, [])
 
   // (city geolocation + free-text live in the shared CityField component)
 
@@ -307,20 +324,27 @@ export default function ProfileView() {
     }
   }
 
-  async function createWorkspace() {
-    if (!newWsName.trim()) return
+  async function createProject() {
+    const name = newProjectName.trim()
+    if (!name) return
+    setCreatingProject(true)
     try {
       const r = await api<{ project: { id: string; name: string; isDefault: boolean } }>('/api/projects', {
         method: 'POST',
-        body: JSON.stringify({ name: newWsName }),
+        body: JSON.stringify({ name, description: newProjectDesc.trim() || null }),
       })
-      setNewWsName('')
+      setNewProjectName('')
+      setNewProjectDesc('')
+      setShowNewProject(false)
       setActiveProject(r.project.id)
-      toast({ title: 'Workspace created ✓', description: `${r.project.name} is now active.` })
+      toast({ title: 'Project created ✓', description: `${r.project.name} is now your active workspace.` })
       await loadSession(true)
       loadProjectRows()
+      bumpRefresh()
     } catch (e) {
-      toast({ title: 'Could not create workspace', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      toast({ title: 'Could not create project', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setCreatingProject(false)
     }
   }
 
@@ -710,28 +734,60 @@ export default function ProfileView() {
                 )}
               </div>
 
-              {/* Multi-company */}
-              <div className="border-t pt-3 space-y-2">
-                <Label className="text-xs text-muted-foreground">Add another company workspace (multi-business)</Label>
-                <div className="flex gap-2">
-                  <Input value={newWsName} onChange={(e) => setNewWsName(e.target.value)} placeholder="e.g. Sibo Events" className="flex-1" />
-                  <Button variant="outline" onClick={createWorkspace} disabled={!newWsName.trim()}>Create</Button>
-                </div>
-              </div>
+              {/* Multi-company pointer: creation lives in My Projects below */}
+              <p className="border-t pt-3 text-xs text-muted-foreground">
+                Running more than one hustle? Tap New project in the My Projects card below. Each project gets its own leads, clients and invoices, and switches in one tap.
+              </p>
             </CardContent>
           </Card>
 
           {/* My Projects — every project you run: description, people, numbers */}
-          <Card>
+          <Card id="my-projects-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <FolderKanban className="h-4 w-4 text-brand" /> My Projects
                 <Badge variant="secondary" className="ml-auto">{projectRows.length}</Badge>
+                <Button size="sm" variant="outline" onClick={() => setShowNewProject((o) => !o)}>
+                  {showNewProject ? 'Close' : '+ New project'}
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {showNewProject && (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); createProject() }}
+                  className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-2.5"
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-project-name">Project name</Label>
+                    <Input
+                      id="new-project-name"
+                      autoFocus
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      placeholder="e.g. Sibo Events pop-up store"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-project-desc">What is it about? Optional.</Label>
+                    <Textarea
+                      id="new-project-desc"
+                      rows={2}
+                      value={newProjectDesc}
+                      onChange={(e) => setNewProjectDesc(e.target.value)}
+                      placeholder="e.g. Launch the Soweto pop-up store, doors open 15 November."
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setShowNewProject(false)} disabled={creatingProject}>Cancel</Button>
+                    <Button type="submit" size="sm" disabled={creatingProject || !newProjectName.trim()}>
+                      {creatingProject ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Create project'}
+                    </Button>
+                  </div>
+                </form>
+              )}
               {projectRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Create a project above and it lands here with its people and numbers.</p>
+                <p className="text-sm text-muted-foreground">Tap New project above, give it a name, and it lands here with its people and numbers.</p>
               ) : (
                 projectRows.map((p) => {
                   const isActive = p.id === activeProjectId || (!activeProjectId && p.isDefault)

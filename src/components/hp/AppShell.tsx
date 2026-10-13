@@ -414,10 +414,15 @@ function ProjectSwitcher() {
           </div>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); setOpen(false); window.dispatchEvent(new CustomEvent('hp:navigate', { detail: 'profile' as ViewKey })) }}
-            className="block border-t px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground transition"
+            onClick={(e) => {
+              e.preventDefault()
+              setOpen(false)
+              sessionStorage.setItem('hp:open-new-project', '1')
+              window.dispatchEvent(new CustomEvent('hp:navigate', { detail: 'profile' as ViewKey }))
+            }}
+            className="block border-t px-3 py-2.5 text-xs font-medium text-brand hover:text-foreground transition"
           >
-            + Manage workspaces in Profile &amp; Team
+            + New project in Profile &amp; Team
           </a>
         </div>
       )}
