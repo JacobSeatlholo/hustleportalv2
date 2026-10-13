@@ -282,3 +282,22 @@ Work Log:
 Stage Summary:
 - Leads are now hard-scoped to projects end to end: dropdown targets, every create path stamps projectId, list filters per project, search remembers per project.
 - Note: discover teaser on the throwaway QA account returned mode=NONE (no profile + daily bucket drained at test time) — honest empty state, not a regression; user's own scans already work.
+
+---
+Task ID: 42
+Agent: Main agent (Super Z)
+Task: Switching projects/organisations must repopulate the lead pipeline, clients and invoices with that workspace's data. Data stayed the same despite switching.
+
+Work Log:
+- ROOT CAUSE (4 gaps): (1) GET /api/clients and GET /api/invoices had NO projectId filter, so views reloaded into the same rows; (2) POST /api/clients and /api/whatsapp/import never stamped projectId (orphans); (3) LeadsView stuck on an explicit dropdown pick (leadProject never reset when the top-bar switcher changed); (4) dashboard was always whole-business.
+- APIs: /api/clients GET accepts ?projectId= (ALL or omitted keeps the classic mixed view, bogus id 404, same contract as leads); POST stamps via resolveProject. /api/invoices GET accepts the same filter. /api/dashboard accepts ?projectId= to scope pipeline/byStage/finance (tasks stay personal/team by design). /api/whatsapp/import lands contacts in the requested workspace.
+- UI: LeadsView + ClientsView + InvoicesView share one pattern: workspace dropdown (follows active workspace by default, All workspaces covers legacy rows), "the top-bar switcher always wins" (explicit picks reset on switch via useEffect on activeProjectId), soft refresh keeps the board in place while the fresh list arrives. New clients + WhatsApp imports join the workspace you are looking at. Invoice composer targets the effective workspace.
+- DashboardView passes the active workspace to /api/dashboard and /api/leads and reloads on switch.
+- Client.projectId already existed in schema (Task 34/35 era) — no migration needed.
+- BUILD NOTE: gitignored debris (src/app/api/{seed,expenses,goals,notes,payments,time-entries}) breaks local Turbopack builds (imports ensureWorkspaceData which does not exist). Quarantined the six dirs out of the tree for the build, restored after. Vercel never sees them (gitignored). If a future local build fails on those paths, move them out, build, move back.
+- Deploy shim runbook held: paramiko pip package wiped by reset, reinstalled (--break-system-packages), keys/shim in .git/hp-deploy/ intact.
+- Pushed 250ae01..9d62e45. Production verify scripts/verify_project42.mjs (COMMITTED this time — 40/41 scripts were lost to resets): 21/21 PASS vs https://www.hustleportal.online — client create default-stamp, explicit-target, cross-filter invisibility, mixed view, bogus 404, WhatsApp import targeting, invoice targeting + list filter, leads regression, dashboard scoped 1+1=2 unscoped, bundle carries dropdowns. First run 20/21: script bug (res.json() consumes body before text()) — fixed with plain fetch.
+
+Stage Summary:
+- Production runs 9d62e45. Switching workspaces in the top bar now repopulates pipeline, clients, invoices and dashboard numbers, seamlessly. Every create path stamps a workspace; no more orphans.
+- Contract note: ?projectId=ALL or omitted = legacy mixed view everywhere; bogus id = 404 with honest error.
