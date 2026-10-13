@@ -182,7 +182,7 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
         keySource: source,
         masked: mask(key),
         ok: false,
-        message: `z.ai rejected ${who}. Paste a fresh key from the z.ai open platform API keys page under Integrations.`,
+        message: `z.ai rejected ${who}. Generate a fresh key on the z.ai open platform API keys page and save it where the old one lives.`,
       }
     }
     if (res.status === 402 || res.status === 429) {

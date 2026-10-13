@@ -18,6 +18,10 @@ import { db } from '@/lib/db'
  * platform key from the environment. A failing user key is never silently swapped
  * for the platform key — spending someone else's paid credits without asking is not
  * what a careful product does.
+ *
+ * The platform env var is canonically ZAI_API_KEY, but the operator is human:
+ * friendly names like GLM_key are accepted too, so a key saved under a different
+ * name still powers the engine instead of sitting invisible in the environment.
  */
 
 const BASE = 'https://api.z.ai/api/paas/v4'
@@ -45,9 +49,18 @@ export async function getUserZaiKey(userId: string): Promise<string | null> {
   return row?.value || null
 }
 
-/** Platform key from the environment (set once on the server by the operator). */
+/**
+ * Platform key from the environment (set once on the server by the operator).
+ * Canonical name first, then the friendly aliases operators actually use.
+ */
+const PLATFORM_ZAI_ENV_NAMES = ['ZAI_API_KEY', 'GLM_key', 'GLM_API_KEY', 'GLM_KEY', 'ZAI_KEY'] as const
+
 export function getPlatformZaiKey(): string | null {
-  return process.env.ZAI_API_KEY?.trim() || null
+  for (const name of PLATFORM_ZAI_ENV_NAMES) {
+    const v = process.env[name]?.trim()
+    if (v) return v
+  }
+  return null
 }
 
 /** Resolution order: the user's own key (their credits) → platform key → none. */

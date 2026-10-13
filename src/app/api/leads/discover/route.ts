@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
-import { zaiGenerate, getUserZaiKey } from '@/lib/zai'
+import { zaiGenerate, getUserZaiKey, getPlatformZaiKey } from '@/lib/zai'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
@@ -15,13 +15,14 @@ export const maxDuration = 60
  * POST /api/leads/discover — source REAL leads.
  *
  * ENGINE CHAIN (first one with real results wins):
- *  1. The scan's LEADER depends on the user's setup:
- *     a personal z.ai key under Integrations puts z.ai GLM in front (their
- *     credits, their control, about two cents per scan); without one, Gemini
- *     with Google Search grounding leads (22s budget).
+ *  1. The scan's LEADER depends on the setup: any saved z.ai key (a personal
+ *     one under Integrations, or the operator's platform key in the
+ *     environment, named ZAI_API_KEY or a friendly alias like GLM_key) puts
+ *     z.ai GLM in front — about two cents per scan, no Google quota. Without
+ *     one, Gemini with Google Search grounding leads (22s budget).
  *  2. The other engine backs up automatically: z.ai GLM brings live Web Search
- *     grounding that ignores Google's quota mood (user key first, then the
- *     platform pool); Gemini grounds on Google Search when z.ai can't answer.
+ *     grounding that ignores Google's quota mood; Gemini grounds on Google
+ *     Search when z.ai can't answer.
  *  3. OpenStreetMap real directory (keyless) with DeepSeek ranking when a
  *     DeepSeek key exists — ranks reality, never supplies contact facts.
  *  4. Explee verified data when configured.
@@ -299,11 +300,13 @@ export async function POST(req: NextRequest) {
 
   const t0 = Date.now()
 
-  // WHO LEADS THE SCAN: a user's own saved z.ai key leads. Their credits, their
-  // control, deterministic behaviour (no Google quota mood mid presentation).
-  // Google steps down to automatic backup. Without a personal z.ai key the
-  // classic order holds: Gemini first, the platform z.ai pool second.
-  const zaiFirst = Boolean(await getUserZaiKey(userId))
+  // WHO LEADS THE SCAN: a saved z.ai key puts the GLM engine in front — a
+  // personal key under Integrations (their credits, their control) or the
+  // operator's platform key (deployed for exactly this: deterministic scans
+  // that ignore Google's quota mood mid presentation). Google steps down to
+  // automatic backup. Without any z.ai key the classic order holds: Gemini
+  // first, and no z.ai stop at all.
+  const zaiFirst = Boolean(await getUserZaiKey(userId)) || Boolean(getPlatformZaiKey())
 
   const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000 })
   const runZaiScan = () => {
@@ -342,8 +345,9 @@ export async function POST(req: NextRequest) {
   let ai: Awaited<ReturnType<typeof geminiGenerate>>
   let zai: Awaited<ReturnType<typeof zaiGenerate>> | null
   if (zaiFirst) {
-    // 1) PRIMARY (your key, your credits) — z.ai GLM with live Web Search grounding.
-    //    A grounded scan costs about two cents.
+    // 1) PRIMARY — z.ai GLM with live Web Search grounding. A personal key
+    //    spends the seller's own credits; the platform key spends the
+    //    operator's pool. Either way a grounded scan costs about two cents.
     zai = await runZaiScan()
     let leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai')
@@ -356,7 +360,7 @@ export async function POST(req: NextRequest) {
     if (ai.ok && leads.length > 0) {
       const zaiWhy =
         zai && !zai.ok && (zai.reason === 'BALANCE' || zai.reason === 'KEY_INVALID' || zai.reason === 'RATE')
-          ? 'Heads up: your z.ai engine could not answer this minute, so Google carried the scan instead. A top up on the z.ai billing page, or a key check under Integrations, puts it back in front.'
+          ? 'Heads up: the z.ai engine could not answer this minute, so Google carried the scan instead. Checking the z.ai key and credits puts it back in front.'
           : undefined
       return aiSearchResponse(leads, 'gemini', zaiWhy || ai.notice)
     }
@@ -369,7 +373,7 @@ export async function POST(req: NextRequest) {
     if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
 
     // 2) SECOND — z.ai GLM with live Web Search grounding (the platform pool:
-    //    your own key would have taken the lead spot above). Google was tried
+    //    a saved key would have taken the lead spot above). Google was tried
     //    first and could not answer — say so once, gently.
     zai = await runZaiScan()
     leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
