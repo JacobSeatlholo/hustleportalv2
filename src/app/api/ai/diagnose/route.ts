@@ -122,13 +122,24 @@ export async function GET() {
       report.checks.push({ source, test: 'list-models', ok: false, status: null, detail: `Network error: ${e instanceof Error ? e.message : 'request failed'}` })
     }
 
-    // 2) Live 1-shot generate on the alias-first chain — catches retired-model 404s.
-    //    A 429 does NOT stop the walk: we test EVERY model so the report shows which
-    //    buckets still have headroom — the exact signal that separates a burned daily
-    //    cap from a zero free-tier limit on the project (different fixes entirely).
-    const tryModels = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.5-flash']
+    // 2) Live 1-shot generate across the DISCOVERED pool — the same filter the
+    //    engine uses, so the report maps exactly the buckets the app will try.
+    //    When a model SUCCEEDS we stop (health proven, quota saved). When models
+    //    FAIL we walk the WHOLE pool: 429 (quota), 503 (Google shedding load) and
+    //    404 (model unavailable for this key) are all per-model, never project-wide.
+    const seenModels = (report.checks.find((c) => c.test === 'list-models' && c.ok && c.models)?.models || []) as string[]
+    const PREF = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
+    const tryModels = seenModels.length > 0
+      ? [
+          ...PREF.filter((m) => seenModels.includes(m)),
+          ...seenModels.filter((m) => !PREF.includes(m) && /flash/i.test(m) && !/tts|image|embed|transcribe|robotics|computer|omni|banana|lyria|antigravity|customtools/i.test(m)),
+        ].slice(0, 12)
+      : ['gemini-flash-latest', 'gemini-3.5-flash']
     let liveOk = false
+    let liveOn = ''
     const quota429: { model: string; detail: string; zero: boolean; perDay: boolean }[] = []
+    const overload: string[] = []
+    const unavailable: string[] = []
     for (const model of tryModels) {
       try {
         const res = await fetch(`${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
@@ -141,14 +152,20 @@ export async function GET() {
         if (res.ok) {
           report.checks.push({ source, test: `live-generate:${model}`, ok: true, status: 200, detail: 'Live AI call succeeded.' })
           liveOk = true
+          liveOn = model
           break
         } else if (res.status === 404) {
-          report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: 404, detail: 'Model not available for this key — trying the next model in the chain.' })
+          unavailable.push(model)
+          report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: 404, detail: 'Model not available for this key.' })
           continue
         } else if (res.status === 429) {
           const { detail, zero, perDay } = quotaForensics(raw, model)
           quota429.push({ model, detail, zero, perDay })
           report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: 429, detail })
+          continue
+        } else if (res.status >= 500) {
+          overload.push(`${model} (${res.status})`)
+          report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: res.status, detail: 'Google is shedding load on this model right now (temporary, self-heals).' })
           continue
         } else {
           report.checks.push({ source, test: `live-generate:${model}`, ok: false, status: res.status, detail: raw.slice(0, 300) || `Google returned ${res.status}.` })
@@ -167,14 +184,14 @@ export async function GET() {
         break
       }
     }
-    // Quota verdict — scenario advice from the actual bucket names Google returned.
+    // Quota + overload verdict — scenario advice from what Google actually returned.
     if (quota429.length > 0) {
       const who = source === 'user' ? 'YOUR saved key' : 'the platform key'
       const anyZero = quota429.some((q) => q.zero)
       const anyPerDay = quota429.some((q) => q.perDay)
       const drained = quota429.map((q) => q.model).join(', ')
       if (liveOk) {
-        report.advice.push(`Some models are quota-blocked (${drained}) but at least one model answered — the app keeps working on the healthy model. ${anyZero ? 'The zero-limit models need billing or a different project (see below).' : anyPerDay ? 'Day buckets reset around 02:00 South African time (midnight UTC).' : 'Minute buckets clear on their own.'}`)
+        report.advice.push(`AI answered on ${liveOn}. Resting right now: ${drained}${overload.length ? `, overloaded: ${overload.join(', ')}` : ''}. The engine spreads the day across the pool automatically. ${anyZero ? 'The zero-limit models need billing or a different project (see below).' : anyPerDay ? 'Day buckets reset around 02:00 South African time (midnight UTC).' : 'Minute buckets clear on their own.'}`)
       } else if (anyZero) {
         report.advice.push(`ZERO FREE-TIER LIMIT on ${who} (${drained}): Google returned limit 0 — this project has NO free quota for these models, so waiting will not fix it. Two real fixes: (1) In Google Cloud console, open the project behind this key and enable billing — the API then runs on pay-as-you-go Tier 1 (Flash-class models cost a few dollars per million tokens; a scanning month costs a few rand). (2) Create a brand-new AI Studio key in a DIFFERENT project (aistudio.google.com/apikey) and update ${source === 'user' ? 'the key under Integrations' : 'GEMINI_API_KEY in Vercel env'}, then redeploy. Confirm which project the key belongs to at https://ai.dev/rate-limit while logged into the right Google account.`)
       } else if (anyPerDay) {
@@ -182,9 +199,12 @@ export async function GET() {
       } else {
         report.advice.push(`MINUTE CAP on ${who} (${drained}): the per-minute free-tier bucket is drained. It clears on its own within a minute — spaced-out scanning avoids it.`)
       }
+    } else if (overload.length > 0 && !liveOk) {
+      report.advice.push(`GOOGLE IS SHEDDING FREE-TIER LOAD right now (${overload.join(', ')}) — 503 high demand is temporary and usually clears within minutes. No action needed; the engine rotates models automatically and retries.`)
     }
-    if (liveOk && source === 'platform') report.verdict = `AI is healthy on the platform key — scans and drafts work.${userKey ? ' Note: YOUR key is tried first; if it is broken the platform key silently takes over.' : ''}`
+    if (liveOk && source === 'platform') report.verdict = `AI is healthy on the platform key (${liveOn}) — scans and drafts work.${userKey ? ' Note: YOUR key is tried first; if it is broken the platform key silently takes over.' : ''}`
     else if (liveOk && source === 'user' && keys.length === 1) report.verdict = 'AI is healthy on your own key.'
+    else if (!liveOk && overload.length > 0 && quota429.length === 0) report.verdict = 'Google is shedding free-tier load at this moment (503 high demand) — temporary, it clears on its own. Details below.'
   }
 
   if (!report.verdict) {

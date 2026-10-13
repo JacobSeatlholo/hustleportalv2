@@ -180,6 +180,9 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'EMPTY':
       return 'Gemini returned an empty response. Try rephrasing, or attach a clearer image.'
     default:
+      if (status === 503 || status === 500) {
+        return 'Google is shedding free-tier traffic this minute (high demand). The engine rotates models on its own, so give it a moment and try again.'
+      }
       return `The AI request failed unexpectedly (Google ${status}). Please try again in a minute.${own}`
   }
 }
