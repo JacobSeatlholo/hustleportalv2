@@ -301,3 +301,21 @@ Work Log:
 Stage Summary:
 - Production runs 9d62e45. Switching workspaces in the top bar now repopulates pipeline, clients, invoices and dashboard numbers, seamlessly. Every create path stamps a workspace; no more orphans.
 - Contract note: ?projectId=ALL or omitted = legacy mixed view everywhere; bogus id = 404 with honest error.
+
+---
+Task ID: 43 (HOLD)
+Agent: Main agent (Super Z)
+Task: User asked to switch AI Lead Finder to DeepSeek ($10 credits). MID-TASK user said WAIT: they rotated Google keys (new account) and want to test lead gen on Google first.
+
+Work Log:
+- DeepSeek engine BUILT (not pushed): src/lib/deepseek.ts (chat completions api.deepseek.com, key chain user setting DEEPSEEK_API_KEY > env, brand-voice errors, 401/402/429/5xx classes, validateDeepseekKey with REAL /user/balance); settings route allows+validates DEEPSEEK_API_KEY; status route DeepSeek row (platform env + balance); diagnose route deepseek section (key accepted, balance, credits-out copy). Discover route was fully rewired (OSM real-data primary + DeepSeek ranking with server-side anti-fabrication: contacts copied verbatim from source records, non-matching answers dropped) then REVERTED per user request.
+- AUTO-COMMITTER STRIKE RISK: background process committed in-progress work as 8d20613 (UUID name). Verified NOT on origin. Local hold commit 4dc07f3 restores Gemini-primary discover; plumbing stays dormant. DO NOT PUSH without user go-ahead.
+- PROD PROBE of the fresh Google setup (scripts/diag_fresh_gemini.mjs):
+  * Platform key = NEW AQ.Ab8…esXg — rotation IS live in production. ListModels 200, 45 models. gemini-3.6-flash live generation 200 (4 other models 503 shedding at that moment).
+  * Lead scan x2: BOTH mode=NONE (quota-class note). OSM fallback: mirrors refuse (chronic datacenter-IP block, Task 39).
+  * Plain advisor call: 502 (30s pool walk exhausted in the storm). Minutes earlier the same pool passed.
+- DIAGNOSIS: rotated key is VALID; Google free tier is in a bursty 503/quota storm. Pattern across OLD and NEW key: the search-grounded lead scan is the most quota-fragile call (grounding bucket tiny or shedding), plain generation is sturdier, OSM is dead from Vercel IPs. Waiting for 02:00 SAST reset = clean test of whether the grounded bucket refills (bucket) or never was there (structural).
+
+Stage Summary:
+- Production UNCHANGED (still 9d62e45 behavior). DeepSeek build parked on local commits 8d20613+4dc07f3 (tip 4dc07f3 = Gemini primary + dormant plumbing).
+- Decision fork for user: (1) 24h Google trial after 02:00 SAST reset, one spaced scan; (2) ship DeepSeek plumbing (missing bit: IntegrationsView key card) for quota-free ranking, Gemini kept only for grounded scan; (3) if grounding proves structural-blocked: search API (Brave/Serper free tier) feeding real results to DeepSeek ranking = full lead-gen off Google for near-zero cost.
