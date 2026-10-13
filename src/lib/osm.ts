@@ -15,6 +15,9 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://overpass.osm.jp/api/interpreter',
 ]
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 const UA = 'HustlePortalBot/1.0 (https://hustleportal.online)'
@@ -48,12 +51,12 @@ async function geocodePlace(area: string): Promise<{ areaId?: number; lat?: numb
     const rows = (await res.json()) as { osm_type?: string; osm_id?: number; lat?: string; lon?: string }[]
     const row = rows[0]
     if (!row) return null
-    // relation → 3600_000_000 + id; way → 2400_000_000 + id
-    if (row.osm_type === 'relation' && row.osm_id) return { areaId: 3_600_000_000 + row.osm_id }
-    if (row.osm_type === 'way' && row.osm_id) return { areaId: 2_400_000_000 + row.osm_id }
-    // Nodes (suburbs, townships, small towns) → search a radius around the pin.
     const lat = parseFloat(row.lat || '')
     const lon = parseFloat(row.lon || '')
+    // relation → 3600_000_000 + id; way → 2400_000_000 + id
+    if (row.osm_type === 'relation' && row.osm_id) return { areaId: 3_600_000_000 + row.osm_id, lat, lon }
+    if (row.osm_type === 'way' && row.osm_id) return { areaId: 2_400_000_000 + row.osm_id, lat, lon }
+    // Nodes (suburbs, townships, small towns) → search a radius around the pin.
     if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon }
     return null
   } catch {
@@ -234,6 +237,68 @@ async function searchNominatimLeads(
   }
 }
 
+/**
+ * Photon (komoot) POI search — the friendliest keyless endpoint for datacenter IPs
+ * (Overpass mirrors refuse them more often than not; Photon rarely does). Same OSM
+ * data via its own index. Contacts are rarely mapped here — reveal's grounded lookup
+ * handles the contact hunt; these leads are real names with real locations.
+ */
+async function searchPhotonLeads(
+  area: string,
+  definition: string,
+  limit: number,
+  place: { lat?: number; lon?: number }
+): Promise<{ leads: OsmLead[]; note?: string }> {
+  const { kv, term } = buildNominatimQuery(definition)
+  if (!kv || place.lat === undefined || place.lon === undefined) return { leads: [] }
+  try {
+    const dLat = 0.08
+    const dLon = 0.1 // ~9 km × 10 km box around the mapped point
+    const bbox = `${(place.lon - dLon).toFixed(4)},${(place.lat - dLat).toFixed(4)},${(place.lon + dLon).toFixed(4)},${(place.lat + dLat).toFixed(4)}`
+    const params = new URLSearchParams({
+      q: term || kv.value.replace(/_/g, ' '),
+      osm_tag: `${kv.key}:${kv.value}`,
+      bbox,
+      limit: String(Math.min(limit * 2, 30)),
+      lang: 'en',
+    })
+    const res = await fetch(`https://photon.komoot.io/api/?${params}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(12_000),
+    })
+    if (!res.ok) return { leads: [] }
+    const json = (await res.json()) as {
+      features?: { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | number> }[]
+    }
+    const seen = new Set<string>()
+    const leads: OsmLead[] = []
+    for (const f of json.features || []) {
+      const p = f.properties || {}
+      const name = String(p.name || '').trim()
+      if (!name) continue
+      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      const suburb = String(p.district || p.city || p.county || '').trim()
+      const industry = String(p.osm_value || kv.value)
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+      leads.push({
+        company: name,
+        industry,
+        city: suburb || area,
+        why: `Listed on OpenStreetMap${suburb ? ` in ${suburb}` : ''} (Photon index) — a real, mappable business matching what you sell. Contact details come through on reveal.`,
+        score: 3,
+        externalId: p.osm_id ? `osm_p_${String(p.osm_type || 'n')[0]}_${p.osm_id}` : undefined,
+      })
+      if (leads.length >= limit) break
+    }
+    return { leads }
+  } catch {
+    return { leads: [] }
+  }
+}
+
 export async function searchOsmLeads(
   area: string,
   definition: string,
@@ -286,10 +351,15 @@ export async function searchOsmLeads(
     }
     if (!result.ok) {
       // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
-      // category search (same OSM data, indexer-friendly) picks up the slack.
+      // category search (same OSM data, indexer-friendly) picks up the slack, then
+      // Photon (most datacenter-friendly of all) before we admit defeat.
       if (remaining() > 20_000) {
         const nom = await searchNominatimLeads(area, definition, limit)
         if (nom.leads.length > 0) return nom
+      }
+      if (remaining() > 8_000) {
+        const ph = await searchPhotonLeads(area, definition, limit, place)
+        if (ph.leads.length > 0) return ph
       }
       return { leads: [], note: remaining() > 0 ? 'The map directory is busy right now — try again in a minute.' : 'The map directory was out of time budget — try again in a minute.' }
     }
@@ -322,9 +392,13 @@ export async function searchOsmLeads(
     }
     if (leads.length === 0) {
       // Sparse township coverage in the map directory → Nominatim's category indexer
-      // (same OSM data) gets one more shot before we admit defeat.
+      // (same OSM data) gets one more shot, then Photon, before we admit defeat.
       const nom = await searchNominatimLeads(area, definition, limit)
       if (nom.leads.length > 0) return nom
+      if (remaining() > 8_000) {
+        const ph = await searchPhotonLeads(area, definition, limit, place)
+        if (ph.leads.length > 0) return ph
+      }
     }
     return { leads, note: leads.length ? undefined : 'No named businesses with contact details matched that category in this area yet.' }
   } catch {

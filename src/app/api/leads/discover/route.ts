@@ -249,11 +249,12 @@ export async function POST(req: NextRequest) {
 
   // One clean, honest message. No clause pile ups: name what happened, give the next move.
   const slowRun = Date.now() - t0 > 50_000
+  const mapWhy = osm.note ? ` ${osm.note}` : ' The map directory had nothing for that description either.'
   const note = ai.ok
-    ? 'The web search and the map directory both came back empty for that description. Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.'
+    ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
     : /quota|rate limit/i.test(ai.error)
-      ? `${ai.error} The map directory had nothing for that description either.`
-      : `${ai.error} The map directory had nothing for that description either.${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
+      ? `${ai.error}${mapWhy}`
+      : `${ai.error}${mapWhy}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
   return NextResponse.json(
     {
