@@ -309,6 +309,7 @@ export async function POST(req: NextRequest) {
   const zaiFirst = Boolean(await getUserZaiKey(userId)) || Boolean(getPlatformZaiKey())
 
   const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000 })
+  const glmTrace: string[] = []
   const runZaiScan = () => {
     const remaining = t0 + 44_000 - Date.now()
     return remaining > 8_000
@@ -317,7 +318,10 @@ export async function POST(req: NextRequest) {
           search: true,
           json: true,
           maxTokens: 1600,
-          timeoutMs: Math.min(20_000, remaining),
+          // Two doors plus a REAL 15 to 25 second grounded generation need
+          // more runway than a single door ever did.
+          timeoutMs: Math.min(34_000, remaining),
+          trace: glmTrace,
         })
       : Promise.resolve(null)
   }
@@ -334,6 +338,7 @@ export async function POST(req: NextRequest) {
       mode: 'AI_SEARCH',
       source: 'WEB',
       ...(notice ? { notice } : {}),
+      ...(body.debug ? { glmTrace } : {}),
       note:
         engine === 'zai'
           ? teaser
@@ -447,6 +452,7 @@ export async function POST(req: NextRequest) {
       leads: [],
       mode: 'NONE',
       ...(ai.notice ? { notice: ai.notice } : {}),
+      ...(body.debug ? { glmTrace } : {}),
       note,
     },
     { status: 200 }

@@ -170,7 +170,7 @@ async function isArrears(res: Response): Promise<boolean> {
 
 export async function zaiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; temperature?: number; maxTokens?: number; timeoutMs?: number }
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; temperature?: number; maxTokens?: number; timeoutMs?: number; trace?: string[] }
 ): Promise<ZaiResult> {
   const { key, source } = await resolveZaiKey(userId)
   if (!key) {
@@ -223,6 +223,7 @@ export async function zaiGenerate(
         ...(opts.json && !opts.search ? { response_format: { type: 'json_object' } } : {}),
         ...(opts.search ? { tools: searchTool(ep.id) } : {}),
       }
+      const at = Date.now()
       try {
         const res = await fetch(`${ep.base}/chat/completions`, {
           method: 'POST',
@@ -233,6 +234,7 @@ export async function zaiGenerate(
           // here, is what protects the caller's budget.
           signal: AbortSignal.timeout(Math.min(28_000, remaining)),
         })
+        opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)`)
         if (!res.ok) {
           const f = friendly(res.status, ep.id)
           failures.push(f)
@@ -269,6 +271,7 @@ export async function zaiGenerate(
         return { ok: true, text, keySource: source === 'user' ? 'user' : 'platform', model: data.model || model, endpoint: ep.id }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'request failed'
+        opts.trace?.push(`${ep.id}/${model} → ${/abort|timeout|timed out/i.test(msg) ? 'TIMEOUT' : 'NETWORK'} (${Date.now() - at}ms)`)
         if (/abort|timeout|timed out/i.test(msg)) {
           failures.push({ error: 'GLM took too long to answer. One more try is usually quicker.', reason: 'BUSY' })
           continue
