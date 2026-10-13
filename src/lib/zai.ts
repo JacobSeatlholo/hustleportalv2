@@ -7,9 +7,11 @@ import { db } from '@/lib/db'
  *   z.ai   → https://api.z.ai/api/paas/v4          (international platform)
  *   Zhipu  → https://open.bigmodel.cn/api/paas/v4  (China open platform)
  * Operators paste one key; the engine tries both doors before it says no, so
- * a key from either platform just works. Fabricated names never go out: the
- * Web Search in Chat tool grounds the model in live web results the same way
- * Gemini's google_search does.
+ * a key from either platform just works. Zhipu knocks first because a wrong
+ * door auth error costs half a second, while a wrong door pacing walk costs
+ * many; door memory then keeps the winner in front. Fabricated names never go
+ * out: the Web Search in Chat tool grounds the model in live web results the
+ * same way Gemini's google_search does.
  *
  * Cost honesty: one grounded lead scan costs roughly two cents (web search
  * tool use plus GLM tokens). Ten dollars of credits is hundreds of scans, and
@@ -27,8 +29,8 @@ import { db } from '@/lib/db'
  */
 
 const ENDPOINTS = [
-  { id: 'z.ai' as const, base: 'https://api.z.ai/api/paas/v4' },
   { id: 'zhipu' as const, base: 'https://open.bigmodel.cn/api/paas/v4' },
+  { id: 'z.ai' as const, base: 'https://api.z.ai/api/paas/v4' },
 ]
 
 export type ZaiEndpointId = (typeof ENDPOINTS)[number]['id']
@@ -44,7 +46,7 @@ let stickyAt = 0
 const STICKY_TTL = 10 * 60_000
 
 function orderedEndpoints() {
-  if (stickyEndpoint === 'zhipu' && Date.now() - stickyAt < STICKY_TTL) {
+  if (stickyEndpoint && Date.now() - stickyAt < STICKY_TTL && ENDPOINTS[0].id !== stickyEndpoint) {
     return [ENDPOINTS[1], ENDPOINTS[0]]
   }
   return [...ENDPOINTS]
@@ -214,6 +216,9 @@ export async function zaiGenerate(
       }
       if (doorArrears && !FREE_MODELS.has(model)) continue
       if (doorPaced) break
+      // Flash rungs answer fast or step aside: a hung free model must not eat
+      // the budget the other door still needs.
+      const attemptCap = FREE_MODELS.has(model) ? 10_000 : 28_000
       const body: Record<string, unknown> = {
         model,
         messages,
@@ -232,7 +237,7 @@ export async function zaiGenerate(
           // A REAL grounded scan legitimately takes 15 to 25 seconds (search
           // plus a JSON report). The deadline guard above, not a tight cap
           // here, is what protects the caller's budget.
-          signal: AbortSignal.timeout(Math.min(28_000, remaining)),
+          signal: AbortSignal.timeout(Math.min(attemptCap, remaining)),
         })
         opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)`)
         if (!res.ok) {
