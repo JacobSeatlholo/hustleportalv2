@@ -264,3 +264,21 @@ Work Log:
 Stage Summary:
 - Creating projects now lives where users look: My Projects card, plus a handoff from the top-nav workspace switcher.
 - No project cap exists or was added; free users can add as many as they want.
+
+---
+Task ID: 41
+Agent: Main agent (Super Z)
+Task: Lead Finder works again (quota reset) — page felt sticky; user wants a project dropdown on lead generation + leads loading into the chosen project + per-project memory.
+
+Work Log:
+- ROOT BUG FOUND: Lead.projectId is nullable and POST /api/leads NEVER set it; attachDefaultProject exists but is called nowhere. Every app-created lead (discover, manual, CSV) landed projectId=null, invisible in per-project counts.
+- API: POST /api/leads now resolves projectId via resolveProject (explicit > default), so no lead is ever orphaned. GET /api/leads accepts projectId filter (ALL = classic mixed view; bogus id 404). Import route does the same for CSV rows. Discover route teaser now grounds on the REQUESTED project, not always the default.
+- UI DiscoverDialog: "Save leads to" project dropdown at top (defaults to active workspace), re-aim mid-dialog; per-project memory in localStorage (hp_discover_mem) restores definition/city/siteUrl/limit per project on open and on switch; saves pass projectId; saves parallelized with Promise.allSettled (5 leads = one round trip, not five).
+- UI LeadsView: workspace filter dropdown (follows active workspace by default, All workspaces option covers legacy null-project rows); soft refresh (skeletons only on cold board, board stays put on refetch); 350ms debounced company search now actually searches; LeadCard memoized with stable openLead callback; filteredLeads/pipelineValue memoized.
+- Quick capture + CSV import also target the active workspace.
+- Deploy shim: paramiko wiped by sandbox reset, restored per runbook (pip --break-system-packages).
+- Pushed 250ae01. Prod verify scripts/verify_project41.mjs: 11/11 PASS (targeting, fallback, counts, scoping, 404, discover accepts projectId, bundle carries new UI). First run showed 2 FAILs that were script assertion bugs (route returns 200 not 201), product behavior was proven correct by the counts check in the same run.
+
+Stage Summary:
+- Leads are now hard-scoped to projects end to end: dropdown targets, every create path stamps projectId, list filters per project, search remembers per project.
+- Note: discover teaser on the throwaway QA account returned mode=NONE (no profile + daily bucket drained at test time) — honest empty state, not a regression; user's own scans already work.
