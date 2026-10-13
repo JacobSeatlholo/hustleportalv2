@@ -341,3 +341,19 @@ Stage Summary:
 - Production ba0e4e5. Lead Finder = engine chain, no longer hostage to Google. z.ai GLM = recommended engine for the $10 budget (~2c/scan ⇒ hundreds of scans); DeepSeek ranks OSM records; Gemini still first when it works; OSM floor guarantees real leads with zero keys.
 - User action: create z.ai key (z.ai open platform → API Keys), top up on Billing page, paste under Integrations → instant save-time probe verifies. Same for their other-profile Gemini key (free tier now tiny: fine for once/twice, not daily).
 - Open: user has NOT yet supplied the real z.ai key (or chosen user-level vs platform env). Yoco secret verification still pending. AI budget governance now = z.ai/DeepSeek spend (no more 02:00 SAST quota narrative for z.ai).
+
+---
+Task ID: 43b
+Agent: Super Z (main)
+Task: User decided "Lets do that" on buying $10 z.ai credits. Prep the platform so the moment their key is saved, their scans run on their credits first.
+
+Work Log:
+- Priority flip in /api/leads/discover: a personal z.ai key (UserSetting ZAI_API_KEY) now puts the GLM engine FIRST in the chain (user credits, deterministic behaviour, ~2c/scan); Gemini demoted to automatic backup. Without a personal key: Gemini first, platform z.ai pool second (unchanged for everyone else).
+- Gemini rescue after z.ai failure names money/key causes once, gently (BALANCE/KEY_INVALID/RATE → "a top up on the z.ai billing page puts it back in front").
+- Shared aiSearchResponse() helper dedupes the two AI_SEARCH return blocks; docstring updated; Integrations z.ai card retitled "pay as you go engine" with FIRST-copy.
+- tsc clean, quarantine build 34.5s OK, pushed 085b674, production verify 18/18 PASS (verify exercised the new path: fake z.ai key ran FIRST and was honestly rejected).
+
+Stage Summary:
+- Production 085b674. Engine chain final: user z.ai key ⇒ z.ai → Gemini → OSM(+DeepSeek rank) → Explee; no user key ⇒ Gemini → platform z.ai → OSM → Explee.
+- Waiting on user: buy $10 at z.ai Billing, create API key, paste under Integrations (save-time probe verifies in the same minute). Their other-profile Gemini key can also ride along as extra backup.
+- Cost math communicated: ~$0.02/scan ⇒ $10 ≈ 500+ grounded scans.
