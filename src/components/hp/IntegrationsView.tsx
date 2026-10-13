@@ -10,7 +10,7 @@ import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
   KeyRound, Loader2, Mail, Sparkles, CalendarCheck2, Trash2,
-  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal, Activity,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal, Activity, Globe, Brain,
 } from 'lucide-react'
 
 const INTEGRATIONS: {
@@ -42,6 +42,22 @@ const INTEGRATIONS: {
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza…',
     helper: 'The AI already runs on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
+    secret: true,
+  },
+  {
+    key: 'ZAI_API_KEY',
+    title: 'z.ai GLM key (optional backup engine)',
+    icon: <Globe className="h-4 w-4 text-brand" />,
+    placeholder: 'Your z.ai API key',
+    helper: 'Pay as you go backup from the z.ai open platform. With your key saved, lead discovery runs live web search grounding on YOUR credits when Google acts up — roughly two cents per scan, hundreds of scans per $10 top up.',
+    secret: true,
+  },
+  {
+    key: 'DEEPSEEK_API_KEY',
+    title: 'DeepSeek key (optional ranking engine)',
+    icon: <Brain className="h-4 w-4 text-brand" />,
+    placeholder: 'sk-…',
+    helper: 'Pay as you go ranker from platform.deepseek.com. With your key saved, map directory leads are matched and ranked to what you sell on YOUR credits — no daily quota wall, pennies per scan.',
     secret: true,
   },
   {
@@ -522,6 +538,9 @@ export default function IntegrationsView() {
   const [mailTesting, setMailTesting] = useState(false)
   const [mailVerdict, setMailVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
   const [geminiVerdict, setGeminiVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
+  // Verdicts for the pay as you go engine keys (DeepSeek, z.ai): keyed by setting key
+  // so each card renders its own save time probe result.
+  const [engineVerdicts, setEngineVerdicts] = useState<Record<string, { ok: boolean; msg: string }>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -541,6 +560,9 @@ export default function IntegrationsView() {
     const value = (drafts[key] ?? '').trim()
     setSaving(key)
     if (key === 'GEMINI_API_KEY') setGeminiVerdict(null)
+    if (key === 'DEEPSEEK_API_KEY' || key === 'ZAI_API_KEY') {
+      setEngineVerdicts((v) => ({ ...v, [key]: undefined as never }))
+    }
     try {
       const res = await api<{ setting: IntegrationSetting; validation?: { ok: boolean; message: string } | null }>(
         '/api/settings',
@@ -559,6 +581,16 @@ export default function IntegrationsView() {
           description: res.validation.ok
             ? 'AI will now run on your own quota.'
             : 'HustlePortal AI automatically covers the gap, so nothing breaks. See the note under the key for the fix.',
+          variant: res.validation.ok ? 'default' : 'destructive',
+        })
+      } else if ((key === 'DEEPSEEK_API_KEY' || key === 'ZAI_API_KEY') && res.validation) {
+        const engine = key === 'DEEPSEEK_API_KEY' ? 'DeepSeek' : 'z.ai'
+        setEngineVerdicts((v) => ({ ...v, [key]: { ok: res.validation!.ok, msg: res.validation!.message } }))
+        toast({
+          title: res.validation.ok ? `${engine} key verified ✓` : `Key saved — but ${engine} flagged something`,
+          description: res.validation.ok
+            ? 'Scans now run on your own credits.'
+            : 'See the note under the key for the fix. Nothing breaks meanwhile.',
           variant: res.validation.ok ? 'default' : 'destructive',
         })
       } else {
@@ -661,6 +693,18 @@ export default function IntegrationsView() {
                   >
                     {geminiVerdict.ok ? '✓ ' : '⚠ '}
                     {geminiVerdict.msg}
+                  </p>
+                )}
+                {engineVerdicts[intg.key] && (
+                  <p
+                    className={`text-xs rounded-md border px-2.5 py-2 leading-relaxed ${
+                      engineVerdicts[intg.key].ok
+                        ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/5'
+                        : 'border-amber-500/40 text-amber-400 bg-amber-500/5'
+                    }`}
+                  >
+                    {engineVerdicts[intg.key].ok ? '✓ ' : '⚠ '}
+                    {engineVerdicts[intg.key].msg}
                   </p>
                 )}
                 {intg.key === 'GMAIL_APP_PASSWORD' && (

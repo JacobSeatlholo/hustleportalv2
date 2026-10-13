@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { getUserGeminiKey, getPlatformGeminiKey } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
+import { resolveZaiKey, ZAI_PROBE_MODEL } from '@/lib/zai'
 
 export const maxDuration = 60
 
@@ -142,6 +143,84 @@ async function deepseekDiag(userId: string): Promise<DeepseekDiag> {
   }
 }
 
+interface ZaiDiag {
+  configured: boolean
+  keySource: 'user' | 'platform' | 'none'
+  masked?: string
+  ok: boolean
+  message: string
+}
+
+/** z.ai side of the chain: key present, accepted, and a REAL micro generation. */
+async function zaiDiag(userId: string): Promise<ZaiDiag> {
+  const { key, source } = await resolveZaiKey(userId)
+  if (!key) {
+    return {
+      configured: false,
+      keySource: 'none',
+      ok: false,
+      message: 'No z.ai key saved. Lead discovery rides on Gemini and the map directory.',
+    }
+  }
+  const who = source === 'user' ? 'your key' : 'the platform key'
+  try {
+    const res = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: ZAI_PROBE_MODEL,
+        messages: [{ role: 'user', content: 'Reply: OK' }],
+        max_tokens: 8,
+        temperature: 0,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(12_000),
+    })
+    if (res.status === 401) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        message: `z.ai rejected ${who}. Paste a fresh key from the z.ai open platform API keys page under Integrations.`,
+      }
+    }
+    if (res.status === 402 || res.status === 429) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        message: `z.ai is pacing requests or the credits behind ${who} are spent. A top up on the z.ai billing page revives it. The map directory and Gemini keep scans alive meanwhile.`,
+      }
+    }
+    if (!res.ok) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        message: `z.ai answered with status ${res.status}. It retries on its own.`,
+      }
+    }
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: true,
+      message: `z.ai GLM is live on ${who}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
+    }
+  } catch {
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: false,
+      message: 'Could not reach z.ai just now. It retries automatically.',
+    }
+  }
+}
+
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -172,14 +251,17 @@ export async function GET() {
   }
 
   const deepseek = await deepseekDiag(userId)
+  const zai = await zaiDiag(userId)
 
   if (keys.length === 0) {
     report.verdict = 'No Gemini key is configured at all — AI features are dormant.'
     report.advice.push('Add your free Gemini key under Integrations (aistudio.google.com → Get API key), or the operator must set GEMINI_API_KEY on the platform.')
-    if (deepseek.configured && deepseek.ok) {
+    if (zai.configured && zai.ok) {
+      report.verdict = 'Gemini has no key configured, but the z.ai GLM engine is live — lead discovery still works end to end with web search grounding.'
+    } else if (deepseek.configured && deepseek.ok) {
       report.verdict = 'Gemini has no key configured, but DeepSeek is live — lead scans still work end to end.'
     }
-    return NextResponse.json({ ok: true, deepseek, ...report })
+    return NextResponse.json({ ok: true, deepseek, zai, ...report })
   }
 
   for (const { source, key } of keys) {
@@ -309,5 +391,5 @@ export async function GET() {
       : 'No key could complete a live AI call — this is why scans return errors. Apply the advice below.'
   }
 
-  return NextResponse.json({ ok: true, deepseek, ...report })
+  return NextResponse.json({ ok: true, deepseek, zai, ...report })
 }

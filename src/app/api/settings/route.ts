@@ -3,12 +3,14 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { validateGeminiKey } from '@/lib/gemini'
 import { validateDeepseekKey } from '@/lib/deepseek'
+import { validateZaiKey } from '@/lib/zai'
 
 const ALLOWED_KEYS = [
   'GMAIL_USER',
   'GMAIL_APP_PASSWORD',
   'GEMINI_API_KEY',
   'DEEPSEEK_API_KEY',
+  'ZAI_API_KEY',
   'EXPLEE_API_KEY',
   'GCAL_OAUTH_TOKEN',
   'WA_PHONE_NUMBER_ID',
@@ -19,7 +21,7 @@ const ALLOWED_KEYS = [
   'NAV_ORDER', // JSON ViewKey[] — the user's personal sidebar menu order
 ]
 
-const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
+const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'ZAI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
 
 function mask(v: string) {
   if (v.length <= 4) return '••••'
@@ -68,7 +70,7 @@ export async function PUT(req: NextRequest) {
   // 403-blocked key is flagged HERE, not three screens later when a scan fails.
   // The key is still stored: the user may enable the API on Google's side and the
   // SAME key starts working, and the platform chain covers the gap meanwhile.
-  let validation: Awaited<ReturnType<typeof validateGeminiKey>> | null = null
+  let validation: { ok: boolean; message: string; status?: string; balanceUsd?: number | null } | null = null
   if (key === 'GEMINI_API_KEY') {
     validation = await validateGeminiKey(value)
   }
@@ -76,6 +78,11 @@ export async function PUT(req: NextRequest) {
   // verdict plus the REAL credit balance from DeepSeek's own meter.
   if (key === 'DEEPSEEK_API_KEY') {
     validation = await validateDeepseekKey(value)
+  }
+  // A pasted z.ai key is probed with a real micro generation the moment it is
+  // saved: a rejected key is flagged HERE, not three screens later when a scan fails.
+  if (key === 'ZAI_API_KEY') {
+    validation = await validateZaiKey(value)
   }
 
   return NextResponse.json({

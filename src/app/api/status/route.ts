@@ -3,6 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { readLastSystemSend } from '@/lib/mailer'
 import { deepseekBalance, getPlatformDeepseekKey } from '@/lib/deepseek'
+import { getPlatformZaiKey, ZAI_PROBE_MODEL } from '@/lib/zai'
 
 export const dynamic = 'force-dynamic'
 
@@ -185,6 +186,75 @@ async function deepseekService(): Promise<Svc> {
   }
 }
 
+/**
+ * z.ai GLM engine — the pay as you go web grounded engine. Platform-level view:
+ * the operator's env key probed with a REAL micro generation (a drained or
+ * rejected key can never fake Live). A user's own key gets its verdict at save
+ * time under Integrations; this row answers for the platform pool only.
+ */
+async function zaiService(): Promise<Svc> {
+  const key = getPlatformZaiKey()
+  if (!key) {
+    return {
+      key: 'zai',
+      name: 'z.ai GLM engine',
+      ok: false,
+      detail: 'Optional pay as you go backup. Add your z.ai key under Integrations and lead discovery runs on your own credits with live web search, no Google quota.',
+    }
+  }
+  try {
+    const res = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: ZAI_PROBE_MODEL,
+        messages: [{ role: 'user', content: 'Reply: OK' }],
+        max_tokens: 8,
+        temperature: 0,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (res.ok) {
+      return {
+        key: 'zai',
+        name: 'z.ai GLM engine',
+        ok: true,
+        detail: 'Live. When Google acts up, lead discovery keeps running here on pay as you go credits.',
+      }
+    }
+    if (res.status === 401) {
+      return {
+        key: 'zai',
+        name: 'z.ai GLM engine',
+        ok: false,
+        detail: 'The platform z.ai key was rejected. A fresh key from the z.ai open platform brings the backup back.',
+      }
+    }
+    if (res.status === 402 || res.status === 429) {
+      return {
+        key: 'zai',
+        name: 'z.ai GLM engine',
+        ok: false,
+        detail: 'z.ai is pacing requests or the credits are spent. A top up on the z.ai billing page revives it.',
+      }
+    }
+    return {
+      key: 'zai',
+      name: 'z.ai GLM engine',
+      ok: false,
+      detail: `z.ai answered with status ${res.status}. It retries on its own.`,
+    }
+  } catch {
+    return {
+      key: 'zai',
+      name: 'z.ai GLM engine',
+      ok: false,
+      detail: 'Could not reach z.ai just now. It retries automatically.',
+    }
+  }
+}
+
 async function pushService(): Promise<Svc> {
   try {
     const rows = await db.platformConfig.findMany({
@@ -226,14 +296,15 @@ export async function GET() {
     })
   }
 
-  const [database, ai, email, push, deepseek] = await Promise.all([
+  const [database, ai, email, push, deepseek, zai] = await Promise.all([
     dbService(),
     aiService(),
     emailService(),
     pushService(),
     deepseekService(),
+    zaiService(),
   ])
-  const services = [database, ai, deepseek, email, push]
+  const services = [database, ai, deepseek, zai, email, push]
   cache = { at: Date.now(), services }
   return NextResponse.json({
     services,
