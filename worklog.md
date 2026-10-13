@@ -357,3 +357,20 @@ Stage Summary:
 - Production 085b674. Engine chain final: user z.ai key ⇒ z.ai → Gemini → OSM(+DeepSeek rank) → Explee; no user key ⇒ Gemini → platform z.ai → OSM → Explee.
 - Waiting on user: buy $10 at z.ai Billing, create API key, paste under Integrations (save-time probe verifies in the same minute). Their other-profile Gemini key can also ride along as extra backup.
 - Cost math communicated: ~$0.02/scan ⇒ $10 ≈ 500+ grounded scans.
+
+---
+Task ID: 43c
+Agent: Super Z (main)
+Task: User saved their z.ai key in Vercel env as GLM_key and redeployed. Make the AI Lead Finder actually use it (demo grade).
+
+Work Log:
+- Root cause one: the engine only read env ZAI_API_KEY, so GLM_key sat invisible. getPlatformZaiKey() now walks aliases (ZAI_API_KEY, GLM_key, GLM_API_KEY, GLM_KEY, ZAI_KEY) and strips surrounding quotes. Platform key present now also flips zaiFirst in discover (GLM leads the chain, Gemini demoted to backup).
+- Root cause two (found via live debugging + new glmTrace): the key IS accepted but the GLM account behind it refuses every scan sized request with 429 on BOTH doors (plain 8 token probes pass; 900/1600 token grounded scans 429; free flash rung hangs 10s+ on tool calls, then glm-4-flash 400s). Diagnosis probes: plain 200 and web search probe 200 earlier in the day, then hard 429 wall = trial/daily quota or zero balance on the account, not a code bug.
+- Engine rebuilt as a two door walk: ENDPOINTS = Zhipu bigmodel first (wrong door 401 is cheap) then z.ai; sticky door memory (10 min TTL, warm instance) keeps the last door that answered in front; arrears sniffing (Zhipu code 1113 / balance words) skips paid rungs straight to free flash rungs; pacing is per door (a paced door no longer blinds the walk); flash attempts capped at 10s so a hung model steps aside; paid attempts 28s; discover scan budget raised 20s to 34s; adaptive maxTokens (cap<=3 leads = 900 else 1600).
+- Honesty plumbing: probeZaiKey shared by status row, save time verdict and diagnose; diagnose now also probes the web search tool and keeps the door's own error words (searchOk/searchRaw); status row copy adapts (Live on z.ai / via Zhipu / top up / rejected); scan note names the door that carried it.
+- QA: scripts/probe_glm_live.mjs (demo proof, spends ~3c when credits live), scripts/scan_once.mjs (one shot scan with glmTrace), scripts/diag_zai_only.mjs, verify_task43.mjs made state agnostic. All committed via git add -f.
+- Production verify 18/18 PASS (ecb7b3f). Real scan still mode NONE: the account needs its $10 top up (or daily quota reset ~18:00 SAST) before glm-4.6 serves scans; every rejection along the way was honest and named the cause.
+
+Stage Summary:
+- Production ecb7b3f. Engine chain final: platform or personal z.ai key puts GLM first (two doors, Zhipu first, door memory) -> Gemini grounded backup -> OSM + DeepSeek ranking -> Explee; honest notes throughout; debug:true returns glmTrace.
+- Waiting on user: top up $10 on the z.ai billing page on the SAME account the key came from (or wait for the Zhipu daily reset around 18:00 SAST for a few free scans). The moment credits land, scans run with no code change needed.
