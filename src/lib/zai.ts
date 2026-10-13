@@ -239,6 +239,7 @@ export async function zaiGenerate(
 export interface ZaiProbeOutcome {
   status: number | null
   endpoint: ZaiEndpointId | null
+  raw: string | null
 }
 
 /**
@@ -247,12 +248,17 @@ export interface ZaiProbeOutcome {
  * micro generation on the exact models the engine walks. Both doors are tried,
  * so a key from either platform reports the truth about itself.
  */
-export async function probeZaiKey(key: string, timeoutMs = 15_000): Promise<ZaiProbeOutcome> {
+export async function probeZaiKey(
+  key: string,
+  timeoutMs = 15_000,
+  opts: { search?: boolean } = {}
+): Promise<ZaiProbeOutcome> {
   const deadline = Date.now() + timeoutMs
   // Most informative non 200 status wins: a 402 or 429 proves a door accepted
   // the key, which outranks a plain auth rejection for the verdict copy.
   const rank = (s: number) => (s === 402 ? 5 : s === 429 ? 4 : s === 401 || s === 403 ? 3 : s >= 500 ? 2 : 1)
   let worst: number | null = null
+  let raw: string | null = null
   for (const ep of ENDPOINTS) {
     for (const model of PROBE_MODELS) {
       const remaining = deadline - Date.now()
@@ -267,21 +273,33 @@ export async function probeZaiKey(key: string, timeoutMs = 15_000): Promise<ZaiP
             max_tokens: 8,
             temperature: 0,
             stream: false,
+            ...(opts.search ? { tools: searchTool(ep.id) } : {}),
           }),
           signal: AbortSignal.timeout(Math.min(8_000, remaining)),
         })
-        if (res.ok) return { status: 200, endpoint: ep.id }
-        if (worst === null || rank(res.status) > rank(worst)) worst = res.status
+        if (res.ok) return { status: 200, endpoint: ep.id, raw: null }
+        // One body read only: it feeds both the raw words and the arrears check.
+        const body = (await res.json().catch(() => null)) as { error?: { code?: string | number; message?: string } } | null
+        if (worst === null || rank(res.status) > rank(worst)) {
+          worst = res.status
+          // The door's own words, for the operator's diagnose page.
+          raw = body?.error?.message?.slice(0, 200) || body?.error?.code?.toString() || null
+        }
         // Auth is door wide: stop burning models here, knock on the other door.
         if (res.status === 401 || res.status === 403) break
         // True pacing: stop probing, the walk above will tell the same story.
-        if (res.status === 429 && !(await isArrears(res))) return { status: res.status, endpoint: null }
+        if (res.status === 429) {
+          const code = String(body?.error?.code ?? '')
+          const emsg = String(body?.error?.message ?? '')
+          const arrears = code === '1113' || /balance|arrears|insufficient|欠费/i.test(emsg)
+          if (!arrears) return { status: res.status, endpoint: null, raw }
+        }
       } catch {
         // this door may be unreachable while the other is fine: keep walking
       }
     }
   }
-  return { status: worst, endpoint: null }
+  return { status: worst, endpoint: null, raw }
 }
 
 export interface ZaiKeyValidation {

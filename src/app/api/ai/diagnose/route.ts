@@ -149,6 +149,8 @@ interface ZaiDiag {
   masked?: string
   ok: boolean
   message: string
+  searchOk?: boolean
+  searchRaw?: string | null
 }
 
 /** z.ai side of the chain: key present, accepted, and a REAL micro generation. */
@@ -165,12 +167,28 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
   const who = source === 'user' ? 'your key' : 'the platform key'
   const probe = await probeZaiKey(key, 15_000)
   if (probe.status === 200) {
+    // Plain generation works. But lead scans live or die by the live web
+    // search tool, so that gets its own probe too, with the door's own words
+    // kept for the operator when it refuses.
+    const sprobe = await probeZaiKey(key, 15_000, { search: true })
+    if (sprobe.status === 200) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: true,
+        searchOk: true,
+        message: `z.ai GLM is live on ${who}${probe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
+      }
+    }
     return {
       configured: true,
       keySource: source,
       masked: mask(key),
-      ok: true,
-      message: `z.ai GLM is live on ${who}${probe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
+      ok: false,
+      searchOk: false,
+      searchRaw: sprobe.raw,
+      message: `GLM answers on ${who}, but the live web search tool was refused (status ${sprobe.status ?? 'none'}). Scans need search, so this is the part to fix. The engine said: ${sprobe.raw || 'no message'}`,
     }
   }
   if (probe.status === 401 || probe.status === 403) {
