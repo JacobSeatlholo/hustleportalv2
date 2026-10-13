@@ -33,9 +33,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const serviceTitle = String(body.serviceTitle || '').trim().slice(0, 120)
   const serviceId = String(body.serviceId || '').trim().slice(0, 60) || null
-  const urgency = (String(body.urgency || 'THIS_WEEK') as UrgencyKey) in URGENCY
-    ? (String(body.urgency) as UrgencyKey)
-    : 'THIS_WEEK'
+  // Normalize ONCE and use the normalized value everywhere: testing one string and
+  // using another is exactly how `urgency` became "undefined" and 500'd the route.
+  const urgencyRaw = String(body.urgency || 'THIS_WEEK').trim()
+  const urgency: UrgencyKey = (urgencyRaw as UrgencyKey) in URGENCY ? (urgencyRaw as UrgencyKey) : 'THIS_WEEK'
   const message = String(body.message || '').trim().slice(0, 2000)
 
   if (!serviceTitle) {
