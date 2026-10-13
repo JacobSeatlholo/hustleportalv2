@@ -130,6 +130,22 @@ function searchTool(endpoint: ZaiEndpointId) {
   ]
 }
 
+/**
+ * Arrears sniffing: GLM doors signal an empty wallet as HTTP 429 (Zhipu code
+ * 1113) just like real pacing. The difference decides the walk: arrears means
+ * the free flash rungs may still answer, true pacing means stop hammering.
+ */
+async function isArrears(res: Response): Promise<boolean> {
+  try {
+    const ej = (await res.json()) as { error?: { code?: string | number; message?: string } } | null
+    const code = String(ej?.error?.code ?? '')
+    const emsg = String(ej?.error?.message ?? '')
+    return code === '1113' || /balance|arrears|insufficient|欠费/i.test(emsg)
+  } catch {
+    return false
+  }
+}
+
 export async function zaiGenerate(
   userId: string,
   opts: { system?: string; prompt: string; json?: boolean; search?: boolean; temperature?: number; maxTokens?: number; timeoutMs?: number }
@@ -185,9 +201,15 @@ export async function zaiGenerate(
           const f = friendly(res.status, ep.id)
           failures.push(f)
           // Auth is door wide: stop burning models here, knock on the other door.
-          // Money and pacing are door wide too for the PAID models, but the free
-          // flash models behind the same door may still answer, so keep walking.
           if (res.status === 401 || res.status === 403) break
+          // True pacing is engine wide: do not hammer a paced engine, end the
+          // walk now so the next attempt starts fresh. An arrears 429 (empty
+          // wallet) still has the free flash rungs behind the same door.
+          if (res.status === 429 && !(await isArrears(res))) {
+            return { ok: false, error: f.error, reason: f.reason }
+          }
+          // Money and pacing walk within the door: the free flash models may
+          // still answer when the paid rungs are out of reach.
           continue
         }
         const data = (await res.json()) as {
@@ -252,6 +274,8 @@ export async function probeZaiKey(key: string, timeoutMs = 15_000): Promise<ZaiP
         if (worst === null || rank(res.status) > rank(worst)) worst = res.status
         // Auth is door wide: stop burning models here, knock on the other door.
         if (res.status === 401 || res.status === 403) break
+        // True pacing: stop probing, the walk above will tell the same story.
+        if (res.status === 429 && !(await isArrears(res))) return { status: res.status, endpoint: null }
       } catch {
         // this door may be unreachable while the other is fine: keep walking
       }
