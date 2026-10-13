@@ -42,6 +42,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Which service do you need? Choose one first.' }, { status: 400 })
   }
 
+  try {
+    return await createServiceRequest(userId, serviceTitle, serviceId, urgency, message)
+  } catch (e) {
+    // Never leave the user with an opaque 500: name what broke, keep the response shape honest.
+    console.error('[service-requests] failed:', e)
+    return NextResponse.json(
+      { error: 'We could not log your request just now. Please try again in a minute, or email team@businesshustle.co.za directly.', detail: e instanceof Error ? e.message.slice(0, 300) : 'unknown error' },
+      { status: 500 },
+    )
+  }
+}
+
+async function createServiceRequest(
+  userId: string,
+  serviceTitle: string,
+  serviceId: string | null,
+  urgency: UrgencyKey,
+  message: string,
+) {
+
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { name: true, email: true, businessName: true, city: true, phone: true },

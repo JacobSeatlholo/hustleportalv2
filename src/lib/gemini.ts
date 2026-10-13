@@ -115,22 +115,24 @@ function quotaRetryDelayMs(raw: string): number | null {
 
 function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: boolean): string {
   const own = ownKey
-    ? ' This happened with YOUR Gemini key — you can remove it under Integrations to ride on HustlePortal AI again.'
+    ? ' This happened with your saved Gemini key. You can remove it under Integrations to use HustlePortal AI instead.'
     : ''
   switch (cls) {
     case 'KEY_INVALID':
-      return `Your Gemini key was rejected by Google (invalid, deleted or mistyped).${own ? ' Update it under Integrations, or remove it to use HustlePortal AI.' : ' The platform AI key looks misconfigured — the operator has been alerted by this message.'}`
+      return `Your Gemini key was rejected by Google (invalid, deleted or mistyped).${own ? ' Update it under Integrations, or remove it to use HustlePortal AI.' : ' The platform AI key looks misconfigured. The operator has been alerted by this message.'}`
     case 'PERMISSION':
-      return `Google blocked the AI request (403 Permission denied).${own ? ' In Google AI Studio / Cloud console: enable the "Generative Language API" for this key and clear any website or API restrictions on it — or simply remove it under Integrations to ride HustlePortal AI.' : ' The platform AI key\'s Google project is currently restricted or suspended — the operator must issue a fresh project key. You can add your own free Gemini key under Integrations to go live instantly.'}`
+      return `Google blocked the AI request (403 Permission denied).${own ? ' Fastest fix: create a brand new key at aistudio.google.com/apikey and save it under Integrations. Or clear the key\'s API and website restrictions in Google Cloud console. HustlePortal AI covers you meanwhile.' : ' The platform AI key\'s Google project is currently restricted. A fresh project key is needed. You can add your own free Gemini key under Integrations to go live instantly.'}`
     case 'QUOTA':
-      return `Gemini is rate-limited right now (429 quota). Please try again in a minute.${own ? ' (Your own key is also over its quota — HustlePortal AI picked up the request.)' : ' The HustlePortal AI key hit its search quota — real-map results take over automatically while it cools down.'}`
+      return own
+        ? 'Your saved Gemini key has reached its free quota for now. It recovers as the quota windows reset. Try again in a minute.'
+        : 'The HustlePortal AI engine has reached its rate limit for this minute. It cools down on its own and real map results take over meanwhile. Please try again in a minute.'
     case 'MODEL':
       // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.
-      return 'Google is rotating its AI models (one was retired mid-flight, 404) and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically — please try again in a minute.'
+      return 'Google is rotating its AI models right now and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically. Please try again in a minute.'
     case 'EMPTY':
-      return 'Gemini returned an empty response — try rephrasing, or attach a clearer image.'
+      return 'Gemini returned an empty response. Try rephrasing, or attach a clearer image.'
     default:
-      return `Gemini request failed (Google ${status}). ${detail.slice(0, 140)}${own}`
+      return `The AI request failed unexpectedly (Google ${status}). Please try again in a minute.${own}`
   }
 }
 
@@ -173,14 +175,16 @@ function shortOtherCause(f: Failure): string {
   const who = f.ownKey ? 'Your own key' : 'HustlePortal AI'
   switch (f.cls) {
     case 'KEY_INVALID': return `(${who} was also rejected as invalid.)`
-    case 'PERMISSION': return `(${who} was also blocked by Google — 403. Enable the "Generative Language API" for the key in Google AI Studio / Cloud console, or create a fresh key at aistudio.google.com/apikey.)`
-    case 'QUOTA': return `(${who} is rate-limited this minute — retrying in a minute usually clears it.)`
-    case 'MODEL': return `(Google is also mid-rotation on its models right now.)`
+    case 'PERMISSION': return f.ownKey
+      ? `(${who} was also blocked by Google. Enable the "Generative Language API" for the key, or create a fresh one at aistudio.google.com/apikey.)`
+      : `(HustlePortal AI was also blocked by Google. A fresh key at aistudio.google.com/apikey is the fastest fix.)`
+    case 'QUOTA': return `(${who} is also rate limited this minute. Waiting a minute usually clears it.)`
+    case 'MODEL': return `(Google is also rotating its models right now.)`
     case 'EMPTY': return `(${who} also returned an empty answer.)`
     case 'OTHER':
       return /abort|timeout|TimeoutError/i.test(f.detail)
-        ? `(${who} also ran out of time on that request — retrying usually lands it.)`
-        : `(${who} also failed — ${f.detail.slice(0, 80)}.)`
+        ? `(${who} also ran out of time on that request. Retrying usually lands it.)`
+        : `(${who} also failed. Try again in a minute.)`
     default: return ''
   }
 }
@@ -253,7 +257,7 @@ async function callGemini(
     return {
       ok: false,
       error:
-        'NO_KEY: HustlePortal AI is not switched on yet — try again soon. You can also add your own free Gemini key under Integrations to go live instantly.',
+        'HustlePortal AI is not switched on yet. Try again soon, or add your own free Gemini key under Integrations to go live instantly.',
     }
   }
 
@@ -333,7 +337,7 @@ async function callGemini(
         // once, gently: the app stayed seamless AND the user learns their key needs care.
         const notice =
           userKeyFailure && !ownKey
-            ? `Heads-up: your own Gemini key was ${userKeyFailure.cls === 'PERMISSION' ? 'blocked by Google (403)' : userKeyFailure.cls === 'KEY_INVALID' ? 'rejected as invalid' : userKeyFailure.cls === 'QUOTA' ? 'rate-limited (429)' : 'unavailable'} — this answer came from HustlePortal AI. You can fix or remove your key under Integrations.`
+            ? `Heads up: your own Gemini key was ${userKeyFailure.cls === 'PERMISSION' ? 'blocked by Google' : userKeyFailure.cls === 'KEY_INVALID' ? 'rejected as invalid' : userKeyFailure.cls === 'QUOTA' ? 'rate limited' : 'unavailable'}. This answer came from HustlePortal AI. You can fix or remove your key under Integrations.`
             : undefined
         return { ok: true, text, ...(notice ? { notice } : {}) }
       } catch (e) {

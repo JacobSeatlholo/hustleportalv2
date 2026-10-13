@@ -21,9 +21,9 @@ import { ensureRefCode } from '@/lib/referral'
 async function buildSignature(userId: string): Promise<string> {
   try {
     const code = await ensureRefCode(userId)
-    return `\n\n— Sent with HustlePortal · the Business OS for South African businesses\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
+    return `\n\nSent with HustlePortal · the Business OS for South African businesses\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
   } catch {
-    return '\n\n— Sent with HustlePortal · hustleportal.online'
+    return '\n\nSent with HustlePortal · hustleportal.online'
   }
 }
 
@@ -197,7 +197,7 @@ export async function recordNoAccountReset(email: string): Promise<void> {
     subject: 'Password reset requested',
     ok: false,
     via: 'no-account',
-    error: 'No HustlePortal account matches this address — nothing was sent. Check for a typo or a different signup email.',
+    error: 'No HustlePortal account matches this address. Nothing was sent. Check for a typo or a different signup email.',
   })
 }
 
@@ -291,10 +291,10 @@ export function isGmailAuthError(msg: string): boolean {
  */
 export function classifyGmailError(msg: string): string {
   if (GMAIL_AUTH_RE.test(msg)) {
-    return 'Gmail rejected your login — it needs an App Password, not your normal password. Integrations → Gmail → Test connection walks you through it in about a minute.'
+    return 'Gmail rejected your login. It needs an App Password, not your normal password. Integrations → Gmail → Test connection walks you through it in about a minute.'
   }
   if (/ENOTFOUND|ETIMEDOUT|ECONNREFUSED|socket|timeout/i.test(msg)) {
-    return 'Could not reach Gmail\'s mail servers from here — check this deployment\'s outbound network, or remove your Gmail under Integrations to let the HustlePortal engine send instead.'
+    return 'Could not reach Gmail\'s mail servers from here. Check this deployment\'s outbound network, or remove your Gmail under Integrations to let the HustlePortal engine send instead.'
   }
   return `Gmail rejected the send: ${firstLine(msg)}`
 }
@@ -303,13 +303,13 @@ export function classifyGmailError(msg: string): string {
 function classifyPlatformError(msg: string, domainVerified = false): string {
   const domain = sendingDomain()
   if (domainVerified && /422|validation|invalid/i.test(msg)) {
-    return 'The email service rejected the recipient address as undeliverable — check it for typos, or try a different address.'
+    return 'The email service rejected the recipient address as undeliverable. Check it for typos, or try a different address.'
   }
   if (/testing emails|only send.*own email|403/i.test(msg)) {
-    return `${domain} is still verifying in Resend — until it completes, sends can only reach your own account inbox. Nothing to configure: it opens up automatically the moment you hit Verify at resend.com/domains.`
+    return `${domain} is still verifying in Resend. Until it completes, sends can only reach your own account inbox. Nothing to configure: it opens up automatically the moment you hit Verify at resend.com/domains.`
   }
   if (/422|"from"|validation/i.test(msg)) {
-    return `The sending address isn't accepted yet — ${domain} must finish verifying at resend.com/domains (DNS can take up to a few hours).`
+    return `The sending address isn't accepted yet. ${domain} must finish verifying at resend.com/domains (DNS can take up to a few hours).`
   }
   return `HustlePortal engine error: ${firstLine(msg)}`
 }
@@ -401,7 +401,7 @@ async function sendViaPlatform(
     return {
       ok: false,
       error:
-        'Email is not switched on yet — HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
+        'Email is not switched on yet. HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
     }
   }
   // USER mail goes out from the business's own identity on our domain; the
@@ -460,8 +460,8 @@ export async function sendMail(
         ok: true,
         provider: 'PLATFORM',
         notice: fb.viaFallback
-          ? 'Sent via HustlePortal\'s test sender — your Gmail login was rejected AND the sending domain is still verifying, so replies route to your account email. Both fixes are one-tap: Integrations (Gmail) + resend.com/domains.'
-          : 'Sent via the HustlePortal engine — your Gmail login was rejected, so replies route to your account email. Fix it in about a minute under Integrations → Test Gmail connection.',
+          ? 'Sent via HustlePortal\'s test sender. Your Gmail login was rejected and the sending domain is still verifying, so replies route to your account email. Both fixes are one tap: Integrations (Gmail) + resend.com/domains.'
+          : 'Sent via the HustlePortal engine. Your Gmail login was rejected, so replies route to your account email. Fix it in about a minute under Integrations → Test Gmail connection.',
       }
     }
     return {
@@ -471,7 +471,7 @@ export async function sendMail(
   }
   const fb = await sendViaPlatform(userId, payload)
   if (fb.ok && creds && fb.viaFallback) {
-    return { ...fb, notice: 'Sent via HustlePortal\'s test sender — your Gmail login is cooling down and the sending domain is still verifying, so this reached only your own account inbox. Both fixes: Integrations (Gmail) + resend.com/domains.' }
+    return { ...fb, notice: 'Sent via HustlePortal\'s test sender. Your Gmail login is cooling down and the sending domain is still verifying, so this reached only your own account inbox. Both fixes: Integrations (Gmail) + resend.com/domains.' }
   }
   return fb
 }

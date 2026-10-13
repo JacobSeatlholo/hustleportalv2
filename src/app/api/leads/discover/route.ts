@@ -247,15 +247,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...ex, source: 'EXPLEE' })
   }
 
+  // One clean, honest message. No clause pile ups: name what happened, give the next move.
+  const slowRun = Date.now() - t0 > 50_000
+  const note = ai.ok
+    ? 'The web search and the map directory both came back empty for that description. Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.'
+    : /quota|rate limit/i.test(ai.error)
+      ? `${ai.error} The map directory had nothing for that description either.`
+      : `${ai.error} The map directory had nothing for that description either.${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
+
   return NextResponse.json(
     {
       leads: [],
       mode: 'NONE',
       ...(ai.notice ? { notice: ai.notice } : {}),
-      note:
-        (ai.ok
-          ? `The web search and the map directory both came back empty for that description — try naming the type of business and area more directly (e.g. "taverns in Soweto that need security services"). ${osm.note || ''}`.trim()
-          : `${ai.error}${Date.now() - t0 > 50_000 ? ' (the search ran out of its time budget — try once more, it is usually quicker on a retry)' : ''} — the map directory also had nothing (${osm.note || 'no area match'}). Try naming the business type and area more directly.`),
+      note,
     },
     { status: 200 }
   )
