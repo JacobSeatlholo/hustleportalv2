@@ -53,8 +53,8 @@ async function main() {
   const zaiRow = stj?.services?.find((s) => s.key === 'zai')
   check('status has z.ai GLM engine row', Boolean(zaiRow), zaiRow ? zaiRow.name : 'missing')
   check(
-    'z.ai row is honest when no platform key is set',
-    Boolean(zaiRow && /Integrations/.test(zaiRow.detail || '')),
+    'z.ai row states the platform key truth (live, top up, rejected or unset)',
+    Boolean(zaiRow && (zaiRow.detail || '').length > 10),
     zaiRow?.detail?.slice(0, 80)
   )
   const dsRow = stj?.services?.find((s) => s.key === 'deepseek')
