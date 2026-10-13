@@ -208,3 +208,41 @@ Stage Summary:
 - Diagnose: full-model 429 walk + quotaForensics + scenario advice shipped dd961f9
 - Status panel: real-generation probe, honest AI row shipped 3194af3
 - AI down ≠ app down: sweep green, gates verified, honest 502s in brand voice
+
+---
+Task ID: 38
+Agent: Main agent (Super Z)
+Task: User added YOCO_SECRET_KEY (verified matches code env name) + wants FREE TIER to work consistently, no billing; AI Lead Finder still hitting daily limits.
+
+Work Log:
+- Confirmed YOCO_SECRET_KEY is the exact env var read by src/lib/yoco.ts + health check; payment rail ready
+- Read discover/reveal routes: 1 AI call per scan, 1 per reveal — frugal; the problem is daily bucket SIZE, not call volume
+- KEY INSIGHT: free-tier quota is PER MODEL (GenerateRequestsPerDayPerProjectPerModel); ListModels shows ~10 usable flash models but old chain only used flash-latest + 3.5-flash
+- Rebuilt gemini.ts: MODEL_PREFERENCE extended to 11 flash models; resolveModels now returns FULL pool (preference entries + any other visible flash Gemini models, gemma/pro/excluded families filtered); callGemini round-robins over the pool via per-key cursor — bursts spread across per-model RPM buckets, day spreads across per-model RPD buckets
+- PerDay 429 no longer benches the whole KEY (only the drained model); QUOTA platform copy now says daily reset ~02:00 SAST + map fallback
+- Diagnose probes pool members: flash-latest, flash-lite-latest, 3.8-flash, 3.5-flash
+- Deploy hiccup: sandbox reset wiped paramiko; restored with python3 -m pip install --break-system-packages paramiko (RUNBOOK: .git/hp-deploy shim + keys survive resets, the pip package does not)
+- Pushed f95bfda, awaiting build
+
+Stage Summary:
+- Free-tier capacity now = pool_size × per-model daily bucket (was 1-2 models' worth)
+- Yoco payment rail verified configured
+- Next: post-build diagnose to map which pool models have headroom + live discover scan test
+
+---
+Task ID: 39
+Agent: Main agent (Super Z)
+Task: Free-tier consistency pass — Yoco verify, pool round-robin, OSM fallback revival, honest 503 handling.
+
+Work Log:
+- Yoco: YOCO_SECRET_KEY is the exact env var read by src/lib/yoco.ts + health; /api/health reports yoco:true — payment rail ready
+- Engine (f95bfda): MODEL_PREFERENCE 4→11 flash models; resolveModels returns FULL discovered pool; callGemini round-robins via per-key cursor; PerDay 429 no longer benches the whole key; day-aware QUOTA copy
+- Diagnose (013bd4d): probes the FULL pool (stop at first success, walk all on failure), 503 overload class + advice, verdict names the live model
+- 503 copy: engine now says "Google is shedding free-tier traffic" instead of blaming quota
+- OSM (df8c6db + d474f41): PROBED the chain — all Overpass mirrors refuse datacenter IPs (de instant-refused, kumi/coffee 30s timeouts from sandbox); Nominatim category sparse in Soweto (1 bar); Photon works but is name-text search. Fixes: 6 mirrors (added mail.ru, osm.ch, osm.jp), Photon keyless POI fallback, 10s/mirror + 8s geocode time discipline, discover note surfaces the real map reason
+
+Stage Summary:
+- Free-tier capacity = pool size × per-model buckets (was effectively 2 models); bursts still rest the engine — spacing scans out is part of the deal
+- Map fallback is honest but data-thin in townships; metro scans return some results
+- 4 commits deployed: f95bfda, 013bd4d, df8c6db, d474f41
+- Billing (Tier 1) remains the single-lever fix when the user chooses; everything shipped works either way
