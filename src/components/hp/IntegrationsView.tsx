@@ -46,10 +46,10 @@ const INTEGRATIONS: {
   },
   {
     key: 'ZAI_API_KEY',
-    title: 'z.ai GLM key (optional backup engine)',
+    title: 'z.ai GLM key (pay as you go engine)',
     icon: <Globe className="h-4 w-4 text-brand" />,
     placeholder: 'Your z.ai API key',
-    helper: 'Pay as you go backup from the z.ai open platform. With your key saved, lead discovery runs live web search grounding on YOUR credits when Google acts up — roughly two cents per scan, hundreds of scans per $10 top up.',
+    helper: 'Pay as you go from the z.ai open platform. Once saved, lead discovery runs live web search grounding on YOUR credits FIRST, with Gemini as automatic backup — roughly two cents per scan, hundreds of scans per $10 top up.',
     secret: true,
   },
   {

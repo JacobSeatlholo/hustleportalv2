@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
-import { zaiGenerate } from '@/lib/zai'
+import { zaiGenerate, getUserZaiKey } from '@/lib/zai'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
@@ -14,12 +14,14 @@ export const maxDuration = 60
 /**
  * POST /api/leads/discover — source REAL leads.
  *
- * ENGINE CHAIN (in order, first one with real results wins):
- *  1. Gemini with Google Search grounding — the established engine when its
- *     free tier is in the mood (22s budget).
- *  2. z.ai GLM with live Web Search grounding — the pay as you go engine that
- *     ignores Google's quota mood (user's own key first, then the platform key;
- *     about two cents per scan). Built for the days Google acts up.
+ * ENGINE CHAIN (first one with real results wins):
+ *  1. The scan's LEADER depends on the user's setup:
+ *     a personal z.ai key under Integrations puts z.ai GLM in front (their
+ *     credits, their control, about two cents per scan); without one, Gemini
+ *     with Google Search grounding leads (22s budget).
+ *  2. The other engine backs up automatically: z.ai GLM brings live Web Search
+ *     grounding that ignores Google's quota mood (user key first, then the
+ *     platform pool); Gemini grounds on Google Search when z.ai can't answer.
  *  3. OpenStreetMap real directory (keyless) with DeepSeek ranking when a
  *     DeepSeek key exists — ranks reality, never supplies contact facts.
  *  4. Explee verified data when configured.
@@ -297,54 +299,86 @@ export async function POST(req: NextRequest) {
 
   const t0 = Date.now()
 
-  // 1) PRIMARY — Gemini with Google Search grounding (the established engine,
-  //    when its free tier is in the mood). Deadline trimmed to 22s so a second
-  //    engine still gets its turn inside the 60s function budget.
-  const ai = await geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000 })
-  const geminiLeads = ai.ok ? parseLeadList(ai.text, cap, city) : []
-  if (ai.ok && geminiLeads.length > 0) {
-    return NextResponse.json({
-      leads: geminiLeads,
-      mode: 'AI_SEARCH',
-      source: 'WEB',
-      ...(ai.notice ? { notice: ai.notice } : {}),
-      note: teaser
-        ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
-        : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
-    })
-  }
+  // WHO LEADS THE SCAN: a user's own saved z.ai key leads. Their credits, their
+  // control, deterministic behaviour (no Google quota mood mid presentation).
+  // Google steps down to automatic backup. Without a personal z.ai key the
+  // classic order holds: Gemini first, the platform z.ai pool second.
+  const zaiFirst = Boolean(await getUserZaiKey(userId))
 
-  // 2) SECOND — z.ai GLM with live Web Search grounding. The pay as you go
-  //    engine that does not care about Google's quota mood: your own key first
-  //    (your credits, your control), then the platform pool. A grounded scan
-  //    costs about two cents, so this is the presentation safe pair of hands.
-  const zaiRemaining = t0 + 44_000 - Date.now()
-  const zai =
-    zaiRemaining > 8_000
-      ? await zaiGenerate(userId, {
+  const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000 })
+  const runZaiScan = () => {
+    const remaining = t0 + 44_000 - Date.now()
+    return remaining > 8_000
+      ? zaiGenerate(userId, {
           ...buildSearch(),
           search: true,
           json: true,
           maxTokens: 1600,
-          timeoutMs: Math.min(20_000, zaiRemaining),
+          timeoutMs: Math.min(20_000, remaining),
         })
-      : null
-  const zaiLeads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
-  if (zai?.ok && zaiLeads.length > 0) {
-    // Google was tried first and could not answer — say so once, gently, so the
-    // user knows which engine carried the scan and why it looks different.
-    const engineNotice = !ai.ok
-      ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the z.ai GLM engine. Everything below is still real, search grounded results.'
-      : undefined
-    return NextResponse.json({
-      leads: zaiLeads,
+      : Promise.resolve(null)
+  }
+
+  const aiSearchResponse = (
+    leads: ReturnType<typeof parseLeadList>,
+    engine: 'gemini' | 'zai',
+    notice?: string
+  ) =>
+    NextResponse.json({
+      leads,
       mode: 'AI_SEARCH',
       source: 'WEB',
-      ...(engineNotice ? { notice: engineNotice } : {}),
-      note: teaser
-        ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on the z.ai GLM engine.`
-        : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by the z.ai GLM engine.`,
+      ...(notice ? { notice } : {}),
+      note:
+        engine === 'zai'
+          ? teaser
+            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on the z.ai GLM engine.`
+            : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by the z.ai GLM engine.`
+          : teaser
+            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
+            : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
     })
+
+  let ai: Awaited<ReturnType<typeof geminiGenerate>>
+  let zai: Awaited<ReturnType<typeof zaiGenerate>> | null
+  if (zaiFirst) {
+    // 1) PRIMARY (your key, your credits) — z.ai GLM with live Web Search grounding.
+    //    A grounded scan costs about two cents.
+    zai = await runZaiScan()
+    let leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
+    if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai')
+
+    // 2) BACKUP — Gemini with Google Search grounding when the z.ai engine could
+    //    not answer. If the z.ai cause is money or the key, say so once, gently:
+    //    the user can act on that, and it explains why the scan ran on Google.
+    ai = await runGeminiScan()
+    leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
+    if (ai.ok && leads.length > 0) {
+      const zaiWhy =
+        zai && !zai.ok && (zai.reason === 'BALANCE' || zai.reason === 'KEY_INVALID' || zai.reason === 'RATE')
+          ? 'Heads up: your z.ai engine could not answer this minute, so Google carried the scan instead. A top up on the z.ai billing page, or a key check under Integrations, puts it back in front.'
+          : undefined
+      return aiSearchResponse(leads, 'gemini', zaiWhy || ai.notice)
+    }
+  } else {
+    // 1) PRIMARY — Gemini with Google Search grounding (the established engine,
+    //    when its free tier is in the mood). Deadline trimmed to 22s so a second
+    //    engine still gets its turn inside the 60s function budget.
+    ai = await runGeminiScan()
+    let leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
+    if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
+
+    // 2) SECOND — z.ai GLM with live Web Search grounding (the platform pool:
+    //    your own key would have taken the lead spot above). Google was tried
+    //    first and could not answer — say so once, gently.
+    zai = await runZaiScan()
+    leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
+    if (zai?.ok && leads.length > 0) {
+      const engineNotice = !ai.ok
+        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the z.ai GLM engine. Everything below is still real, search grounded results.'
+        : undefined
+      return aiSearchResponse(leads, 'zai', engineNotice)
+    }
   }
 
   // 3) FALLBACK A — OpenStreetMap: real, keyless directory listings (no AI
