@@ -5,6 +5,7 @@ import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
+import { resolveProject } from '@/lib/workspace'
 
 export const maxDuration = 60
 
@@ -120,12 +121,10 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // TEASER: no definition → build the search from the seller's saved profile (website first).
+  // Grounds on the REQUESTED workspace (Lead Finder dropdown), default workspace otherwise.
   let teaser = false
   if (!definition) {
-    const project = await db.project.findFirst({
-      where: { userId },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-    })
+    const project = await resolveProject(userId, body.projectId ?? null)
     const offering = project?.offerings?.trim() || project?.valueProp?.trim() || ''
     const sellerLine = [
       project?.website ? `Their website is ${project.website}.` : '',

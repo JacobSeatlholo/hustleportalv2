@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 
 export default function LeadsView() {
-  const { session, loadSession, bumpRefresh } = useHp()
+  const { session, activeProjectId, loadSession, bumpRefresh } = useHp()
   const { toast } = useToast()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,6 +35,10 @@ export default function LeadsView() {
   const [scope, setScope] = useState<'all' | 'mine' | 'team'>('all')
   const [stageFilter, setStageFilter] = useState<string>('ALL')
   const [q, setQ] = useState('')
+  const [qDebounced, setQDebounced] = useState('')
+  // Workspace focus: follows the active workspace (top nav switcher) until the user picks explicitly.
+  const [leadProject, setLeadProject] = useState('')
+  const effProject = leadProject || activeProjectId || 'ALL'
 
   // dialogs
   const [showAdd, setShowAdd] = useState(false)
@@ -43,9 +47,12 @@ export default function LeadsView() {
   const [detail, setDetail] = useState<Lead | null>(null)
 
   async function load() {
-    setLoading(true)
+    // Soft refresh: only show skeletons on a cold board. With data on screen the
+    // board stays put while the fresh list arrives — no jarring flash.
+    if (leads.length === 0) setLoading(true)
     try {
-      const res = await api<{ leads: Lead[] }>(`/api/leads?scope=${scope}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
+      const pid = effProject && effProject !== 'ALL' ? `&projectId=${encodeURIComponent(effProject)}` : ''
+      const res = await api<{ leads: Lead[] }>(`/api/leads?scope=${scope}${pid}${qDebounced ? `&q=${encodeURIComponent(qDebounced)}` : ''}`)
       setLeads(res.leads)
     } catch {
       toast({ title: 'Failed to load leads', variant: 'destructive' })
@@ -61,7 +68,13 @@ export default function LeadsView() {
     const openDiscover = () => setShowDiscover(true)
     window.addEventListener('hp:discover', openDiscover)
     return () => window.removeEventListener('hp:discover', openDiscover)
-  }, [scope])
+  }, [scope, qDebounced, effProject])
+
+  // Typing stays instant; the server search trails 350ms behind.
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q), 350)
+    return () => clearTimeout(t)
+  }, [q])
 
   async function moveStage(lead: Lead, stage: string) {
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, stage } : l)))
@@ -111,8 +124,9 @@ export default function LeadsView() {
     }
   }
 
-  const pipelineValue = leads.filter((l) => !['WON', 'LOST'].includes(l.stage)).reduce((a, l) => a + l.value, 0)
-  const filteredLeads = stageFilter === 'ALL' ? leads : leads.filter((l) => l.stage === stageFilter)
+  const openLead = useCallback((l: Lead) => setDetail(l), [])
+  const pipelineValue = useMemo(() => leads.filter((l) => !['WON', 'LOST'].includes(l.stage)).reduce((a, l) => a + l.value, 0), [leads])
+  const filteredLeads = useMemo(() => (stageFilter === 'ALL' ? leads : leads.filter((l) => l.stage === stageFilter)), [leads, stageFilter])
   const visibleStages = stageFilter === 'ALL' ? STAGES : STAGES.filter((s) => s.key === stageFilter)
 
   return (
@@ -153,6 +167,17 @@ export default function LeadsView() {
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search company…" className="pl-9" />
         </div>
+        {(session?.projects?.length ?? 0) > 1 && (
+          <Select value={effProject} onValueChange={setLeadProject}>
+            <SelectTrigger className="w-[170px]" aria-label="Workspace"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All workspaces</SelectItem>
+              {session!.projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={stageFilter} onValueChange={setStageFilter}>
           <SelectTrigger className="w-[170px]" aria-label="Filter by stage"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -183,7 +208,7 @@ export default function LeadsView() {
                 </div>
                 <div className="space-y-2 min-h-[120px] max-h-[62vh] overflow-y-auto hp-scroll pr-1">
                   {items.map((l) => (
-                    <LeadCard key={l.id} lead={l} onClick={() => setDetail(l)} />
+                    <LeadCard key={l.id} lead={l} onOpen={openLead} />
                   ))}
                   {items.length === 0 && (
                     <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
@@ -228,10 +253,10 @@ export default function LeadsView() {
   )
 }
 
-function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
+const LeadCard = memo(function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: (l: Lead) => void }) {
   return (
     <button
-      onClick={onClick}
+      onClick={() => onOpen(lead)}
       className="w-full text-left rounded-xl border bg-card p-3 shadow-sm hover:shadow-md hover:border-brand/60 transition"
     >
       <div className="flex items-start justify-between gap-2">
@@ -252,10 +277,10 @@ function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
       </div>
     </button>
   )
-}
+})
 
 function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
-  const { session } = useHp()
+  const { activeProjectId } = useHp()
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ company: '', contactName: '', email: '', phone: '', industry: '', city: '', value: '' })
@@ -266,7 +291,7 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
     try {
       await api('/api/leads', {
         method: 'POST',
-        body: JSON.stringify({ ...form, value: parseFloat(form.value) || 0, source: 'MANUAL', unlocked: Boolean(form.email || form.phone) }),
+        body: JSON.stringify({ ...form, projectId: activeProjectId || undefined, value: parseFloat(form.value) || 0, source: 'MANUAL', unlocked: Boolean(form.email || form.phone) }),
       })
       toast({ title: 'Lead captured' })
       setForm({ company: '', contactName: '', email: '', phone: '', industry: '', city: '', value: '' })
@@ -321,6 +346,22 @@ interface DiscoverResult {
 
 type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'NONE'
 
+// Per workspace memory: the Lead Finder remembers the last hunt per project.
+// Switch the target project and its own search comes back.
+interface DiscMem { definition?: string; city?: string; siteUrl?: string; limit?: string }
+const DISC_MEM_KEY = 'hp_discover_mem'
+function loadDiscMem(pid: string): DiscMem {
+  try { return (JSON.parse(localStorage.getItem(DISC_MEM_KEY) || '{}') as Record<string, DiscMem>)[pid] || {} } catch { return {} }
+}
+function saveDiscMem(pid: string, mem: DiscMem) {
+  if (!pid) return
+  try {
+    const all = JSON.parse(localStorage.getItem(DISC_MEM_KEY) || '{}') as Record<string, DiscMem>
+    all[pid] = { ...all[pid], ...mem }
+    localStorage.setItem(DISC_MEM_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+
 const DISCOVER_STEPS = [
   'Scanning the live web for real businesses…',
   'Checking public directories near you…',
@@ -330,13 +371,17 @@ const DISCOVER_STEPS = [
 ]
 
 function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
-  const { session } = useHp()
+  const { session, activeProjectId } = useHp()
   const { toast } = useToast()
   const { paid } = usePlan()
   const [definition, setDefinition] = useState('')
   const [city, setCity] = useState(session?.user.city || '')
   const [siteUrl, setSiteUrl] = useState('')
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+  // Target project: found leads land in THIS workspace's pipeline. Starts on the
+  // active workspace (top nav switcher), user can re-aim without leaving the dialog.
+  const projects = session?.projects ?? []
+  const [targetProject, setTargetProject] = useState('')
   // Free plan finds 5 real leads per search; Operator widens the net. The server
   // enforces it (402 → upgrade dialog) — this default just starts everyone honest.
   const [limit, setLimit] = useState('5')
@@ -358,6 +403,41 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     try { setAutoAdd(localStorage.getItem('hp_discover_autoadd') !== '0') } catch { /* default on */ }
   }, [])
 
+  // Every open: aim at the active workspace and restore that project's remembered search.
+  useEffect(() => {
+    if (!open) return
+    const pid = activeProjectId || projects.find((p) => p.isDefault)?.id || projects[0]?.id || ''
+    setTargetProject(pid)
+    const mem = pid ? loadDiscMem(pid) : {}
+    setDefinition(mem.definition || '')
+    setCity(mem.city || session?.user.city || '')
+    setSiteUrl(mem.siteUrl || '')
+    setLimit(mem.limit || '5')
+    setCoords(null)
+    setResults([])
+    setNote('')
+    setMode('NONE')
+    setAddedKeys(new Set())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Re-aim mid dialog: stash the current hunt under its project, restore the other's.
+  function pickProject(id: string) {
+    if (!id || id === targetProject) return
+    saveDiscMem(targetProject, { definition, city, siteUrl, limit })
+    setTargetProject(id)
+    const mem = loadDiscMem(id)
+    setDefinition(mem.definition || '')
+    setCity(mem.city || '')
+    setSiteUrl(mem.siteUrl || '')
+    setLimit(mem.limit || '5')
+    setCoords(null)
+    setResults([])
+    setNote('')
+    setMode('NONE')
+    setAddedKeys(new Set())
+  }
+
   // Engagement loop while the search runs: rotating status + a live seconds counter
   // (the honest search can take up to ~40s — silence would feel like a hang).
   useEffect(() => {
@@ -368,21 +448,23 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   }, [busy])
 
   async function saveLeads(list: DiscoverResult[]) {
-    let added = 0
-    for (const r of list) {
-      await api('/api/leads', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...r,
-          country: 'South Africa',
-          source: resSource,
-          // Contact details the search itself surfaced are real public info — free, like manual capture.
-          unlocked: Boolean(r.email || r.phone),
-        }),
-      })
-      added++
-    }
-    return added
+    // Parallel saves: five leads land in one round trip, not five.
+    const res = await Promise.allSettled(
+      list.map((r) =>
+        api('/api/leads', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...r,
+            projectId: targetProject || undefined,
+            country: 'South Africa',
+            source: resSource,
+            // Contact details the search itself surfaced are real public info — free, like manual capture.
+            unlocked: Boolean(r.email || r.phone),
+          }),
+        })
+      )
+    )
+    return res.filter((x) => x.status === 'fulfilled').length
   }
 
   async function search() {
@@ -397,11 +479,14 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         body: JSON.stringify({
           definition,
           city,
+          projectId: targetProject || undefined,
           website: siteUrl.trim() || undefined,
           limit: parseInt(limit),
           ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
         }),
       })
+      // The search itself is remembered per project — come back later and it is still here.
+      saveDiscMem(targetProject, { definition, city, siteUrl, limit })
       setResults(res.leads)
       setMode(res.mode)
       setResSource(res.source || (res.mode === 'LIVE' ? 'EXPLEE' : 'WEB'))
@@ -448,6 +533,20 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Save leads to</Label>
+            <Select value={targetProject} onValueChange={pickProject}>
+              <SelectTrigger aria-label="Target project"><SelectValue placeholder="Choose a project" /></SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Each project keeps its own pipeline and remembers its own last search. Switch and pick up where that project left off.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label>Who is your ideal client?</Label>
             <Textarea
@@ -620,6 +719,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
 }
 
 function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
+  const { activeProjectId } = useHp()
   const { toast } = useToast()
   const [csv, setCsv] = useState('')
   const [busy, setBusy] = useState(false)
@@ -637,7 +737,7 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
     try {
       const res = await api<{ imported: number; skipped: number; total: number }>('/api/leads/import', {
         method: 'POST',
-        body: JSON.stringify({ csv }),
+        body: JSON.stringify({ csv, projectId: activeProjectId || undefined }),
       })
       setResult(res)
       if (res.imported > 0) {

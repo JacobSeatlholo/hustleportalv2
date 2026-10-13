@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
+import { resolveProject } from '@/lib/workspace'
 
 interface CsvRow {
   [key: string]: string
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { csv, teamId } = body
+  const { csv, teamId, projectId } = body
   if (!csv || typeof csv !== 'string' || csv.trim().length === 0) {
     return NextResponse.json({ error: 'Paste CSV content or upload a file.' }, { status: 400 })
   }
@@ -79,6 +80,8 @@ export async function POST(req: NextRequest) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
     if (!member) return NextResponse.json({ error: 'Not a member of that team.' }, { status: 403 })
   }
+  // All imported rows land in one workspace: the chosen project, else the default.
+  const project = await resolveProject(userId, projectId ?? null)
   const rows = parseCsv(csv)
   if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV.' }, { status: 400 })
 
@@ -95,6 +98,7 @@ export async function POST(req: NextRequest) {
     await db.lead.create({
       data: {
         userId,
+        projectId: project.id,
         teamId: teamId || null,
         company,
         contactName: pick(row, 'contactName') || null,
