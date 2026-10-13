@@ -126,7 +126,7 @@ export async function GET() {
     //    A 429 does NOT stop the walk: we test EVERY model so the report shows which
     //    buckets still have headroom — the exact signal that separates a burned daily
     //    cap from a zero free-tier limit on the project (different fixes entirely).
-    const tryModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash']
+    const tryModels = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.5-flash']
     let liveOk = false
     const quota429: { model: string; detail: string; zero: boolean; perDay: boolean }[] = []
     for (const model of tryModels) {

@@ -24,19 +24,33 @@ import { db } from '@/lib/db'
  */
 const MODEL_PREFERENCE = [
   'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-3.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite-preview',
 ] as const
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
-/** Winner cache — PER KEY (a user key and the platform key can see different model
- * lists), verified against ListModels, refreshed on this TTL. */
+/** Pool cache — PER KEY (a user key and the platform key can see different model
+ * lists), verified against ListModels, refreshed on this TTL. The pool is the FULL
+ * ranked list of usable flash models, not one winner: Google's free-tier quota is
+ * PER MODEL (GenerateRequestsPerDayPerProjectPerModel), so spreading the day's
+ * calls across N models multiplies daily capacity N times over. */
 const MODEL_TTL_MS = 30 * 60 * 1000
-const modelCache = new Map<string, { model: string; at: number }>()
+const modelCache = new Map<string, { models: string[]; at: number }>()
 function keyTag(key: string): string {
   return `${key.slice(0, 8)}:${key.slice(-4)}`
 }
+
+/** Round-robin cursor per key — consecutive calls start on different models so
+ * bursts land on separate RPM buckets and the day spreads across separate RPD buckets. */
+const poolCursor = new Map<string, number>()
 
 /**
  * Drained or blocked keys must not tax every request: after a key-level failure
@@ -159,7 +173,7 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'QUOTA':
       return own
         ? 'Your saved Gemini key has reached its free quota for now. It recovers as the quota windows reset. Try again in a minute.'
-        : 'The HustlePortal AI engine has reached its rate limit for this minute. It cools down on its own and real map results take over meanwhile. Please try again in a minute.'
+        : 'The AI engine is resting its free quota right now. It refills on its own, with the daily reset around 02:00 South African time, and real map results still power your search meanwhile.'
     case 'MODEL':
       // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.
       return 'Google is rotating its AI models right now and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically. Please try again in a minute.'
@@ -224,16 +238,15 @@ function shortOtherCause(f: Failure): string {
 }
 
 /**
- * What can THIS key actually call right now? ListModels once per TTL, pick the best
- * preference entry the key can see. Discovery is best-effort — any failure falls back
- * to the static preference chain.
+ * What can THIS key actually call right now? ListModels once per TTL, build the FULL
+ * pool: every preference entry the key can see (alias-first, newest numbered flash
+ * after), then any other flash-tier Gemini models visible, newest first. Discovery
+ * is best-effort — any failure falls back to the static preference chain.
  */
 async function resolveModels(key: string): Promise<string[]> {
   const now = Date.now()
   const hit = modelCache.get(keyTag(key))
-  if (hit && now - hit.at < MODEL_TTL_MS) {
-    return [hit.model, ...MODEL_PREFERENCE.filter((m) => m !== hit.model)]
-  }
+  if (hit && now - hit.at < MODEL_TTL_MS) return hit.models
   try {
     const res = await fetch(
       `${BASE}/models?key=${encodeURIComponent(key)}&pageSize=1000`,
@@ -248,23 +261,24 @@ async function resolveModels(key: string): Promise<string[]> {
           .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
           .map((m) => (m.name || '').replace(/^models\//, ''))
       )
-      const pick = MODEL_PREFERENCE.find((m) => usable.has(m))
-      if (pick) {
-        modelCache.set(keyTag(key), { model: pick, at: now })
-        return [pick, ...MODEL_PREFERENCE.filter((m) => m !== pick)]
-      }
-      // None of our preferred names are visible — ride the newest flash-tier model Google offers.
-      const anyFlash = (data.models || [])
-        .map((m) => (m.name || '').replace(/^models\//, ''))
-        .filter(
-          (n) =>
-            /flash/i.test(n) &&
-            !/tts|image|embed|transcribe|robotics|computer|omni|banana|lyria|preview|customtools/i.test(n)
-        )
-        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]
-      if (anyFlash) {
-        modelCache.set(keyTag(key), { model: anyFlash, at: now })
-        return [anyFlash, ...MODEL_PREFERENCE.filter((m) => m !== anyFlash)]
+      const pool = [
+        ...MODEL_PREFERENCE.filter((m) => usable.has(m)),
+        // Any other flash-tier Gemini model the key can see, newest first — extra
+        // daily buckets Google offers on this project. Gemma/Pro excluded (no search
+        // grounding / too slow for the deadline); excluded families are hard no's.
+        ...[...usable]
+          .filter(
+            (n) =>
+              n.startsWith('gemini-') &&
+              /flash/i.test(n) &&
+              !/tts|image|embed|transcribe|robotics|computer|omni|banana|lyria|antigravity|customtools/i.test(n)
+          )
+          .filter((n) => !(MODEL_PREFERENCE as readonly string[]).includes(n))
+          .sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+      ]
+      if (pool.length > 0) {
+        modelCache.set(keyTag(key), { models: pool, at: now })
+        return pool
       }
     }
   } catch {
@@ -315,8 +329,8 @@ async function callGemini(
   for (const { key, ownKey } of orderedKeys) {
     if (Date.now() >= deadline) break
     const discovered = await resolveModels(key)
-    const models = discovered.filter((m) => !modelDrained(key, m))
-    if (models.length === 0) {
+    const usable = discovered.filter((m) => !modelDrained(key, m))
+    if (usable.length === 0) {
       // Every model on this key is inside a quota bench — say so honestly and
       // move to the next key without paying Google a single 429 for it.
       const f: Failure = { cls: 'QUOTA', ownKey, status: 429, detail: 'all models on this key are inside a quota cooldown' }
@@ -324,6 +338,13 @@ async function callGemini(
       if (ownKey && !userKeyFailure) userKeyFailure = f
       continue
     }
+    // Round-robin over the pool: consecutive calls start on a different model, so a
+    // burst of scans lands on separate per-model RPM buckets and the whole day's
+    // volume spreads across separate per-model DAY buckets. Capacity scales with
+    // pool size instead of dying with one model's daily cap.
+    const start = poolCursor.get(keyTag(key)) || 0
+    poolCursor.set(keyTag(key), start + 1)
+    const models = usable.map((_, i) => usable[(start + i) % usable.length])
     for (const model of models) {
       const remaining = deadline - Date.now()
       if (remaining <= 2_000) break
@@ -340,15 +361,15 @@ async function callGemini(
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
           if (ownKey && !userKeyFailure) userKeyFailure = failure
-          // A cached winner that Google just retired — evict so the next request re-discovers.
+          // A cached pool that Google just changed — evict so the next request re-discovers.
           if (cls === 'MODEL') modelCache.delete(keyTag(key))
-          // Key-level fatals AND per-day quota walls bench the key: a 403/invalid key
-          // rejects EVERY model, and a PerDay 429 will not clear inside this request.
+          // Key-level fatals bench the key: a 403/invalid key rejects EVERY model.
+          // A PerDay 429 does NOT bench the key any more — the per-model bench below
+          // retires exactly the drained model and its pool siblings keep answering.
           if (cls === 'KEY_INVALID' || cls === 'PERMISSION') {
             benchKey(key)
             break
           }
-          if (cls === 'QUOTA' && /PerDay/i.test(raw)) benchKey(key)
           if (cls === 'QUOTA') {
             // Day bucket drained (or a zero free-tier limit on this model): bench the
             // (key,model) pair so later walks skip straight to models with headroom.
@@ -379,7 +400,7 @@ async function callGemini(
           if (ownKey && !userKeyFailure) userKeyFailure = failure
           continue
         }
-        modelCache.set(keyTag(key), { model, at: Date.now() })
+        // Pool freshness is owned by the TTL cache — nothing to rewrite on success.
         // The user's own key was bypassed but the platform saved the answer — say so,
         // once, gently: the app stayed seamless AND the user learns their key needs care.
         const notice =
