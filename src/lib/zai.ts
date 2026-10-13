@@ -228,7 +228,10 @@ export async function zaiGenerate(
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(Math.min(12_000, remaining)),
+          // A REAL grounded scan legitimately takes 15 to 25 seconds (search
+          // plus a JSON report). The deadline guard above, not a tight cap
+          // here, is what protects the caller's budget.
+          signal: AbortSignal.timeout(Math.min(28_000, remaining)),
         })
         if (!res.ok) {
           const f = friendly(res.status, ep.id)
