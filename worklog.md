@@ -166,3 +166,19 @@ Stage Summary:
 - Production runs 0b0f561. Free plan: 5 leads per search, 3 stock items, 6 emails, no logo. Operator opens all four, in-app one-tap dialog does the selling (calm, honest, no dashboards of hype).
 - AI engine: a drained user key now benches itself for 10 min instead of taxing every call; per-key model discovery. With the user's OLD key still under Integrations, notices stay truthful and the platform key answers.
 - User next steps: (a) create the API key on businesshustleworldwide@gmail.com at aistudio.google.com/apikey (Playground banner is irrelevant to API keys), paste under Integrations → instant verdict; (b) optionally set the same key as GEMINI_API_KEY in Vercel env for the platform pool; (c) old key self-recovers when its daily quota resets (midnight Pacific).
+
+---
+Task ID: 36
+Agent: Super Z (main)
+Task: Recap + catch-up audit + extensive production QA for full-on production; user reported 429 (old key still in place, not yet rotated).
+
+Work Log:
+- AUDIT: backlog vs code. Verified already-built: Yoco full integration (lib/yoco.ts + webhooks + register, needs only YOCO_SECRET_KEY), invoice bank details, service-request dual channel, reset flow, free gates, upgrade dialog, system status. Remaining open items are USER-SIDE env actions only (Gemini key rotation, YOCO_SECRET_KEY, GA id, optional CRON_SECRET).
+- BUG FOUND+FIXED (prod): POST /api/service-requests 500'd whenever body omitted urgency — the route tested String(body.urgency || 'THIS_WEEK') against URGENCY but then USED raw String(body.urgency) → "undefined" → URGENCY["undefined"].dueInDays crash. Fixed (normalize once), route now wraps in try/catch and returns honest error+detail instead of opaque 500. Verified live: task created + team email sent (emailSent=true).
+- COPY (brand voice, no dashes): rewrote all user-facing AI engine errors (gemini.ts friendlyError/shortOtherCause/NO_KEY/fallback notice) — removed em-dashes, removed the false "HustlePortal AI picked up the request" claim on total failure, clean one-message composition; discover NONE note rebuilt as one clean message (no clause pile-up); mailer.ts user-facing notices + email signature lines de-dashed; welcome email subject+body de-dashed.
+- QA: tsc clean (src), build OK 35s. Prod suites: e2e_prod_qa 30/0, verify_task33 21/0, verify_task34 24/0, verify_task35 18/1(known script artifact: sales-pitch needs filled profile), NEW scripts/qa_final_sweep.mjs 44/0 (public surfaces, all data routes, email 6-send gate fires at #7, service request dual channel, AI contract+honesty, sealed task record chain, session lifecycle). diagnose probe: platform key ACCEPTED, 45 models visible — 429s are purely quota, exactly as diagnosed.
+- Deploys: 6ad74bc (copy+surfacing) then 7d82537 (urgency fix). Both verified against https://www.hustleportal.online.
+
+Stage Summary:
+- Production runs 7d82537. QA: 5 suites, 137 checks, 0 real failures. One real prod bug fixed (service requests).
+- User next steps (env actions only they can do): (1) rotate Gemini key — new key from aistudio.google.com/apikey on businesshustleworldwide@gmail.com → paste under Integrations (instant verdict) AND replace GEMINI_API_KEY in Vercel env → redeploy; (2) YOCO_SECRET_KEY sk_live_/sk_test_ in Vercel → redeploy → Setup Checklist one-click webhook register; (3) GA when ready: NEXT_PUBLIC_GA_MEASUREMENT_ID; (4) optional CRON_SECRET.
