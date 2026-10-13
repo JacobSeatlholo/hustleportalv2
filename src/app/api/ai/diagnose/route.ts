@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { getUserGeminiKey, getPlatformGeminiKey } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
-import { resolveZaiKey, ZAI_PROBE_MODEL } from '@/lib/zai'
+import { resolveZaiKey, probeZaiKey } from '@/lib/zai'
 
 export const maxDuration = 60
 
@@ -163,61 +163,49 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
     }
   }
   const who = source === 'user' ? 'your key' : 'the platform key'
-  try {
-    const res = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: ZAI_PROBE_MODEL,
-        messages: [{ role: 'user', content: 'Reply: OK' }],
-        max_tokens: 8,
-        temperature: 0,
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(12_000),
-    })
-    if (res.status === 401) {
-      return {
-        configured: true,
-        keySource: source,
-        masked: mask(key),
-        ok: false,
-        message: `z.ai rejected ${who}. Generate a fresh key on the z.ai open platform API keys page and save it where the old one lives.`,
-      }
-    }
-    if (res.status === 402 || res.status === 429) {
-      return {
-        configured: true,
-        keySource: source,
-        masked: mask(key),
-        ok: false,
-        message: `z.ai is pacing requests or the credits behind ${who} are spent. A top up on the z.ai billing page revives it. The map directory and Gemini keep scans alive meanwhile.`,
-      }
-    }
-    if (!res.ok) {
-      return {
-        configured: true,
-        keySource: source,
-        masked: mask(key),
-        ok: false,
-        message: `z.ai answered with status ${res.status}. It retries on its own.`,
-      }
-    }
+  const probe = await probeZaiKey(key, 15_000)
+  if (probe.status === 200) {
     return {
       configured: true,
       keySource: source,
       masked: mask(key),
       ok: true,
-      message: `z.ai GLM is live on ${who}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
+      message: `z.ai GLM is live on ${who}${probe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
     }
-  } catch {
+  }
+  if (probe.status === 401 || probe.status === 403) {
     return {
       configured: true,
       keySource: source,
       masked: mask(key),
       ok: false,
-      message: 'Could not reach z.ai just now. It retries automatically.',
+      message: `z.ai rejected ${who} on both GLM doors. Generate a fresh key on the API keys page of the platform where the credits live and save it where the old one lives.`,
     }
+  }
+  if (probe.status === 402 || probe.status === 429) {
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: false,
+      message: `GLM is pacing requests or the credits behind ${who} are spent. A top up on the billing page revives it. The map directory and Gemini keep scans alive meanwhile.`,
+    }
+  }
+  if (probe.status === null) {
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: false,
+      message: 'Could not reach GLM just now. It retries automatically.',
+    }
+  }
+  return {
+    configured: true,
+    keySource: source,
+    masked: mask(key),
+    ok: false,
+    message: `GLM answered with status ${probe.status}. It retries on its own.`,
   }
 }
 

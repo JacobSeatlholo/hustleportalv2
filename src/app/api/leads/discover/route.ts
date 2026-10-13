@@ -325,9 +325,11 @@ export async function POST(req: NextRequest) {
   const aiSearchResponse = (
     leads: ReturnType<typeof parseLeadList>,
     engine: 'gemini' | 'zai',
-    notice?: string
-  ) =>
-    NextResponse.json({
+    notice?: string,
+    zaiEndpoint?: 'z.ai' | 'zhipu'
+  ) => {
+    const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
+    return NextResponse.json({
       leads,
       mode: 'AI_SEARCH',
       source: 'WEB',
@@ -335,12 +337,13 @@ export async function POST(req: NextRequest) {
       note:
         engine === 'zai'
           ? teaser
-            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on the z.ai GLM engine.`
-            : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by the z.ai GLM engine.`
+            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on ${zaiEngineName}.`
+            : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by ${zaiEngineName}.`
           : teaser
             ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
             : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
     })
+  }
 
   let ai: Awaited<ReturnType<typeof geminiGenerate>>
   let zai: Awaited<ReturnType<typeof zaiGenerate>> | null
@@ -350,7 +353,7 @@ export async function POST(req: NextRequest) {
     //    operator's pool. Either way a grounded scan costs about two cents.
     zai = await runZaiScan()
     let leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
-    if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai')
+    if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai', undefined, zai.endpoint)
 
     // 2) BACKUP — Gemini with Google Search grounding when the z.ai engine could
     //    not answer. If the z.ai cause is money or the key, say so once, gently:
@@ -379,9 +382,9 @@ export async function POST(req: NextRequest) {
     leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) {
       const engineNotice = !ai.ok
-        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the z.ai GLM engine. Everything below is still real, search grounded results.'
+        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the GLM engine. Everything below is still real, search grounded results.'
         : undefined
-      return aiSearchResponse(leads, 'zai', engineNotice)
+      return aiSearchResponse(leads, 'zai', engineNotice, zai.endpoint)
     }
   }
 
