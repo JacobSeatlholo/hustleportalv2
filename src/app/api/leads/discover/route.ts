@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
-import { deepseekGenerate } from '@/lib/deepseek'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
@@ -13,20 +12,16 @@ export const maxDuration = 60
 /**
  * POST /api/leads/discover — source REAL leads.
  *
- * PRIMARY: the OpenStreetMap directory supplies real, publicly mappable
- * businesses (names, phones, websites as listed). DeepSeek then matches those
- * real records to what the seller offers: score, fit and a one-line "why".
- * DeepSeek never invents companies and never supplies contact details — the
- * server copies contacts verbatim from the map record and drops any answer that
- * does not match a real source entry. No fabricated leads, ever.
+ * PRIMARY: Gemini with Google Search grounding — the model can only report businesses
+ * it actually saw in search results (websites, directories, maps listings, news).
+ * No fabricated companies, no synthetic contacts: real results or nothing.
  *
- * FALLBACK: Gemini with Google Search grounding when the map has nothing —
- * the model can only report businesses it actually saw in search results.
+ * TEASER: with no definition supplied, the AI builds the search from the seller's saved
+ * profile (website, offerings, value proposition) and finds a few real businesses in the
+ * seller's area that likely need what they sell — the taste that sells the R199 plan.
  *
- * TEASER: with no definition supplied, the search builds from the seller's saved
- * profile (website, offerings, value proposition).
- *
- * LAST RESORT: Explee verified data when configured.
+ * FALLBACK: Explee verified data when configured. Demo/fabricated leads are gone —
+ * "the teaser must be real results and not bs".
  */
 
 interface AiLead {
@@ -68,8 +63,6 @@ function saneWebsite(v?: string): string | undefined {
   return s.replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
 }
 
-const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-
 /**
  * Read the seller's own website so the hunt is grounded in what they actually
  * sell. Best effort, 8s cap: title, description and visible text — enough for
@@ -102,83 +95,6 @@ async function readSellerSite(raw: string): Promise<{ url: string; text: string 
   } catch {
     return { url, text: '' }
   }
-}
-
-/**
- * DeepSeek enrichment of REAL map records. The model only decides WHICH source
- * businesses fit the seller and WHY; every contact field in the answer is
- * copied verbatim from the source record it matched, and any answer that does
- * not map back to a real record is dropped. This is the anti-fabrication
- * guarantee: DeepSeek ranks reality, it never supplies facts.
- */
-async function enrichOsmWithDeepseek(
-  userId: string,
-  definition: string,
-  raw: AiLead[],
-  cap: number,
-  t0: number
-): Promise<{ leads: (AiLead & { company: string })[]; notice?: string } | null> {
-  if (raw.length === 0) return null
-  const remaining = t0 + 54_000 - Date.now()
-  if (remaining < 6_000) return null // no runway to rank: hand back the raw real records
-  // Compact, numbered source list. Everything DeepSeek may know about the leads
-  // lives here, so the server can verify the answer against it.
-  const source = raw
-    .map((l, i) =>
-      `${i + 1}. company: ${l.company} | type: ${l.industry || 'unknown'}${l.city ? ` | area: ${l.city}` : ''}${l.phone ? ` | phone: ${l.phone}` : ''}${l.website ? ` | website: ${l.website}` : ''}`
-    )
-    .join('\n')
-  const res = await deepseekGenerate(userId, {
-    system:
-      'You are a meticulous lead qualifier for South African small businesses. You receive a numbered list of REAL businesses from the OpenStreetMap directory and a seller description. You pick which of those real businesses are worth the seller contacting. You NEVER invent a company, phone number, website or email: every field you output must come from the list. If nothing fits, return fewer leads.',
-    prompt:
-      `The seller offers:\n"""${definition.slice(0, 900)}"""\n\n` +
-      `Real businesses from the map directory:\n${source}\n\n` +
-      `Pick up to ${cap} businesses from the list above that would realistically buy what the seller offers.\n` +
-      `Rules:\n` +
-      `- company: copy the name EXACTLY as it appears in the list.\n` +
-      `- score: 1 to 5 fit for the seller. Reserve 4 and 5 for strong fits.\n` +
-      `- why: one short line grounded in the type and area shown in the list.\n` +
-      `- never output phone, website or email. Those stay attached from the source automatically.\n` +
-      `- drop businesses that clearly do not fit. Fewer, better leads win.\n` +
-      `Return ONLY JSON: {"leads":[{"company":"","industry":"","why":"","score":3}]}`,
-    json: true,
-    temperature: 0.3,
-    maxTokens: 1400,
-    timeoutMs: Math.max(6_000, Math.min(22_000, remaining - 1_000)),
-  })
-  if (!res.ok) {
-    // Real failure (no key, credits out, busy): the raw real records still flow.
-    // Credit and key problems are worth a gentle mention so the user can act.
-    if (res.reason === 'BALANCE' || res.reason === 'KEY_INVALID') return { leads: [], notice: res.error }
-    return null
-  }
-  const parsed = parseJsonLoose<{ leads?: AiLead[] }>(res.text)
-  const byKey = new Map<string, AiLead>()
-  for (const r of raw) byKey.set(normKey(r.company || ''), r)
-  const out: (AiLead & { company: string })[] = []
-  const seen = new Set<string>()
-  for (const l of parsed?.leads || []) {
-    const src = byKey.get(normKey(clean(l.company) || ''))
-    if (!src) continue // not a real record: dropped, never surfaced
-    const key = normKey(src.company)
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    out.push({
-      company: src.company,
-      industry: clean(l.industry) || src.industry,
-      city: src.city,
-      phone: src.phone,
-      website: src.website,
-      email: src.email,
-      contactName: src.contactName,
-      why: clean(l.why)?.slice(0, 220),
-      score: typeof l.score === 'number' ? Math.max(1, Math.min(5, Math.round(l.score))) : 3,
-    })
-  }
-  if (out.length === 0) return null // qualifier rejected everything: the raw floor beats an empty win
-  out.sort((a, b) => (b.score || 0) - (a.score || 0))
-  return { leads: out.slice(0, cap) }
 }
 
 export async function POST(req: NextRequest) {
@@ -263,43 +179,12 @@ export async function POST(req: NextRequest) {
       `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","why":"","score":3}]}`,
   })
 
+  // 1) PRIMARY — grounded web search (real businesses only).
+  // Deadline budget: Vercel caps this function at 60s — the Gemini chain gets
+  // 30s (hard deadline inside callGemini too), leaving room for the OSM map
+  // fallback, so the caller always gets an honest response instead of a 504.
   const t0 = Date.now()
-
-  // 1) PRIMARY — real businesses from the OpenStreetMap directory (keyless, no
-  //    quota walls), matched and ranked by DeepSeek on the seller's behalf.
-  //    With a GPS pin we search a tight 5 km radius around it instead of geocoding the city name.
-  const osm = await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 35_000, lat, lng })
-  const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
-  if (osm.leads.length > 0) {
-    const ranked = await enrichOsmWithDeepseek(userId, definition, osm.leads as AiLead[], cap, t0)
-    if (ranked && ranked.leads.length > 0) {
-      return NextResponse.json({
-        leads: ranked.leads,
-        mode: 'OSM',
-        source: 'OSM',
-        ...(ranked.notice ? { notice: ranked.notice } : {}),
-        ...(osm.note ? { osmNote: osm.note } : {}),
-        note: teaser
-          ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by DeepSeek AI. Contact details come straight from the directory.`
-          : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by DeepSeek AI to what you sell. Contact details as listed in the directory.`,
-      })
-    }
-    return NextResponse.json({
-      leads: osm.leads,
-      mode: 'OSM',
-      source: 'OSM',
-      ...(osm.note ? { osmNote: osm.note } : {}),
-      note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed. AI ranking is resting, so these are unranked.`,
-    })
-  }
-
-  // 2) FALLBACK — Gemini with Google Search grounding when the map directory had
-  //    nothing for that description. Same real-results-only contract. Whatever
-  //    time the map run left is the grounding budget (hard 55s wall overall).
-  const ai = await geminiGenerate(userId, {
-    ...buildSearch(),
-    timeoutMs: Math.max(8_000, Math.min(30_000, t0 + 55_000 - Date.now())),
-  })
+  const ai = await geminiGenerate(userId, { ...buildSearch(), timeoutMs: 30_000 })
 
   if (ai.ok) {
     const parsed = parseJsonLoose<{ leads?: AiLead[] }>(ai.text)
@@ -319,7 +204,7 @@ export async function POST(req: NextRequest) {
       // a lead without a company name is unusable — drop it (no fabrication)
       .filter((l): l is typeof l & { company: string } => Boolean(l.company))
       .filter((l) => {
-        const key = normKey(l.company)
+        const key = l.company.toLowerCase().replace(/[^a-z0-9]/g, '')
         if (!key || seen.has(key)) return false
         seen.add(key)
         return true
@@ -338,6 +223,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 2) FALLBACK A — OpenStreetMap: real, keyless directory listings (Gemini only
+  //    helped translate the need into map tags; Overpass supplies the actual data).
+  //    Only started when there is still runway (the chain needs ~15s of its own).
+  //    With a GPS pin we search a tight 5 km radius around it instead of geocoding the city name.
+  const osm = Date.now() - t0 < 35_000
+    ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
+    : { leads: [], note: 'skipped — the web search used the time budget' }
+  if (osm.leads.length > 0) {
+    return NextResponse.json({
+      leads: osm.leads,
+      mode: 'OSM',
+      source: 'OSM',
+      ...(ai.notice ? { notice: ai.notice } : {}),
+      note: `Real businesses from the OpenStreetMap directory${pinArea ? ' within 5 km of your location' : area ? ` in ${area}` : ''} — publicly mappable, contact details as listed. Search grounding was busy, so these come from the map instead.`,
+    })
+  }
+
   // 3) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
   const ex = Date.now() - t0 < 50_000 ? await searchLeads(definition, city || undefined, cap) : { leads: [] }
   if (ex.leads.length > 0) {
@@ -348,8 +250,8 @@ export async function POST(req: NextRequest) {
   const slowRun = Date.now() - t0 > 50_000
   const mapWhy = osm.note ? ` ${osm.note}` : ' The map directory had nothing for that description either.'
   const note = ai.ok
-    ? `The map directory and the web search both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
-    : /quota|credits|rate limit/i.test(ai.error)
+    ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
+    : /quota|rate limit/i.test(ai.error)
       ? `${ai.error}${mapWhy}`
       : `${ai.error}${mapWhy}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
