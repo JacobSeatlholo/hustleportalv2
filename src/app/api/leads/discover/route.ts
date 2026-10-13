@@ -317,7 +317,9 @@ export async function POST(req: NextRequest) {
           ...buildSearch(),
           search: true,
           json: true,
-          maxTokens: 1600,
+          // Small nets get small reports: a tighter request fits under the
+          // token ceilings that fresh GLM accounts start with.
+          maxTokens: cap <= 3 ? 900 : 1600,
           // Two doors plus a REAL 15 to 25 second grounded generation need
           // more runway than a single door ever did.
           timeoutMs: Math.min(34_000, remaining),
