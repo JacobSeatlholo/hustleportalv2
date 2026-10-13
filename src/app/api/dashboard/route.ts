@@ -1,15 +1,25 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { resolveProject } from '@/lib/workspace'
 
-// GET /api/dashboard — aggregated real user data
-export async function GET() {
+// GET /api/dashboard?projectId= — aggregated real user data
+// projectId narrows the hustle numbers (pipeline, finance) to one workspace;
+// projectId=ALL (or omitted) keeps the whole-business view. Tasks stay personal/team.
+export async function GET(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const projectId = new URL(req.url).searchParams.get('projectId') || ''
+  let projectFilter: Record<string, unknown> = {}
+  if (projectId && projectId !== 'ALL') {
+    const project = await resolveProject(userId, projectId)
+    if (project.id !== projectId) return NextResponse.json({ error: 'Unknown project.' }, { status: 404 })
+    projectFilter = { projectId }
+  }
 
   const memberships = await db.teamMember.findMany({ where: { userId }, select: { teamId: true } })
   const teamIds = memberships.map((m) => m.teamId)
-  const leadScope = teamIds.length > 0 ? { OR: [{ userId }, { teamId: { in: teamIds } }] } : { userId }
+  const leadScope = { ...(teamIds.length > 0 ? { OR: [{ userId }, { teamId: { in: teamIds } }] } : { userId }), ...projectFilter }
   const taskScope = teamIds.length > 0
     ? { OR: [{ assigneeId: userId }, { creatorId: userId, teamId: null }, { teamId: { in: teamIds } }] }
     : { OR: [{ assigneeId: userId }, { creatorId: userId, teamId: null }] }
@@ -21,7 +31,7 @@ export async function GET() {
       select: { status: true, priority: true, dueDate: true },
     }),
     db.financeEntry.findMany({
-      where: { userId, occurredAt: { gte: new Date(Date.now() - 180 * 24 * 3600 * 1000) } },
+      where: { userId, ...projectFilter, occurredAt: { gte: new Date(Date.now() - 180 * 24 * 3600 * 1000) } },
       orderBy: { occurredAt: 'asc' },
     }),
     db.wallet.findUnique({ where: { userId } }),

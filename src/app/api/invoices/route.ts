@@ -27,14 +27,23 @@ function money(n: number) {
   return Math.round(n * 100) / 100
 }
 
-// GET /api/invoices?status= → { invoices, logoUrl } (logoUrl = the Operator business logo every new invoice starts with)
+// GET /api/invoices?status=&projectId= → { invoices, logoUrl } (logoUrl = the Operator business logo every new invoice starts with)
+// projectId narrows the list to one workspace; projectId=ALL (or omitted) keeps the classic mixed view.
 export async function GET(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const status = new URL(req.url).searchParams.get('status')
+  const params = new URL(req.url).searchParams
+  const status = params.get('status')
+  const projectId = params.get('projectId') || ''
+  let projectFilter: Record<string, unknown> = {}
+  if (projectId && projectId !== 'ALL') {
+    const project = await resolveProject(userId, projectId)
+    if (project.id !== projectId) return NextResponse.json({ error: 'Unknown project.' }, { status: 404 })
+    projectFilter = { projectId }
+  }
   const [invoices, logo] = await Promise.all([
     db.invoice.findMany({
-      where: { userId, ...(status ? { status } : {}) },
+      where: { userId, ...(status ? { status } : {}), ...projectFilter },
       orderBy: { createdAt: 'desc' },
       take: 200,
     }),

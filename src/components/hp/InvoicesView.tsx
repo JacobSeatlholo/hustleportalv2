@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api, rands, randsPlain, type Invoice, type ProjectFull, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
@@ -68,7 +69,7 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 export default function InvoicesView() {
-  const { activeProjectId, bumpRefresh, setView, setStoreFocus } = useHp()
+  const { session, activeProjectId, bumpRefresh, setView, setStoreFocus } = useHp()
   const { toast } = useToast()
   const { paid } = usePlan()
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -106,6 +107,16 @@ export default function InvoicesView() {
   const [reqService, setReqService] = useState<RequestedService | null>(null)
   const [reqPreset, setReqPreset] = useState<string | undefined>(undefined)
 
+  // Workspace focus: follows the active workspace (top nav switcher) until the user picks explicitly.
+  const [invProject, setInvProject] = useState('')
+  const effProject = invProject || activeProjectId || 'ALL'
+
+  // The top-bar switcher always wins: switching projects in the top nav repopulates
+  // the invoice book for that workspace, seamlessly.
+  useEffect(() => {
+    setInvProject('')
+  }, [activeProjectId])
+
   useEffect(() => {
     if (logoNudgeNumber && logoMarkedRef.current !== logoNudgeNumber) {
       logoMarkedRef.current = logoNudgeNumber
@@ -128,7 +139,9 @@ export default function InvoicesView() {
     setLoading(true)
     try {
       const [inv, proj] = await Promise.all([
-        api<{ invoices: Invoice[]; logoUrl?: string | null }>('/api/invoices'),
+        api<{ invoices: Invoice[]; logoUrl?: string | null }>(
+          effProject && effProject !== 'ALL' ? `/api/invoices?projectId=${encodeURIComponent(effProject)}` : '/api/invoices'
+        ),
         activeProjectId ? api<{ project: ProjectFull }>(`/api/projects/${activeProjectId}`).catch(() => null) : Promise.resolve(null),
       ])
       setInvoices(inv.invoices)
@@ -155,7 +168,7 @@ export default function InvoicesView() {
     } finally {
       setLoading(false)
     }
-  }, [toast, activeProjectId])
+  }, [toast, effProject])
 
   useEffect(() => { load() }, [load])
 
@@ -234,7 +247,7 @@ export default function InvoicesView() {
         method: 'POST',
         body: JSON.stringify({
           clientName, clientEmail, items, taxRate, notes, logoUrl,
-          status, projectId: activeProjectId,
+          status, projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
           bankDetails: bankLines(bank).join('\n'),
         }),
       })
@@ -303,9 +316,22 @@ export default function InvoicesView() {
           <h2 className="font-display text-2xl">Invoices</h2>
           <p className="text-sm text-muted-foreground">VAT-ready ZAR invoices with your logo — print, PDF via the browser, or mark as sent.</p>
         </div>
-        <Button onClick={() => setShowCreate((s) => !s)}>
-          <Plus className="h-4 w-4" /> New invoice
-        </Button>
+        <div className="flex items-center gap-2">
+          {(session?.projects?.length ?? 0) > 1 && (
+            <Select value={effProject} onValueChange={setInvProject}>
+              <SelectTrigger className="w-[170px]" aria-label="Workspace"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All workspaces</SelectItem>
+                {session!.projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={() => setShowCreate((s) => !s)}>
+            <Plus className="h-4 w-4" /> New invoice
+          </Button>
+        </div>
       </div>
 
       {/* Banking details — printed on every new invoice */}

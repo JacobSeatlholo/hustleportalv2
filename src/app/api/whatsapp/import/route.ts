@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { parseContactList, normalizePhone, MAX_IMPORT_BATCH } from '@/lib/whatsapp'
+import { resolveProject } from '@/lib/workspace'
 
 /**
  * POST /api/whatsapp/import — 1-click bulk import of a WhatsApp contact list.
@@ -61,9 +62,12 @@ export async function POST(req: NextRequest) {
 
   const source = body.source === 'VCF' || /BEGIN:VCARD/i.test(text) ? 'VCF' : 'WHATSAPP'
   if (toCreate.length > 0) {
+    // Imported contacts land in the requested workspace (explicit wins, else active/default).
+    const project = await resolveProject(userId, typeof body.projectId === 'string' ? body.projectId : null)
     await db.client.createMany({
       data: toCreate.map((c) => ({
         userId,
+        projectId: project.id,
         name: c.name,
         phone: c.phone,
         email: c.email,

@@ -40,6 +40,13 @@ export default function LeadsView() {
   const [leadProject, setLeadProject] = useState('')
   const effProject = leadProject || activeProjectId || 'ALL'
 
+  // The top-bar switcher always wins: if the user picked a workspace here explicitly,
+  // switching projects in the top nav re-follows the new active one so the pipeline
+  // repopulates seamlessly.
+  useEffect(() => {
+    setLeadProject('')
+  }, [activeProjectId])
+
   // dialogs
   const [showAdd, setShowAdd] = useState(false)
   const [showDiscover, setShowDiscover] = useState(false)

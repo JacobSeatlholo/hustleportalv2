@@ -41,7 +41,7 @@ const QUICK_CHIPS = [
 ] as const
 
 export default function DashboardView() {
-  const { session, setView, setAiBarQuery } = useHp()
+  const { session, activeProjectId, setView, setAiBarQuery } = useHp()
   const { toast } = useToast()
   const [data, setData] = useState<DashData | null>(null)
   const [newLeads, setNewLeads] = useState<Lead[]>([])
@@ -52,9 +52,11 @@ export default function DashboardView() {
 
   async function load() {
     try {
+      // Hustle numbers follow the active workspace (top nav switcher); tasks stay personal.
+      const pid = activeProjectId ? `projectId=${encodeURIComponent(activeProjectId)}` : ''
       const [d, leads, tasks] = await Promise.all([
-        api<DashData>('/api/dashboard'),
-        api<{ leads: Lead[] }>('/api/leads'),
+        api<DashData>(`/api/dashboard${pid ? `?${pid}` : ''}`),
+        api<{ leads: Lead[] }>(`/api/leads${pid ? `?${pid}` : ''}`),
         api<{ tasks: Task[] }>('/api/tasks?scope=mine'),
       ])
       setData(d)
@@ -67,8 +69,7 @@ export default function DashboardView() {
 
   useEffect(() => {
     load()
-     
-  }, [])
+  }, [activeProjectId])
 
   async function askAi(text?: string) {
     const q = (text ?? aiQuery).trim()

@@ -47,12 +47,21 @@ interface ImportResult {
 const EMPTY = { name: '', company: '', email: '', phone: '', monthlyValue: '', status: 'ACTIVE', notes: '' }
 
 export default function ClientsView() {
-  const { bumpRefresh } = useHp()
+  const { session, activeProjectId, bumpRefresh } = useHp()
   const { toast } = useToast()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  // Workspace focus: follows the active workspace (top nav switcher) until the user picks explicitly.
+  const [clientProject, setClientProject] = useState('')
+  const effProject = clientProject || activeProjectId || 'ALL'
+
+  // The top-bar switcher always wins: picking a project in the top nav repopulates
+  // the book of clients for that workspace, seamlessly.
+  useEffect(() => {
+    setClientProject('')
+  }, [activeProjectId])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [form, setForm] = useState(EMPTY)
@@ -79,8 +88,12 @@ export default function ClientsView() {
   }, [importText])
 
   async function load() {
+    // Soft refresh: skeletons only on a cold book. With clients on screen the list
+    // stays put while the fresh one arrives — no jarring flash on workspace switch.
+    if (clients.length === 0) setLoading(true)
     try {
-      const data = await api<{ clients: Client[] }>('/api/clients')
+      const pid = effProject && effProject !== 'ALL' ? `?projectId=${encodeURIComponent(effProject)}` : ''
+      const data = await api<{ clients: Client[] }>(`/api/clients${pid}`)
       setClients(data.clients)
       // Touchpoint: a real book of relationships is the natural moment to offer
       // automated follow-ups — once, quietly, and never again if dismissed.
@@ -98,7 +111,7 @@ export default function ClientsView() {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [effProject])
 
   const filtered = useMemo(
     () =>
@@ -189,7 +202,7 @@ export default function ClientsView() {
     try {
       const res = await api<ImportResult>('/api/whatsapp/import', {
         method: 'POST',
-        body: JSON.stringify({ text: importText }),
+        body: JSON.stringify({ text: importText, projectId: activeProjectId || undefined }),
       })
       setImportResult(res)
       await load()
@@ -242,7 +255,8 @@ export default function ClientsView() {
         await api(`/api/clients/${editing.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
         toast({ title: 'Client updated' })
       } else {
-        await api('/api/clients', { method: 'POST', body: JSON.stringify(payload) })
+        // New clients join the workspace you are looking at right now.
+        await api('/api/clients', { method: 'POST', body: JSON.stringify({ ...payload, projectId: activeProjectId || undefined }) })
         toast({ title: 'Client added', description: `${form.name} is now in your CRM.` })
       }
       setDialogOpen(false)
@@ -333,6 +347,17 @@ export default function ClientsView() {
             className="pl-9"
           />
         </div>
+        {(session?.projects?.length ?? 0) > 1 && (
+          <Select value={effProject} onValueChange={setClientProject}>
+            <SelectTrigger className="w-[170px]" aria-label="Workspace"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All workspaces</SelectItem>
+              {session!.projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Tabs2 value={statusFilter} onChange={setStatusFilter} />
       </div>
 
