@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { validateGeminiKey } from '@/lib/gemini'
+import { validateDeepseekKey } from '@/lib/deepseek'
 
 const ALLOWED_KEYS = [
   'GMAIL_USER',
   'GMAIL_APP_PASSWORD',
   'GEMINI_API_KEY',
+  'DEEPSEEK_API_KEY',
   'EXPLEE_API_KEY',
   'GCAL_OAUTH_TOKEN',
   'WA_PHONE_NUMBER_ID',
@@ -17,7 +19,7 @@ const ALLOWED_KEYS = [
   'NAV_ORDER', // JSON ViewKey[] — the user's personal sidebar menu order
 ]
 
-const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
+const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
 
 function mask(v: string) {
   if (v.length <= 4) return '••••'
@@ -69,6 +71,11 @@ export async function PUT(req: NextRequest) {
   let validation: Awaited<ReturnType<typeof validateGeminiKey>> | null = null
   if (key === 'GEMINI_API_KEY') {
     validation = await validateGeminiKey(value)
+  }
+  // A pasted DeepSeek key is probed against DeepSeek the moment it is saved:
+  // verdict plus the REAL credit balance from DeepSeek's own meter.
+  if (key === 'DEEPSEEK_API_KEY') {
+    validation = await validateDeepseekKey(value)
   }
 
   return NextResponse.json({

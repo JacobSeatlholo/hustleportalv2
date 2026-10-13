@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { getUserGeminiKey, getPlatformGeminiKey } from '@/lib/gemini'
+import { resolveDeepseekKey } from '@/lib/deepseek'
 
 export const maxDuration = 60
 
@@ -52,6 +53,95 @@ function quotaForensics(raw: string, model: string): { detail: string; zero: boo
   return { detail: `429 on ${model}${retryDelay ? ` — retry in ${retryDelay}` : ''}${zero ? ' — LIMIT 0 (no free tier for this model on this project)' : perDay ? ' — daily bucket burned' : ''}`, zero, perDay }
 }
 
+interface DeepseekDiag {
+  configured: boolean
+  keySource: 'user' | 'platform' | 'none'
+  masked?: string
+  ok: boolean
+  balanceUsd?: number | null
+  message: string
+}
+
+/** DeepSeek side of the engine: key present, accepted, and the REAL credit balance. */
+async function deepseekDiag(userId: string): Promise<DeepseekDiag> {
+  const { key, source } = await resolveDeepseekKey(userId)
+  if (!key) {
+    return {
+      configured: false,
+      keySource: 'none',
+      ok: false,
+      message: 'No DeepSeek key saved. Lead ranking falls back to Gemini search grounding or the raw map directory.',
+    }
+  }
+  const who = source === 'user' ? 'your key' : 'the platform key'
+  try {
+    const res = await fetch('https://api.deepseek.com/user/balance', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 401) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        message: `DeepSeek rejected ${who}. Paste a fresh key from platform.deepseek.com/api_keys under Integrations.`,
+      }
+    }
+    if (!res.ok) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        message: `DeepSeek answered with status ${res.status}. It retries on its own.`,
+      }
+    }
+    const data = (await res.json()) as {
+      is_available?: boolean
+      balance_infos?: { currency?: string; total_balance?: string }[]
+    }
+    const usd = Number((data.balance_infos || []).find((b) => (b.currency || '').toUpperCase() === 'USD')?.total_balance ?? NaN)
+    const balanceUsd = Number.isFinite(usd) ? usd : null
+    if (data.is_available === false) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        balanceUsd,
+        message: `DeepSeek flags the account behind ${who} unavailable. Check platform.deepseek.com.`,
+      }
+    }
+    if (balanceUsd !== null && balanceUsd <= 0) {
+      return {
+        configured: true,
+        keySource: source,
+        masked: mask(key),
+        ok: false,
+        balanceUsd,
+        message: `DeepSeek credits are used up on ${who}. Top up at platform.deepseek.com. The map directory and Gemini fallback keep scans alive meanwhile.`,
+      }
+    }
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: true,
+      balanceUsd,
+      message: `DeepSeek is live on ${who}${balanceUsd !== null ? ` with $${balanceUsd.toFixed(2)} of credits` : ''}. Lead ranking runs here first, with no daily quota wall.`,
+    }
+  } catch {
+    return {
+      configured: true,
+      keySource: source,
+      masked: mask(key),
+      ok: false,
+      message: 'Could not reach DeepSeek just now. It retries automatically.',
+    }
+  }
+}
+
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -81,10 +171,15 @@ export async function GET() {
     verdict: '',
   }
 
+  const deepseek = await deepseekDiag(userId)
+
   if (keys.length === 0) {
     report.verdict = 'No Gemini key is configured at all — AI features are dormant.'
     report.advice.push('Add your free Gemini key under Integrations (aistudio.google.com → Get API key), or the operator must set GEMINI_API_KEY on the platform.')
-    return NextResponse.json({ ok: true, ...report })
+    if (deepseek.configured && deepseek.ok) {
+      report.verdict = 'Gemini has no key configured, but DeepSeek is live — lead scans still work end to end.'
+    }
+    return NextResponse.json({ ok: true, deepseek, ...report })
   }
 
   for (const { source, key } of keys) {
@@ -214,5 +309,5 @@ export async function GET() {
       : 'No key could complete a live AI call — this is why scans return errors. Apply the advice below.'
   }
 
-  return NextResponse.json({ ok: true, ...report })
+  return NextResponse.json({ ok: true, deepseek, ...report })
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { readLastSystemSend } from '@/lib/mailer'
+import { deepseekBalance, getPlatformDeepseekKey } from '@/lib/deepseek'
 
 export const dynamic = 'force-dynamic'
 
@@ -143,6 +144,47 @@ async function emailService(): Promise<Svc> {
   }
 }
 
+/**
+ * DeepSeek engine — the pay-as-you-go lead ranker. Platform-level view: the
+ * operator's env key and its real credit balance. A user's own key (the common
+ * case) gets its verdict at save time under Integrations; this row answers for
+ * the platform pool only.
+ */
+async function deepseekService(): Promise<Svc> {
+  const key = getPlatformDeepseekKey()
+  if (!key) {
+    return {
+      key: 'deepseek',
+      name: 'DeepSeek engine',
+      ok: false,
+      detail: 'Optional pay-as-you-go ranker. Add your DeepSeek key under Integrations and lead ranking runs on your own credits with no daily quota wall.',
+    }
+  }
+  const bal = await deepseekBalance(key, 6_000)
+  if (!bal) {
+    return {
+      key: 'deepseek',
+      name: 'DeepSeek engine',
+      ok: false,
+      detail: 'Could not reach DeepSeek just now. It retries automatically.',
+    }
+  }
+  if (!bal.available) {
+    return {
+      key: 'deepseek',
+      name: 'DeepSeek engine',
+      ok: false,
+      detail: 'DeepSeek flags the account unavailable. Check platform.deepseek.com, then check again here.',
+    }
+  }
+  return {
+    key: 'deepseek',
+    name: 'DeepSeek engine',
+    ok: true,
+    detail: `Live. $${(bal.totalUsd ?? 0).toFixed(2)} of credits standing by for lead ranking.`,
+  }
+}
+
 async function pushService(): Promise<Svc> {
   try {
     const rows = await db.platformConfig.findMany({
@@ -184,8 +226,14 @@ export async function GET() {
     })
   }
 
-  const [database, ai, email, push] = await Promise.all([dbService(), aiService(), emailService(), pushService()])
-  const services = [database, ai, email, push]
+  const [database, ai, email, push, deepseek] = await Promise.all([
+    dbService(),
+    aiService(),
+    emailService(),
+    pushService(),
+    deepseekService(),
+  ])
+  const services = [database, ai, deepseek, email, push]
   cache = { at: Date.now(), services }
   return NextResponse.json({
     services,
