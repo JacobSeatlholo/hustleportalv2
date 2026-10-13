@@ -319,3 +319,25 @@ Work Log:
 Stage Summary:
 - Production UNCHANGED (still 9d62e45 behavior). DeepSeek build parked on local commits 8d20613+4dc07f3 (tip 4dc07f3 = Gemini primary + dormant plumbing).
 - Decision fork for user: (1) 24h Google trial after 02:00 SAST reset, one spaced scan; (2) ship DeepSeek plumbing (missing bit: IntegrationsView key card) for quota-free ranking, Gemini kept only for grounded scan; (3) if grounding proves structural-blocked: search API (Brave/Serper free tier) feeding real results to DeepSeek ranking = full lead-gen off Google for near-zero cost.
+
+---
+Task ID: 43
+Agent: Super Z (main)
+Task: "Gemini on my other profile of the activated api key? We must make this work.. atleast even if its once/twice for a presentation. If i cant use deepseek, can i use z.ai? can i pay as i go here? you can browse the internet right?" — research the options, then make the AI Lead Finder work regardless of Google's mood.
+
+Work Log:
+- Researched live (web search + z.ai docs): Gemini free tier slashed since Dec 2025 (Flash 250→20 RPD, further Apr 2026 cuts, some projects at limit 0) = the "Google is being weird" root cause. DeepSeek: pay as you go via card/PayPal, but NO web browsing (ranking only). z.ai: pay as you go on the Billing page, GLM-4.6 $0.60/1M in + $2.20/1M out, Web Search in Chat tool $0.01/use, search-prime engine, docs.z.ai/guides/tools/web-search.
+- Resurrected the parked DeepSeek plumbing (local commits 8d20613+4dc07f3) and shipped it.
+- NEW src/lib/zai.ts: GLM engine (api.z.ai/api/paas/v4), model walk glm-4.6→4.7→5.3-flash, web_search tool (search-prime, count 10) when search:true, key chain user setting ZAI_API_KEY > env, brand-voice error classes (401/402/429/5xx/timeout), validateZaiKey with REAL micro generation probe.
+- /api/leads/discover rewired to an engine chain: 1) Gemini grounded (22s) 2) z.ai GLM grounded (20s, gentle notice names which engine carried the scan) 3) OSM real directory + DeepSeek ranking (anti-fabrication: contacts copied verbatim from source records, non-matching answers dropped) 4) raw OSM 5) Explee; honest combined error names the most actionable cause (money/key beats quota).
+- /api/settings: ZAI_API_KEY allowed+masked+save-time probe; validation var retyped to a union (Gemini/DeepSeek/z.ai verdicts).
+- /api/status: new z.ai GLM engine row (platform env key, real 8-token probe, 401/402/429 copy).
+- /api/ai/diagnose: zaiDiag section (key source, masked, real probe, verdicts); "no Gemini key but z.ai live" verdict added.
+- IntegrationsView: z.ai GLM + DeepSeek key cards with save-time verdict notes (engineVerdicts state).
+- Fixed parked-commit type errors: enrichOsmWithDeepseek null-company guard, zai keySource narrowing, settings validation union.
+- Quarantine build dance OK (34.7s), scripts/verify_task43.mjs (committed via git add -f), pushed ba0e4e5, production verify 18/18 PASS.
+
+Stage Summary:
+- Production ba0e4e5. Lead Finder = engine chain, no longer hostage to Google. z.ai GLM = recommended engine for the $10 budget (~2c/scan ⇒ hundreds of scans); DeepSeek ranks OSM records; Gemini still first when it works; OSM floor guarantees real leads with zero keys.
+- User action: create z.ai key (z.ai open platform → API Keys), top up on Billing page, paste under Integrations → instant save-time probe verifies. Same for their other-profile Gemini key (free tier now tiny: fine for once/twice, not daily).
+- Open: user has NOT yet supplied the real z.ai key (or chosen user-level vs platform env). Yoco secret verification still pending. AI budget governance now = z.ai/DeepSeek spend (no more 02:00 SAST quota narrative for z.ai).
