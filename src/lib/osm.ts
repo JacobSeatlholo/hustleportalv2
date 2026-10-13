@@ -46,7 +46,7 @@ function tagIndustry(tags: Record<string, string>): string | undefined {
 async function geocodePlace(area: string): Promise<{ areaId?: number; lat?: number; lon?: number } | null> {
   try {
     const url = `${NOMINATIM}?q=${encodeURIComponent(area + ', South Africa')}&format=jsonv2&limit=1&countrycodes=za`
-    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12_000) })
+    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8_000) })
     if (!res.ok) return null
     const rows = (await res.json()) as { osm_type?: string; osm_id?: number; lat?: string; lon?: string }[]
     const row = rows[0]
@@ -331,7 +331,9 @@ export async function searchOsmLeads(
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA, Accept: 'application/json' },
           body: 'data=' + encodeURIComponent(query),
-          signal: AbortSignal.timeout(Math.min(30_000, left)),
+          // 10s per mirror MAX: one hanging mirror must never eat the budget the
+          // Nominatim + Photon fallbacks still need. Six mirrors × 10s still fits.
+          signal: AbortSignal.timeout(Math.min(10_000, left)),
         })
         if (!res.ok) continue // mirror busy/blocked — try the next one
         const json = (await res.json()) as { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }
