@@ -374,3 +374,20 @@ Work Log:
 Stage Summary:
 - Production ecb7b3f. Engine chain final: platform or personal z.ai key puts GLM first (two doors, Zhipu first, door memory) -> Gemini grounded backup -> OSM + DeepSeek ranking -> Explee; honest notes throughout; debug:true returns glmTrace.
 - Waiting on user: top up $10 on the z.ai billing page on the SAME account the key came from (or wait for the Zhipu daily reset around 18:00 SAST for a few free scans). The moment credits land, scans run with no code change needed.
+
+---
+Task ID: 43d
+Agent: Super Z (main)
+Task: User reported "Search load failed" after loading the $10 and the api key. Ensure the lead generation system actually works.
+
+Work Log:
+- Live trace diagnosed the real failure chain: zhipu/glm-4.6 429 with the door's own words "余额不足或无可用资源包,请充值" (insufficient balance OR no available resource package) — the GLM web search tool is billed apart from model tokens on the Zhipu door and this account cannot pay for it; free flash rungs then hung 10s each (glm-4.5-flash) or 400ed (glm-4-flash) on the tool payload; Gemini 503ed (free tier shedding); the keyless OSM map directory was skipped because a fixed 32s elapsed gate saw the budget already burned. Result: mode NONE, 0 leads, ~39s, user sees "Search failed".
+- zai.ts: readDoorError() captures the door's own words once per failure; trace lines now carry status + words; on a SEARCH walk one arrears refusal ends the whole walk in one knock (~0.6s, one key = one account) with BALANCE copy naming the door and the fix; plain walks keep the free rung fallback; search walk bench (TIMEOUT 10 min, 400 60 min) so dead rungs stop taxing later scans; probeZaiSearch() added (one tiny grounded request, sticky door first).
+- status route: z.ai row now probes the SEARCH tool after a plain 200 and tells the truth ("Live for AI answers on GLM credits, but the web search tool was refused (not covered by the current balance). A top up on the billing page brings web grounded scans here. Google and the real map directory carry scans meanwhile.").
+- discover route: OSM gate is runway based (>16s of the 50s budget left) instead of a fixed elapsed wall; zaiWhy(reason, who) notice on every fallback exit (Gemini success AND both OSM branches) names the door, the cause and the fix gently; glmTrace attached to OSM responses too when debug.
+- osm.ts: Overpass phase cap 12s per query (mirrors hang from datacenter IPs and were starving the fallbacks); Nominatim category search now sweeps a viewbox+bounded box (~9x10km) around the geocoded point instead of city= which returned the city node itself ("Johannesburg, type city"); both searchNominatimLeads call sites pass place. Probe evidence from sandbox: Nominatim 200 in 0.5-0.9s, Photon category search delivers real POIs (8 supermarkets, 1 bar around JHB CBD).
+- QA: scripts/verify_task43d.mjs (committed -f). Production verifies: 10/10 then 11/11 PASS after the trace fix. Real scans now return mode OSM with REAL Soweto businesses (Kwa Lichaba Lounge, Chaf-Pozi, The Net Cafe) in ~27s, honest notice, zero fabricated contacts.
+
+Stage Summary:
+- Production f56ad91. Scan chain under a broken wallet + 503 Google: GLM arrears knock (0.5s, door words in trace) -> Gemini (usually fast fail today) -> OSM (Overpass 12s phase -> Nominatim viewbox sweep -> Photon) = REAL leads every time, with a gentle notice naming the door to top up. The lead generation system works again without waiting for money.
+- User actions that still unlock the web grounded GLM engine: top up the account that owns the key ON THE ZHIPU OPEN PLATFORM (open.bigmodel.cn) — the door's words say the web search tool has no balance/package there — or generate a key on z.ai if the $10 lives there and swap it into GLM_key. Adding the DeepSeek key (DEEPSEEK_API_KEY in Vercel or under Integrations) turns on AI ranking of the map directory leads.
