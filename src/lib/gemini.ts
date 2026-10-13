@@ -60,6 +60,40 @@ function benchKey(key: string): void {
   keyCooldown.set(keyTag(key), Date.now() + KEY_COOLDOWN_MS)
 }
 
+/**
+ * Per-(key,model) quota bench: a 429 that names a DAY bucket — or a ZERO free-tier
+ * limit for this model on this project — will not clear inside this request, nor
+ * within a minute. Without this bench the drained model sits at the head of every
+ * later walk: pure latency tax plus pointless request volume. A day bucket rides
+ * the bench 30 minutes; a zero limit (needs billing or a different project, it
+ * never self-heals) six hours. In-memory per serverless instance, same as keyCooldown.
+ */
+const MODEL_QUOTA_COOLDOWN_MS = 30 * 60_000
+const MODEL_QUOTA_COOLDOWN_ZERO_MS = 6 * 60 * 60_000
+const modelQuotaCooldown = new Map<string, number>()
+function modelQuotaTag(key: string, model: string): string {
+  return `${keyTag(key)}|${model}`
+}
+function modelDrained(key: string, model: string): boolean {
+  const until = modelQuotaCooldown.get(modelQuotaTag(key, model))
+  if (!until) return false
+  if (Date.now() >= until) {
+    modelQuotaCooldown.delete(modelQuotaTag(key, model))
+    return false
+  }
+  return true
+}
+function benchModelQuota(key: string, model: string, zeroLimit: boolean): void {
+  modelQuotaCooldown.set(
+    modelQuotaTag(key, model),
+    Date.now() + (zeroLimit ? MODEL_QUOTA_COOLDOWN_ZERO_MS : MODEL_QUOTA_COOLDOWN_MS)
+  )
+}
+/** Google names the exhausted bucket with a numeric limit — 0 means no free tier for this model here. */
+function quotaZeroLimit(raw: string): boolean {
+  return /"limit":\s*"?0"?|limit:\s*0\b/i.test(raw)
+}
+
 export async function getUserGeminiKey(userId: string): Promise<string | null> {
   const row = await db.userSetting.findUnique({
     where: { userId_key: { userId, key: 'GEMINI_API_KEY' } },
@@ -280,7 +314,16 @@ async function callGemini(
 
   for (const { key, ownKey } of orderedKeys) {
     if (Date.now() >= deadline) break
-    const models = await resolveModels(key)
+    const discovered = await resolveModels(key)
+    const models = discovered.filter((m) => !modelDrained(key, m))
+    if (models.length === 0) {
+      // Every model on this key is inside a quota bench — say so honestly and
+      // move to the next key without paying Google a single 429 for it.
+      const f: Failure = { cls: 'QUOTA', ownKey, status: 429, detail: 'all models on this key are inside a quota cooldown' }
+      failures.push(f)
+      if (ownKey && !userKeyFailure) userKeyFailure = f
+      continue
+    }
     for (const model of models) {
       const remaining = deadline - Date.now()
       if (remaining <= 2_000) break
@@ -307,6 +350,10 @@ async function callGemini(
           }
           if (cls === 'QUOTA' && /PerDay/i.test(raw)) benchKey(key)
           if (cls === 'QUOTA') {
+            // Day bucket drained (or a zero free-tier limit on this model): bench the
+            // (key,model) pair so later walks skip straight to models with headroom.
+            const zero = quotaZeroLimit(raw)
+            if (/PerDay/i.test(raw) || zero) benchModelQuota(key, model, zero)
             // 429 is a PER-MODEL quota bucket on free tier, not key-wide: the next
             // Flash model usually still has headroom, so rotate instead of giving
             // up. If Google names a short retryDelay for this model, honour it once.
