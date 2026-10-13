@@ -246,3 +246,21 @@ Stage Summary:
 - Map fallback is honest but data-thin in townships; metro scans return some results
 - 4 commits deployed: f95bfda, 013bd4d, df8c6db, d474f41
 - Billing (Tier 1) remains the single-lever fix when the user chooses; everything shipped works either way
+
+---
+Task ID: 40
+Agent: Main agent (Super Z)
+Task: User sees My Projects but no option to add a new project beyond 2 — make creation discoverable.
+
+Work Log:
+- Root cause: no cap anywhere (POST /api/projects allows unlimited); the only create path was an input labeled "Add another company workspace" buried at the bottom of the Company workspace card, while the My Projects card (where users look) had none. Naming split-brain: workspace vs project.
+- ProfileView: replaced buried multi-company input with a first-class "+ New project" button in the My Projects card header; inline create form (name required + optional description) submits on Enter, creates, activates the new workspace, toasts, reloads rows + session.
+- Removed the duplicate create input in Company workspace card, left a pointer line to My Projects (one canonical path).
+- AppShell ProjectSwitcher footer: "+ Manage workspaces" → "+ New project in Profile & Team"; sets sessionStorage hp:open-new-project then navigates — ProfileView consumes the flag on mount, opens the form and smooth-scrolls to the My Projects card (robust against conditional view mount timing).
+- Copy audit: no dashes anywhere in new strings.
+- tsc clean on touched files, build OK 35s, pushed 5f5fa15.
+- Prod verify scripts/verify_project40.mjs: 11/11 PASS — default auto-created, create 2nd + 3rd (beyond 2), description persisted, blank name 400, delete returns to 2 with default intact, deployed bundle contains the new UI.
+
+Stage Summary:
+- Creating projects now lives where users look: My Projects card, plus a handoff from the top-nav workspace switcher.
+- No project cap exists or was added; free users can add as many as they want.
