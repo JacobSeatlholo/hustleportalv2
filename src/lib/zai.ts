@@ -74,7 +74,7 @@ export type ZaiErrorReason = 'NO_KEY' | 'KEY_INVALID' | 'BALANCE' | 'RATE' | 'BU
 
 export type ZaiResult =
   | { ok: true; text: string; keySource: 'user' | 'platform'; model: string; endpoint: ZaiEndpointId }
-  | { ok: false; error: string; reason: ZaiErrorReason }
+  | { ok: false; error: string; reason: ZaiErrorReason; endpoint?: ZaiEndpointId }
 
 export async function getUserZaiKey(userId: string): Promise<string | null> {
   const row = await db.userSetting.findUnique({
@@ -155,19 +155,47 @@ function searchTool(endpoint: ZaiEndpointId) {
 }
 
 /**
- * Arrears sniffing: GLM doors signal an empty wallet as HTTP 429 (Zhipu code
- * 1113) just like real pacing. The difference decides the walk: arrears means
- * the free flash rungs may still answer, true pacing means stop hammering.
+ * Read the door's own words from an error body, ONCE. The walk needs the code
+ * and message to tell an empty wallet from real pacing, and the trace and the
+ * status row need the actual words so the operator can act on what the door
+ * said instead of a guess. Returned sanitized and short.
  */
-async function isArrears(res: Response): Promise<boolean> {
+async function readDoorError(res: Response): Promise<{ code: string; message: string; words: string | null }> {
   try {
     const ej = (await res.json()) as { error?: { code?: string | number; message?: string } } | null
     const code = String(ej?.error?.code ?? '')
-    const emsg = String(ej?.error?.message ?? '')
-    return code === '1113' || /balance|arrears|insufficient|欠费/i.test(emsg)
+    const message = String(ej?.error?.message ?? '')
+    const words = message ? message.replace(/\s+/g, ' ').trim().slice(0, 120) : code || null
+    return { code, message, words }
   } catch {
+    return { code: '', message: '', words: null }
+  }
+}
+
+function arrearsWords(door: { code: string; message: string }): boolean {
+  return door.code === '1113' || /balance|arrears|insufficient|欠费/i.test(door.message)
+}
+
+/**
+ * Search walk model bench: a model that hung the full attempt cap or answered
+ * 400 with the web search tool attached is dead weight for SEARCH scans (the
+ * live trace proved both: glm 4.5 flash hung ten seconds a door, glm 4 flash
+ * 400ed on the tool payload). Bench the model so later scans skip straight to
+ * the rungs that can actually answer. Plain (no search) walks are untouched:
+ * free flash models answer plain generation all day.
+ * In memory per serverless instance, same as the door memory.
+ */
+const SEARCH_BENCH_HANG_MS = 10 * 60_000
+const SEARCH_BENCH_BAD_MS = 60 * 60_000
+const searchModelBench = new Map<string, number>()
+function searchBenched(model: string): boolean {
+  const until = searchModelBench.get(model)
+  if (!until) return false
+  if (Date.now() >= until) {
+    searchModelBench.delete(model)
     return false
   }
+  return true
 }
 
 export async function zaiGenerate(
@@ -216,6 +244,7 @@ export async function zaiGenerate(
       }
       if (doorArrears && !FREE_MODELS.has(model)) continue
       if (doorPaced) break
+      if (opts.search && searchBenched(model)) continue
       // Flash rungs answer fast or step aside: a hung free model must not eat
       // the budget the other door still needs.
       const attemptCap = FREE_MODELS.has(model) ? 10_000 : 28_000
@@ -239,17 +268,34 @@ export async function zaiGenerate(
           // here, is what protects the caller's budget.
           signal: AbortSignal.timeout(Math.min(attemptCap, remaining)),
         })
-        opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)`)
         if (!res.ok) {
-          const f = friendly(res.status, ep.id)
-          failures.push(f)
+          const door = await readDoorError(res)
+          opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)${door.words ? ` "${door.words}"` : ''}`)
           // Auth is door wide: stop burning models here, knock on the other door.
-          if (res.status === 401 || res.status === 403) break
+          if (res.status === 401 || res.status === 403) {
+            failures.push(friendly(res.status, ep.id))
+            break
+          }
           if (res.status === 429 || res.status === 402) {
-            const arrears = await isArrears(res)
+            const arrears = arrearsWords(door)
+            if (opts.search && arrears) {
+              // The web search tool is billed apart from model tokens on both
+              // doors, so an empty wallet kills EVERY rung of a search walk:
+              // the paid rungs say 429 outright and the free flash rungs hang
+              // or 400 with the tool attached (the live trace proved it).
+              // One door's words settle it for the whole walk, because one key
+              // is one account: end now with the copy that names the door and
+              // the fix, and hand the time budget to the backup engines.
+              return {
+                ok: false,
+                error: `GLM credits on ${ep.id === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} do not cover the web search tool right now. A top up on that platform's billing page brings web grounded scans back.`,
+                reason: 'BALANCE',
+                endpoint: ep.id,
+              }
+            }
             if (arrears) {
-              // Empty wallet on this door: skip its paid rungs, try its free
-              // flash rungs, then move on without looking back.
+              // Plain walk, empty wallet: skip this door's paid rungs, its free
+              // flash rungs may still answer plain generation.
               doorArrears = true
               continue
             }
@@ -259,10 +305,15 @@ export async function zaiGenerate(
               break
             }
           }
-          // Other money and model errors: the free flash models behind the
-          // same door may still answer, so keep walking.
+          // Other money and model errors: bench 400s on search walks (a tool
+          // payload this model refuses will not self heal) and keep walking.
+          if (opts.search && res.status === 400) {
+            searchModelBench.set(model, Date.now() + SEARCH_BENCH_BAD_MS)
+          }
+          failures.push(friendly(res.status, ep.id))
           continue
         }
+        opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)`)
         const data = (await res.json()) as {
           choices?: { message?: { content?: string } }[]
           model?: string
@@ -276,8 +327,12 @@ export async function zaiGenerate(
         return { ok: true, text, keySource: source === 'user' ? 'user' : 'platform', model: data.model || model, endpoint: ep.id }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'request failed'
-        opts.trace?.push(`${ep.id}/${model} → ${/abort|timeout|timed out/i.test(msg) ? 'TIMEOUT' : 'NETWORK'} (${Date.now() - at}ms)`)
-        if (/abort|timeout|timed out/i.test(msg)) {
+        const timedOut = /abort|timeout|timed out/i.test(msg)
+        opts.trace?.push(`${ep.id}/${model} → ${timedOut ? 'TIMEOUT' : 'NETWORK'} (${Date.now() - at}ms)`)
+        if (timedOut) {
+          // A hung model with the search tool attached is a known dead rung:
+          // bench it for search walks so the next scan does not pay its wait.
+          if (opts.search) searchModelBench.set(model, Date.now() + SEARCH_BENCH_HANG_MS)
           failures.push({ error: 'GLM took too long to answer. One more try is usually quicker.', reason: 'BUSY' })
           continue
         }
@@ -287,6 +342,56 @@ export async function zaiGenerate(
   }
   const b = pickWorst()
   return { ok: false, error: b.error, reason: b.reason }
+}
+
+export interface ZaiSearchProbe {
+  ok: boolean
+  status: number | null
+  words: string | null
+  endpoint: ZaiEndpointId | null
+}
+
+/**
+ * One search tool micro generation, for the status row and the diagnose page.
+ * The plain probe can say Live while the web search tool is refused (it is
+ * billed apart from model tokens), and scans need the tool, so the scan path
+ * gets its own honest check: one tiny grounded request on the sticky door
+ * first, the other door as backup. The door's own words come back so the
+ * operator reads the truth, not a guess.
+ */
+export async function probeZaiSearch(key: string, timeoutMs = 9_000): Promise<ZaiSearchProbe> {
+  for (const ep of orderedEndpoints()) {
+    try {
+      const res = await fetch(`${ep.base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'glm-4.6',
+          messages: [{ role: 'user', content: 'Reply: OK' }],
+          max_tokens: 8,
+          temperature: 0,
+          stream: false,
+          tools: searchTool(ep.id),
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      if (res.ok) {
+        markSticky(ep.id)
+        return { ok: true, status: 200, words: null, endpoint: ep.id }
+      }
+      const door = await readDoorError(res)
+      const refused = arrearsWords(door)
+      return {
+        ok: false,
+        status: res.status,
+        words: refused ? 'not covered by the current balance' : door.words,
+        endpoint: ep.id,
+      }
+    } catch {
+      // this door may be unreachable while the other is fine: try the next
+    }
+  }
+  return { ok: false, status: null, words: null, endpoint: null }
 }
 
 export interface ZaiProbeOutcome {

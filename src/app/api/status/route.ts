@@ -3,7 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { readLastSystemSend } from '@/lib/mailer'
 import { deepseekBalance, getPlatformDeepseekKey } from '@/lib/deepseek'
-import { getPlatformZaiKey, probeZaiKey } from '@/lib/zai'
+import { getPlatformZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
 
 export const dynamic = 'force-dynamic'
 
@@ -205,14 +205,35 @@ async function zaiService(): Promise<Svc> {
   }
   const probe = await probeZaiKey(key, 15_000)
   if (probe.status === 200) {
+    // Plain generation works. Scans additionally need the web search tool,
+    // which the doors bill apart from model tokens, so the row checks the
+    // scan path too: a key that answers but cannot pay for search says so
+    // here, with the door's own words, instead of claiming scan readiness.
+    const s = await probeZaiSearch(key, 9_000)
+    if (s.ok) {
+      return {
+        key: 'zai',
+        name: 'z.ai GLM engine',
+        ok: true,
+        detail:
+          probe.endpoint === 'zhipu'
+            ? 'Live on the Zhipu open platform. Lead discovery keeps running here on GLM credits, no Google quota.'
+            : 'Live. When Google acts up, lead discovery keeps running here on pay as you go credits.',
+      }
+    }
+    if (s.status === 429 || s.status === 402) {
+      return {
+        key: 'zai',
+        name: 'z.ai GLM engine',
+        ok: true,
+        detail: `Live for AI answers on GLM credits, but the web search tool was refused (${s.words || `status ${s.status}`}). A top up on the billing page brings web grounded scans here. Google and the real map directory carry scans meanwhile.`,
+      }
+    }
     return {
       key: 'zai',
       name: 'z.ai GLM engine',
       ok: true,
-      detail:
-        probe.endpoint === 'zhipu'
-          ? 'Live on the Zhipu open platform. Lead discovery keeps running here on GLM credits, no Google quota.'
-          : 'Live. When Google acts up, lead discovery keeps running here on pay as you go credits.',
+      detail: `Live for AI answers, but the web search tool check answered ${s.status ?? 'nothing'} just now. Scans fall back to Google and the real map directory meanwhile.`,
     }
   }
   if (probe.status === 401 || probe.status === 403) {

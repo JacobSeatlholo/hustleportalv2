@@ -354,6 +354,24 @@ export async function POST(req: NextRequest) {
 
   let ai: Awaited<ReturnType<typeof geminiGenerate>>
   let zai: Awaited<ReturnType<typeof zaiGenerate>> | null
+
+  /**
+   * When the GLM engine could not take the scan and a backup carried it, say
+   * so once, gently, with the fix named. The reason decides the words: an
+   * empty wallet names the door to top up, pacing asks for one more try, a
+   * rejected key points at Integrations.
+   */
+  const zaiWhy = (who: string): string | undefined => {
+    if (!zai || zai.ok) return undefined
+    if (zai.reason === 'BALANCE')
+      return `Heads up: the GLM engine on ${zai.endpoint === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} is out of credits for its web search, so ${who} carried this scan. A top up on that billing page puts it back in front.`
+    if (zai.reason === 'RATE')
+      return `Heads up: the GLM engine is pacing requests this minute, so ${who} carried the scan. One more try usually puts it back in front.`
+    if (zai.reason === 'KEY_INVALID')
+      return `Heads up: the GLM key was not accepted, so ${who} carried the scan. Checking the key under Integrations puts it back in front.`
+    return undefined
+  }
+
   if (zaiFirst) {
     // 1) PRIMARY — z.ai GLM with live Web Search grounding. A personal key
     //    spends the seller's own credits; the platform key spends the
@@ -368,11 +386,7 @@ export async function POST(req: NextRequest) {
     ai = await runGeminiScan()
     leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) {
-      const zaiWhy =
-        zai && !zai.ok && (zai.reason === 'BALANCE' || zai.reason === 'KEY_INVALID' || zai.reason === 'RATE')
-          ? 'Heads up: the z.ai engine could not answer this minute, so Google carried the scan instead. Checking the z.ai key and credits puts it back in front.'
-          : undefined
-      return aiSearchResponse(leads, 'gemini', zaiWhy || ai.notice)
+      return aiSearchResponse(leads, 'gemini', zaiWhy('Google') || ai.notice)
     }
   } else {
     // 1) PRIMARY — Gemini with Google Search grounding (the established engine,
@@ -398,20 +412,26 @@ export async function POST(req: NextRequest) {
   // 3) FALLBACK A — OpenStreetMap: real, keyless directory listings (no AI
   //    needed to fetch them), then DeepSeek ranks them to the seller when a
   //    DeepSeek key exists. With a GPS pin we search a tight 5 km radius around
-  //    it instead of geocoding the city name. Only started when there is runway.
+  //    it instead of geocoding the city name. The gate is RUNWAY, not a fixed
+  //    wall: when the web engines fail fast (an empty GLM wallet answers in
+  //    under a second, pacing in one), the map directory still gets its turn
+  //    instead of being skipped by a stale elapsed time check while the scan
+  //    had plenty of budget left.
+  const osmRunway = t0 + 50_000 - Date.now()
   const osm =
-    Date.now() - t0 < 32_000
+    osmRunway > 14_000
       ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
       : { leads: [], note: 'skipped — the web search used the time budget' }
   if (osm.leads.length > 0) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
+    const dirNotice = zaiWhy('the real business directory')
     const ranked = await enrichOsmWithDeepseek(userId, definition, osm.leads as AiLead[], cap, t0)
     if (ranked && ranked.leads.length > 0) {
       return NextResponse.json({
         leads: ranked.leads,
         mode: 'OSM',
         source: 'OSM',
-        ...(ranked.notice ? { notice: ranked.notice } : {}),
+        ...(ranked.notice || dirNotice ? { notice: ranked.notice || dirNotice } : {}),
         ...(osm.note ? { osmNote: osm.note } : {}),
         note: teaser
           ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by DeepSeek AI. Contact details come straight from the directory.`
@@ -422,7 +442,7 @@ export async function POST(req: NextRequest) {
       leads: osm.leads,
       mode: 'OSM',
       source: 'OSM',
-      ...(ai.notice ? { notice: ai.notice } : {}),
+      ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
       ...(osm.note ? { osmNote: osm.note } : {}),
       note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed. AI ranking is resting, so these are unranked.`,
     })
