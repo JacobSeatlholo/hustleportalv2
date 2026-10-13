@@ -58,13 +58,15 @@ function markSticky(endpoint: ZaiEndpointId) {
 }
 
 /**
- * Walk list, cheap first. GLM-4.6 is the price/performance workhorse; newer
- * generations follow for when a model id is ever retired; the flash models at
- * the tail are free on the Zhipu door, so a key with zero credits still scans.
- * A model error walks to the next entry; an auth error skips straight to the
- * other door (auth is door wide, never model wide).
+ * Walk list, cheap first. GLM-4.6 is the price/performance workhorse (both
+ * doors still answer it); GLM-5.3 and the 5.3 flash family follow as the
+ * current generation per the model docs, so a door that has retired 4.6
+ * steps forward instead of failing; the tail rungs are free on the Zhipu
+ * door, so a key with zero credits still scans. A model error walks to the
+ * next entry; an auth error skips straight to the other door (auth is door
+ * wide, never model wide).
  */
-const MODEL_PREFERENCE = ['glm-4.6', 'glm-4.7', 'glm-5.3-flash', 'glm-4.5-flash', 'glm-4-flash'] as const
+const MODEL_PREFERENCE = ['glm-4.6', 'glm-5.3', 'glm-5.3-flash', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 const PROBE_MODELS = ['glm-4.6', 'glm-4.5-flash'] as const
 
@@ -188,6 +190,28 @@ function arrearsWords(door: { code: string; message: string }): boolean {
 const SEARCH_BENCH_HANG_MS = 10 * 60_000
 const SEARCH_BENCH_BAD_MS = 60 * 60_000
 const searchModelBench = new Map<string, number>()
+
+/**
+ * Retired model bench: a door that answers 400 naming the model as unknown or
+ * unsupported has retired that rung for EVERY walk, plain and search alike.
+ * Without this, a retired flagship would tax every plain generation with a
+ * knock that can never land. Keyed on the door's own words, so a payload
+ * shape refusal (no model words in the message) never benches a healthy rung.
+ */
+const MODEL_MISSING_MS = 60 * 60_000
+const missingModelBench = new Map<string, number>()
+function modelRetired(model: string): boolean {
+  const until = missingModelBench.get(model)
+  if (!until) return false
+  if (Date.now() >= until) {
+    missingModelBench.delete(model)
+    return false
+  }
+  return true
+}
+function isModelMissing(door: { code: string; message: string }): boolean {
+  return /model|模型/i.test(door.message) && /not\s+exist|unknown|invalid|not\s+found|unsupported|不存在|不支持/i.test(door.message)
+}
 function searchBenched(model: string): boolean {
   const until = searchModelBench.get(model)
   if (!until) return false
@@ -244,6 +268,7 @@ export async function zaiGenerate(
       }
       if (doorArrears && !FREE_MODELS.has(model)) continue
       if (doorPaced) break
+      if (modelRetired(model)) continue
       if (opts.search && searchBenched(model)) continue
       // Flash rungs answer fast or step aside: a hung free model must not eat
       // the budget the other door still needs.
@@ -288,7 +313,7 @@ export async function zaiGenerate(
               // the fix, and hand the time budget to the backup engines.
               return {
                 ok: false,
-                error: `GLM credits on ${ep.id === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} do not cover the web search tool right now. A top up on that platform's billing page brings web grounded scans back.`,
+                error: `GLM credits on ${ep.id === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} do not cover the web search tool right now. Top up on that platform's billing page, or save a key from the platform that holds your credits, and web grounded scans come back.`,
                 reason: 'BALANCE',
                 endpoint: ep.id,
               }
@@ -305,10 +330,13 @@ export async function zaiGenerate(
               break
             }
           }
-          // Other money and model errors: bench 400s on search walks (a tool
-          // payload this model refuses will not self heal) and keep walking.
-          if (opts.search && res.status === 400) {
-            searchModelBench.set(model, Date.now() + SEARCH_BENCH_BAD_MS)
+          // Other money and model errors: a 400 naming the model benches the
+          // rung for every walk (a retired model id will not self heal), a 400
+          // on a search walk benches the rung for search walks (a tool payload
+          // this model refuses will not self heal either), then keep walking.
+          if (res.status === 400) {
+            if (isModelMissing(door)) missingModelBench.set(model, Date.now() + MODEL_MISSING_MS)
+            if (opts.search) searchModelBench.set(model, Date.now() + SEARCH_BENCH_BAD_MS)
           }
           failures.push(friendly(res.status, ep.id))
           continue
@@ -355,9 +383,11 @@ export interface ZaiSearchProbe {
  * One search tool micro generation, for the status row and the diagnose page.
  * The plain probe can say Live while the web search tool is refused (it is
  * billed apart from model tokens), and scans need the tool, so the scan path
- * gets its own honest check: one tiny grounded request on the sticky door
- * first, the other door as backup. The door's own words come back so the
- * operator reads the truth, not a guess.
+ * gets its own honest check. The prompt FORCES a real search invocation: a
+ * trivial "Reply: OK" prompt lets the door answer 200 without ever executing
+ * the tool, which once made an empty wallet look search ready. One tiny
+ * grounded request on the sticky door first, the other door as backup, the
+ * door's own words coming back so the operator reads the truth, not a guess.
  */
 export async function probeZaiSearch(key: string, timeoutMs = 9_000): Promise<ZaiSearchProbe> {
   for (const ep of orderedEndpoints()) {
@@ -367,8 +397,10 @@ export async function probeZaiSearch(key: string, timeoutMs = 9_000): Promise<Za
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model: 'glm-4.6',
-          messages: [{ role: 'user', content: 'Reply: OK' }],
-          max_tokens: 8,
+          messages: [
+            { role: 'user', content: 'Search the web for one current news headline from Johannesburg, then reply with it.' },
+          ],
+          max_tokens: 64,
           temperature: 0,
           stream: false,
           tools: searchTool(ep.id),

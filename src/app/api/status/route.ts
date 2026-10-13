@@ -226,7 +226,7 @@ async function zaiService(): Promise<Svc> {
         key: 'zai',
         name: 'z.ai GLM engine',
         ok: true,
-        detail: `Live for AI answers on GLM credits, but the web search tool was refused (${s.words || `status ${s.status}`}). A top up on the billing page brings web grounded scans here. Google and the real map directory carry scans meanwhile.`,
+        detail: `Live for AI answers on GLM credits, but the web search tool was refused (${s.words || `status ${s.status}`}). Search billing lives on the same platform the key came from, so top up there or save a key from the platform that holds your credits. Google and the real map directory carry scans meanwhile.`,
       }
     }
     return {

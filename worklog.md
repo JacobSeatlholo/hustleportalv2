@@ -391,3 +391,21 @@ Work Log:
 Stage Summary:
 - Production f56ad91. Scan chain under a broken wallet + 503 Google: GLM arrears knock (0.5s, door words in trace) -> Gemini (usually fast fail today) -> OSM (Overpass 12s phase -> Nominatim viewbox sweep -> Photon) = REAL leads every time, with a gentle notice naming the door to top up. The lead generation system works again without waiting for money.
 - User actions that still unlock the web grounded GLM engine: top up the account that owns the key ON THE ZHIPU OPEN PLATFORM (open.bigmodel.cn) — the door's words say the web search tool has no balance/package there — or generate a key on z.ai if the $10 lives there and swap it into GLM_key. Adding the DeepSeek key (DEEPSEEK_API_KEY in Vercel or under Integrations) turns on AI ranking of the map directory leads.
+
+---
+Task ID: 43e
+Agent: Super Z (main)
+Task: User sent a screenshot of the GLM-5.3 docs page asking "where?" and wants the lead generation system working. Diagnose the live door state, align the engine with the current GLM model family, and make every honest message name the key/money platform mismatch.
+
+Work Log:
+- Live diagnose against production: key 5aa56e…CGy2 accepted on the Zhipu door, plain generation OK, but a REAL scan still got zhipu/glm-4.6 → 429 "余额不足或无可用资源包,请充值" — the $10 lives on z.ai (international) while the key was minted on the Zhipu open platform. Search billing follows the key's platform, so the scan path still falls to OSM (which delivered 5 real Soweto leads in 27s, 11/11 PASS).
+- False positive found and killed: /api/ai/diagnose claimed searchOk true minutes before the scan was refused, because probeZaiKey(search:true) lets the FREE flash rung answer "Reply: OK" without ever invoking the search tool. zaiDiag now uses probeZaiSearch (pins glm-4.6, walks both doors), same truth as the status row.
+- probeZaiSearch prompt now FORCES a real search invocation ("Search the web for one current news headline from Johannesburg…"), max_tokens 64, so an empty wallet can no longer dress up as search ready on the status row either.
+- MODEL_PREFERENCE realigned with the docs page the user is reading: glm-4.6 stays the proven workhorse, glm-5.3 + glm-5.3-flash (current generation per docs.z.ai) follow as retirement rungs, speculative glm-4.7 dropped. New missingModelBench: a 400 whose door words name the model as unknown/unsupported benches that rung for EVERY walk (60 min), so a retired flagship never taxes plain generations more than once per instance hour.
+- Mismatch story named everywhere, gently: search walk BALANCE error, status row detail, diagnose message, and the discover zaiWhy notice all now say "top up on that platform's billing page, or save a key from the platform that holds your credits".
+- Bonus: fixed pre-existing keySource narrowing type error in src/lib/deepseek.ts (same pattern zai.ts already used). App tsc clean; skills/ tooling errors untouched (outside the build).
+- QA: build OK 34.2s; verify_task43d.mjs 11/11 PASS pre-deploy; post deploy diag + full scan verify re-run.
+
+Stage Summary:
+- Engine chain unchanged and healthy: GLM first (two doors) → Gemini grounded → OSM + DeepSeek ranking → Explee, with real Soweto leads landing even on a broken wallet.
+- The ONE user action that lights up web grounded GLM scans: generate the API key ON z.ai (top right "API Keys" on docs.z.ai / z.ai console, where the $10 lives), then save it under Integrations → z.ai card (instant probe, no redeploy) or swap it into Vercel GLM_key and redeploy. Zhipu-minted keys and z.ai credits are two different houses.

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { getUserGeminiKey, getPlatformGeminiKey } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
-import { resolveZaiKey, probeZaiKey } from '@/lib/zai'
+import { resolveZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
 
 export const maxDuration = 60
 
@@ -168,17 +168,19 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
   const probe = await probeZaiKey(key, 15_000)
   if (probe.status === 200) {
     // Plain generation works. But lead scans live or die by the live web
-    // search tool, so that gets its own probe too, with the door's own words
-    // kept for the operator when it refuses.
-    const sprobe = await probeZaiKey(key, 15_000, { search: true })
-    if (sprobe.status === 200) {
+    // search tool, so that gets its own probe too: probeZaiSearch pins the
+    // paid workhorse model and FORCES a real search invocation, so a free
+    // flash rung answering plain generation can no longer dress an empty
+    // wallet up as search ready. The door's own words stay for the operator.
+    const sprobe = await probeZaiSearch(key, 12_000)
+    if (sprobe.ok) {
       return {
         configured: true,
         keySource: source,
         masked: mask(key),
         ok: true,
         searchOk: true,
-        message: `z.ai GLM is live on ${who}${probe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
+        message: `z.ai GLM is live on ${who}${sprobe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
       }
     }
     return {
@@ -187,8 +189,8 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
       masked: mask(key),
       ok: false,
       searchOk: false,
-      searchRaw: sprobe.raw,
-      message: `GLM answers on ${who}, but the live web search tool was refused (status ${sprobe.status ?? 'none'}). Scans need search, so this is the part to fix. The engine said: ${sprobe.raw || 'no message'}`,
+      searchRaw: sprobe.words,
+      message: `GLM answers on ${who}, but the live web search tool was refused (status ${sprobe.status ?? 'none'}). Scans need search, so this is the part to fix: search billing lives on the same platform the key came from, so top up there or save a key from the platform that holds your credits. The engine said: ${sprobe.words || 'no message'}`,
     }
   }
   if (probe.status === 401 || probe.status === 403) {

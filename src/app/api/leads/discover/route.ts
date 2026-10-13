@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
   const zaiWhy = (who: string): string | undefined => {
     if (!zai || zai.ok) return undefined
     if (zai.reason === 'BALANCE')
-      return `Heads up: the GLM engine on ${zai.endpoint === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} is out of credits for its web search, so ${who} carried this scan. A top up on that billing page puts it back in front.`
+      return `Heads up: the GLM engine on ${zai.endpoint === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} is out of credits for its web search, so ${who} carried this scan. A top up on that billing page, or a key from the platform that holds your credits, puts it back in front.`
     if (zai.reason === 'RATE')
       return `Heads up: the GLM engine is pacing requests this minute, so ${who} carried the scan. One more try usually puts it back in front.`
     if (zai.reason === 'KEY_INVALID')

@@ -109,7 +109,7 @@ export async function deepseekGenerate(
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
     const text = data.choices?.[0]?.message?.content?.trim() || ''
     if (!text) return { ok: false, error: 'DeepSeek returned an empty answer.', reason: 'EMPTY' }
-    return { ok: true, text, keySource: source }
+    return { ok: true, text, keySource: source === 'user' ? 'user' : 'platform' }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'request failed'
     if (/abort|timeout|timed out/i.test(msg))
