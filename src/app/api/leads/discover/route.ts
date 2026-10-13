@@ -419,7 +419,7 @@ export async function POST(req: NextRequest) {
   //    had plenty of budget left.
   const osmRunway = t0 + 50_000 - Date.now()
   const osm =
-    osmRunway > 14_000
+    osmRunway > 16_000
       ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
       : { leads: [], note: 'skipped — the web search used the time budget' }
   if (osm.leads.length > 0) {

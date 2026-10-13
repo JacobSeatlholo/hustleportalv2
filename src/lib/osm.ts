@@ -175,20 +175,36 @@ out tags center ${Math.max(limit * 6, 60)};`
 async function searchNominatimLeads(
   area: string,
   definition: string,
-  limit: number
+  limit: number,
+  place?: { lat?: number; lon?: number }
 ): Promise<{ leads: OsmLead[]; note?: string }> {
   const { kv } = buildNominatimQuery(definition)
   if (!kv) return { leads: [] }
   try {
     const params = new URLSearchParams({
       [kv.key]: kv.value,
-      city: area,
       countrycodes: 'za',
       format: 'jsonv2',
       limit: String(Math.min(limit * 3, 40)),
       addressdetails: '1',
       extratags: '1',
     })
+    // Coordinates from the geocode turn the category search from a city name
+    // guess into a bounded box sweep. The city= filter alone makes Nominatim
+    // answer with the city node itself ("Johannesburg, type city") instead of
+    // the salons and shops inside it; viewbox plus bounded finds the actual
+    // mapped businesses in the ~9 by 10 km box around the mapped point.
+    if (place?.lat !== undefined && place?.lon !== undefined) {
+      const dLat = 0.08
+      const dLon = 0.1
+      params.set(
+        'viewbox',
+        `${(place.lon - dLon).toFixed(4)},${(place.lat + dLat).toFixed(4)},${(place.lon + dLon).toFixed(4)},${(place.lat - dLat).toFixed(4)}`
+      )
+      params.set('bounded', '1')
+    } else {
+      params.set('city', area)
+    }
     const res = await fetch(`${NOMINATIM}?${params}`, {
       headers: { 'User-Agent': UA, Accept: 'application/json' },
       signal: AbortSignal.timeout(15_000),
@@ -322,18 +338,25 @@ export async function searchOsmLeads(
   if (!place) return { leads: [], note: `Could not map "${area}" to a map area — check the spelling.` }
 
   const tagFilters = buildTagFilters(definition).tags
-  const runOverpass = async (query: string): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
+  const runOverpass = async (query: string, phaseCapMs = 12_000): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
+    // Phase cap: the mirrors answer fast when they answer at all, and hang
+    // when they do not (datacenter traffic gets refused silently more often
+    // than not). Six mirrors at ten seconds each would eat the whole budget
+    // and starve the Nominatim and Photon fallbacks that actually answer
+    // from the datacenter. Twelve seconds per phase, then hand over.
+    const phaseEnd = Date.now() + phaseCapMs
     for (const endpoint of OVERPASS_ENDPOINTS) {
       const left = remaining()
       if (left < 5_000) break // no budget for another mirror — bail honestly
+      if (Date.now() >= phaseEnd) break // phase spent: the fallbacks get their turn
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA, Accept: 'application/json' },
           body: 'data=' + encodeURIComponent(query),
           // 10s per mirror MAX: one hanging mirror must never eat the budget the
-          // Nominatim + Photon fallbacks still need. Six mirrors × 10s still fits.
-          signal: AbortSignal.timeout(Math.min(10_000, left)),
+          // Nominatim + Photon fallbacks still need.
+          signal: AbortSignal.timeout(Math.max(1_000, Math.min(10_000, left, phaseEnd - Date.now()))),
         })
         if (!res.ok) continue // mirror busy/blocked — try the next one
         const json = (await res.json()) as { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }
@@ -353,10 +376,11 @@ export async function searchOsmLeads(
     }
     if (!result.ok) {
       // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
-      // category search (same OSM data, indexer-friendly) picks up the slack, then
-      // Photon (most datacenter-friendly of all) before we admit defeat.
+      // category search (same OSM data, indexer-friendly, bounded around the mapped
+      // point) picks up the slack, then Photon (most datacenter-friendly of all)
+      // before we admit defeat.
       if (remaining() > 20_000) {
-        const nom = await searchNominatimLeads(area, definition, limit)
+        const nom = await searchNominatimLeads(area, definition, limit, place)
         if (nom.leads.length > 0) return nom
       }
       if (remaining() > 8_000) {
@@ -395,7 +419,7 @@ export async function searchOsmLeads(
     if (leads.length === 0) {
       // Sparse township coverage in the map directory → Nominatim's category indexer
       // (same OSM data) gets one more shot, then Photon, before we admit defeat.
-      const nom = await searchNominatimLeads(area, definition, limit)
+      const nom = await searchNominatimLeads(area, definition, limit, place)
       if (nom.leads.length > 0) return nom
       if (remaining() > 8_000) {
         const ph = await searchPhotonLeads(area, definition, limit, place)
