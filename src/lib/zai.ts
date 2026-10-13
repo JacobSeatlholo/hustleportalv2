@@ -34,6 +34,28 @@ const ENDPOINTS = [
 export type ZaiEndpointId = (typeof ENDPOINTS)[number]['id']
 
 /**
+ * Door memory: the door that answered last keeps pole position for a while, so
+ * a slow first door never eats the scan budget twice in a row. Module state
+ * survives between requests on a warm server; a cold start just falls back to
+ * the canonical order and pays the walk once.
+ */
+let stickyEndpoint: ZaiEndpointId | null = null
+let stickyAt = 0
+const STICKY_TTL = 10 * 60_000
+
+function orderedEndpoints() {
+  if (stickyEndpoint === 'zhipu' && Date.now() - stickyAt < STICKY_TTL) {
+    return [ENDPOINTS[1], ENDPOINTS[0]]
+  }
+  return [...ENDPOINTS]
+}
+
+function markSticky(endpoint: ZaiEndpointId) {
+  stickyEndpoint = endpoint
+  stickyAt = Date.now()
+}
+
+/**
  * Walk list, cheap first. GLM-4.6 is the price/performance workhorse; newer
  * generations follow for when a model id is ever retired; the flash models at
  * the tail are free on the Zhipu door, so a key with zero credits still scans.
@@ -174,13 +196,19 @@ export async function zaiGenerate(
     failures.length
       ? failures.reduce((a, b) => (REASON_RANK[b.reason] > REASON_RANK[a.reason] ? b : a))
       : { error: 'GLM request failed', reason: 'OTHER' as ZaiErrorReason }
-  for (const ep of ENDPOINTS) {
+  // Once a door says the wallet is empty, its PAID rungs will say it again;
+  // only the free flash rungs behind that door still deserve a knock.
+  const FREE_MODELS = new Set(['glm-4.5-flash', 'glm-4-flash'])
+  let doorArrears = false
+  for (const ep of orderedEndpoints()) {
+    doorArrears = false
     for (const model of MODEL_PREFERENCE) {
       const remaining = deadline - Date.now()
       if (remaining < 4_000) {
         const b = pickWorst()
         return { ok: false, error: b.error, reason: b.reason }
       }
+      if (doorArrears && !FREE_MODELS.has(model)) continue
       const body: Record<string, unknown> = {
         model,
         messages,
@@ -202,14 +230,22 @@ export async function zaiGenerate(
           failures.push(f)
           // Auth is door wide: stop burning models here, knock on the other door.
           if (res.status === 401 || res.status === 403) break
-          // True pacing is engine wide: do not hammer a paced engine, end the
-          // walk now so the next attempt starts fresh. An arrears 429 (empty
-          // wallet) still has the free flash rungs behind the same door.
-          if (res.status === 429 && !(await isArrears(res))) {
-            return { ok: false, error: f.error, reason: f.reason }
+          if (res.status === 429 || res.status === 402) {
+            const arrears = await isArrears(res)
+            if (arrears) {
+              // Empty wallet on this door: skip its paid rungs, try its free
+              // flash rungs, then move on without looking back.
+              doorArrears = true
+              continue
+            }
+            // True pacing is engine wide: do not hammer a paced engine, end
+            // the walk now so the next attempt starts fresh.
+            if (res.status === 429) {
+              return { ok: false, error: f.error, reason: f.reason }
+            }
           }
-          // Money and pacing walk within the door: the free flash models may
-          // still answer when the paid rungs are out of reach.
+          // Other money and model errors: the free flash models behind the
+          // same door may still answer, so keep walking.
           continue
         }
         const data = (await res.json()) as {
@@ -221,6 +257,7 @@ export async function zaiGenerate(
           failures.push({ error: 'GLM returned an empty answer.', reason: 'EMPTY' })
           continue
         }
+        markSticky(ep.id)
         return { ok: true, text, keySource: source === 'user' ? 'user' : 'platform', model: data.model || model, endpoint: ep.id }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'request failed'
@@ -259,7 +296,7 @@ export async function probeZaiKey(
   const rank = (s: number) => (s === 402 ? 5 : s === 429 ? 4 : s === 401 || s === 403 ? 3 : s >= 500 ? 2 : 1)
   let worst: number | null = null
   let raw: string | null = null
-  for (const ep of ENDPOINTS) {
+  for (const ep of orderedEndpoints()) {
     for (const model of PROBE_MODELS) {
       const remaining = deadline - Date.now()
       if (remaining < 3_000) break
@@ -277,7 +314,10 @@ export async function probeZaiKey(
           }),
           signal: AbortSignal.timeout(Math.min(8_000, remaining)),
         })
-        if (res.ok) return { status: 200, endpoint: ep.id, raw: null }
+        if (res.ok) {
+          markSticky(ep.id)
+          return { status: 200, endpoint: ep.id, raw: null }
+        }
         // One body read only: it feeds both the raw words and the arrears check.
         const body = (await res.json().catch(() => null)) as { error?: { code?: string | number; message?: string } } | null
         if (worst === null || rank(res.status) > rank(worst)) {
