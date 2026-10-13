@@ -174,11 +174,11 @@ export async function GET() {
       const anyPerDay = quota429.some((q) => q.perDay)
       const drained = quota429.map((q) => q.model).join(', ')
       if (liveOk) {
-        report.advice.push(`Some models are quota-blocked (${drained}) but at least one model answered — the app keeps working on the healthy model. ${anyZero ? 'The zero-limit models need billing or a different project (see below).' : anyPerDay ? 'Day buckets reset around 09:00 South African time.' : 'Minute buckets clear on their own.'}`)
+        report.advice.push(`Some models are quota-blocked (${drained}) but at least one model answered — the app keeps working on the healthy model. ${anyZero ? 'The zero-limit models need billing or a different project (see below).' : anyPerDay ? 'Day buckets reset around 02:00 South African time (midnight UTC).' : 'Minute buckets clear on their own.'}`)
       } else if (anyZero) {
         report.advice.push(`ZERO FREE-TIER LIMIT on ${who} (${drained}): Google returned limit 0 — this project has NO free quota for these models, so waiting will not fix it. Two real fixes: (1) In Google Cloud console, open the project behind this key and enable billing — the API then runs on pay-as-you-go Tier 1 (Flash-class models cost a few dollars per million tokens; a scanning month costs a few rand). (2) Create a brand-new AI Studio key in a DIFFERENT project (aistudio.google.com/apikey) and update ${source === 'user' ? 'the key under Integrations' : 'GEMINI_API_KEY in Vercel env'}, then redeploy. Confirm which project the key belongs to at https://ai.dev/rate-limit while logged into the right Google account.`)
       } else if (anyPerDay) {
-        report.advice.push(`DAILY CAP BURNED on ${who} (${drained}): every model hit its per-day free-tier bucket. Google resets day buckets at midnight US Pacific — around 09:00 South African time. Options: wait for the reset, scan fewer searches per day, or enable billing on the Google project behind the key for Tier 1 limits (pay-as-you-go, a few rand per scanning month on Flash models).`)
+        report.advice.push(`DAILY CAP BURNED on ${who} (${drained}): every model hit its per-day free-tier bucket. Google's own reset clock (retryDelay) points to midnight UTC — around 02:00 South African time. Options: wait for the reset, scan fewer searches per day, or enable billing on the Google project behind the key for Tier 1 limits (pay-as-you-go, a few rand per scanning month on Flash models).`)
       } else {
         report.advice.push(`MINUTE CAP on ${who} (${drained}): the per-minute free-tier bucket is drained. It clears on its own within a minute — spaced-out scanning avoids it.`)
       }

@@ -54,10 +54,18 @@ async function aiService(): Promise<Svc> {
       detail: 'Not switched on yet. The operator adds one key and every AI feature lights up.',
     }
   }
+  // Probe a REAL generation, not ListModels: a key whose daily free-tier bucket is
+  // drained still passes ListModels, which would show "Live" while every scan fails.
+  // One 8-token call per 45s cache window — honest status at negligible cost.
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=1`,
-      { signal: AbortSignal.timeout(4_000) },
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(key),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply: OK' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
+        signal: AbortSignal.timeout(6_000),
+      },
     )
     if (res.ok) {
       return {
@@ -72,7 +80,7 @@ async function aiService(): Promise<Svc> {
         key: 'ai',
         name: 'AI engine',
         ok: false,
-        detail: 'Busy minute. Quota refills itself and the map directory covers lead searches meanwhile.',
+        detail: 'Daily free quota used up. It resets around 02:00 South African time, and the map directory covers lead searches meanwhile.',
       }
     }
     if (res.status === 403 || res.status === 401) {
