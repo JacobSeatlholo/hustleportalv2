@@ -182,3 +182,29 @@ Work Log:
 Stage Summary:
 - Production runs 7d82537. QA: 5 suites, 137 checks, 0 real failures. One real prod bug fixed (service requests).
 - User next steps (env actions only they can do): (1) rotate Gemini key — new key from aistudio.google.com/apikey on businesshustleworldwide@gmail.com → paste under Integrations (instant verdict) AND replace GEMINI_API_KEY in Vercel env → redeploy; (2) YOCO_SECRET_KEY sk_live_/sk_test_ in Vercel → redeploy → Setup Checklist one-click webhook register; (3) GA when ready: NEXT_PUBLIC_GA_MEASUREMENT_ID; (4) optional CRON_SECRET.
+
+---
+Task ID: 37
+Agent: Main agent (Super Z)
+Task: Gemini key rotation STILL failing after user rotated key + redeployed; wildcard DNS approved; diagnose root cause with production data.
+
+Work Log:
+- Prod probe: registered fresh QA account, ran /api/health + /api/ai/diagnose + live plan call against https://www.hustleportal.online
+- Health: all green, aiPlatformKey=true, yoco=true, 29 tables
+- Diagnose verdict: platform key (NEW AQ.Ab8…oE0g format) VALID (ListModels 200, 45 models), but generateContent 429 on gemini-flash-latest — new key's quota ALSO blocked
+- Patched src/lib/gemini.ts: per-(key,model) quota bench — PerDay 429 or zero-limit benches that model 30min/6h so drained models stop heading every walk
+- Patched src/app/api/ai/diagnose/route.ts: 429 no longer stops the walk (tests ALL models to find headroom), quotaForensics() parses bucket/quotaId/limit/retryDelay, scenario advice (zero limit → billing or new project; PerDay → reset ~09:00 SAST; PerMinute → self-clears)
+- Committed dd961f9, pushed main, awaiting Vercel build
+
+Stage Summary:
+- Rotation was done CORRECTLY (Vercel env has the new key); the blocker is Google-side quota on the new key's project
+- Next: re-run diagnose after build → read forensics → user-side fix is billing or fresh key in a different project (if limit 0) or wait for 09:00 SAST reset (if PerDay)
+- Wildcard ALIAS *.hustleportal.online → cname.vercel-dns-017.com confirmed live and harmless (user approved it mid-work)
+- Build 3194af3 live. QA sweep: 44 PASS / 0 FAIL. Diagnose now reports bucket=GenerateRequestsPerDayPerProjectPerModel-FreeTier, retryDelay≈81500s (reset ≈ midnight UTC ≈ 02:00 SAST). Status panel AI row honestly reports drained daily quota. 2.5-flash variants 404 on generation for this project (Google-side); flash-latest + 3.5-flash are the usable pair, both day-blocked.
+- ROOT CAUSE (final): rotation was correct; new key valid; DAILY free-tier bucket per project+model exhausted by today's testing. Fix is user-side: enable billing on the key's Google Cloud project (Tier 1) or wait for the 02:00 SAST reset and ration scans.
+
+Stage Summary:
+- Engine: per-(key,model) quota bench (30min PerDay / 6h zero-limit) shipped dd961f9
+- Diagnose: full-model 429 walk + quotaForensics + scenario advice shipped dd961f9
+- Status panel: real-generation probe, honest AI row shipped 3194af3
+- AI down ≠ app down: sweep green, gates verified, honest 502s in brand voice
