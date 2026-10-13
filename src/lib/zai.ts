@@ -197,11 +197,15 @@ export async function zaiGenerate(
       ? failures.reduce((a, b) => (REASON_RANK[b.reason] > REASON_RANK[a.reason] ? b : a))
       : { error: 'GLM request failed', reason: 'OTHER' as ZaiErrorReason }
   // Once a door says the wallet is empty, its PAID rungs will say it again;
-  // only the free flash rungs behind that door still deserve a knock.
+  // only the free flash rungs behind that door still deserve a knock. And a
+  // paced door is exhausted too, because pacing is per door, never engine
+  // wide: the other door may be perfectly healthy.
   const FREE_MODELS = new Set(['glm-4.5-flash', 'glm-4-flash'])
   let doorArrears = false
+  let doorPaced = false
   for (const ep of orderedEndpoints()) {
     doorArrears = false
+    doorPaced = false
     for (const model of MODEL_PREFERENCE) {
       const remaining = deadline - Date.now()
       if (remaining < 4_000) {
@@ -209,6 +213,7 @@ export async function zaiGenerate(
         return { ok: false, error: b.error, reason: b.reason }
       }
       if (doorArrears && !FREE_MODELS.has(model)) continue
+      if (doorPaced) break
       const body: Record<string, unknown> = {
         model,
         messages,
@@ -238,10 +243,10 @@ export async function zaiGenerate(
               doorArrears = true
               continue
             }
-            // True pacing is engine wide: do not hammer a paced engine, end
-            // the walk now so the next attempt starts fresh.
             if (res.status === 429) {
-              return { ok: false, error: f.error, reason: f.reason }
+              // Pacing is per door: stop knocking here, try the other door.
+              doorPaced = true
+              break
             }
           }
           // Other money and model errors: the free flash models behind the
