@@ -30,10 +30,35 @@ const MODEL_PREFERENCE = [
 ] as const
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
-/** Winner cache — verified against ListModels, refreshed on this TTL. */
-let cachedModel: string | null = null
-let cachedModelAt = 0
+/** Winner cache — PER KEY (a user key and the platform key can see different model
+ * lists), verified against ListModels, refreshed on this TTL. */
 const MODEL_TTL_MS = 30 * 60 * 1000
+const modelCache = new Map<string, { model: string; at: number }>()
+function keyTag(key: string): string {
+  return `${key.slice(0, 8)}:${key.slice(-4)}`
+}
+
+/**
+ * Drained or blocked keys must not tax every request: after a key-level failure
+ * (invalid, 403) or a per-day quota wall, the key sits out a cooldown on the bench
+ * while the other key answers. Without this, one drained key under Integrations
+ * made EVERY AI call pay its 429s before the platform key got a turn. In-memory
+ * per serverless instance; a fresh instance retries the bench key at worst once.
+ */
+const KEY_COOLDOWN_MS = 10 * 60_000
+const keyCooldown = new Map<string, number>()
+function keyBenched(key: string): boolean {
+  const until = keyCooldown.get(keyTag(key))
+  if (!until) return false
+  if (Date.now() >= until) {
+    keyCooldown.delete(keyTag(key))
+    return false
+  }
+  return true
+}
+function benchKey(key: string): void {
+  keyCooldown.set(keyTag(key), Date.now() + KEY_COOLDOWN_MS)
+}
 
 export async function getUserGeminiKey(userId: string): Promise<string | null> {
   const row = await db.userSetting.findUnique({
@@ -167,8 +192,9 @@ function shortOtherCause(f: Failure): string {
  */
 async function resolveModels(key: string): Promise<string[]> {
   const now = Date.now()
-  if (cachedModel && now - cachedModelAt < MODEL_TTL_MS) {
-    return [cachedModel, ...MODEL_PREFERENCE.filter((m) => m !== cachedModel)]
+  const hit = modelCache.get(keyTag(key))
+  if (hit && now - hit.at < MODEL_TTL_MS) {
+    return [hit.model, ...MODEL_PREFERENCE.filter((m) => m !== hit.model)]
   }
   try {
     const res = await fetch(
@@ -186,8 +212,7 @@ async function resolveModels(key: string): Promise<string[]> {
       )
       const pick = MODEL_PREFERENCE.find((m) => usable.has(m))
       if (pick) {
-        cachedModel = pick
-        cachedModelAt = now
+        modelCache.set(keyTag(key), { model: pick, at: now })
         return [pick, ...MODEL_PREFERENCE.filter((m) => m !== pick)]
       }
       // None of our preferred names are visible — ride the newest flash-tier model Google offers.
@@ -200,8 +225,7 @@ async function resolveModels(key: string): Promise<string[]> {
         )
         .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]
       if (anyFlash) {
-        cachedModel = anyFlash
-        cachedModelAt = now
+        modelCache.set(keyTag(key), { model: anyFlash, at: now })
         return [anyFlash, ...MODEL_PREFERENCE.filter((m) => m !== anyFlash)]
       }
     }
@@ -233,6 +257,14 @@ async function callGemini(
     }
   }
 
+  // A benched (drained/blocked) key rides the BACK of the line — the healthy key
+  // answers first and the notice still tells the truth about whose quota was used.
+  const benchedCount = keys.filter((k) => keyBenched(k.key)).length
+  const orderedKeys =
+    benchedCount > 0 && benchedCount < keys.length
+      ? [...keys.filter((k) => !keyBenched(k.key)), ...keys.filter((k) => keyBenched(k.key))]
+      : keys
+
   const failures: Failure[] = []
   let userKeyFailure: Failure | null = null // remember WHY the user's key was bypassed → honest notice on fallback success
   let timedOut = false
@@ -242,7 +274,7 @@ async function callGemini(
   // the single biggest cause of Vercel 504s on slow paths.
   const deadline = Date.now() + timeoutMs
 
-  for (const { key, ownKey } of keys) {
+  for (const { key, ownKey } of orderedKeys) {
     if (Date.now() >= deadline) break
     const models = await resolveModels(key)
     for (const model of models) {
@@ -262,13 +294,14 @@ async function callGemini(
           failures.push(failure)
           if (ownKey && !userKeyFailure) userKeyFailure = failure
           // A cached winner that Google just retired — evict so the next request re-discovers.
-          if (cls === 'MODEL' && model === cachedModel) {
-            cachedModel = null
-            cachedModelAt = 0
+          if (cls === 'MODEL') modelCache.delete(keyTag(key))
+          // Key-level fatals AND per-day quota walls bench the key: a 403/invalid key
+          // rejects EVERY model, and a PerDay 429 will not clear inside this request.
+          if (cls === 'KEY_INVALID' || cls === 'PERMISSION') {
+            benchKey(key)
+            break
           }
-          // Key-level fatals: no point trying other models with the same key —
-          // a permission-blocked (403) or invalid key rejects EVERY model.
-          if (cls === 'KEY_INVALID' || cls === 'PERMISSION') break
+          if (cls === 'QUOTA' && /PerDay/i.test(raw)) benchKey(key)
           if (cls === 'QUOTA') {
             // 429 is a PER-MODEL quota bucket on free tier, not key-wide: the next
             // Flash model usually still has headroom, so rotate instead of giving
@@ -295,8 +328,7 @@ async function callGemini(
           if (ownKey && !userKeyFailure) userKeyFailure = failure
           continue
         }
-        cachedModel = model
-        cachedModelAt = Date.now()
+        modelCache.set(keyTag(key), { model, at: Date.now() })
         // The user's own key was bypassed but the platform saved the answer — say so,
         // once, gently: the app stayed seamless AND the user learns their key needs care.
         const notice =

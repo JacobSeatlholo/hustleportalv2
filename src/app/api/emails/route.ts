@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { sendMail } from '@/lib/mailer'
+import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -26,6 +27,16 @@ export async function POST(req: NextRequest) {
   const mailBody = String(body.body || '').trim()
   if (!to || !to.includes('@')) return NextResponse.json({ error: 'A valid recipient email is required.' }, { status: 400 })
   if (!subject || !mailBody) return NextResponse.json({ error: 'Subject and body are required.' }, { status: 400 })
+
+  // Free plan ceiling: 6 sent emails from the account. Failed sends never burn one.
+  // Checked BEFORE the send so the sixth email still goes out on the button press.
+  const { paid } = await planState(userId)
+  let freeRemaining: number | undefined
+  if (!paid) {
+    const sent = await db.emailLog.count({ where: { userId, status: 'SENT' } })
+    if (sent >= FREE_LIMITS.emailSends) return upgradeJson('email', FREE_LIMITS.emailSends)
+    freeRemaining = FREE_LIMITS.emailSends - sent - 1
+  }
 
   const result = await sendMail(userId, { to, subject, body: mailBody })
   const provider = result.ok ? result.provider : 'NONE'
@@ -58,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error, email }, { status: 400 })
   }
-  return NextResponse.json({ email, notice: result.notice || null })
+  return NextResponse.json({ email, notice: result.notice || null, freeRemaining: freeRemaining ?? null })
 }
 
 // DELETE /api/emails?id= → remove a draft/log row

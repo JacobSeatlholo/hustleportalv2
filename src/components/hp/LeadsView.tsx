@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, STAGES, type Lead, type TopUpPack } from './shared'
 import { useHp } from './store'
+import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
@@ -331,11 +332,14 @@ const DISCOVER_STEPS = [
 function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
   const { session } = useHp()
   const { toast } = useToast()
+  const { paid } = usePlan()
   const [definition, setDefinition] = useState('')
   const [city, setCity] = useState(session?.user.city || '')
   const [siteUrl, setSiteUrl] = useState('')
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [limit, setLimit] = useState('10')
+  // Free plan finds 5 real leads per search; Operator widens the net. The server
+  // enforces it (402 → upgrade dialog) — this default just starts everyone honest.
+  const [limit, setLimit] = useState('5')
   const [busy, setBusy] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [step, setStep] = useState(0)
@@ -481,14 +485,33 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>How many</Label>
-              <Select value={limit} onValueChange={setLimit}>
+              <Select
+                value={limit}
+                onValueChange={(v) => {
+                  if (!paid && parseInt(v) > 5) {
+                    requestUpgrade('discover')
+                    return
+                  }
+                  setLimit(v)
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['5', '10', '15', '20', '30'].map((n) => (
-                    <SelectItem key={n} value={n}>{n} leads</SelectItem>
-                  ))}
+                  {['5', '10', '15', '20', '30'].map((n) => {
+                    const locked = !paid && parseInt(n) > 5
+                    return (
+                      <SelectItem key={n} value={n}>
+                        {n} leads{locked ? ' · Operator' : ''}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {paid
+                  ? 'Operator: up to 30 real leads per search.'
+                  : 'Free finds 5 real leads per search. Operator widens the net to 30.'}
+              </p>
             </div>
           </div>
           <Button onClick={search} disabled={busy} className="w-full">

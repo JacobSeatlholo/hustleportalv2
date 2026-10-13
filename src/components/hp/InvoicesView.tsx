@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { api, rands, randsPlain, type Invoice, type ProjectFull, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Plus, ReceiptText, Printer, Send, Trash2, Upload, X } from 'lucide-react'
+import { Loader2, Plus, ReceiptText, Printer, Send, Trash2, Upload, X, Lock } from 'lucide-react'
 import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
+import { usePlan, requestUpgrade } from './useUpgrade'
 
 type Item = { description: string; quantity: number; unitPrice: number }
 type BankDetails = {
@@ -69,6 +70,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default function InvoicesView() {
   const { activeProjectId, bumpRefresh, setView, setStoreFocus } = useHp()
   const { toast } = useToast()
+  const { paid } = usePlan()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -89,6 +91,10 @@ export default function InvoicesView() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [sendAfter, setSendAfter] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Business logo (Operator): uploaded once as SVG, printed on every invoice.
+  const [bizLogo, setBizLogo] = useState<string | null>(null)
+  const [bizLogoBusy, setBizLogoBusy] = useState(false)
+  const bizLogoRef = useRef<HTMLInputElement>(null)
 
   // Conversion touchpoints — quiet, frequency-capped, never blocking (see touchpoints.ts)
   // invoice-logo is DERIVED: latest invoice without a logo + frequency gate → the card
@@ -122,10 +128,11 @@ export default function InvoicesView() {
     setLoading(true)
     try {
       const [inv, proj] = await Promise.all([
-        api<{ invoices: Invoice[] }>('/api/invoices'),
+        api<{ invoices: Invoice[]; logoUrl?: string | null }>('/api/invoices'),
         activeProjectId ? api<{ project: ProjectFull }>(`/api/projects/${activeProjectId}`).catch(() => null) : Promise.resolve(null),
       ])
       setInvoices(inv.invoices)
+      setBizLogo(inv.logoUrl || null)
       // Touchpoint: latest invoice without a logo → one quiet, professional prompt
       // (frequency-capped in localStorage; survives navigation until capped).
       const latest = inv.invoices[0]
@@ -161,7 +168,42 @@ export default function InvoicesView() {
   function resetForm() {
     setClientName(''); setClientEmail('')
     setItems([{ description: '', quantity: 1, unitPrice: 0 }])
-    setTaxRate(15); setNotes(''); setLogoUrl(null); setSendAfter(false)
+    setTaxRate(15); setNotes(''); setLogoUrl(bizLogo); setSendAfter(false)
+  }
+
+  async function onBizLogoFile(file: File | undefined) {
+    if (!file) return
+    if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') {
+      toast({ title: 'SVG please', description: 'Export your logo as an SVG file. It stays crisp at every print size.', variant: 'destructive' })
+      return
+    }
+    if (file.size > 150_000) {
+      toast({ title: 'Logo too large', description: 'Keep the SVG under 150 KB. Most logo exports are far smaller.', variant: 'destructive' })
+      return
+    }
+    setBizLogoBusy(true)
+    try {
+      const svg = await file.text()
+      const res = await api<{ logoUrl: string }>('/api/invoice-logo', { method: 'PUT', body: JSON.stringify({ svg }) })
+      setBizLogo(res.logoUrl)
+      setLogoUrl(res.logoUrl)
+      toast({ title: 'Logo saved ✓', description: 'Every invoice you create from now on prints it.' })
+    } catch (e) {
+      toast({ title: 'Could not save the logo', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBizLogoBusy(false)
+      if (bizLogoRef.current) bizLogoRef.current.value = ''
+    }
+  }
+
+  async function removeBizLogo() {
+    try {
+      await api('/api/invoice-logo', { method: 'DELETE' })
+      setBizLogo(null)
+      toast({ title: 'Logo removed' })
+    } catch {
+      toast({ title: 'Could not remove the logo', variant: 'destructive' })
+    }
   }
 
   async function saveBank() {
@@ -235,6 +277,11 @@ export default function InvoicesView() {
 
   function onLogoFile(file: File | undefined) {
     if (!file) return
+    // The logo feature lives on Operator, wherever it is touched from.
+    if (!paid) {
+      requestUpgrade('logo')
+      return
+    }
     if (file.size > 300_000) {
       toast({ title: 'Logo too large', description: 'Keep it under 300 KB for the printable template.', variant: 'destructive' })
       return
@@ -321,12 +368,65 @@ export default function InvoicesView() {
           )}
       </div>
 
+      {/* Business logo (Operator) — uploaded once, printed on every invoice */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-medium text-sm">Your business logo</h3>
+            <p className="text-xs text-muted-foreground">Upload it once as an SVG. Every invoice you print or email carries your brand.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {bizLogo ? (
+              <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">ON INVOICES</Badge>
+            ) : paid ? (
+              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">NOT SET YET</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">OPERATOR</Badge>
+            )}
+            {paid ? (
+              <>
+                <Button size="sm" variant="outline" disabled={bizLogoBusy} onClick={() => bizLogoRef.current?.click()}>
+                  {bizLogoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="h-3.5 w-3.5 mr-1" /> {bizLogo ? 'Replace' : 'Upload SVG'}</>}
+                </Button>
+                {bizLogo && (
+                  <Button size="sm" variant="ghost" onClick={removeBizLogo}>Remove</Button>
+                )}
+              </>
+            ) : (
+              <Button size="sm" variant="outline" className="border-brand/50" onClick={() => requestUpgrade('logo')}>
+                <Lock className="h-3.5 w-3.5 mr-1 text-brand" /> Unlock on Operator
+              </Button>
+            )}
+          </div>
+        </div>
+        {bizLogo && (
+          <div className="rounded-lg border bg-background p-3 inline-block">
+            <img src={bizLogo} alt="Business logo" className="h-12" />
+          </div>
+        )}
+        <input
+          ref={bizLogoRef}
+          type="file"
+          accept=".svg,image/svg+xml"
+          className="hidden"
+          onChange={(e) => onBizLogoFile(e.target.files?.[0])}
+        />
+      </div>
+
       {showCreate && (
         <div className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-sm">New invoice</h3>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-              <Upload className="h-3.5 w-3.5" /> Logo
+            <label
+              className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground"
+              onClick={(e) => {
+                if (!paid) {
+                  e.preventDefault()
+                  requestUpgrade('logo')
+                }
+              }}
+            >
+              <Upload className="h-3.5 w-3.5" /> Logo{!paid ? ' · Operator' : ''}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onLogoFile(e.target.files?.[0])} />
               {logoUrl && <img src={logoUrl} alt="logo preview" className="h-6 rounded" />}
             </label>

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { api, type EmailLogRow, type Lead } from './shared'
 import { useHp } from './store'
+import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X } from 'lucide-react'
 
@@ -33,6 +34,7 @@ interface MailStatus {
 export default function MailView() {
   const { activeProjectId, bumpRefresh, setView } = useHp()
   const { toast } = useToast()
+  const { paid } = usePlan()
   const [emails, setEmails] = useState<EmailLogRow[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,13 +108,17 @@ export default function MailView() {
     setSending(true)
     setSendError(null)
     try {
-      const res = await api<{ email: EmailLogRow; notice?: string | null }>('/api/emails', {
+      const res = await api<{ email: EmailLogRow; notice?: string | null; freeRemaining?: number | null }>('/api/emails', {
         method: 'POST',
         body: JSON.stringify({ draftId, to, subject, body, projectId: activeProjectId }),
       })
       toast({
         title: 'Sent ✓',
-        description: res.notice || `${subject} → ${to}`,
+        description:
+          res.notice ||
+          (typeof res.freeRemaining === 'number' && !paid
+            ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. Operator sends unlimited.`
+            : `${subject} → ${to}`),
       })
       setSubject(''); setBody(''); setTo(''); setDraftId(null)
       load()
@@ -135,6 +141,7 @@ export default function MailView() {
   }
 
   // One calm line: what will happen when I hit Send?
+  const sentCount = emails.filter((e) => e.status === 'SENT').length
   const engineReady = mailStatus ? mailStatus.platformConfigured && mailStatus.domainStatus === 'verified' : null
   const statusDot = engineReady === true ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
   const statusText = (() => {
@@ -162,6 +169,22 @@ export default function MailView() {
         <h2 className="font-display text-2xl">Mail</h2>
         <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile — sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
       </div>
+
+      {/* Free plan email meter — honest count, calm tone, one tap to the plans.
+          The server enforces the ceiling; this makes it visible before it bites. */}
+      {!paid && (
+        <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm">
+            <p className="font-medium">
+              {Math.max(0, 6 - sentCount)} of 6 free emails left
+            </p>
+            <p className="text-xs text-muted-foreground">Operator sends unlimited, with your business name on every message.</p>
+          </div>
+          <Button size="sm" variant="outline" className="border-brand/50" onClick={() => requestUpgrade('email')}>
+            <Sparkles className="h-3.5 w-3.5 mr-1 text-brand" /> See Operator
+          </Button>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Compose */}

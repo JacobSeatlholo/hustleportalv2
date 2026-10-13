@@ -1,0 +1,187 @@
+import { NextResponse } from 'next/server'
+import { getUserId } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { readLastSystemSend } from '@/lib/mailer'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * GET /api/status — live platform status for the Integrations trust panel.
+ * Presence plus the last honest outcome only: never secret values, never hosts.
+ * Cached 45s in the instance so the panel can poll freely without cost.
+ *
+ * Rows the BROWSER knows better than the server (voice dictation support) are
+ * added client side; this endpoint answers for everything with a heartbeat:
+ * database, AI engine, email engine, push notifications.
+ */
+
+interface Svc {
+  key: string
+  name: string
+  ok: boolean
+  detail: string
+}
+
+let cache: { at: number; services: Svc[] } | null = null
+const TTL_MS = 45_000
+
+async function dbService(): Promise<Svc> {
+  try {
+    await db.$queryRaw`SELECT 1`
+    return {
+      key: 'database',
+      name: 'Business data',
+      ok: true,
+      detail: 'Live. Your records save and sync the moment you press save.',
+    }
+  } catch {
+    return {
+      key: 'database',
+      name: 'Business data',
+      ok: false,
+      detail: 'Struggling to reach the data store right now. Nothing is lost, it retries on its own.',
+    }
+  }
+}
+
+async function aiService(): Promise<Svc> {
+  const key = process.env.GEMINI_API_KEY?.trim()
+  if (!key) {
+    return {
+      key: 'ai',
+      name: 'AI engine',
+      ok: false,
+      detail: 'Not switched on yet. The operator adds one key and every AI feature lights up.',
+    }
+  }
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=1`,
+      { signal: AbortSignal.timeout(4_000) },
+    )
+    if (res.ok) {
+      return {
+        key: 'ai',
+        name: 'AI engine',
+        ok: true,
+        detail: 'Live. Lead finder, diary scanner and the Co-Founder are answering.',
+      }
+    }
+    if (res.status === 429) {
+      return {
+        key: 'ai',
+        name: 'AI engine',
+        ok: false,
+        detail: 'Busy minute. Quota refills itself and the map directory covers lead searches meanwhile.',
+      }
+    }
+    if (res.status === 403 || res.status === 401) {
+      return {
+        key: 'ai',
+        name: 'AI engine',
+        ok: false,
+        detail: 'The platform AI key was rejected by Google. A fresh key from AI Studio brings everything back.',
+      }
+    }
+    return {
+      key: 'ai',
+      name: 'AI engine',
+      ok: false,
+      detail: `Google answered with status ${res.status}. It retries on its own.`,
+    }
+  } catch {
+    return {
+      key: 'ai',
+      name: 'AI engine',
+      ok: false,
+      detail: 'Could not reach Google just now. It retries automatically.',
+    }
+  }
+}
+
+async function emailService(): Promise<Svc> {
+  const configured = Boolean(process.env.RESEND_API_KEY?.trim())
+  if (!configured) {
+    return {
+      key: 'email',
+      name: 'Email engine',
+      ok: false,
+      detail: 'Not configured yet. Sends will flow the moment the operator adds the sending key.',
+    }
+  }
+  const last = await readLastSystemSend().catch(() => null)
+  if (last?.ok) {
+    const ageH = Math.max(0, Math.round((Date.now() - new Date(last.at).getTime()) / 36e5))
+    return {
+      key: 'email',
+      name: 'Email engine',
+      ok: true,
+      detail: `Live. The last system email landed ${ageH === 0 ? 'within this hour' : `${ageH} hour${ageH === 1 ? '' : 's'} ago`}.`,
+    }
+  }
+  if (last && !last.ok) {
+    return {
+      key: 'email',
+      name: 'Email engine',
+      ok: false,
+      detail: 'The last system email hit a snag and will retry. Your own sends still go out.',
+    }
+  }
+  return {
+    key: 'email',
+    name: 'Email engine',
+    ok: true,
+    detail: 'Configured and standing by. Your emails go out the moment you press send.',
+  }
+}
+
+async function pushService(): Promise<Svc> {
+  try {
+    const rows = await db.platformConfig.findMany({
+      where: { key: { in: ['PUSH_VAPID_PUBLIC', 'PUSH_VAPID_PRIVATE'] } },
+    })
+    const ready = rows.filter((r) => Boolean(r.value)).length >= 2
+    return ready
+      ? {
+          key: 'push',
+          name: 'Push notifications',
+          ok: true,
+          detail: 'Live. Installed apps receive task reminders and due date alerts.',
+        }
+      : {
+          key: 'push',
+          name: 'Push notifications',
+          ok: false,
+          detail: 'Warming up. Keys generate themselves on the first push subscribe.',
+        }
+  } catch {
+    return {
+      key: 'push',
+      name: 'Push notifications',
+      ok: false,
+      detail: 'Could not check just now. It retries automatically.',
+    }
+  }
+}
+
+export async function GET() {
+  const userId = await getUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (cache && Date.now() - cache.at < TTL_MS) {
+    return NextResponse.json({
+      services: cache.services,
+      checkedAt: new Date(cache.at).toISOString(),
+      cached: true,
+    })
+  }
+
+  const [database, ai, email, push] = await Promise.all([dbService(), aiService(), emailService(), pushService()])
+  const services = [database, ai, email, push]
+  cache = { at: Date.now(), services }
+  return NextResponse.json({
+    services,
+    checkedAt: new Date(cache.at).toISOString(),
+    cached: false,
+  })
+}

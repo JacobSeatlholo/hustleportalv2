@@ -18,7 +18,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { api, randsPlain } from './shared'
 import { useHp } from './store'
-import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle } from 'lucide-react'
+import { usePlan, requestUpgrade } from './useUpgrade'
+import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles } from 'lucide-react'
 
 interface Item {
   id: string
@@ -44,6 +45,7 @@ const EMPTY = { name: '', sku: '', quantity: '', unit: '', costPrice: '', sellPr
 export default function InventoryView() {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
+  const { paid } = usePlan()
   const [items, setItems] = useState<Item[]>([])
   const [totals, setTotals] = useState<Totals | null>(null)
   const [loading, setLoading] = useState(true)
@@ -128,6 +130,24 @@ export default function InventoryView() {
         </div>
         <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Add item</Button>
       </div>
+
+      {/* Free plan slot meter — honest countdown, one tap to the plans. The server
+          enforces the same number; this just makes the ceiling visible before it bites. */}
+      {!paid && (
+        <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm">
+            <p className="font-medium">
+              {totals ? `${Math.max(0, 3 - totals.count)} of 3 free stock slots open` : 'Free plan tracks 3 stock items'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Operator watches your whole stockroom, with low stock alerts and live stock value.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="border-brand/50" onClick={() => requestUpgrade('inventory')}>
+            <Sparkles className="h-3.5 w-3.5 mr-1 text-brand" /> See Operator
+          </Button>
+        </div>
+      )}
 
       {totals && totals.count > 0 && (
         <div className="grid grid-cols-3 gap-3">

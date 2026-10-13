@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
+import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 
 /**
  * Inventory — dead-simple stock management.
@@ -38,6 +39,14 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const name = String(b.name || '').trim()
   if (!name) return NextResponse.json({ error: 'Item name is required.' }, { status: 400 })
+  // Free plan ceiling: 3 stock items. The meter in the UI reads the same number.
+  const { paid } = await planState(userId)
+  if (!paid) {
+    const count = await db.inventoryItem.count({ where: { userId } })
+    if (count >= FREE_LIMITS.inventoryItems) {
+      return upgradeJson('inventory', FREE_LIMITS.inventoryItems)
+    }
+  }
   const item = await db.inventoryItem.create({
     data: {
       userId,

@@ -4,6 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
+import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 
 export const maxDuration = 60
 
@@ -99,7 +100,14 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
-  const cap = Math.min(Math.max(parseInt(body.limit) || 10, 1), 20)
+  const requested = Math.min(Math.max(parseInt(body.limit) || 10, 1), 30)
+  // Free plan: 5 real leads per search, always. Wider nets live on Operator.
+  // Enforced BEFORE the search so nobody burns quota on a search they cannot keep.
+  const { paid } = await planState(userId)
+  if (!paid && requested > FREE_LIMITS.discoverLeads) {
+    return upgradeJson('discover', FREE_LIMITS.discoverLeads)
+  }
+  const cap = requested
   let definition = String(body.definition || '').trim()
   let city = String(body.city || '').trim()
   // GPS radius mode: the client tags the user's live position (CityField "Tag location")

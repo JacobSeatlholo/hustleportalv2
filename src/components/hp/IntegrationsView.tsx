@@ -10,7 +10,7 @@ import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
   KeyRound, Loader2, Mail, Sparkles, CalendarCheck2, Trash2,
-  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal, Activity,
 } from 'lucide-react'
 
 const INTEGRATIONS: {
@@ -293,6 +293,114 @@ interface MailStatusInfo {
   gmailConfigured: boolean
 }
 
+interface SvcStatus {
+  key: string
+  name: string
+  ok: boolean
+  detail: string
+}
+
+/**
+ * System status — the trust panel. One honest answer to "is everything working
+ * right now?": live checks against the database, the AI engine, the email engine
+ * and push, plus what THIS device supports (voice dictation). Refreshes itself;
+ * a status panel never cries wolf, so failures stay quiet until the check lands.
+ */
+function SystemStatusCard() {
+  const [services, setServices] = useState<SvcStatus[] | null>(null)
+  const [checkedAt, setCheckedAt] = useState<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [tick, setTick] = useState(0)
+
+  const load = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await api<{ services: SvcStatus[]; checkedAt: string }>('/api/status')
+      setServices(res.services)
+      setCheckedAt(new Date(res.checkedAt).getTime())
+    } catch {
+      // silent — the panel keeps the last known truth
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const t = setInterval(load, 60_000)
+    return () => clearInterval(t)
+  }, [load])
+  // re-render every 10s so "checked Xs ago" stays honest
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 10_000)
+    return () => clearInterval(t)
+  }, [])
+
+  const voiceSupported =
+    typeof window !== 'undefined' &&
+    ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
+
+  const rows: SvcStatus[] = [
+    ...(services || []),
+    {
+      key: 'voice',
+      name: 'Voice dictation',
+      ok: voiceSupported,
+      detail: voiceSupported
+        ? 'Ready on this device. Tap the mic in Tasks and speak.'
+        : 'This browser does not offer dictation. Chrome, Edge or Safari do.',
+    },
+  ]
+
+  const ago = checkedAt ? Math.max(0, Math.round((Date.now() - checkedAt) / 1000)) : null
+  void tick // re-render timer
+
+  return (
+    <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <Activity className="h-4 w-4 text-brand" />
+          <h3 className="font-medium text-sm">System status</h3>
+          {rows.every((r) => r.ok) && rows.length > 1 ? (
+            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">ALL SYSTEMS LIVE</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">CHECKING</Badge>
+          )}
+        </div>
+        <Button size="sm" variant="ghost" onClick={load} disabled={refreshing}>
+          <Loader2 className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {rows.map((s) => (
+          <div key={s.key} className="flex items-start gap-2.5">
+            <span
+              className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+                s.ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+              }`}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-tight">{s.name}</p>
+              <p className="text-xs text-muted-foreground">{s.detail}</p>
+            </div>
+          </div>
+        ))}
+        {!services && (
+          <p className="text-xs text-muted-foreground flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" /> Checking every system now…
+          </p>
+        )}
+      </div>
+      {ago !== null && (
+        <p className="text-[11px] text-muted-foreground">
+          Live check · {ago < 5 ? 'just now' : `${ago}s ago`} · refreshes on its own every minute
+        </p>
+      )}
+    </div>
+  )
+}
+
 /**
  * Email engine status — the ONE card that answers "can I send email right now?".
  * Shows live Resend domain verification (fetched server-side with the platform key)
@@ -505,6 +613,7 @@ export default function IntegrationsView() {
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
       ) : (
         <div className="space-y-3">
+          <SystemStatusCard />
           <MailEngineCard />
           <AIDiagnosticsCard />
           <WhatsAppCard />

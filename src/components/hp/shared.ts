@@ -215,7 +215,25 @@ export async function api<T = unknown>(url: string, options?: RequestInit): Prom
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const err = new Error((data as { error?: string }).error || `Request failed (${res.status})`)
+    // The upgrade contract: a 402 with { upgrade: true } opens the ONE upgrade
+    // dialog (mounted once in AppShell) and still throws a friendly Error so
+    // the caller's catch block shows the same reason as a toast. No screen
+    // needs special code to sell Operator.
+    const d = data as { error?: string; upgrade?: boolean; feature?: string; limit?: number }
+    if (res.status === 402 && d.upgrade && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('hp:upgrade', {
+          detail: { feature: d.feature, limit: d.limit, message: d.error },
+        }),
+      )
+      const err = new Error(d.error || 'This one lives on Operator.')
+      const e = err as Error & { status?: number; upgrade?: boolean; feature?: string }
+      e.status = 402
+      e.upgrade = true
+      e.feature = d.feature
+      throw e
+    }
+    const err = new Error(d.error || `Request failed (${res.status})`)
     ;(err as Error & { status?: number; data?: unknown }).status = res.status
     ;(err as Error & { status?: number; data?: unknown }).data = data
     throw err

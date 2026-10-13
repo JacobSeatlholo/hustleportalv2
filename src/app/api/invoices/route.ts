@@ -27,17 +27,20 @@ function money(n: number) {
   return Math.round(n * 100) / 100
 }
 
-// GET /api/invoices?status=
+// GET /api/invoices?status= → { invoices, logoUrl } (logoUrl = the Operator business logo every new invoice starts with)
 export async function GET(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const status = new URL(req.url).searchParams.get('status')
-  const invoices = await db.invoice.findMany({
-    where: { userId, ...(status ? { status } : {}) },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  })
-  return NextResponse.json({ invoices })
+  const [invoices, logo] = await Promise.all([
+    db.invoice.findMany({
+      where: { userId, ...(status ? { status } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    }),
+    db.userSetting.findUnique({ where: { userId_key: { userId, key: 'INVOICE_LOGO' } } }),
+  ])
+  return NextResponse.json({ invoices, logoUrl: logo?.value || null })
 }
 
 // POST /api/invoices → create with auto number + ZAR totals (15% VAT default)

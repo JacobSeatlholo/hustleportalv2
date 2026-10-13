@@ -28,6 +28,7 @@ import IntegrationsView from './IntegrationsView'
 import GrowView from './GrowView'
 import InventoryView from './InventoryView'
 import WelcomeTour from './WelcomeTour'
+import UpgradeListener from './useUpgrade'
 import SectionTutorial from './SectionTutorial'
 import TaskReminders from './TaskReminders'
 import InstallApp from './InstallApp'
@@ -266,6 +267,7 @@ export default function AppShell() {
         <WelcomeTour />
         <SectionTutorial />
         <TaskReminders />
+        <UpgradeListener />
 
         {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons
             being out of comfortable reach on tall screens. */}
