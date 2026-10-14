@@ -119,7 +119,7 @@ export default function SetupChecklist() {
             </div>
             {i.id === 'YOCO_WEBHOOK' ? (
               keyBad ? (
-                <span className="shrink-0 text-xs text-amber-500 max-w-36 text-right">Fix YOCO_SECRET_KEY in Vercel — must start with sk_test_ / sk_live_</span>
+                <span className="shrink-0 text-xs text-amber-500 max-w-36 text-right">Fix YOCO_SECRET_KEY in Vercel — paste the Portal secret key, not the whsec_ webhook secret</span>
               ) : (
                 <button
                   onClick={registerWebhook}

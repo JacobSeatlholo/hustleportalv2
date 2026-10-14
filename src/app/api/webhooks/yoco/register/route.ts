@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
   if (!secretKey) {
     return NextResponse.json(
       { error: status.present
-          ? 'YOCO_SECRET_KEY is set but does not look like a secret key — it must start with sk_test_ or sk_live_. Check the value in Vercel → Settings → Environment Variables, then redeploy.'
-          : 'YOCO_SECRET_KEY is not set. Add the sk_test_ / sk_live_ key in Vercel → Settings → Environment Variables first, then redeploy.' },
+          ? 'YOCO_SECRET_KEY holds a webhook signing secret (whsec_...). That one verifies Yoco messages; the checkout gateway needs the secret key from the Yoco Portal instead.'
+          : 'YOCO_SECRET_KEY is not set. Add the secret key from the Yoco Portal in Vercel → Settings → Environment Variables first, then redeploy.' },
       { status: 400 },
     )
   }

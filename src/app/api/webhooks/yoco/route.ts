@@ -32,8 +32,9 @@ export async function GET() {
     webhookMode: webhookMode || null,
     secretKey: { ...keyStatus, ...(shapeHint ? { hint: shapeHint } : {}) },
     // 'live' | 'test' | null — lets the owner (and probes) confirm real money
-    // mode without exposing any key material.
-    mode: getYocoKeyMode(),
+    // mode without exposing any key material. The key text decides; when it is
+    // silent, Yoco's own word at last webhook registration fills the gap.
+    mode: getYocoKeyMode() ?? (webhookMode as 'live' | 'test' | null) ?? null,
   })
 }
 

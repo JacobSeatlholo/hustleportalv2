@@ -15,29 +15,47 @@ import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
 const CHECKOUT_API = 'https://payments.yoco.com/api'
 
+/**
+ * The secret key from Vercel. Yoco itself is the validator: whatever the owner
+ * pasted is sent as the Bearer key and Yoco accepts or rejects it. We only
+ * filter out values that are clearly the wrong secret (the webhook signing
+ * secret starts with whsec_ and would never authenticate a checkout).
+ */
 export function getYocoSecretKey(): string | null {
   const key = process.env.YOCO_SECRET_KEY
   if (!key) return null
   const trimmed = key.trim()
-  if (!trimmed.startsWith('sk_')) return null
+  if (!trimmed || trimmed.startsWith('whsec_')) return null
   return trimmed
 }
 
-/** Distinguish "env var missing" from "env var set but not a sk_ secret key". */
+/** Distinguish "env var missing" from "env var set but the wrong secret". */
 export function getYocoSecretKeyStatus(): { present: boolean; validFormat: boolean } {
   const raw = process.env.YOCO_SECRET_KEY?.trim()
-  return { present: Boolean(raw), validFormat: Boolean(raw && raw.startsWith('sk_')) }
+  return { present: Boolean(raw), validFormat: Boolean(raw && !raw.startsWith('whsec_')) }
+}
+
+/**
+ * Which Yoco world a key belongs to, from its own text: live keys carry
+ * "live", test keys carry "test". Yoco is the final word (the webhook
+ * registration response names the mode), but this gives the dashboard an
+ * instant read before that call ever happens.
+ */
+export function yocoModeFromKey(key: string): 'live' | 'test' | null {
+  if (/_live/i.test(key)) return 'live'
+  if (/_test/i.test(key)) return 'test'
+  return null
 }
 
 /**
  * Which Yoco world money moves in: 'live' (real cards, real rands) or 'test'.
- * Derived from the key prefix only — no secret material ever leaves the server.
- * Null means no usable key is configured.
+ * Null means no usable key is configured (or the mode is undetectable from
+ * the key text; the stored webhook mode fills that gap at the call sites).
  */
 export function getYocoKeyMode(): 'live' | 'test' | null {
   const key = getYocoSecretKey()
   if (!key) return null
-  return key.startsWith('sk_live_') ? 'live' : 'test'
+  return yocoModeFromKey(key)
 }
 
 /** Webhook secret: env var wins, otherwise the one stored by the register endpoint. */

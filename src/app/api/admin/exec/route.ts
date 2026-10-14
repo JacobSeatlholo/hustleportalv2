@@ -131,7 +131,9 @@ export async function GET() {
     // Payments: gateway mode + webhook state + the money pulse. The owner sees
     // at a glance that real rands flow and that Yoco confirmations land.
     payments: {
-      keyMode: getYocoKeyMode(),
+      // Key text decides the mode; when it is silent, Yoco's own word at the
+      // last webhook registration fills the gap.
+      keyMode: getYocoKeyMode() ?? ((webhookModeRow as 'live' | 'test' | null) || null),
       webhookConfigured: Boolean(webhookSecret),
       webhookSource: process.env.YOCO_WEBHOOK_SECRET ? 'env' : webhookSecret ? 'config' : 'none',
       webhookMode: webhookModeRow || null,
