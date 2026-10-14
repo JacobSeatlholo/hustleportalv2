@@ -349,9 +349,13 @@ interface DiscoverResult {
   city?: string
   why?: string
   score?: number
+  verified?: string
+  seenAgo?: string
+  verifyScore?: number
+  sourceRef?: string
 }
 
-type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'NONE'
+type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'POOL' | 'NONE'
 
 // Per workspace memory: the Lead Finder remembers the last hunt per project.
 // Switch the target project and its own search comes back.
@@ -672,8 +676,8 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                   {results.length} matches found
                   {autoAdd && <span className="text-emerald-600 font-medium"> · already in your pipeline</span>}
                 </span>
-                <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : mode === 'OSM' ? 'bg-sky-500/15 text-sky-400' : 'bg-brand/20 text-brand'}>
-                  {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : 'Verified data'}
+                <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : mode === 'OSM' ? 'bg-sky-500/15 text-sky-400' : mode === 'POOL' ? 'bg-brand/20 text-brand' : 'bg-brand/20 text-brand'}>
+                  {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : mode === 'POOL' ? 'Verified pool' : 'Verified data'}
                 </Badge>
               </div>
               <div className="max-h-64 overflow-y-auto hp-scroll space-y-1.5">
@@ -702,6 +706,11 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                           {r.phone && <span className="text-muted-foreground">☎ {r.phone}</span>}
                           {r.email && <span className="text-muted-foreground truncate">✉ {r.email}</span>}
                         </div>
+                        {(r.verified || r.seenAgo) && (
+                          <div className="mt-1 text-[10px] text-emerald-600">
+                            {r.verified ? `✓ ${r.verified}` : ''}{r.verified && r.seenAgo ? ' · ' : ''}{r.seenAgo || ''}
+                          </div>
+                        )}
                       </div>
                       {alreadyIn ? (
                         <Badge className="bg-emerald-500/15 text-emerald-600 text-[10px] mt-0.5">✓ in pipeline</Badge>

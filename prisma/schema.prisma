@@ -577,3 +577,80 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+// ============ VERIFIED LEAD POOL (shared freshness + scale layer) ============
+
+// One row per REAL business ever surfaced by any scan on the platform,
+// deduplicated by fingerprint. Every later scan that sees the same business
+// again bumps lastSeenAt and confirmCount — that is the "still active" signal.
+// Serving rotates the least recently served faces first, so repeated scans
+// show each seller businesses they have never saved before. Pool first
+// serving keeps engine quota spend flat as the user base grows: the first
+// scan of a topic pays, everyone after serves free.
+model LeadPool {
+  id             String    @id @default(cuid())
+  fingerprint    String    @unique // normKey(company) + "|" + normKey(city or area)
+  company        String
+  industry       String?
+  city           String?
+  areaLabel      String?   // the human area line of the scans that found it
+  address        String?
+  phone          String?   // normalized +27 form
+  phoneRaw       String?   // as first seen
+  email          String?
+  website        String?
+  contactName    String?
+  why            String?   // last fit line from ranking
+  score          Int?      // last AI fit score 1..5
+  lat            Float?
+  lng            Float?
+  source         String    // GEMINI | ZAI | OSM | EXPLEE
+  sourceRef      String?   // OSM node/way link or directory url
+  confirmCount   Int       @default(1)
+  verifyScore    Int       @default(0) // 0..100
+  verifyState    String    @default("new") // new | active | listed | stale
+  verifyChecks   String?   // JSON { phoneOk, websiteOk, checkedAt }
+  firstSeenAt    DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  lastVerifiedAt DateTime?
+  timesServed    Int       @default(0)
+  lastServedAt   DateTime?
+  active         Boolean   @default(true)
+
+  hits LeadPoolHit[]
+
+  @@index([lastSeenAt])
+  @@index([lastServedAt])
+  @@index([city])
+}
+
+// Links a scan topic (normalized description + area) to the pool records it
+// surfaced. The same topic asked again by ANY seller serves from here
+// instantly, without touching the engines.
+model LeadPoolHit {
+  id        String   @id @default(cuid())
+  topicFp   String
+  poolId    String
+  createdAt DateTime @default(now())
+
+  pool LeadPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@unique([topicFp, poolId])
+  @@index([topicFp])
+}
+
+// One row per scan. Doubles as the rate limit anchor (cooldown between scans
+// + daily allowance per user) and the warm pool window (a topic scanned
+// moments ago by anyone serves while it warms).
+model ScanRun {
+  id        String   @id @default(cuid())
+  userId    String
+  topicFp   String
+  mode      String   // POOL | WARM | AI_SEARCH | OSM | EXPLEE | NONE
+  leadCount Int      @default(0)
+  fromPool  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([topicFp, createdAt])
+}

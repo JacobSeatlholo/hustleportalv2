@@ -8,6 +8,17 @@ import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 import { resolveProject } from '@/lib/workspace'
+import {
+  checkScanAllowance,
+  logScanRun,
+  recentTopicScan,
+  rememberScanResults,
+  serveFromPool,
+  topicFingerprint,
+  userSavedKeys,
+  type RememberLead,
+  type VerifyStamp,
+} from '@/lib/leadpool'
 
 export const maxDuration = 60
 
@@ -299,6 +310,34 @@ function normKey(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
+/** A lead as it leaves the route: engine facts + pool verification chips. */
+type OutLead = {
+  company?: string
+  contactName?: string
+  email?: string
+  phone?: string
+  website?: string
+  industry?: string
+  city?: string
+  why?: string
+  score?: number
+  verified?: string
+  seenAgo?: string
+  verifyScore?: number
+  sourceRef?: string
+}
+
+/** Attach the pool's verification chips to the leads the engines just found. */
+function decorateLeads<T extends OutLead>(
+  leads: T[],
+  stamps: Map<string, VerifyStamp>
+): (T & { verified?: string; seenAgo?: string; verifyScore?: number })[] {
+  return leads.map((l) => {
+    const s = l.company ? stamps.get(normKey(l.company)) : undefined
+    return s ? { ...l, verified: s.verified, seenAgo: s.seenAgo, verifyScore: s.verifyScore } : l
+  })
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -347,6 +386,58 @@ export async function POST(req: NextRequest) {
       { error: 'Describe who you want to sell to — or save your website in Profile so the AI can scout for you.' },
       { status: 400 }
     )
+  }
+
+  // THE POOL: fingerprint the seller's own words + area BEFORE the seller site
+  // context is appended, so every seller describing the same client in the same
+  // area shares one pool topic. The first scan of a topic pays the engines;
+  // every seller after that serves free. That is what keeps quota spend flat
+  // while the user base grows.
+  const topicFp = topicFingerprint(definition, city, hasPin ? lat : undefined, hasPin ? lng : undefined)
+  const areaLabel = hasPin ? (city ? `${city} area` : 'Your area') : city && !/^anywhere/i.test(city) ? city : 'South Africa'
+
+  // Guardrails: a short breath between scans and a daily allowance keep one
+  // account (or one runaway loop) from hammering the engines the whole
+  // customer base shares. Both are DB backed, so they survive serverless churn.
+  const gate = await checkScanAllowance(userId)
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        error:
+          gate.reason === 'daily'
+            ? "You have used today's scan allowance. It refills after midnight, South African time."
+            : 'Your scan door is catching its breath. Give it a few seconds and go again.',
+      },
+      { status: 429, headers: { 'Retry-After': String(gate.reason === 'cooldown' ? gate.waitSeconds : 60) } }
+    )
+  }
+
+  // Pool first: enough fresh verified leads for this topic that the seller has
+  // never saved? Serve instantly, zero engine calls, zero quota burn. A topic
+  // another seller scanned in the last few minutes serves warm while the pool
+  // grows. Rotation: least recently served faces first, so scanning again keeps
+  // meeting businesses the seller has never contacted.
+  const excludeKeys = await userSavedKeys(userId)
+  const pooled = await serveFromPool({ topicFp, cap, excludeKeys })
+  if (pooled.length >= cap) {
+    await logScanRun(userId, topicFp, 'POOL', pooled.length, true)
+    return NextResponse.json({
+      leads: pooled,
+      mode: 'POOL',
+      source: 'POOL',
+      fromPool: true,
+      note: 'Fresh faces from the verified lead pool. Every business here was confirmed on a recent scan and none are already in your pipeline. Scan again anytime and the pool keeps rotating in businesses you have not met yet.',
+    })
+  }
+  if (pooled.length > 0 && (await recentTopicScan(topicFp, 10))) {
+    await logScanRun(userId, topicFp, 'WARM', pooled.length, true)
+    return NextResponse.json({
+      leads: pooled,
+      mode: 'POOL',
+      source: 'POOL',
+      fromPool: true,
+      note: `Served while the pool warms up: a recent scan just mapped this ground, so these ${pooled.length} verified leads are ready now. Your next scan in a few minutes brings fresh faces too.`,
+    })
   }
 
   // The seller's website grounds the whole hunt: we read what they actually sell
@@ -415,27 +506,45 @@ export async function POST(req: NextRequest) {
       : Promise.resolve(null)
   }
 
-  const aiSearchResponse = (
+  const aiSearchResponse = async (
     leads: ReturnType<typeof parseLeadList>,
     engine: 'gemini' | 'zai',
     notice?: string,
     zaiEndpoint?: 'z.ai' | 'zhipu'
-  ) => {
+  ): Promise<NextResponse> => {
+    // Capture + verify: what the engines found lands in the shared pool
+    // (deduped, phones normalized, websites pinged while budget allows), then
+    // the answer tops up with fresh pool faces the seller has never saved.
+    const stamps = await rememberScanResults({
+      topicFp,
+      area: areaLabel,
+      source: engine === 'zai' ? 'ZAI' : 'GEMINI',
+      leads: leads as RememberLead[],
+      budgetUntil: t0 + 54_000,
+    })
+    let final: OutLead[] = decorateLeads(leads, stamps)
+    const have = new Set(final.map((l) => normKey(l.company || '')))
+    if (final.length < cap) {
+      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
+      final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
+    }
+    await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
     const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
+    const baseNote =
+      engine === 'zai'
+        ? teaser
+          ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on ${zaiEngineName}.`
+          : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by ${zaiEngineName}.`
+        : teaser
+          ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
+          : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`
     return NextResponse.json({
-      leads,
+      leads: final,
       mode: 'AI_SEARCH',
       source: 'WEB',
       ...(notice ? { notice } : {}),
       ...(body.debug ? { glmTrace, geminiTrace } : {}),
-      note:
-        engine === 'zai'
-          ? teaser
-            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on ${zaiEngineName}.`
-            : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by ${zaiEngineName}.`
-          : teaser
-            ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
-            : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`,
+      note: final.length > leads.length ? `${baseNote} Topped up with verified pool leads you have not seen yet.` : baseNote,
     })
   }
 
@@ -516,10 +625,35 @@ export async function POST(req: NextRequest) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
     const dirNotice = zaiWhy('the real business directory')
     const ranked = await enrichOsmWithAi(userId, definition, osm.leads as AiLead[], cap, t0, glmTrace)
+    // Capture + verify: map records land in the shared pool (deduped, phones
+    // normalized, websites pinged while budget allows), then the answer keeps
+    // its ranking order and tops up with fresh pool faces never saved before.
+    const stamps = await rememberScanResults({
+      topicFp,
+      area: areaLabel,
+      source: 'OSM',
+      leads: osm.leads as RememberLead[],
+      budgetUntil: t0 + 54_000,
+    })
+    let final: OutLead[] = decorateLeads(osm.leads, stamps)
+    const have = new Set(final.map((l) => normKey(l.company || '')))
+    if (final.length < cap) {
+      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
+      final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
+    }
+    const rankScore = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l.score || 0]))
+    const rankedById = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l]))
+    final = final
+      .map((l) => {
+        const r = rankedById.get(normKey(l.company || ''))
+        return r ? { ...l, why: r.why || l.why, score: r.score || l.score } : l
+      })
+      .sort((a, b) => (rankScore.get(normKey(b.company || '')) || 0) - (rankScore.get(normKey(a.company || '')) || 0))
+    await logScanRun(userId, topicFp, 'OSM', final.length, false)
     if (ranked && ranked.leads.length > 0) {
       const engineName = ranked.engine || 'AI'
       return NextResponse.json({
-        leads: ranked.leads,
+        leads: final,
         mode: 'OSM',
         source: 'OSM',
         ...(ranked.notice || dirNotice ? { notice: ranked.notice || dirNotice } : {}),
@@ -531,7 +665,7 @@ export async function POST(req: NextRequest) {
       })
     }
     return NextResponse.json({
-      leads: osm.leads,
+      leads: final,
       mode: 'OSM',
       source: 'OSM',
       ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
@@ -544,7 +678,16 @@ export async function POST(req: NextRequest) {
   // 4) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
   const ex = Date.now() - t0 < 50_000 ? await searchLeads(definition, city || undefined, cap) : { leads: [] }
   if (ex.leads.length > 0) {
-    return NextResponse.json({ ...ex, source: 'EXPLEE' })
+    const stamps = await rememberScanResults({
+      topicFp,
+      area: areaLabel,
+      source: 'EXPLEE',
+      leads: ex.leads as unknown as RememberLead[],
+      budgetUntil: t0 + 54_000,
+    })
+    const final = decorateLeads(ex.leads as unknown as OutLead[], stamps)
+    await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
+    return NextResponse.json({ ...ex, leads: final, source: 'EXPLEE' })
   }
 
   // One clean, honest message. No clause pile ups: name what happened, give the next move.
@@ -562,6 +705,7 @@ export async function POST(req: NextRequest) {
     ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
     : `${engineError}${mapWhy}${!ai.ok && ai.error !== engineError ? ` The Google engine also could not answer this minute: ${ai.error}` : ''}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
+  await logScanRun(userId, topicFp, 'NONE', 0, false)
   return NextResponse.json(
     {
       leads: [],
