@@ -308,7 +308,8 @@ export async function POST(req: NextRequest) {
   // first, and no z.ai stop at all.
   const zaiFirst = Boolean(await getUserZaiKey(userId)) || Boolean(getPlatformZaiKey())
 
-  const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000 })
+  const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000, trace: geminiTrace })
+  const geminiTrace: string[] = []
   const glmTrace: string[] = []
   const runZaiScan = () => {
     const remaining = t0 + 44_000 - Date.now()
@@ -340,7 +341,7 @@ export async function POST(req: NextRequest) {
       mode: 'AI_SEARCH',
       source: 'WEB',
       ...(notice ? { notice } : {}),
-      ...(body.debug ? { glmTrace } : {}),
+      ...(body.debug ? { glmTrace, geminiTrace } : {}),
       note:
         engine === 'zai'
           ? teaser
@@ -433,7 +434,7 @@ export async function POST(req: NextRequest) {
         source: 'OSM',
         ...(ranked.notice || dirNotice ? { notice: ranked.notice || dirNotice } : {}),
         ...(osm.note ? { osmNote: osm.note } : {}),
-        ...(body.debug ? { glmTrace } : {}),
+        ...(body.debug ? { glmTrace, geminiTrace } : {}),
         note: teaser
           ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by DeepSeek AI. Contact details come straight from the directory.`
           : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by DeepSeek AI to what you sell. Contact details as listed in the directory.`,
@@ -445,7 +446,7 @@ export async function POST(req: NextRequest) {
       source: 'OSM',
       ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
       ...(osm.note ? { osmNote: osm.note } : {}),
-      ...(body.debug ? { glmTrace } : {}),
+      ...(body.debug ? { glmTrace, geminiTrace } : {}),
       note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed. AI ranking is resting, so these are unranked.`,
     })
   }
@@ -476,7 +477,7 @@ export async function POST(req: NextRequest) {
       leads: [],
       mode: 'NONE',
       ...(ai.notice ? { notice: ai.notice } : {}),
-      ...(body.debug ? { glmTrace } : {}),
+      ...(body.debug ? { glmTrace, geminiTrace } : {}),
       note,
     },
     { status: 200 }

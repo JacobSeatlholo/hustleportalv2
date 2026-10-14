@@ -338,7 +338,8 @@ async function callGemini(
   userId: string,
   body: Record<string, unknown>,
   timeoutMs: number,
-  speed = false
+  speed = false,
+  trace?: string[]
 ): Promise<GeminiResult> {
   const keys: { key: string; ownKey: boolean }[] = []
   const userKey = await getUserGeminiKey(userId)
@@ -397,6 +398,7 @@ async function callGemini(
       const genConfig = speedCfg
         ? { ...(body.generationConfig as Record<string, unknown>), thinkingConfig: speedCfg }
         : body.generationConfig
+      const tModel = Date.now()
       try {
         const target = geminiFetchTarget(key, `/models/${model}:generateContent`)
         const res = await fetch(target.url, {
@@ -407,6 +409,7 @@ async function callGemini(
         })
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
+          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${raw.slice(0, 160).replace(/\s+/g, ' ')}`)
           const cls = classify(res.status, raw)
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
@@ -445,11 +448,13 @@ async function callGemini(
         }
         const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || ''
         if (!text.trim()) {
+          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) empty response`)
           const failure: Failure = { cls: 'EMPTY', ownKey, status: res.status, detail: '' }
           failures.push(failure)
           if (ownKey && !userKeyFailure) userKeyFailure = failure
           continue
         }
+        trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ok`)
         // Pool freshness is owned by the TTL cache — nothing to rewrite on success.
         // The user's own key was bypassed but the platform saved the answer — say so,
         // once, gently: the app stayed seamless AND the user learns their key needs care.
@@ -460,6 +465,7 @@ async function callGemini(
         return { ok: true, text, ...(notice ? { notice } : {}) }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Gemini request failed'
+        trace?.push(`gemini/${model} → network (${Date.now() - tModel}ms) ${msg.slice(0, 120)}`)
         const failure: Failure = { cls: 'OTHER', ownKey, status: 0, detail: msg }
         failures.push(failure)
         if (ownKey && !userKeyFailure) userKeyFailure = failure
@@ -474,7 +480,7 @@ async function callGemini(
 
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number; maxOutputTokens?: number },
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number; maxOutputTokens?: number; trace?: string[] },
 ): Promise<GeminiResult> {
   const history = (opts.history || []).slice(-10).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
@@ -496,7 +502,7 @@ export async function geminiGenerate(
     // Real-world grounding: Google Search results the model actually saw (real businesses).
     ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
   }
-  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000), Boolean(opts.search))
+  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000), Boolean(opts.search), opts.trace)
 }
 
 /**
