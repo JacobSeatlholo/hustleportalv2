@@ -222,11 +222,18 @@ async function zaiService(): Promise<Svc> {
       }
     }
     if (s.status === 429 || s.status === 402) {
+      // A billing or pacing refusal proves the door ACCEPTED the key, and a
+      // door only accepts keys minted on its own platform, so the refusing
+      // door IS the key's home. Name it, so a key from one GLM platform with
+      // credits on the other can never hide.
+      const home = s.endpoint
+        ? ` This key belongs to ${s.endpoint === 'zhipu' ? 'the Zhipu open platform' : 'z.ai'}, so its credits and packages live there.`
+        : ''
       return {
         key: 'zai',
         name: 'z.ai GLM engine',
         ok: true,
-        detail: `Live for AI answers on GLM credits, but the web search tool was refused (${s.words || `status ${s.status}`}). Search billing lives on the same platform the key came from, so top up there or save a key from the platform that holds your credits. Google and the real map directory carry scans meanwhile.`,
+        detail: `Live for AI answers on GLM credits, but the web search tool was refused (${s.words || `status ${s.status}`}).${home} Top up on that platform's billing page, or save a key from the platform that holds your credits. Google and the real map directory carry scans meanwhile.`,
       }
     }
     return {
