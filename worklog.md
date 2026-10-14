@@ -571,3 +571,21 @@ Work Log:
 
 Stage Summary:
 - Production 82f5170 fully verified: efficiency pass (parallel capture, DB side rotation) + sustainability pass (SAST midnight, scan log prune, lastVerifiedAt index) landed with zero regressions. The platform is ready for the Yoco payment gateway work.
+
+---
+Task ID: 46
+Agent: Super Z (main)
+Task: "How can we find human contact leads as well? Can we look at LinkedIn or anywhere with more leads we can fetch and verify, for an efficient GTM lead generation system when a user clicks AI Lead gen?"
+
+Work Log:
+- Honest LinkedIn answer: LinkedIn blocks scraping (ToS + 999 walls), so no scraping. Instead the DECISION MAKER LAYER captures humans from public web sources legally: LinkedIn/Facebook public pages, company team pages, directories and news that appear in legitimate search results. Copy verbatim or drop, never construct.
+- Built the PEOPLE PASS (discover route): one grounded Gemini call naming the owner/founder/decision maker behind the businesses a scan just found, with role + public profile URL. Runs IN PARALLEL with the GLM map ranking call (different engines, different quotas) so scans stay just as fast. Budget guarded (13s runway, 12s timeout), silent skip on drained days (honest floor: leads without names).
+- Anti fabrication holds everywhere: every answer company must map back to a real lead of this scan; sanePersonName (letters only, no filler words) + saneProfileUrl (real URL shape) on input AND on the AI answer; names never clobber a name another engine found.
+- Scan prompts (both Gemini and GLM) now carry the PEOPLE ARE THE PRIZE rule: contactName + role + profileUrl when the results actually show them.
+- Humans ride the verified lead pool: LeadPool + Lead gain role and profileUrl (additive schema, db push on Vercel build), merge keeps best facts, rotation serves them like every other verified fact. Pool served leads carry names forward to every seller for free.
+- UI: result cards show "Ask for Thabo (Owner)" + a public profile link; lead card in the pipeline shows the decision maker block (free facts, never behind the reveal paywall: only email/phone are paid).
+- Deploy hiccup: paramiko installs into /home/z/.venv (the shim's interpreter), NOT the system python. venv install + push OK.
+- Deployed 1c9c5b6..0405140. Probes: people_probe.mjs 4/4 PASS (5 real Soweto leads, honest no names on a drained grounding day, human fields persist end to end), e2e 37/37, pool probe 6/6.
+
+Stage Summary:
+- Production 0405140: when a user clicks AI Lead gen they now get businesses WITH named humans where the public web names them (owner, role, public profile link), all verified and anti fabrication guarded. On drained Google days the scan honestly delivers businesses without names. GTM flow: scan, see the human, open the public profile, reach out. Yoco payments remain the next door.
