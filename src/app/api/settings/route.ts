@@ -49,7 +49,9 @@ export async function PUT(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const key = String(body.key || '')
-  const value = String(body.value ?? '')
+  // Trim on store: a pasted key with a trailing newline or space would otherwise
+  // ride into every header and query param until someone re-saves it.
+  const value = String(body.value ?? '').trim()
   if (!ALLOWED_KEYS.includes(key)) {
     return NextResponse.json({ error: 'Unknown setting key.' }, { status: 400 })
   }

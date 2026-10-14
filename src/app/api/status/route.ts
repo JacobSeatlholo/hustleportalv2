@@ -61,13 +61,16 @@ async function aiService(): Promise<Svc> {
   // drained still passes ListModels, which would show "Live" while every scan fails.
   // One 8-token call per 45s cache window — honest status at negligible cost.
   try {
-    const target = geminiFetchTarget(key, '/models/gemini-flash-latest:generateContent')
+    // Probe on a LITE model: the full flash alias is a thinking model whose latency
+    // can outlive a 6s probe and read as an outage that is not there. Lite answers
+    // in about a second, so false alarms stay off the status panel.
+    const target = geminiFetchTarget(key, '/models/gemini-flash-lite-latest:generateContent')
     const res = await fetch(
       target.url,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...target.headers },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply: OK' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply: OK' }] }], generationConfig: { maxOutputTokens: 64, temperature: 0 } }),
         signal: AbortSignal.timeout(6_000),
       },
     )

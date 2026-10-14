@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { getUserGeminiKey, getPlatformGeminiKey, geminiFetchTarget } from '@/lib/gemini'
+import { getUserGeminiKey, getPlatformGeminiKey, geminiFetchTarget, thinkingConfigFor } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
 import { resolveZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
 
@@ -313,13 +313,15 @@ export async function GET() {
     //    FAIL we walk the WHOLE pool: 429 (quota), 503 (Google shedding load) and
     //    404 (model unavailable for this key) are all per-model, never project-wide.
     const seenModels = (report.checks.find((c) => c.test === 'list-models' && c.ok && c.models)?.models || []) as string[]
-    const PREF = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
+    // Lite models lead the walk: they skip extended thinking, so a healthy key
+    // proves itself in seconds instead of strangling the probe on a thinking alias.
+    const PREF = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
     const tryModels = seenModels.length > 0
       ? [
           ...PREF.filter((m) => seenModels.includes(m)),
           ...seenModels.filter((m) => !PREF.includes(m) && /flash/i.test(m) && !/tts|image|embed|transcribe|robotics|computer|omni|banana|lyria|antigravity|customtools/i.test(m)),
         ].slice(0, 12)
-      : ['gemini-flash-latest', 'gemini-3.5-flash']
+      : ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite']
     let liveOk = false
     let liveOn = ''
     const quota429: { model: string; detail: string; zero: boolean; perDay: boolean }[] = []
@@ -328,10 +330,18 @@ export async function GET() {
     for (const model of tryModels) {
       try {
         const target = geminiFetchTarget(key, `/models/${model}:generateContent`)
+        const cfg = thinkingConfigFor(model)
         const res = await fetch(target.url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...target.headers },
-          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: OK' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: OK' }] }],
+            generationConfig: {
+              maxOutputTokens: 64,
+              temperature: 0,
+              ...(cfg ? { thinkingConfig: cfg } : {}),
+            },
+          }),
           signal: AbortSignal.timeout(20_000),
         })
         const raw = await res.text().catch(() => '')

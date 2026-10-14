@@ -469,7 +469,7 @@ export async function POST(req: NextRequest) {
     : ''
   const note = ai.ok || zai?.ok
     ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
-    : `${engineError}${mapWhy}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
+    : `${engineError}${mapWhy}${!ai.ok && ai.error !== engineError ? ` The Google engine also could not answer this minute: ${ai.error}` : ''}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
   return NextResponse.json(
     {

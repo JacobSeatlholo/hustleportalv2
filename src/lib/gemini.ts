@@ -71,6 +71,26 @@ function keyTag(key: string): string {
  * bursts land on separate RPM buckets and the day spreads across separate RPD buckets. */
 const poolCursor = new Map<string, number>()
 
+/** Latency discipline for the search path: Google's current full flash alias is a
+ * thinking model whose quiet minutes don't fit a 22s scan budget. Lite models skip
+ * extended thinking by design, so when speed matters they lead the pool and the
+ * round-robin spreads the day across the fast buckets first. */
+function liteFirst(models: string[]): string[] {
+  const lite = models.filter((m) => /lite/i.test(m))
+  return [...lite, ...models.filter((m) => !/lite/i.test(m))]
+}
+
+/**
+ * Per-model thinking control, named generations only (aliases stay untouched —
+ * their generation is unknown). 2.5 models accept thinkingBudget 0 = thinking off;
+ * 3.x models take thinkingLevel low. Returns null when the model should run stock.
+ */
+export function thinkingConfigFor(model: string): Record<string, unknown> | null {
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 }
+  if (/^gemini-3\./.test(model)) return { thinkingLevel: 'low' }
+  return null
+}
+
 /**
  * Drained or blocked keys must not tax every request: after a key-level failure
  * (invalid, 403) or a per-day quota wall, the key sits out a cooldown on the bench
@@ -317,7 +337,8 @@ async function resolveModels(key: string): Promise<string[]> {
 async function callGemini(
   userId: string,
   body: Record<string, unknown>,
-  timeoutMs: number
+  timeoutMs: number,
+  speed = false
 ): Promise<GeminiResult> {
   const keys: { key: string; ownKey: boolean }[] = []
   const userKey = await getUserGeminiKey(userId)
@@ -352,7 +373,8 @@ async function callGemini(
   for (const { key, ownKey } of orderedKeys) {
     if (Date.now() >= deadline) break
     const discovered = await resolveModels(key)
-    const usable = discovered.filter((m) => !modelDrained(key, m))
+    const pool = speed ? liteFirst(discovered) : discovered
+    const usable = pool.filter((m) => !modelDrained(key, m))
     if (usable.length === 0) {
       // Every model on this key is inside a quota bench — say so honestly and
       // move to the next key without paying Google a single 429 for it.
@@ -371,12 +393,16 @@ async function callGemini(
     for (const model of models) {
       const remaining = deadline - Date.now()
       if (remaining <= 2_000) break
+      const speedCfg = speed ? thinkingConfigFor(model) : null
+      const genConfig = speedCfg
+        ? { ...(body.generationConfig as Record<string, unknown>), thinkingConfig: speedCfg }
+        : body.generationConfig
       try {
         const target = geminiFetchTarget(key, `/models/${model}:generateContent`)
         const res = await fetch(target.url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...target.headers },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, generationConfig: genConfig }),
           signal: AbortSignal.timeout(remaining),
         })
         if (!res.ok) {
@@ -470,7 +496,7 @@ export async function geminiGenerate(
     // Real-world grounding: Google Search results the model actually saw (real businesses).
     ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
   }
-  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000))
+  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000), Boolean(opts.search))
 }
 
 /**
