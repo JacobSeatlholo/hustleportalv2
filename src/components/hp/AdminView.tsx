@@ -533,7 +533,7 @@ function PoolCard({ detail, busy, onRun, onAction }: {
 
       {lastCampaign && (
         <div className="text-[10px] text-muted-foreground mb-2">
-          Last campaign {timeAgo(lastCampaign.createdAt)} · {lastCampaign.mode === 'EXPLEE' ? 'Explee live' : 'Verified pool'} · {lastCampaign.leadCount} added
+          Last campaign {timeAgo(lastCampaign.createdAt)} · {lastCampaign.fromPool ? 'Verified pool' : 'Explee live'} · {lastCampaign.leadCount} added
           {pool.campaigns.length > 1 ? ` · ${pool.campaigns.length} recent` : ''}
         </div>
       )}

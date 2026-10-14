@@ -151,8 +151,12 @@ async function main() {
   const send = lastSend ? JSON.parse(lastSend.value) : null
   check('exec credit email addressed to the owner', Boolean(send && send.to === 'ceo@businesshustle.co.za'), send ? `subject="${(send.subject || '').slice(0, 60)}" ok=${send.ok}` : 'no stamp')
   check('credit email names the client', Boolean(send && send.subject && send.subject.includes('Ayanda')), send?.subject || '')
-  const autoScan = await db.scanRun.findFirst({ where: { userId: a.id, mode: { in: ['EXPLEE', 'POOL'] }, createdAt: { gte: new Date(Date.now() - 60_000) } }, orderBy: { createdAt: 'desc' } })
+  const autoScan = await db.scanRun.findFirst({ where: { userId: a.id, mode: 'CAMPAIGN', createdAt: { gte: new Date(Date.now() - 60_000) } }, orderBy: { createdAt: 'desc' } })
   check('auto campaign ran on the paid topup', Boolean(autoScan), autoScan ? `mode=${autoScan.mode} leads=${autoScan.leadCount}` : 'none')
+  // The campaign must never eat the client's own scan allowance: the newest
+  // non campaign run has to be old enough that the 12s cooldown stays clear.
+  const lastOwnScan = await db.scanRun.findFirst({ where: { userId: a.id, mode: { not: 'CAMPAIGN' } }, orderBy: { createdAt: 'desc' } })
+  check('campaign does not block their own scans', !lastOwnScan || Date.now() - lastOwnScan.createdAt.getTime() > 12_000, lastOwnScan ? `age=${Math.round((Date.now() - lastOwnScan.createdAt.getTime()) / 1000)}s` : 'no own scans')
 
   // 12. Walls: unauth 401, non-exec 403, bad action 400
   const unauth = await call(`/api/admin/exec/client/${a.id}/pool`, { method: 'POST', body: {} })

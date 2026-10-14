@@ -172,8 +172,10 @@ export type ScanGate = { ok: true } | { ok: false; reason: 'cooldown'; waitSecon
 
 /** Cooldown between ANY scans (pool serves too) + a daily engine allowance per seller. Both survive serverless restarts: DB backed. */
 export async function checkScanAllowance(userId: string): Promise<ScanGate> {
+  // CAMPAIGN runs are excluded: they are the platform working for the client
+  // (fired by their topup), never a spend of the client's own scan allowance.
   const last = await db.scanRun.findFirst({
-    where: { userId },
+    where: { userId, mode: { not: 'CAMPAIGN' } },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   })
@@ -191,7 +193,7 @@ export async function checkScanAllowance(userId: string): Promise<ScanGate> {
   const dayStartUtc = new Date(
     Date.UTC(sastClock.getUTCFullYear(), sastClock.getUTCMonth(), sastClock.getUTCDate()) - 2 * 60 * 60 * 1000
   )
-  const count = await db.scanRun.count({ where: { userId, createdAt: { gte: dayStartUtc } } })
+  const count = await db.scanRun.count({ where: { userId, mode: { not: 'CAMPAIGN' }, createdAt: { gte: dayStartUtc } } })
   if (count >= cap) return { ok: false, reason: 'daily' }
   return { ok: true }
 }

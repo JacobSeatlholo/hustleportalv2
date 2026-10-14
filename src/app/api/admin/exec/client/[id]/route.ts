@@ -71,7 +71,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     }),
     db.clientPoolLead.groupBy({ by: ['status'], where: { userId: id }, _count: { _all: true } }),
     db.scanRun.findMany({
-      where: { userId: id, mode: { in: ['EXPLEE', 'POOL'] } },
+      where: { userId: id, mode: 'CAMPAIGN' },
       orderBy: { createdAt: 'desc' },
       take: 8,
       select: { id: true, mode: true, leadCount: true, fromPool: true, createdAt: true },

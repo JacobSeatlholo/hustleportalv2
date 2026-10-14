@@ -297,7 +297,10 @@ export async function runClientCampaign(
   }
 
   const landed = await landOnBench(userId, city, inputs)
-  await logScanRun(userId, topicFp, mode, landed.added, mode === 'POOL').catch(() => {})
+  // Campaign runs are the platform working on the client's behalf (they paid
+  // for this) so they log under their own CAMPAIGN mode: the scan allowance
+  // gate ignores them and the client's own daily quota stays untouched.
+  await logScanRun(userId, topicFp, 'CAMPAIGN', landed.added, mode === 'POOL').catch(() => {})
 
   return {
     mode,
