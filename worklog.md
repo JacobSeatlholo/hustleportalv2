@@ -439,3 +439,19 @@ Work Log:
 
 Stage Summary:
 - Production 38e85b6. Engine chain final and honest: both doors asked, real leads every scan, no fabricated contacts. The ONE remaining user action: on z.ai billing, either Add Payment with a small amount (search calls cost a fraction of a cent, $2 to $5 is hundreds of grounded searches) or buy a search bundle under Usage Bundles. The 100M token pack keeps paying the model side; it just cannot pay the web search tool.
+
+---
+Task ID: 43h
+Agent: Super Z (main)
+Task: User is on aistudio.google.com creating the free Gemini key for the AI Lead Finder search layer. Reported their new key starts with "AQ" not "AIza", and asked whether it goes in the phone app (Integrations) or Vercel env. Fix whatever blocks the save, deploy, and hand back the paste step.
+
+Work Log:
+- Verified via web search: Google moved AI Studio keys to new "auth keys" starting with AQ. (classic keys remain AIza...). New keys work on the native generativelanguage endpoints but ride the documented x-goog-api-key HEADER instead of the ?key= query param (docs Oct 2026: "all new keys created in AI Studio are automatically created as auth keys").
+- Found the save gate would reject valid AQ keys: validateGeminiKey shape check only knew /^AIza[0-9A-Za-z_-]{30,}$/ and every direct fetch hardcoded ?key=.
+- Shipped a key-generation-agnostic carrier: new exported geminiFetchTarget(key, pathAndQuery) in src/lib/gemini.ts picks the carrier by prefix (AIza keeps ?key=, AQ gets x-goog-api-key header). All four Gemini fetch sites now use it: resolveModels ListModels, callGemini generateContent, validateGeminiKey probe, status route live probe, diagnose route ListModels + live generate. Shape check now accepts both /^(AIza…|AQ\S{30,})$/, message names both formats, dead BASE const removed from diagnose route, Integrations placeholder now "AIza… or AQ… (Google issues both)".
+- Local sanity: regex 6/6 (AIza true, AQ. true, AQ/ true, short AQ false, sk-ant false, ya29 false); URL builder verified for both carriers. tsc filtered clean on all four files.
+- Read screenshot of user's AI Studio usage dashboard: Free tier badge, success rate back at 100%, real token flow across Gemini 3.5/3.6/3.7/3.8 Flash — the project is healthy; the ~490 x 429 burst around Oct 14 is pacing, not a broken key.
+- Context correction absorbed from 43g: the GLM_key is a z.ai key (billing history proved it); the $10 lives in a 100M GLM token pack covering model inference; only the web search tool needs cash. The Gemini free key therefore completes the search layer at $0; no change needed on the z.ai side.
+
+Stage Summary:
+- AQ auth key support shipped on top of 38e85b6 (commit pending push). User next step: paste the AQ key under Integrations → Gemini card (instant, no redeploy, probed on save); Vercel GEMINI_API_KEY platform slot is the optional later move for all users. Once saved, the scan chain runs GLM (tokens covered by pack) → Gemini grounded (free Google search) → OSM + DeepSeek fallback. Scan test fires the moment they confirm the save.
