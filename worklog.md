@@ -499,3 +499,21 @@ Work Log:
 
 Stage Summary:
 - The triple-error message is dead: no billing noise, honest quota wording, map directory no longer starved. Fresh users get real leads 24/7 even on a drained AI day. Paths to live grounded AI scans: fresh Google project key (new bucket, instant), daily reset ~09:00 SAST, or fund z.ai search. Platform DeepSeek key still absent by user choice, ranking sugar only.
+
+---
+Task ID: 43l
+Agent: Super Z (main)
+Task: User pasted a NEW Gemini key and scans still failed ("unacceptable, this is literally the product"). Demanded a live front end test, key validity check, and a fix.
+
+Work Log:
+- Live forensics via production API (sandbox has no DB/env access): registered fresh QA users, ran /api/ai/diagnose + reproduced the user's EXACT 10:51 scan (massage/floatation in Cape Town, ubuntuwellness.com) with debug traces.
+- Key verdict: the "saved key" quota message is the OWN-KEY QUOTA class, which only appears when Google ACCEPTED the key and refused quota. Keys are VALID. Root cause of the AI wall: every key the user owns (old AIza, AQ in Integrations, AQ in Vercel) lives in ONE Google project whose daily grounded-search allowance is drained (bare RESOURCE_EXHAUSTED, no quotaId). A new key in the SAME project shares the drained bucket. Live reproduce at ~11:30 SAST (after the 09:00 reset) still 429s: drained again by the morning's scan storms.
+- BUG 1 (osm.ts keywords): "massage|wellness|float|sauna|rehab|physio|therapy" matched NO category in buildTagFilters/buildNominatimQuery, so the map directory had ZERO coverage for the wellness scan. Added the wellness entry (shop massage/beauty/spa/cosmetics/nails) to both maps + physio/therapy to healthcare.
+- BUG 2 (osm.ts Nominatim carrier, the structural one): Nominatim /search silently ignores shop/craft/office/leisure category params and answers 400 "Nothing to search for". ONLY amenity= is a recognised param, which is why tavern scans worked and shop scans never did. Sandbox-proven fix: the documented special phrase form q=[shop=massage] works for every category ([shop=massage] 3 rows, [shop=beauty] 8 rows in Cape Town). searchNominatimLeads now sends one bracket phrase per sibling value (up to 3), merges rows, and a refused phrase no longer kills siblings.
+- NEW ENGINE (discover route): enrichOsmWithGlm ranks real map records via zaiGenerate PLAIN generation (json_object, temperature 0.3) using the ALREADY PAID 100M GLM token pack, zero Google, zero DeepSeek, zero setup for any user. Shared rankingPrompt + matchRankedToSource verifier with the DeepSeek leg (anti fabrication guarantee unchanged: every company must map to a source record). enrichOsmWithAi orchestrates: personal DeepSeek key first, GLM engine for everyone else, raw real records as the floor. Notes now name the engine that ranked.
+- gemini.ts: own-key day-quota message now carries the escape hatch: "A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away."
+- Also: Overpass generic sweep now only fires when Overpass actually ANSWERED (a down mirror chain no longer burns 12s on a pointless second phase).
+- Deploys: d252b67 (43l) then 5ebbba7 (43m). Post-deploy live verify with the user's EXACT scan: mode OSM, 5 REAL leads with phones (Lnna Thai Massage & Beauty +27 79 527 7901, Dee Dee Thai Therapy +27 21 434 6948, The Piercery +27 63 680 4950, Yemenya Spa and Hair +27 21 439 2266, Racecourse Road). Soweto taverns regression scan: 3 real leads, no regression. GLM ranking walk could not finish this run (4.6 both doors 429 arrears for the search wallet, 4.5-flash timeouts on both doors, glm-4-flash 400 on Zhipu) but the raw-records floor held exactly as designed.
+
+Stage Summary:
+- The product now delivers real, contact-bearing leads for the user's exact query on a day when Google grounding is drained, the GLM search wallet is unfunded, AND Overpass mirrors are down. Nominatim bracket phrases are the reliable directory workhorse. AI grounded scans return when the user creates a key in a NEW Google project (per-project bucket) or at the daily reset. GLM plain ranking observed flaky this run (free rung timeouts) and stays as a best effort layer above the raw floor.
