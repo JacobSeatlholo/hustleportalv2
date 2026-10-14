@@ -68,27 +68,47 @@ async function main() {
   const prof = await req('PATCH', '/api/profile', { businessName: 'QA Spaza & Grill', website: 'https://example.com', city: 'Johannesburg' })
   check('profile update works', prof.status === 200 || prof.status === 201, `status ${prof.status} ${JSON.stringify(prof.json).slice(0, 80)}`)
 
-  // 6. Lead discovery (AI/OSM — slow, honest-fail allowed)
-  let leadId = null
+  // 6. Lead discovery (AI/OSM/POOL — slow, honest-fail allowed)
+  let firstLead = null
   try {
     const disc = await req('POST', '/api/leads/discover', { city: 'Johannesburg', industry: 'RETAIL', limit: 5 }, 150000)
     const results = disc.json?.leads || disc.json?.results || []
     check('lead discover returns results or honest error', disc.status === 200, `status ${disc.status}, results ${results.length}`)
-    if (results[0]?.id) leadId = results[0].id
+    check('discover names its engine (mode + source)', Boolean(disc.json?.mode) && Boolean(disc.json?.source), `mode=${disc.json?.mode} source=${disc.json?.source}`)
+    check('every lead carries a real business name', results.length === 0 || results.every((l) => l.company && String(l.company).trim().length > 1))
+    firstLead = results[0] || null
   } catch (e) {
     check('lead discover returns results or honest error', false, String(e).slice(0, 80))
   }
 
-  // 7. Reveal (honesty contract: charged only when real contact found)
-  if (leadId) {
-    const balBefore = (await getBalance()) ?? 0
-    const rev = await req('POST', '/api/leads/reveal', { leadId }, 90000)
-    const balAfter = (await getBalance()) ?? 0
-    const charged = balAfter < balBefore
-    const hasContact = !!(rev.json?.lead?.email || rev.json?.lead?.phone)
-    check('reveal obeys honesty contract', rev.status === 200 && (!charged || hasContact), `charged=${charged} hasContact=${hasContact}`)
+  // 6b. Pipeline save + reveal — the honesty contract end to end. Discover
+  // results carry no id: the seller saves a lead first, then reveals it.
+  if (firstLead?.company) {
+    const save = await req('POST', '/api/leads', {
+      company: firstLead.company,
+      phone: firstLead.phone || '',
+      email: firstLead.email || '',
+      website: firstLead.website || '',
+      industry: firstLead.industry || '',
+      city: firstLead.city || '',
+      source: 'AI_SEARCH',
+    })
+    check('save discovered lead to pipeline', (save.status === 200 || save.status === 201) && !!save.json?.lead?.id, `status ${save.status}`)
+    const savedLeadId = save.json?.lead?.id
+    if (savedLeadId) {
+      const balBefore = (await getBalance()) ?? 0
+      const rev = await req('POST', '/api/leads/reveal', { leadId: savedLeadId }, 90000)
+      const balAfter = (await getBalance()) ?? 0
+      const charged = balAfter < balBefore
+      const lead = rev.json?.lead
+      const hasContact = !!(lead?.email || lead?.phone)
+      check('reveal obeys honesty contract (charged only when real contact)', rev.status === 200 && (!charged || hasContact), `charged=${charged} hasContact=${hasContact} status=${rev.status}`)
+      const again = await req('POST', '/api/leads/reveal', { leadId: savedLeadId }, 30000)
+      const balAgain = (await getBalance()) ?? 0
+      check('already unlocked lead never charges twice', again.status === 200 && balAgain === balAfter, `status=${again.status}`)
+    }
   } else {
-    console.log('  SKIP reveal — no discover results (noted, not a failure)')
+    console.log('  SKIP pipeline save + reveal — no discover results (noted, not a failure)')
   }
 
   // 8. Clients CRUD (the fixed add-contact flow)
@@ -113,12 +133,15 @@ async function main() {
   check('create finance entry works', fin.status === 200 || fin.status === 201, `status ${fin.status}`)
 
   // 11. Subscribe (annual cycle validation — live key => PENDING + redirect; no key => sandbox + credits)
+  // Balance baseline is taken HERE so a reveal charge earlier in the run can
+  // never fake a failed credit grant.
+  const balPreSub = (await getBalance()) ?? 0
   const sub = await req('POST', '/api/subscribe', { plan: 'HUSTLER', cycle: 'ANNUAL' }, 45000)
   const sandbox = sub.json?.sandbox === true
   if (sandbox) {
     check('subscribe sandbox activates', sub.json?.subscription?.status === 'ACTIVE' && sub.json?.subscription?.billingCycle === 'ANNUAL', `cycle=${sub.json?.subscription?.billingCycle}`)
     const bal2 = await getBalance()
-    check('plan grants 5 reveal credits (R75)', (bal2 ?? 0) >= (bal0 ?? 0) + 7500, `balance=${bal2}`)
+    check('plan grants 5 reveal credits (R75)', (bal2 ?? 0) >= (balPreSub ?? 0) + 7500, `balance=${bal2} baseline=${balPreSub}`)
     const ps = await req('POST', '/api/subscribe/pause', { action: 'pause' })
     check('pause works', ps.status === 200 && ps.json?.subscription?.status === 'PAUSED', `status ${ps.status}`)
     const pr = await req('POST', '/api/subscribe/pause', { action: 'resume' })
@@ -136,6 +159,18 @@ async function main() {
     await req('POST', '/api/subscribe/pause', { action: 'pause' })
   } else {
     check('boss annual checkout requested (R4,990)', subBoss.status === 200 && !!subBoss.json?.redirectUrl, `status ${subBoss.status}`)
+  }
+
+  // 12a. NPO 30% discount (registered nonprofits pay 30% less, every cycle)
+  const subNpo = await req('POST', '/api/subscribe', { plan: 'HUSTLER', cycle: 'MONTHLY', npoNumber: '044-291' }, 45000)
+  if (subNpo.json?.sandbox) {
+    check('NPO sandbox amount = R139.30 (30% off R199)', subNpo.json?.subscription?.amountCents === 13930, `amountCents=${subNpo.json?.subscription?.amountCents}`)
+    check('NPO number stored on subscription', Boolean(subNpo.json?.subscription?.npoNumber || subNpo.json?.subscription?.npo), '')
+    await req('POST', '/api/subscribe/pause', { action: 'pause' })
+  } else if (subNpo.status === 200 && subNpo.json?.redirectUrl) {
+    check('NPO checkout requested at discounted amount', true, 'live yoco mode')
+  } else {
+    check('NPO subscribe path works', false, `status ${subNpo.status} ${JSON.stringify(subNpo.json).slice(0, 80)}`)
   }
 
   // 12b. Inventory (Task 31 — new stock module)

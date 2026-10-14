@@ -72,5 +72,13 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({ ok: true, demoted: demoted.count, rechecked: batch.length, live, dead })
+  // 3) PRUNE: scan logs older than 45 days leave. The cooldown, the daily
+  //    allowance and the warm window all live within a single day, so old rows
+  //    are pure ballast — without this the table grows one row per scan,
+  //    forever, on a platform whose promise is scans every day at scale.
+  const pruned = await db.scanRun.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - 45 * 86_400_000) } },
+  })
+
+  return NextResponse.json({ ok: true, demoted: demoted.count, rechecked: batch.length, live, dead, prunedScans: pruned.count })
 }

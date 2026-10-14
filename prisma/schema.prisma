@@ -621,6 +621,7 @@ model LeadPool {
 
   @@index([lastSeenAt])
   @@index([lastServedAt])
+  @@index([lastVerifiedAt])
   @@index([city])
 }
 

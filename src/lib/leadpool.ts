@@ -183,8 +183,14 @@ export async function checkScanAllowance(userId: string): Promise<ScanGate> {
   }
   const { paid } = await planState(userId)
   const cap = paid ? DAILY_SCAN_CAP_PAID : DAILY_SCAN_CAP_FREE
-  const dayStartUtc = new Date(Date.now() - 2 * 60 * 60 * 1000) // SAST = UTC+2: shift back, then take midnight
-  dayStartUtc.setUTCHours(0, 0, 0, 0)
+  // True SAST midnight in UTC: read today's date off the SAST clock (now minus
+  // 2h), floor to that day, then shift the floor back 2h into UTC. The old
+  // shortcut skipped the final shift, so the window actually refilled at
+  // 02:00 South African time while the copy promised midnight.
+  const sastClock = new Date(Date.now() - 2 * 60 * 60 * 1000) // SAST = UTC+2
+  const dayStartUtc = new Date(
+    Date.UTC(sastClock.getUTCFullYear(), sastClock.getUTCMonth(), sastClock.getUTCDate()) - 2 * 60 * 60 * 1000
+  )
   const count = await db.scanRun.count({ where: { userId, createdAt: { gte: dayStartUtc } } })
   if (count >= cap) return { ok: false, reason: 'daily' }
   return { ok: true }
@@ -262,17 +268,22 @@ export async function serveFromPool(opts: {
   maxAgeDays?: number
 }): Promise<PoolLead[]> {
   const cap = Math.max(1, Math.min(30, opts.cap))
-  if (cap <= 0) return []
   const maxAge = opts.maxAgeDays ?? 21
   const cutoff = new Date(Date.now() - maxAge * 86_400_000)
+  // Postgres does the rotation sort (never served faces first, then least
+  // recently served, then freshest) and only the head rows ship to the app.
+  // The JS sort below stays as the deterministic tiebreak on the small set.
   const hits = await db.leadPoolHit.findMany({
     where: {
       topicFp: opts.topicFp,
       pool: { active: true, verifyState: { not: 'stale' }, lastSeenAt: { gte: cutoff } },
     },
     include: { pool: true },
-    orderBy: { createdAt: 'desc' },
-    take: 400,
+    orderBy: [
+      { pool: { lastServedAt: { sort: 'asc', nulls: 'first' } } },
+      { pool: { lastSeenAt: 'desc' } },
+    ],
+    take: 150,
   })
   const rows = hits.map((h) => h.pool).filter((p) => !opts.excludeKeys.has(normKey(p.company)))
   rows.sort((a, b) => {
@@ -364,19 +375,24 @@ export async function rememberScanResults(opts: {
   const toCreate: RememberLead[] = []
   const refById = new Map<string, string>() // fingerprint -> poolId for hit links
 
+  // Classify first (no DB): merges vs new faces.
+  const merges: { l: RememberLead; prev: LeadPoolRow; phone: { ok: boolean; e164?: string }; sourceRef?: string; websiteOk?: boolean }[] = []
   for (const l of rows) {
     const key = normKey(l.company)
     const fp = `${key}|${normKey(l.city || opts.area)}`
-    const phone = normalizeSaPhone(l.phone)
-    const sourceRef = sourceRefFor(l.externalId)
     const prev = byFp.get(fp)
-    const websiteOk = siteOk.get(key)
-
     if (!prev) {
       toCreate.push(l)
       continue
     }
+    merges.push({ l, prev, phone: normalizeSaPhone(l.phone), sourceRef: sourceRefFor(l.externalId), websiteOk: siteOk.get(key) })
+  }
 
+  // Merge writes run in parallel chunks: a sequential roundtrip per row used to
+  // add seconds of tail latency to every engine scan on a serverless database.
+  await chunked(merges, 8, async ({ l, prev, phone, sourceRef, websiteOk }) => {
+    const key = normKey(l.company)
+    const fp = `${key}|${normKey(l.city || opts.area)}`
     // merge: keep the best facts on file, never erase good data with blanks
     const prevChecks = parseChecksSource(prev.verifyChecks)
     const checks: VerifyChecks = {
@@ -422,10 +438,10 @@ export async function rememberScanResults(opts: {
     } catch {
       /* one record failing never blocks the rest */
     }
-  }
+  })
 
-  // new faces: create, then link to the topic
-  for (const l of toCreate) {
+  // new faces: create in parallel chunks, then link to the topic
+  await chunked(toCreate, 8, async (l) => {
     const key = normKey(l.company)
     const fp = `${key}|${normKey(l.city || opts.area)}`
     const phone = normalizeSaPhone(l.phone)
@@ -475,7 +491,7 @@ export async function rememberScanResults(opts: {
     } catch {
       /* a duplicate fingerprint from a parallel scan: harmless, skip */
     }
-  }
+  })
 
   // link everything this topic surfaced so the same topic serves from the pool later
   const hitRows = [...refById.entries()].map(([fp, poolId]) => ({ topicFp: opts.topicFp, poolId }))
