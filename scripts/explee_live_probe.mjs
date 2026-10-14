@@ -70,11 +70,15 @@ async function main() {
   const top = await req('/api/wallet/topup', { method: 'POST', body: JSON.stringify({ packageId: 'starter' }) })
   const tj = await top.json().catch(() => null)
   const liveCheckout = top.status === 200 && tj?.ok === true && typeof tj?.redirectUrl === 'string' && tj?.sandbox !== true
+  const liveRejected = top.status === 502 && !tj?.sandbox
   if (liveCheckout) {
     check('topup opens a live Yoco checkout', true, `mode=${tj?.mode || '?'}`)
     check('checkout redirect points at Yoco', /yoco\.com/i.test(tj.redirectUrl || ''), String(tj.redirectUrl || '').slice(0, 90))
     check('live TopUp recorded PENDING at R500', tj?.topUp?.status === 'PENDING' && tj?.topUp?.amountCents === 50000, `ref=${tj?.topUp?.reference || 'none'} amount=${tj?.topUp?.amountCents}`)
     console.log('  INFO: live mode. No card was charged by this probe; the wallet credits when a real payment confirms via the webhook.')
+  } else if (liveRejected) {
+    check('topup honestly fails while Yoco rejects the saved key', true, `status ${top.status} err=${String(tj?.error || '').slice(0, 60)}`)
+    console.log('  INFO: the value in YOCO_SECRET_KEY is not a working secret key yet. Replace it on Vercel with the Portal secret key, redeploy, then tap Register on the exec dashboard.')
   } else {
     check('topup accepted in sandbox mode', top.status === 200 && tj?.ok === true && tj?.sandbox === true, `status ${top.status}`)
     check('topup PAID with reference', tj?.topUp?.status === 'PAID' && !!tj?.topUp?.reference, `ref=${tj?.topUp?.reference || 'none'}`)

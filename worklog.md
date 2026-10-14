@@ -685,3 +685,26 @@ Work Log:
 
 Stage Summary:
 - Production f1fa5fa: everywhere a client sees the Operator plan they also see, quietly, that it is normally R299 a month — the R199 launch special framing is live on the landing page, the in app plans view and the upgrade dialog. What clients are charged is unchanged (R199 / R1,990, NPO R139.30 / R1,393). When the launch ends, set priceCents 29900 + annualCents 299000 and drop the two normal fields: one file, no other edits.
+
+---
+Task ID: 50
+Agent: Super Z (main)
+Task: "The yoco key is in and let us now use actual live data on the exec dashboard ahead of the launch."
+
+Work Log:
+- Recon: exec feed was already DB driven (real users, subs, topups) but revenue KPIs mixed sandbox QA money with real card money, the dashboard had no Yoco mode/webhook visibility, the DEMO/LIVE data mode select was display only legacy (nothing reads CONFIG_KEYS.MODE), and the sandbox instant pay paths were open to ANY production visitor while the key was missing/invalid.
+- Revenue truth: exec feed + growth route + admin config now count provider YOCO only for MRR, subscribers, byPlan and topup totals; sandbox amounts surface as transparent sub lines (sandboxTopups30dCents, testMrrCents) instead of silently vanishing. Roster display unchanged.
+- Exec feed new payments block: keyMode (key text decides, stored webhook mode as fallback), webhookConfigured + source + webhookMode, and recent 12 PAID topups joined with payer names (the money pulse).
+- AdminView: new Payments card (Yoco live/test/not connected badge, webhook state incl stale mode warning, one tap Register webhook button, latest payments list), MRR and Top ups 30d KPI sub lines, provider chips (Yoco/Sandbox) on client drawer topup rows, Data mode select replaced by an honest Discovery engine status (Live Explee vs Verified pool fallback).
+- Webhook mode tracking: CONFIG_KEYS.YOCO_WEBHOOK_MODE stored at register time (Yoco response names the mode); register GET + webhooks GET return webhookMode; PaymentsCard distinguishes ready vs registered for another mode (test era webhook would silently swallow live payments).
+- KEY FORMAT FIX: getYocoSecretKey was strict sk_ prefixed; the owner's real Yoco key starts yoco_live_... (59 chars). Relaxed to reject only whsec_ values and let Yoco validate; yocoModeFromKey detects live/test from key text. E2E then confirmed mode=live from the key text, and the real checkout call returned Yoco 401: the saved value is NOT a working secret key (likely the key label/ID copied instead of the key value).
+- LAUNCH INTEGRITY: sandbox instant activation (subscribe + topup) closed to QA probe accounts only (@hustleqa.example.com). Real visitors get an honest gentle message (503) and NEVER free plans/credit, even while the gateway is misconfigured. E2E + all probes register on the QA domain so they keep working.
+- Client error copy: when Yoco rejects/fails, clients see "Card payments are momentarily unavailable. Please try again in a moment."; raw Yoco detail goes to server logs (console.error in both routes).
+- Diagnostics: webhooks GET adds a key shape hint (first7...last4 + length, only when the value is clearly the wrong secret type) so the owner can see what Vercel holds without exposing it. Probe scripts/key_diag.mjs (local) printed the decisive hint: yoco_li...d381 (59 chars).
+- Probes: e2e_prod_qa.mjs gained 4 Yoco gateway checks (status endpoint, key present, LIVE mode, webhook ready for current key mode); explee_live_probe.mjs is live era aware with three branches (live checkout OK / live rejected while key is bad / sandbox).
+- Deploys: 027a507 (live data + payments card), 0a1123c (sandbox closure + webhook mode + hint), 40169cb (Yoco as validator + mode fallback), d227c93 (gentle client error copy).
+
+Stage Summary:
+- Production d227c93: exec dashboard now runs on actual live money. MRR/subscribers/topups count only real Yoco card payments; the Payments card shows gateway mode, webhook state and the latest settled payments with a one tap webhook registration; the fake Demo mode setting is gone. Sandbox free paths are closed to everyone except QA probes.
+- VERDICT ON THE KEY: the value saved in YOCO_SECRET_KEY authenticates NOWHERE: Yoco returns 401 on a real checkout call. It starts yoco_li...d381 (59 chars) and looks like a key LABEL, not the secret key value. OWNER TODO: Yoco Portal → copy the actual secret key value → replace YOCO_SECRET_KEY on Vercel → redeploy → open Exec Dashboard → tap Register on the Payments card. E2E then goes full green automatically (34/38 now; the 4 fails are exactly key 401 x3 + webhook not yet registered for live mode).
+- Regression: exec_prod_probe 9/9 PASS, explee_live_probe 5/5 PASS (honest live rejected branch), E2E 34/38 (4 expected Yoco key gate failures).
