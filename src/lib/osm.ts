@@ -104,7 +104,7 @@ export function buildTagFilters(definition: string): { tags: { key: string; rege
 }
 
 /** Human-readable category term + key/value for Nominatim category search. */
-export function buildNominatimQuery(definition: string): { kv?: { key: string; value: string }; term?: string } {
+export function buildNominatimQuery(definition: string): { kv?: { key: string; value: string; values: string[] }; term?: string } {
   const d = definition.toLowerCase()
   const kvMap: { match: RegExp; key: string; values: string[] }[] = [
     { match: /tavern|shebeen|liquor/, key: 'amenity', values: ['bar', 'pub'] },
@@ -135,7 +135,7 @@ export function buildNominatimQuery(definition: string): { kv?: { key: string; v
     if (m.match.test(d)) {
       const value = m.values[0]
       const term = value.replace(/_/g, ' ')
-      return { kv: { key: m.key, value }, term }
+      return { kv: { key: m.key, value, values: m.values }, term }
     }
   }
   return {}
@@ -172,7 +172,12 @@ out tags center ${Math.max(limit * 6, 60)};`
 
 /**
  * Nominatim category search — same OpenStreetMap data, works from datacenter IPs.
- * extratags=1 returns website/phone/email where mapped. Real businesses or nothing.
+ * THE CARRIER MATTERS: Nominatim's /search only recognises a handful of category
+ * params (amenity among them) and silently ignores shop/craft/office/leisure ones,
+ * answering 400 "Nothing to search for". The documented special phrase form
+ * q=[shop=massage] works for EVERY category, so that is what we send — one bracket
+ * query per candidate value, merged. extratags=1 returns website/phone/email where
+ * mapped. Real businesses or nothing.
  */
 async function searchNominatimLeads(
   area: string,
@@ -183,38 +188,7 @@ async function searchNominatimLeads(
   const { kv } = buildNominatimQuery(definition)
   if (!kv) return { leads: [] }
   try {
-    const params = new URLSearchParams({
-      [kv.key]: kv.value,
-      countrycodes: 'za',
-      format: 'jsonv2',
-      limit: String(Math.min(limit * 3, 40)),
-      addressdetails: '1',
-      extratags: '1',
-    })
-    // Coordinates from the geocode turn the category search from a city name
-    // guess into a bounded box sweep. The city= filter alone makes Nominatim
-    // answer with the city node itself ("Johannesburg, type city") instead of
-    // the salons and shops inside it; viewbox plus bounded finds the actual
-    // mapped businesses in the ~9 by 10 km box around the mapped point.
-    if (place?.lat !== undefined && place?.lon !== undefined) {
-      const dLat = 0.08
-      const dLon = 0.1
-      params.set(
-        'viewbox',
-        `${(place.lon - dLon).toFixed(4)},${(place.lat + dLat).toFixed(4)},${(place.lon + dLon).toFixed(4)},${(place.lat - dLat).toFixed(4)}`
-      )
-      params.set('bounded', '1')
-    } else {
-      params.set('city', area)
-    }
-    const res = await fetch(`${NOMINATIM}?${params}`, {
-      headers: { 'User-Agent': UA, Accept: 'application/json' },
-      // 10s cap: Nominatim answers in 1 to 3 seconds when it answers at all;
-      // a hanging call must never eat the scan's remaining budget.
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!res.ok) return { leads: [] }
-    const rows = (await res.json()) as {
+    const rowsAll: {
       osm_id?: number
       category?: string
       type?: string
@@ -224,10 +198,49 @@ async function searchNominatimLeads(
       lon?: string
       address?: Record<string, string>
       extratags?: Record<string, string>
-    }[]
+    }[] = []
+    // Up to three phrases per scan (a category's sibling values widen the net:
+    // massage pulls in beauty too). A refused phrase must never kill its
+    // siblings, so failures continue to the next one.
+    for (const v of kv.values.slice(0, 3)) {
+      const params = new URLSearchParams({
+        q: `[${kv.key}=${v}]`,
+        countrycodes: 'za',
+        format: 'jsonv2',
+        limit: String(Math.min(limit * 3, 40)),
+        addressdetails: '1',
+        extratags: '1',
+      })
+      // Coordinates from the geocode turn the category search from a city name
+      // guess into a bounded box sweep. The city= filter alone makes Nominatim
+      // answer with the city node itself ("Johannesburg, type city") instead of
+      // the salons and shops inside it; viewbox plus bounded finds the actual
+      // mapped businesses in the ~9 by 10 km box around the mapped point.
+      if (place?.lat !== undefined && place?.lon !== undefined) {
+        const dLat = 0.08
+        const dLon = 0.1
+        params.set(
+          'viewbox',
+          `${(place.lon - dLon).toFixed(4)},${(place.lat + dLat).toFixed(4)},${(place.lon + dLon).toFixed(4)},${(place.lat - dLat).toFixed(4)}`
+        )
+        params.set('bounded', '1')
+      } else {
+        params.set('city', area)
+      }
+      const res = await fetch(`${NOMINATIM}?${params}`, {
+        headers: { 'User-Agent': UA, Accept: 'application/json' },
+        // 10s cap: Nominatim answers in 1 to 3 seconds when it answers at all;
+        // a hanging call must never eat the scan's remaining budget.
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!res.ok) continue
+      const rows = (await res.json()) as typeof rowsAll
+      if (Array.isArray(rows)) rowsAll.push(...rows)
+      if (rowsAll.length >= limit * 3) break
+    }
     const seen = new Set<string>()
     const leads: OsmLead[] = []
-    for (const r of rows) {
+    for (const r of rowsAll) {
       // Skip place/boundary rows — “Johannesburg” is not a hairdresser.
       if (r.category === 'place' || r.category === 'boundary' || r.type === 'administrative') continue
       const name = (r.name || r.display_name?.split(',')[0] || '').trim()
@@ -381,8 +394,11 @@ export async function searchOsmLeads(
     const overpassCap = () => Math.max(4_000, Math.min(12_000, remaining() - 18_000))
     let result = await runOverpass(overpassQuery(place, tagFilters, limit, opts?.lat !== undefined), overpassCap())
     // Category too narrow for this area (common in townships) → one generic sweep of
-    // ALL named businesses. Still 100% real directory data. Only while budget lasts.
-    if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0 && remaining() > 20_000) {
+    // ALL named businesses. Still 100% real directory data. Only when Overpass
+    // actually ANSWERED but found nothing for the category: when the mirrors are
+    // down, the generic sweep would just burn the budget the Nominatim and Photon
+    // fallbacks still need.
+    if (result.ok && (result.data?.elements || []).length === 0 && tagFilters.length > 0 && remaining() > 20_000) {
       result = await runOverpass(overpassQuery(place, [], limit, opts?.lat !== undefined), overpassCap())
     }
     if (!result.ok) {
