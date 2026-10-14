@@ -418,7 +418,7 @@ async function callGemini(
             flat.match(/"limit"\s*:\s*"?[\d.]+/)?.[0],
             flat.match(/retryDelay"\s*:\s*"[^"]+/)?.[0],
           ].filter(Boolean).join(' | ')
-          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${flat.slice(0, 110)}${quotaBits ? ' || ' + quotaBits : ''}`)
+          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${flat.slice(0, 1600)}${quotaBits ? ' || ' + quotaBits : ''}`)
           const cls = classify(res.status, raw)
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
