@@ -409,7 +409,7 @@ async function callGemini(
         })
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
-          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${raw.slice(0, 160).replace(/\s+/g, ' ')}`)
+          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${raw.slice(0, 500).replace(/\s+/g, ' ')}`)
           const cls = classify(res.status, raw)
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
