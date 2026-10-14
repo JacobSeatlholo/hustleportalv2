@@ -409,3 +409,18 @@ Work Log:
 Stage Summary:
 - Engine chain unchanged and healthy: GLM first (two doors) → Gemini grounded → OSM + DeepSeek ranking → Explee, with real Soweto leads landing even on a broken wallet.
 - The ONE user action that lights up web grounded GLM scans: generate the API key ON z.ai (top right "API Keys" on docs.z.ai / z.ai console, where the $10 lives), then save it under Integrations → z.ai card (instant probe, no redeploy) or swap it into Vercel GLM_key and redeploy. Zhipu-minted keys and z.ai credits are two different houses.
+
+---
+Task ID: 43f
+Agent: Super Z (main)
+Task: User replaced GLM_key with a new key ("put the new key in my environment variables on vercel. Lets see if the ai lead finder scan works"). Verify the scan path and identify why the grounded engine still does not carry scans.
+
+Work Log:
+- Live diag: fingerprint CHANGED (5aa56e…CGy2 → 34cd02…lXiU), so the new key is live in the serverless runtime. searchOk still false, arrears words on the search probe.
+- scan_once trace is DEFINITIVE: one line, zhipu/glm-4.6 → 429 (692ms) "余额不足或无可用资源包,请充值。" A z.ai-minted key would have drawn a 401 on the Zhipu door and a second line for the z.ai door. One Zhipu arrears line = the new key is ALSO a Zhipu open platform key. The user minted twice on open.bigmodel.cn while the $10 lives on z.ai.
+- Shipped (452c8f2): the refusing door now names the key's home in both System Status and /api/ai/diagnose ("A billing refusal means that door accepted the key, and a door only accepts keys minted on its own platform"). Billing/pacing refusals (402/429) prove ownership; 401s do not, so ownership is only claimed on billing refusals.
+- Deploy hiccup: paramiko was missing again after the sandbox reset (background pip had died silently); reinstalled synchronously, push 83dc39c..452c8f2 OK.
+- Post deploy: plain probe hit 429 pacing (probe storm from repeated QA on the free rungs); transient, retries on its own. Search path evidence unchanged.
+
+Stage Summary:
+- Production 452c8f2. Engine chain healthy, map directory still delivering real Soweto leads on every scan. The single blocker is platform mismatch: Zhipu key + z.ai credits. The fix is one z.ai-minted key (docs.z.ai top right API Keys button) saved under Integrations or GLM_key. The product now names the key's home platform on every billing refusal, so the mismatch is visible without a debug trace.
