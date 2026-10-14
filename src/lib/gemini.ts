@@ -409,7 +409,16 @@ async function callGemini(
         })
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
-          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${raw.slice(0, 500).replace(/\s+/g, ' ')}`)
+          // Head plus the quota fields that name the EXHAUSTED bucket (daily vs
+          // monthly, per model vs per project) — that distinction decides the fix.
+          const flat = raw.replace(/\s+/g, ' ')
+          const quotaBits = [
+            flat.match(/quotaId":"[^"]+/)?.[0],
+            flat.match(/quotaMetric":"[^"]+/)?.[0],
+            flat.match(/"limit":\s*"?[\d.]+/)?.[0],
+            flat.match(/"retryDelay":"[^"]+/)?.[0],
+          ].filter(Boolean).join(' | ')
+          trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${flat.slice(0, 110)}${quotaBits ? ' || ' + quotaBits : ''}`)
           const cls = classify(res.status, raw)
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
