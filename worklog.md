@@ -646,3 +646,27 @@ Stage Summary:
 - Full automation confirmed possible via API: POST /autogtm/campaigns (create), /campaigns/import (own leads), /approve, /start, /stop, GET /autogtm/hot-leads, GET /campaigns/{id}/inbox, GET /billing/balance, POST /search/people, POST /find-and-enrich
 - This validates the full chain: client credit top-up -> email notify owner -> automated explee campaign -> hot-leads -> per-client pool in exec dashboard -> owner injects into client pipeline
 - OpenAPI spec cached at scripts/tmp/explee_openapi.json for implementation reference
+
+---
+Task ID: 48c
+Agent: Super Z (main)
+Task: "okay I've added the key" — owner saved EXPLEE_API_KEY on Vercel. Make the app actually use it and prove the live Explee chain on production.
+
+Work Log:
+- GAP FOUND: getConfig('explee_api_key') read ONLY the PlatformConfig DB row (Exec Dashboard settings). The Vercel env var the owner just set was never consulted, so campaigns would have kept falling back to the free verified pool with the key sitting dormant.
+- Fix (src/lib/config.ts): ENV_FALLBACKS map; getConfig falls back to process.env.EXPLEE_API_KEY when the DB row is absent. DB row (dashboard settings) still wins when present. hasExpleeKey, campaign.ts key gate, expleeSearchCompanies and the discover fallback B all light up automatically. tsc clean.
+- Deployment marker (src/app/api/health/route.ts): integrations.explee boolean added alongside yoco, so key wiring is confirmable at a glance without exposing the secret.
+- Probe script scripts/explee_live_probe.mjs (deployed via git add -f): fresh QA client -> R500 starter pack sandbox topup -> wallet 9900 to 59900 -> discover answers 200 right after the after() campaign (allowance untouched) -> bonus exotic topic (typewriter repair, Colesberg) to reach discover fallback B directly.
+- Deploys: f51459a (config env fallback + probe), 363c2ac (health marker).
+
+Stage Summary:
+- (verification pending: waiting for Vercel build, then explee_live_probe + regression)
+- Post-deploy verification (production 363c2ac):
+  - health integrations.explee: True within one poll of the build going live (the Vercel env var is present AND the new code reads it; permanent at a glance check for the owner).
+  - explee_live_probe 8/8: QA client registered, R500 starter pack sandbox PAID (ref HP-MV8G38QD), wallet 9900 to 59900, discover 200 immediately after the after() campaign (CAMPAIGN mode allowance exclusion still holds).
+  - DECISIVE engine proof via bench topic: the auto campaign's topic ("new customers in Johannesburg that would pay for what they sell" + Johannesburg, built deterministically from a QA profile with no profile fields) had NEVER been scanned before. Minutes later a brand new user scanning that exact topic got mode POOL with LIVE EXPLEE B2B rows (SOCRATI: email online@socrati.co.za, linkedin.com/company/96766671 sourceRef, employees 15, score 93, Checked website live; Trendyland: email, phone, domain, employees 2). Only a live Explee search inside the auto campaign could have captured those faces under that fingerprint. Chain proven: topup -> owner email -> live Explee campaign -> bench + shared pool -> free pool serve for the next seller.
+  - Regression: E2E 37/37 PASS, pool probe 6/6 PASS.
+  - WATCHED ANOMALY: 2 transient 402 responses on discover during probing (fresh QA users), gone on 3/3 subsequent runs and all regressions green. Our code has no 402 path; looks like a Vercel edge/usage blip. If it recurs, check Vercel usage/plan limits, not app code.
+
+Stage Summary:
+- Production 363c2ac: the Explee key the owner added on Vercel is LIVE in the product. Every client topup at or above R500 now fires a real Explee campaign (0.5 Explee credits per company from the owner's explee balance), the owner gets the result email naming the engine and remaining balance, and leads land on the per client bench in the Exec Dashboard for one tap review. The verified pool remains the honest free fallback whenever Explee is quiet. Probe scripts: explee_live_probe.mjs, explee_bench_probe.mjs.
