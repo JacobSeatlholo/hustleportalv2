@@ -413,10 +413,10 @@ async function callGemini(
           // monthly, per model vs per project) — that distinction decides the fix.
           const flat = raw.replace(/\s+/g, ' ')
           const quotaBits = [
-            flat.match(/quotaId":"[^"]+/)?.[0],
-            flat.match(/quotaMetric":"[^"]+/)?.[0],
-            flat.match(/"limit":\s*"?[\d.]+/)?.[0],
-            flat.match(/"retryDelay":"[^"]+/)?.[0],
+            flat.match(/quotaId"\s*:\s*"[^"]+/)?.[0],
+            flat.match(/quotaMetric"\s*:\s*"[^"]+/)?.[0],
+            flat.match(/"limit"\s*:\s*"?[\d.]+/)?.[0],
+            flat.match(/retryDelay"\s*:\s*"[^"]+/)?.[0],
           ].filter(Boolean).join(' | ')
           trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ${flat.slice(0, 110)}${quotaBits ? ' || ' + quotaBits : ''}`)
           const cls = classify(res.status, raw)
