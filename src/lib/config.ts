@@ -24,9 +24,19 @@ const DEFAULTS: Record<string, string> = {
   [CONFIG_KEYS.MODE]: 'DEMO',
 }
 
+// Platform secrets can live in two homes: the Exec Dashboard settings (DB
+// row) and Vercel env vars. The DB row wins when present; the env var is the
+// fallback so a key added on Vercel lights up campaigns without a database
+// write. Secrets never render in full anywhere: the UI shows masks only.
+const ENV_FALLBACKS: Record<string, string | undefined> = {
+  [CONFIG_KEYS.EXPLEE_API_KEY]: process.env.EXPLEE_API_KEY,
+}
+
 export async function getConfig(key: string): Promise<string> {
   const row = await db.platformConfig.findUnique({ where: { key } })
   if (row) return row.value
+  const fromEnv = ENV_FALLBACKS[key]?.trim()
+  if (fromEnv) return fromEnv
   return DEFAULTS[key] ?? ''
 }
 
