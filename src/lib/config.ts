@@ -8,12 +8,14 @@ export const CONFIG_KEYS = {
   TOPUP_PACKS: 'topup_packs', // JSON [{id,name,amountCents,creditCents,bonus}]
   MODE: 'mode', // DEMO | LIVE
   YOCO_WEBHOOK_SECRET: 'yoco_webhook_secret', // whsec_... from registering the checkout webhook
+  CAMPAIGN_AUTO_CENTS: 'campaign_auto_cents', // top-ups at or above this auto run a client campaign
 } as const
 
 const DEFAULTS: Record<string, string> = {
   [CONFIG_KEYS.LEAD_PRICE]: '1500', // R15.00
   [CONFIG_KEYS.FREE_LEADS]: '3',
   [CONFIG_KEYS.WELCOME_CREDIT_CENTS]: '9900', // R99 — enough real teaser reveals to taste the platform
+  [CONFIG_KEYS.CAMPAIGN_AUTO_CENTS]: '50000', // R500 — the smallest credit pack; every real top-up earns a campaign
   [CONFIG_KEYS.TOPUP_PACKS]: JSON.stringify([
     { id: 'starter', name: 'Starter', amountCents: 50000, creditCents: 50000, bonus: 0 },
     { id: 'growth', name: 'Growth', amountCents: 150000, creditCents: 165000, bonus: 10 },

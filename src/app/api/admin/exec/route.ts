@@ -12,7 +12,7 @@ export async function GET() {
   const d7 = new Date(now - 7 * 86_400_000)
   const d30 = new Date(now - 30 * 86_400_000)
 
-  const [userCount, new7, new30, subs, topupAgg, walletAgg, leadCount] = await Promise.all([
+  const [userCount, new7, new30, subs, topupAgg, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: d7 } } }),
     db.user.count({ where: { createdAt: { gte: d30 } } }),
@@ -22,6 +22,9 @@ export async function GET() {
     db.topUp.aggregate({ where: { status: 'PAID', paidAt: { gte: d30 } }, _sum: { amountCents: true } }),
     db.wallet.aggregate({ _sum: { balance: true } }),
     db.lead.count(),
+    db.clientPoolLead.count({ where: { status: 'NEW' } }),
+    db.clientPoolLead.count({ where: { createdAt: { gte: new Date(now - 86_400_000) } } }),
+    db.clientPoolLead.groupBy({ by: ['userId'], where: { status: 'NEW' }, _count: { _all: true } }),
   ])
 
   // Lazy subscription truth: ACTIVE only while renewsAt stands; PAUSED, PAST_DUE, CANCELED as-is.
@@ -49,6 +52,7 @@ export async function GET() {
   ])
   const txMap = new Map(txMax.map((r) => [r.userId, r._max.createdAt]))
   const leadMap = new Map(leadMax.map((r) => [r.userId, r._max.updatedAt]))
+  const poolMap = new Map(poolByUser.map((r) => [r.userId, r._count._all]))
 
   const roster = rosterRows.map((u) => {
     const sub = u.subscription
@@ -73,6 +77,7 @@ export async function GET() {
       renewsAt: sub?.renewsAt ?? null,
       npoNumber: sub?.npoNumber ?? null,
       counts: { leads: u._count.leads, clients: u._count.clients, invoices: u._count.invoices, projects: u._count.projects },
+      poolCount: poolMap.get(u.id) ?? 0,
       lastActiveAt: lastActive,
     }
   })
@@ -90,6 +95,8 @@ export async function GET() {
       topups30dCents: topupAgg._sum.amountCents || 0,
       walletFloatCents: walletAgg._sum.balance || 0,
       leadsPlatform: leadCount,
+      poolNew,
+      poolArrivals24h,
       suspended: roster.filter((r) => r.accountStatus === 'SUSPENDED').length,
     },
     roster,

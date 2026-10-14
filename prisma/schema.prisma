@@ -57,6 +57,7 @@ model User {
   pushSubs           PushSubscription[]
   taskComments       TaskComment[]
   projectMemberships ProjectMember[]  @relation("ProjectMemberUser")
+  poolLeads          ClientPoolLead[]
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============
@@ -661,4 +662,40 @@ model ScanRun {
 
   @@index([userId, createdAt])
   @@index([topicFp, createdAt])
+}
+
+// ============ EXEC LEAD POOL (per client, the owner's review bench) ============
+// When a client loads credit, a lead campaign runs for them automatically
+// (Explee first, the platform's verified pool as the free fallback). Every
+// campaign's results land HERE, one bench per client, waiting for the business
+// owner's review. Nothing enters the client's pipeline until the owner taps
+// Add — they stay the gatekeeper of what their clients see.
+model ClientPoolLead {
+  id          String    @id @default(cuid())
+  userId      String // the platform client (seller) this bench belongs to
+  fingerprint String // normKey(company) + "|" + normKey(city) — dedup inside this bench
+  company     String
+  contactName String?
+  role        String? // the human's part: Owner, Manager, Buyer
+  profileUrl  String? // public profile page where this person is named
+  email       String?
+  phone       String?
+  website     String?
+  industry    String?
+  city        String?
+  country     String?
+  source      String    @default("EXPLEE") // EXPLEE | POOL | MANUAL
+  sourceRef   String? // Explee domain/linkedin url or pool source link
+  why         String? // fit line for the owner's quick read
+  score       Int?
+  status      String    @default("NEW") // NEW | ADDED | DISMISSED
+  leadId      String? // set the moment the lead joins the client's pipeline
+  createdAt   DateTime  @default(now())
+  addedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, status])
+  @@index([createdAt])
 }

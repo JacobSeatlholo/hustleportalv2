@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
@@ -95,6 +95,11 @@ export async function POST(req: NextRequest) {
 
     await addCredits(topUp.userId, topUp.creditCents, 'TOPUP', `Wallet top-up (${topUp.reference})`)
     if (topUp.amountCents >= 150000) await awardXp(topUp.userId, 'TOPUP', 40, 'Wallet top-up')
+    // The owner's credit story runs after the response: exec email + auto campaign.
+    after(async () => {
+      const { onPaidTopUp } = await import('@/lib/execnotify')
+      await onPaidTopUp(topUp.id)
+    })
     return NextResponse.json({ ok: true, credited: topUp.creditCents, reference: topUp.reference })
   }
 

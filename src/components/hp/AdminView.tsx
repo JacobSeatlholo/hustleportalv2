@@ -25,7 +25,7 @@ import { api, rands } from './shared'
 import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
-  Building2, ReceiptText, History, CircleDot,
+  Building2, ReceiptText, History, CircleDot, Sparkles, X, Check,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -45,6 +45,8 @@ interface Kpis {
   topups30dCents: number
   walletFloatCents: number
   leadsPlatform: number
+  poolNew: number
+  poolArrivals24h: number
   suspended: number
 }
 
@@ -67,6 +69,7 @@ interface RosterRow {
   renewsAt: string | null
   npoNumber: string | null
   counts: { leads: number; clients: number; invoices: number; projects: number }
+  poolCount: number
   lastActiveAt: string | null
 }
 
@@ -116,6 +119,36 @@ interface InvoiceRow {
   paidAt: string | null
 }
 
+interface PoolRow {
+  id: string
+  company: string
+  contactName: string | null
+  role: string | null
+  profileUrl: string | null
+  email: string | null
+  phone: string | null
+  website: string | null
+  industry: string | null
+  city: string | null
+  country: string | null
+  source: string
+  sourceRef: string | null
+  why: string | null
+  score: number | null
+  status: string
+  leadId: string | null
+  createdAt: string
+  addedAt: string | null
+}
+
+interface CampaignRow {
+  id: string
+  mode: string
+  leadCount: number
+  fromPool: boolean
+  createdAt: string
+}
+
 interface ClientDetail {
   client: {
     id: string
@@ -148,6 +181,7 @@ interface ClientDetail {
   payments: { topups: TopUpRow[]; creditTxs: TxRow[] }
   projects: ProjectRow[]
   pipeline: { stages: Record<string, number>; total: number }
+  pool: { rows: PoolRow[]; counts: { NEW: number; ADDED: number; DISMISSED: number }; campaigns: CampaignRow[] }
   clientsCount: number
   invoices: InvoiceRow[]
 }
@@ -447,6 +481,119 @@ function AddLeadsDialog({ clientId, clientName, open, onOpenChange, onDone }: {
   )
 }
 
+// =================== Lead pool card (the campaign bench) ===================
+// Every campaign's results wait here per client. The owner reviews and adds
+// the winners to the client's pipeline in one tap. Nothing lands in the
+// client's pipeline without that tap.
+
+function PoolCard({ detail, busy, onRun, onAction }: {
+  detail: ClientDetail
+  busy: boolean
+  onRun: (definition: string, city: string) => void
+  onAction: (action: 'add' | 'addAll' | 'dismiss', ids: string[]) => void
+}) {
+  const pool = detail.pool
+  const waiting = pool.rows.filter((r) => r.status === 'NEW')
+  const addedShown = pool.rows.filter((r) => r.status === 'ADDED').slice(-4).reverse()
+  const [open, setOpen] = useState(true)
+  const [def, setDef] = useState('')
+  const [city, setCity] = useState('')
+  const [showInputs, setShowInputs] = useState(false)
+  const lastCampaign = pool.campaigns[0]
+
+  return (
+    <div className="p-5 py-4">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-brand" /> Lead pool
+          {pool.counts.NEW > 0 && (
+            <Badge className="bg-brand text-black hover:bg-brand text-[10px]">{pool.counts.NEW} waiting</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => setShowInputs((s) => !s)} className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+            search words
+          </button>
+          <Button size="sm" className="h-7 bg-brand text-black hover:bg-brand/90" disabled={busy} onClick={() => onRun(def, city)}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3 w-3 mr-1" />} Run campaign
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground mb-2">
+        Campaigns run for them the moment they load credit. Fresh faces wait here for your review, nothing reaches their pipeline until you add it.
+      </p>
+
+      {showInputs && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+          <Input value={def} onChange={(e) => setDef(e.target.value)} placeholder="Custom search words (their profile fills this)" className="h-8 text-xs" />
+          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder={`Area (default: ${detail.client.city || 'South Africa'})`} className="h-8 text-xs" />
+        </div>
+      )}
+
+      {lastCampaign && (
+        <div className="text-[10px] text-muted-foreground mb-2">
+          Last campaign {timeAgo(lastCampaign.createdAt)} · {lastCampaign.mode === 'EXPLEE' ? 'Explee live' : 'Verified pool'} · {lastCampaign.leadCount} added
+          {pool.campaigns.length > 1 ? ` · ${pool.campaigns.length} recent` : ''}
+        </div>
+      )}
+
+      <button type="button" onClick={() => setOpen((o) => !o)} className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+        {open ? 'hide list' : `show list (${waiting.length})`}
+      </button>
+
+      {open && (
+        <div className="rounded-lg border divide-y max-h-72 overflow-y-auto hp-scroll mt-1.5">
+          {waiting.length === 0 && addedShown.length === 0 && (
+            <div className="px-3 py-3 text-xs text-muted-foreground">
+              Empty for now. Run a campaign above, or it fires on its own the next time {detail.client.name.split(' ')[0]} loads credit.
+            </div>
+          )}
+          {waiting.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">
+                  {r.company}
+                  {r.contactName ? <span className="text-muted-foreground font-normal"> · ask for {r.contactName}{r.role ? ` (${r.role})` : ''}</span> : ''}
+                </div>
+                <div className="text-muted-foreground truncate">
+                  {[r.city, r.industry, r.phone, r.email].filter(Boolean).join(' · ') || 'no contact facts yet'}
+                </div>
+                {r.why && <div className="text-[10px] text-muted-foreground/80 truncate italic">&ldquo;{r.why}&rdquo;</div>}
+              </div>
+              <Badge variant="outline" className={`text-[9px] shrink-0 ${r.source === 'EXPLEE' ? 'border-brand/40 text-brand' : 'border-emerald-500/40 text-emerald-400'}`}>
+                {r.source === 'EXPLEE' ? 'Explee' : 'Verified pool'}
+              </Badge>
+              <Button size="sm" variant="outline" className="h-7 shrink-0 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" disabled={busy} onClick={() => onAction('add', [r.id])}>
+                <Check className="h-3 w-3 mr-0.5" /> Add
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-rose-400" disabled={busy} onClick={() => onAction('dismiss', [r.id])}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          {waiting.length > 1 && (
+            <div className="px-3 py-2">
+              <Button size="sm" variant="outline" className="w-full h-7 border-brand/40 text-brand hover:bg-brand/10" disabled={busy} onClick={() => onAction('addAll', [])}>
+                <Plus className="h-3 w-3 mr-1" /> Add all {waiting.length} to their pipeline
+              </Button>
+            </div>
+          )}
+          {addedShown.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-xs opacity-60">
+              <div className="min-w-0 flex-1 truncate">{r.company}</div>
+              <Badge variant="outline" className="text-[9px] shrink-0 border-emerald-500/30 text-emerald-400">In pipeline</Badge>
+            </div>
+          ))}
+          {pool.counts.DISMISSED > 0 && (
+            <div className="px-3 py-1.5 text-[10px] text-muted-foreground">{pool.counts.DISMISSED} set aside on past campaigns.</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // =================== Client drawer ===================
 
 function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
@@ -460,6 +607,44 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
+  const [poolBusy, setPoolBusy] = useState(false)
+
+  async function runCampaign(definition: string, city: string) {
+    if (!id) return
+    setPoolBusy(true)
+    try {
+      const r = await api<{ message: string }>(`/api/admin/exec/client/${id}/pool`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...(definition.trim() ? { definition: definition.trim() } : {}),
+          ...(city.trim() ? { city: city.trim() } : {}),
+        }),
+      })
+      toast({ title: 'Campaign done', description: r.message })
+      setTick((t) => t + 1); onChanged()
+    } catch (e) {
+      toast({ title: 'Campaign did not run', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setPoolBusy(false)
+    }
+  }
+
+  async function poolAction(action: 'add' | 'addAll' | 'dismiss', ids: string[]) {
+    if (!id) return
+    setPoolBusy(true)
+    try {
+      const r = await api<{ message: string }>(`/api/admin/exec/client/${id}/pool`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action, ids }),
+      })
+      toast({ title: action === 'dismiss' ? 'Set aside' : 'Into their pipeline', description: r.message })
+      setTick((t) => t + 1); onChanged()
+    } catch (e) {
+      toast({ title: 'Could not update the pool', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setPoolBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -537,6 +722,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                         subAmountCents: c.subscription?.amountCents ?? 0, renewsAt: c.subscription?.renewsAt ?? null,
                         npoNumber: c.subscription?.npoNumber ?? null,
                         counts: { leads: detail?.pipeline.total ?? 0, clients: detail?.clientsCount ?? 0, invoices: detail?.invoices.length ?? 0, projects: detail?.projects.length ?? 0 },
+                        poolCount: detail?.pool.counts.NEW ?? 0,
                         lastActiveAt: null,
                       })}>
                       <Pause className="h-4 w-4 mr-1" /> Pause account
@@ -639,6 +825,11 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                 ))}
               </div>
             </div>
+
+            {/* Lead pool: the campaign bench */}
+            {fresh && (
+              <PoolCard detail={fresh} busy={poolBusy} onRun={runCampaign} onAction={poolAction} />
+            )}
 
             {/* Invoices */}
             <div className="p-5 py-4">
@@ -799,6 +990,12 @@ export default function AdminView() {
     api<ExecData>('/api/admin/exec').then(setExec).catch(() => setExec(null))
   }, [tick])
 
+  // Email deep link: the credit notification points straight at the client's desk.
+  useEffect(() => {
+    const cid = new URLSearchParams(window.location.search).get('client')
+    if (cid) setOpenId(cid)
+  }, [])
+
   async function loadConfig() {
     try {
       const d = await api<AdminData>('/api/admin/config')
@@ -888,7 +1085,7 @@ export default function AdminView() {
           <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due`} />
           <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub="wallet purchases" />
           <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
-          <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub="across all pipelines" />
+          <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub={`across all pipelines · ${k.poolNew} in pools${k.poolArrivals24h > 0 ? ` · +${k.poolArrivals24h} today` : ''}`} />
         </div>
       )}
 
@@ -978,6 +1175,7 @@ export default function AdminView() {
                 </div>
                 <div className="text-xs text-muted-foreground basis-36">
                   <span className="font-medium text-foreground">{rands(u.walletCents)}</span> wallet · {u.counts.leads} leads
+                  {u.poolCount > 0 && <span className="text-brand font-medium"> · {u.poolCount} pooled</span>}
                   <div>joined {timeAgo(u.joinedAt)} · last seen {timeAgo(u.lastActiveAt)}</div>
                 </div>
                 <div className="flex items-center gap-1.5 ml-auto shrink-0">
@@ -1049,8 +1247,8 @@ export default function AdminView() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {data.config.expleeKeySet
-                  ? 'Key configured — lead discovery uses live Explee data.'
-                  : 'No key yet — lead discovery runs in demo mode. Get yours at explee.com (API Keys in account settings).'}
+                  ? 'Key configured — lead discovery and client campaigns search live Explee data.'
+                  : 'No key yet — client campaigns serve fresh faces from your own verified pool instead. Get yours at explee.com (API Keys in account settings).'}
               </p>
             </div>
 

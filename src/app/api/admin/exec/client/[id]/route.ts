@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!user) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
   const now = Date.now()
-  const [topups, creditTxs, projects, stageGroups, clientsCount, invoices, leadsTotal] = await Promise.all([
+  const [topups, creditTxs, projects, stageGroups, clientsCount, invoices, leadsTotal, poolRows, poolCounts, campaigns] = await Promise.all([
     db.topUp.findMany({
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
@@ -61,10 +61,26 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       select: { id: true, number: true, clientName: true, status: true, total: true, issuedAt: true, paidAt: true },
     }),
     db.lead.count({ where: { userId: id } }),
+    // The client's lead pool bench: waiting first (oldest first so nothing rots
+    // at the back), then the most recent adds for context. desc on status puts
+    // NEW before ADDED alphabetically.
+    db.clientPoolLead.findMany({
+      where: { userId: id, status: { in: ['NEW', 'ADDED'] } },
+      orderBy: [{ status: 'desc' }, { createdAt: 'asc' }],
+      take: 120,
+    }),
+    db.clientPoolLead.groupBy({ by: ['status'], where: { userId: id }, _count: { _all: true } }),
+    db.scanRun.findMany({
+      where: { userId: id, mode: { in: ['EXPLEE', 'POOL'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: { id: true, mode: true, leadCount: true, fromPool: true, createdAt: true },
+    }),
   ])
 
   const sub = user.subscription
   const subLive = sub && sub.status === 'ACTIVE' && (!sub.renewsAt || sub.renewsAt.getTime() >= now)
+  const poolMap = Object.fromEntries(poolCounts.map((g) => [g.status, g._count._all]))
 
   return NextResponse.json({
     client: {
@@ -80,6 +96,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     pipeline: {
       stages: Object.fromEntries(stageGroups.map((g) => [g.stage, g._count._all])),
       total: leadsTotal,
+    },
+    pool: {
+      rows: poolRows,
+      counts: { NEW: poolMap.NEW ?? 0, ADDED: poolMap.ADDED ?? 0, DISMISSED: poolMap.DISMISSED ?? 0 },
+      campaigns,
     },
     clientsCount,
     invoices,
