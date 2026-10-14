@@ -3,7 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { awardXp } from '@/lib/gamification'
-import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, type YocoWebhookEvent } from '@/lib/yoco'
+import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, getYocoKeyMode, type YocoWebhookEvent } from '@/lib/yoco'
 import { rewardOnSubscribe } from '@/lib/referral'
 import { getPlan, grantPlanRevealCredits } from '@/lib/plans'
 
@@ -17,6 +17,9 @@ export async function GET() {
     configured: Boolean(secret),
     source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none',
     secretKey: getYocoSecretKeyStatus(),
+    // 'live' | 'test' | null — lets the owner (and probes) confirm real money
+    // mode without exposing any key material.
+    mode: getYocoKeyMode(),
   })
 }
 

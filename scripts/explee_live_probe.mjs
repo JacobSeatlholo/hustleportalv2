@@ -1,11 +1,12 @@
-// Explee live probe: the owner added EXPLEE_API_KEY on Vercel; config.ts now
-// falls back to that env var when the DB config row is absent. Prove on
-// production that the credit story runs on live Explee data:
+// Explee live probe: prove on production that the credit story runs on live
+// Explee data, in the live Yoco era:
 //
-//   1. A fresh QA client loads the R500 starter pack (sandbox instant PAID).
-//   2. Wallet credits land (welcome 9900 -> 59900).
-//   3. The auto campaign fires in after() WITHOUT touching the client's scan
-//      allowance (discover answers 200 immediately after).
+//   1. A fresh QA client registers (welcome credit lands).
+//   2. The R500 starter pack opens a REAL Yoco checkout (live key) and the
+//      TopUp waits PENDING until Yoco's webhook confirms the payment. When no
+//      key is configured, sandbox mode confirms instantly and fires the
+//      auto campaign the same way it did in Task 48c.
+//   3. Discover answers on the client's own allowance either way.
 //   4. Bonus direct probe: an exotic topic where the map directory comes back
 //      empty falls through to Explee (discover fallback B) and returns
 //      source EXPLEE with real companies when the key is live.
@@ -63,27 +64,37 @@ async function main() {
   const before = me1?.wallet?.balance ?? 0
   check('welcome credit on the wallet', before > 0, `balance=${before}`)
 
-  // 2. Load the R500 starter pack (sandbox instant PAID, threshold campaign fires)
+  // 2. Load the R500 starter pack. Live Yoco era: the request opens a real
+  //    hosted checkout and the TopUp stays PENDING until Yoco's webhook says
+  //    paid. Sandbox era (no key): instant PAID plus the auto campaign.
   const top = await req('/api/wallet/topup', { method: 'POST', body: JSON.stringify({ packageId: 'starter' }) })
   const tj = await top.json().catch(() => null)
-  check('topup accepted in sandbox mode', top.status === 200 && tj?.ok === true && tj?.sandbox === true, `status ${top.status}`)
-  check('topup PAID with reference', tj?.topUp?.status === 'PAID' && !!tj?.topUp?.reference, `ref=${tj?.topUp?.reference || 'none'}`)
-  check('starter pack amount R500', tj?.topUp?.amountCents === 50000, `amount=${tj?.topUp?.amountCents}`)
+  const liveCheckout = top.status === 200 && tj?.ok === true && typeof tj?.redirectUrl === 'string' && tj?.sandbox !== true
+  if (liveCheckout) {
+    check('topup opens a live Yoco checkout', true, `mode=${tj?.mode || '?'}`)
+    check('checkout redirect points at Yoco', /yoco\.com/i.test(tj.redirectUrl || ''), String(tj.redirectUrl || '').slice(0, 90))
+    check('live TopUp recorded PENDING at R500', tj?.topUp?.status === 'PENDING' && tj?.topUp?.amountCents === 50000, `ref=${tj?.topUp?.reference || 'none'} amount=${tj?.topUp?.amountCents}`)
+    console.log('  INFO: live mode. No card was charged by this probe; the wallet credits when a real payment confirms via the webhook.')
+  } else {
+    check('topup accepted in sandbox mode', top.status === 200 && tj?.ok === true && tj?.sandbox === true, `status ${top.status}`)
+    check('topup PAID with reference', tj?.topUp?.status === 'PAID' && !!tj?.topUp?.reference, `ref=${tj?.topUp?.reference || 'none'}`)
+    check('starter pack amount R500', tj?.topUp?.amountCents === 50000, `amount=${tj?.topUp?.amountCents}`)
 
-  // 3. Credits landed
-  const me2 = await req('/api/auth/me').then((r) => r.json()).catch(() => null)
-  const afterBal = me2?.wallet?.balance ?? 0
-  check('wallet credited +50000', afterBal === before + 50000, `${before} -> ${afterBal}`)
+    // 3. Credits landed (sandbox only; live wallets wait for the webhook).
+    const me2 = await req('/api/auth/me').then((r) => r.json()).catch(() => null)
+    const afterBal = me2?.wallet?.balance ?? 0
+    check('wallet credited +50000', afterBal === before + 50000, `${before} -> ${afterBal}`)
+  }
 
-  // 4. The campaign runs in after(); give it a moment, then confirm the
-  //    client's own scan allowance is untouched (CAMPAIGN mode excluded).
-  await sleep(12_000)
+  // 4. Discover answers on the client's own allowance. After a sandbox
+  //    campaign this also proves CAMPAIGN mode never ate the scan allowance.
+  await sleep(8_000)
   const scan = await req('/api/leads/discover', {
     method: 'POST',
     body: JSON.stringify({ definition: 'taverns in Soweto that need security services', city: 'Soweto', limit: 5 }),
   })
   const sj = await scan.json().catch(() => null)
-  check('discover answers right after the campaign (allowance untouched)', scan.status === 200, `status ${scan.status} mode=${sj?.mode || '?'}`)
+  check('discover answers 200 on the client allowance', scan.status === 200, `status ${scan.status} mode=${sj?.mode || '?'}`)
   if (sj?.leads?.length) console.log('  scan sample:', jlines(sj.leads, 3).join(' | '))
 
   // 5. Bonus direct probe: exotic topic where the map directory should come
@@ -105,7 +116,7 @@ async function main() {
     console.log('  INFO: map directory or pool answered first; the direct fallback B probe is inconclusive (not a failure).')
   }
 
-  console.log('\nThe owner inbox proof: two emails just went to ceo@businesshustle.co.za,')
+  console.log('\nInbox proof (sandbox runs): two emails just went to ceo@businesshustle.co.za,')
   console.log('the second names the engine (Explee live search vs verified pool) and the Explee balance left.')
   finish()
 }

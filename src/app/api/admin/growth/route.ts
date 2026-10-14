@@ -15,7 +15,7 @@ export async function GET() {
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
   const [subs, users, referrals, topReferrers, topups, newThisMonth, activeSubs] = await Promise.all([
-    db.subscription.findMany({ select: { plan: true, status: true, amountCents: true, renewsAt: true, startedAt: true, userId: true } }),
+    db.subscription.findMany({ select: { plan: true, status: true, amountCents: true, renewsAt: true, startedAt: true, userId: true, provider: true } }),
     db.user.count(),
     db.referral.findMany({ select: { status: true, referrerId: true, invitedUserId: true } }),
     db.referral.groupBy({
@@ -25,21 +25,25 @@ export async function GET() {
       orderBy: { _count: { referrerId: 'desc' } },
       take: 5,
     }),
-    db.topUp.aggregate({ where: { status: 'PAID', paidAt: { gte: monthAgo } }, _sum: { amountCents: true } }),
+    // Real card money only: sandbox QA top ups never dress up the revenue line.
+    db.topUp.aggregate({ where: { status: 'PAID', paidAt: { gte: monthAgo }, provider: 'YOCO' }, _sum: { amountCents: true } }),
     db.user.count({ where: { createdAt: { gte: monthAgo } } }),
     db.subscription.findMany({ where: { status: 'ACTIVE' }, select: { userId: true } }),
   ])
 
   // Lazy expiry view: only count ACTIVE subs whose renewsAt hasn't passed.
+  // Revenue counts live Yoco plans only; QA sandbox plans stay in the roster,
+  // never in the mission math.
   const now = Date.now()
   const active = subs.filter((s) => s.status === 'ACTIVE' && (!s.renewsAt || s.renewsAt.getTime() >= now))
+  const liveActive = active.filter((s) => s.provider === 'YOCO')
   const pastDue = subs.filter((s) => s.status === 'PAST_DUE' || (s.status === 'ACTIVE' && s.renewsAt && s.renewsAt.getTime() < now)).length
   const canceled = subs.filter((s) => s.status === 'CANCELED').length
 
-  const mrrCents = active.reduce((a, s) => a + s.amountCents, 0)
+  const mrrCents = liveActive.reduce((a, s) => a + s.amountCents, 0)
   const byPlan = {
-    HUSTLER: active.filter((s) => s.plan === 'HUSTLER').length,
-    BOSS: active.filter((s) => s.plan === 'BOSS').length,
+    HUSTLER: liveActive.filter((s) => s.plan === 'HUSTLER').length,
+    BOSS: liveActive.filter((s) => s.plan === 'BOSS').length,
   }
 
   const referrerIds = topReferrers.map((r) => r.referrerId)
@@ -69,8 +73,8 @@ export async function GET() {
       targetCents: MRR_TARGET_CENTS,
       percent: Math.min(100, Math.round((mrrCents / MRR_TARGET_CENTS) * 100)),
     },
-    members: { total: users, newThisMonth, subscribers: active.length, byPlan },
-    subscriptions: { active: active.length, pastDue, canceled },
+    members: { total: users, newThisMonth, subscribers: liveActive.length, byPlan },
+    subscriptions: { active: liveActive.length, pastDue, canceled },
     referrals: {
       total: referrals.length,
       subscribed: referrals.filter((r) => r.status === 'SUBSCRIBED').length,

@@ -25,7 +25,7 @@ import { api, rands } from './shared'
 import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
-  Building2, ReceiptText, History, CircleDot, Sparkles, X, Check,
+  Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -43,6 +43,8 @@ interface Kpis {
   subsPaused: number
   subsCanceled: number
   topups30dCents: number
+  sandboxTopups30dCents: number
+  testMrrCents: number
   walletFloatCents: number
   leadsPlatform: number
   poolNew: number
@@ -76,6 +78,22 @@ interface RosterRow {
 interface ExecData {
   kpis: Kpis
   roster: RosterRow[]
+  payments?: {
+    keyMode: 'live' | 'test' | null
+    webhookConfigured: boolean
+    webhookSource: string
+    recent: {
+      id: string
+      amountCents: number
+      creditCents: number
+      provider: string
+      reference: string
+      paidAt: string | null
+      createdAt: string
+      clientName: string
+      clientBusiness: string | null
+    }[]
+  }
 }
 
 interface TopUpRow {
@@ -775,6 +793,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                   {detail?.payments.topups.map((t) => (
                     <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
                       <Badge variant="outline" className={`text-[9px] ${t.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : t.status === 'FAILED' ? 'bg-rose-500/15 text-rose-400 border-rose-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}>{t.status}</Badge>
+                      <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-white/15 text-muted-foreground'}`}>{t.provider === 'YOCO' ? 'Yoco' : 'Sandbox'}</Badge>
                       <span className="font-medium w-20">{rands(t.amountCents)}</span>
                       <span className="text-muted-foreground flex-1 truncate">{t.reference}{t.providerRef ? ` · ${t.providerRef}` : ''}</span>
                       <span className="text-muted-foreground">{timeAgo(t.paidAt || t.createdAt)}</span>
@@ -944,6 +963,103 @@ function MiniStat({ icon, label, value, sub }: { icon: React.ReactNode; label: s
   )
 }
 
+// =================== Payments card (the money, live) ===================
+// The owner's at a glance answer to one question: is real card money flowing
+// and does every rand land safely? Gateway mode, webhook state, and the latest
+// settled payments, straight from the ledger.
+
+function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData['payments']> | null; onChanged: () => void }) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  if (!payments) return null
+
+  async function registerWebhook() {
+    setBusy(true)
+    try {
+      await api('/api/webhooks/yoco/register', { method: 'POST', body: JSON.stringify({}) })
+      toast({ title: 'Webhook registered', description: 'Yoco now tells HustlePortal the moment a payment lands, and wallets credit themselves.' })
+      onChanged()
+    } catch (e) {
+      toast({ title: 'Could not register the webhook', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const modeBadge = payments.keyMode === 'live' ? (
+    <Badge className="bg-brand text-black hover:bg-brand text-[10px]">Yoco live</Badge>
+  ) : payments.keyMode === 'test' ? (
+    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">Yoco test</Badge>
+  ) : (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground">Not connected</Badge>
+  )
+
+  const modeNote = payments.keyMode === 'live'
+    ? 'Card payments run on your live Yoco account. Clients pay real rands and wallets credit the moment Yoco confirms.'
+    : payments.keyMode === 'test'
+      ? 'Checkout runs on test keys right now. Swap in your live key on Vercel to take real money.'
+      : 'Add your Yoco secret key on Vercel, then redeploy, to take card payments.'
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-brand" /> Payments
+          {modeBadge}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">{modeNote}</p>
+
+        {payments.keyMode && (
+          payments.webhookConfigured ? (
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs">
+              <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium text-emerald-400">Webhook registered</div>
+                <div className="text-muted-foreground">Every payment confirms itself: wallets credit and plans activate the moment Yoco says paid.</div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+              <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-medium text-amber-400">Register the webhook to finish the setup</div>
+                <div className="text-muted-foreground">Without it, card payments wait unclaimed instead of crediting wallets. One tap fixes it.</div>
+              </div>
+              <Button size="sm" className="h-7 bg-brand text-black hover:bg-brand/90 shrink-0" disabled={busy} onClick={registerWebhook}>
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3 w-3 mr-1" />} Register
+              </Button>
+            </div>
+          )
+        )}
+
+        <div>
+          <div className="text-xs text-muted-foreground mb-1.5">Latest payments</div>
+          <div className="rounded-lg border divide-y max-h-56 overflow-y-auto hp-scroll">
+            {payments.recent.length === 0 && (
+              <div className="px-3 py-2.5 text-xs text-muted-foreground">No card payments yet. The moment a client loads credit, it lands here.</div>
+            )}
+            {payments.recent.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-white/15 text-muted-foreground'}`}>
+                  {t.provider === 'YOCO' ? 'Yoco' : 'Sandbox'}
+                </Badge>
+                <span className="font-medium w-20">{rands(t.amountCents)}</span>
+                <span className="flex-1 truncate">
+                  {t.clientName}{t.clientBusiness ? <span className="text-muted-foreground"> · {t.clientBusiness}</span> : ''}
+                  <span className="text-muted-foreground"> · {t.reference}</span>
+                </span>
+                <span className="text-muted-foreground shrink-0">{timeAgo(t.paidAt || t.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // =================== Executive Dashboard (main) ===================
 
 interface AdminData {
@@ -951,7 +1067,6 @@ interface AdminData {
     expleeKeySet: boolean
     expleeKeyMasked: string
     leadPrice: number
-    mode: string
     packs: { id: string; name: string; amountCents: number; creditCents: number; bonus: number }[]
   }
   stats: { userCount: number; leadCount: number; topupTotal: number }
@@ -982,7 +1097,6 @@ export default function AdminView() {
   // lead economy config (kept from the classic admin panel)
   const [apiKey, setApiKey] = useState('')
   const [leadPrice, setLeadPrice] = useState('')
-  const [mode, setMode] = useState('DEMO')
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -1001,7 +1115,6 @@ export default function AdminView() {
       const d = await api<AdminData>('/api/admin/config')
       setData(d)
       setLeadPrice(String(d.config.leadPrice / 100))
-      setMode(d.config.mode)
     } catch (e) {
       toast({ title: 'Admin load failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     }
@@ -1019,7 +1132,6 @@ export default function AdminView() {
         body: JSON.stringify({
           ...(apiKey.trim() ? { expleeApiKey: apiKey.trim() } : {}),
           leadPrice: Math.round(parseFloat(leadPrice) * 100) || 1500,
-          mode,
         }),
       })
       toast({ title: 'Settings saved' })
@@ -1082,12 +1194,15 @@ export default function AdminView() {
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <KpiCard hot icon={<UserPlus className="h-3 w-3" />} label="New signups 7d" value={String(k.new7)} sub={`+${k.new30} in 30 days`} />
           <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.members)} sub={k.suspended > 0 ? `${k.suspended} paused` : 'all active'} />
-          <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due`} />
-          <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub="wallet purchases" />
+          <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due${k.testMrrCents > 0 ? ` · ${rands(k.testMrrCents)} in test plans` : ''}`} />
+          <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub={`live card money${k.sandboxTopups30dCents > 0 ? ` · ${rands(k.sandboxTopups30dCents)} in tests` : ''}`} />
           <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
           <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub={`across all pipelines · ${k.poolNew} in pools${k.poolArrivals24h > 0 ? ` · +${k.poolArrivals24h} today` : ''}`} />
         </div>
       )}
+
+      {/* Payments: gateway mode, webhook state, latest settled money */}
+      <PaymentsCard payments={exec?.payments ?? null} onChanged={() => setTick((t) => t + 1)} />
 
       {/* Newest members spotlight */}
       <Card>
@@ -1217,7 +1332,7 @@ export default function AdminView() {
         <div className="grid sm:grid-cols-3 gap-3">
           <StatCard icon={<Users className="h-4 w-4" />} label="Users" value={String(data.stats.userCount)} />
           <StatCard icon={<Target className="h-4 w-4" />} label="Leads in platform" value={String(data.stats.leadCount)} />
-          <StatCard icon={<Coins className="h-4 w-4" />} label="Top-ups processed" value={rands(data.stats.topupTotal)} />
+          <StatCard icon={<Coins className="h-4 w-4" />} label="Top ups processed" value={rands(data.stats.topupTotal)} />
         </div>
       )}
 
@@ -1259,14 +1374,21 @@ export default function AdminView() {
                 <p className="text-xs text-muted-foreground">What clients pay in credits to unlock contact details. Your margin over Explee cost lives here.</p>
               </div>
               <div className="space-y-1.5">
-                <Label>Data mode</Label>
-                <Select value={mode} onValueChange={setMode}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DEMO">Demo (fallback data)</SelectItem>
-                    <SelectItem value="LIVE">Live (Explee)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Discovery engine</Label>
+                <div className="rounded-lg border bg-card px-3 py-2 text-sm flex items-center gap-2 min-h-9">
+                  {data.config.expleeKeySet ? (
+                    <>
+                      <Badge className="bg-brand text-black hover:bg-brand text-[10px]">Live</Badge>
+                      <span className="text-xs text-muted-foreground">Explee finds fresh faces for every campaign.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Fallback</Badge>
+                      <span className="text-xs text-muted-foreground">Campaigns serve verified pool faces until an Explee key is saved.</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">The engine picks itself from your keys. Payments and lead search both run live.</p>
               </div>
             </div>
 

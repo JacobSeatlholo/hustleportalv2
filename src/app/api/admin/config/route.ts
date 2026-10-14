@@ -20,10 +20,12 @@ export async function GET() {
     getConfig(CONFIG_KEYS.MODE),
     getConfig(CONFIG_KEYS.TOPUP_PACKS),
   ])
-  const [userCount, leadCount, txAgg] = await Promise.all([
+  const [userCount, leadCount, topupAgg] = await Promise.all([
     db.user.count(),
     db.lead.count(),
-    db.creditTx.aggregate({ where: { type: 'TOPUP' }, _sum: { amount: true } }),
+    // Lifetime settled card money (live Yoco top ups). Sandbox QA payments are
+    // test rands, never revenue.
+    db.topUp.aggregate({ where: { status: 'PAID', provider: 'YOCO' }, _sum: { amountCents: true } }),
   ])
   const users = await db.user.findMany({
     orderBy: { createdAt: 'desc' },
@@ -41,7 +43,7 @@ export async function GET() {
     stats: {
       userCount,
       leadCount,
-      topupTotal: txAgg._sum.amount || 0,
+      topupTotal: topupAgg._sum.amountCents || 0,
     },
     users,
   })

@@ -29,6 +29,17 @@ export function getYocoSecretKeyStatus(): { present: boolean; validFormat: boole
   return { present: Boolean(raw), validFormat: Boolean(raw && raw.startsWith('sk_')) }
 }
 
+/**
+ * Which Yoco world money moves in: 'live' (real cards, real rands) or 'test'.
+ * Derived from the key prefix only — no secret material ever leaves the server.
+ * Null means no usable key is configured.
+ */
+export function getYocoKeyMode(): 'live' | 'test' | null {
+  const key = getYocoSecretKey()
+  if (!key) return null
+  return key.startsWith('sk_live_') ? 'live' : 'test'
+}
+
 /** Webhook secret: env var wins, otherwise the one stored by the register endpoint. */
 export async function getYocoWebhookSecret(): Promise<string | null> {
   const env = process.env.YOCO_WEBHOOK_SECRET?.trim()
