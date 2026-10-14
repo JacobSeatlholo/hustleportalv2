@@ -558,3 +558,16 @@ Work Log:
 Stage Summary:
 - Production 82f5170: every engine scan is now seconds faster on the capture path, the serve path ships 2.5x less data, the daily allowance refills when the copy says it does, and the scan log can no longer grow forever. E2E suite now covers the reveal money contract and the NPO discount.
 - Post-deploy regression next: full E2E + pool probe live.
+
+---
+Task ID: 45b
+Agent: Super Z (main)
+Task: Post-deploy regression on production 82f5170.
+
+Work Log:
+- Canary: /api/cron/leads-refresh answered with the new prunedScans key (0 pruned, 0 demoted, 0 rechecked) — new build confirmed live, cron clean.
+- Full E2E (now 37 checks): RESULT 37 passed, 0 failed. First ever live coverage of the reveal honesty contract (no verified contact found -> NOT charged, honest message) and the NPO 30% sandbox rate (R139.30, npoNumber stored). Discover served mode POOL with zero engine calls on the hot QA topic.
+- Pool probe: 6/6 PASS (chips on every lead, rescan serves from pool, gentle 429 cooldown, brand new seller serves instantly and free).
+
+Stage Summary:
+- Production 82f5170 fully verified: efficiency pass (parallel capture, DB side rotation) + sustainability pass (SAST midnight, scan log prune, lastVerifiedAt index) landed with zero regressions. The platform is ready for the Yoco payment gateway work.
