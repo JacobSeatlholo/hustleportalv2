@@ -257,6 +257,14 @@ export async function zaiGenerate(
   const FREE_MODELS = new Set(['glm-4.5-flash', 'glm-4-flash'])
   let doorArrears = false
   let doorPaced = false
+  // Billing refusals are per door, not per account: one login serves both
+  // doors, but each platform keeps its own billing pocket, so a wallet
+  // refusal on one door says nothing about the other. Count them across the
+  // whole walk; only when BOTH doors refuse does the wallet become the
+  // final word. (The live billing history proved the old one knock rule
+  // wrong: a z.ai key with a paid resource pack was refused by the Zhipu
+  // door's pocket and the walk never asked the z.ai door.)
+  let arrearsDoors = 0
   for (const ep of orderedEndpoints()) {
     doorArrears = false
     doorPaced = false
@@ -304,23 +312,27 @@ export async function zaiGenerate(
           if (res.status === 429 || res.status === 402) {
             const arrears = arrearsWords(door)
             if (opts.search && arrears) {
-              // The web search tool is billed apart from model tokens on both
-              // doors, so an empty wallet kills EVERY rung of a search walk:
-              // the paid rungs say 429 outright and the free flash rungs hang
-              // or 400 with the tool attached (the live trace proved it).
-              // One door's words settle it for the whole walk, because one key
-              // is one account: end now with the copy that names the door and
-              // the fix, and hand the time budget to the backup engines.
-              return {
-                ok: false,
-                error: `GLM credits on ${ep.id === 'z.ai' ? 'z.ai' : 'the Zhipu open platform'} do not cover the web search tool right now. Top up on that platform's billing page, or save a key from the platform that holds your credits, and web grounded scans come back.`,
-                reason: 'BALANCE',
-                endpoint: ep.id,
+              // The web search tool is billed apart from model tokens, and
+              // each door bills from its own pocket. This door refused, so
+              // stop paying its rungs and knock the other door once; only
+              // when BOTH doors refuse does the wallet story become the
+              // final answer. (One door's words no longer settle the walk:
+              // the live billing history proved a paid pack on one platform
+              // sits invisible to the other door.)
+              arrearsDoors += 1
+              if (arrearsDoors >= 2) {
+                return {
+                  ok: false,
+                  error: 'Both GLM doors refused the web search tool for balance. A small top up or a search bundle on the billing page of the platform where your credits live brings web grounded scans back.',
+                  reason: 'BALANCE',
+                  endpoint: ep.id,
+                }
               }
+              break
             }
             if (arrears) {
-              // Plain walk, empty wallet: skip this door's paid rungs, its free
-              // flash rungs may still answer plain generation.
+              // Plain walk, empty pocket on this door: skip its paid rungs,
+              // its free flash rungs may still answer plain generation.
               doorArrears = true
               continue
             }
@@ -390,6 +402,12 @@ export interface ZaiSearchProbe {
  * door's own words coming back so the operator reads the truth, not a guess.
  */
 export async function probeZaiSearch(key: string, timeoutMs = 9_000): Promise<ZaiSearchProbe> {
+  // Both doors get asked: one login serves both, and each platform bills
+  // from its own pocket, so the first door's refusal must never hide an
+  // answer from the other. The most informative refusal (billing beats
+  // auth) comes back when both doors say no.
+  const rank = (s: number) => (s === 402 ? 5 : s === 429 ? 4 : s === 401 || s === 403 ? 3 : 2)
+  let worst: ZaiSearchProbe | null = null
   for (const ep of orderedEndpoints()) {
     try {
       const res = await fetch(`${ep.base}/chat/completions`, {
@@ -413,17 +431,18 @@ export async function probeZaiSearch(key: string, timeoutMs = 9_000): Promise<Za
       }
       const door = await readDoorError(res)
       const refused = arrearsWords(door)
-      return {
+      const probe: ZaiSearchProbe = {
         ok: false,
         status: res.status,
         words: refused ? 'not covered by the current balance' : door.words,
         endpoint: ep.id,
       }
+      if (!worst || rank(probe.status ?? 0) > rank(worst.status ?? 0)) worst = probe
     } catch {
       // this door may be unreachable while the other is fine: try the next
     }
   }
-  return { ok: false, status: null, words: null, endpoint: null }
+  return worst ?? { ok: false, status: null, words: null, endpoint: null }
 }
 
 export interface ZaiProbeOutcome {

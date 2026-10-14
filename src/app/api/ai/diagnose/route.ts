@@ -190,7 +190,7 @@ async function zaiDiag(userId: string): Promise<ZaiDiag> {
       ok: false,
       searchOk: false,
       searchRaw: sprobe.words,
-      message: `GLM answers on ${who}, but the live web search tool was refused (status ${sprobe.status ?? 'none'})${sprobe.endpoint ? ` on ${sprobe.endpoint === 'zhipu' ? 'the Zhipu open platform' : 'z.ai'}` : ''}. A billing refusal means that door accepted the key, and a door only accepts keys minted on its own platform, so the key's home is where the fix lives: top up there, or save a key from the platform that holds your credits. The engine said: ${sprobe.words || 'no message'}`,
+      message: `GLM answers on ${who}, but the web search tool was refused for balance on both doors (status ${sprobe.status ?? 'none'}). One login serves both GLM doors and search is billed apart from model tokens, so a small top up or a search bundle on the billing page of the platform where your credits live is the part to fix. The engine said: ${sprobe.words || 'no message'}`,
     }
   }
   if (probe.status === 401 || probe.status === 403) {
