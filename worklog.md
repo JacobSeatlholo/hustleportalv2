@@ -484,3 +484,18 @@ Work Log:
 
 Stage Summary:
 - Plug and play chain is structurally complete and proven piecewise: fresh user → GLM refuse (honest) → Gemini grounded (ready; AQ platform key verified 200; blocked ONLY by the project's drained grounding bucket right now) → OSM real leads (3 real Soweto businesses every probe). Paths to live grounding: (1) fresh Google project + fresh key = fresh bucket instantly, (2) wait for Google's daily reset (~09:00 SAST / midnight Pacific), (3) small z.ai cash top up revives the GLM search leg (100M token pack already pays tokens). Monitor at https://ai.dev/rate-limit. Platform DeepSeek key still missing — fresh-user OSM leads stay unranked until the user adds their DeepSeek key to Vercel.
+
+---
+Task ID: 43k
+Agent: Super Z (main)
+Task: User reported scans still failing with the triple message (GLM balance refusal + map busy + Gemini quota) and suspected the missing DeepSeek key. Demanded plug and play.
+
+Work Log:
+- Root causes isolated: (1) platform GLM key fronted EVERY scan and its search tool is balance refused, so every scan paid a dead attempt plus billing noise the seller cannot act on; (2) the Gemini quota message said "try again in a minute" for what is a DAILY grounded-search drain (resets ~09:00 SAST), sending the user retrying against a wall; (3) OSM fallback gates (>20s/>8s remaining) got starved after the AI legs ate the budget, producing "map directory busy" even when Nominatim/Photon could answer; (4) DeepSeek absence confirmed HARMLESS (NO_KEY path returns raw OSM leads).
+- gemini.ts: friendlyError QUOTA now distinguishes PerMinute (pacing, one more try) vs day/bare walls (refills around 09:00 South African time); PerMinute 429s ride a new 65s per-(key,model) bench (MODEL_RATE_COOLDOWN_MS) so repeated scans stop re-paying the 429 storm; the park-and-retry delay path (up to 8s per drained model) retired in favour of bench + rotate.
+- discover route: zaiFirst now requires a PERSONAL z.ai key (Integrations); the platform GLM pool never fronts grounded scans and all its BALANCE/RATE/KEY_INVALID notices are suppressed (zaiWhy + engineErrors gated on personalZai); final NONE note therefore leads with the honest Gemini quota words; "AI ranking is resting" clause dropped from unranked OSM note.
+- osm.ts: Overpass phase cap now dynamic (remaining minus 18s reserve, clamped 4-12s) so Nominatim and Photon ALWAYS get their turn; their gates lowered to >10s/>5s; fetch timeouts tightened (Nominatim 15s to 10s, Photon 12s to 8s).
+- Deployed e9174bd (d7015f2..e9174bd). Live probe on production (fresh QA user, zero keys): Gemini leads with ONE fast 429 attempt (149ms, bare wall breaker fires, no pool hammering), GLM backup refuses silently (notice none), OSM delivered 3 real Soweto businesses (Kwa Lichaba Lounge, Chaf-Pozi, The Net Cafe) with clean note. Plug and play proven: register, scan, real leads, zero setup.
+
+Stage Summary:
+- The triple-error message is dead: no billing noise, honest quota wording, map directory no longer starved. Fresh users get real leads 24/7 even on a drained AI day. Paths to live grounded AI scans: fresh Google project key (new bucket, instant), daily reset ~09:00 SAST, or fund z.ai search. Platform DeepSeek key still absent by user choice, ranking sugar only.
