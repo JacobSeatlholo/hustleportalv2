@@ -535,3 +535,26 @@ Work Log:
 
 Stage Summary:
 - The three promises are live in production: FRESH (re-sightings prove active, 60 day demotion, rotation keeps new faces coming, verified chips show exactly how fresh), VERIFIABLE (every lead carries a badge backed by a real check and a clickable source link, anti fabrication verifier unchanged), SCALE (first scan of a topic pays, everyone after serves free, cooldown + daily caps stop abuse, OSM floor untouched). Onboarding can now never stampede the engines: a thousand sellers on the same topic cost one scan.
+
+---
+Task ID: 45
+Agent: Super Z (main)
+Task: "Do a complete end to end test to ensure we have cleaned out all bugs and or inefficiencies. The scan works, now make it more efficient and sustainable for future client use." (Yoco payments next.)
+
+Work Log:
+- Baseline: full E2E suite (e2e_prod_qa.mjs) against production BEFORE changes: 30 passed, 0 failed. Core journey healthy on 7bebccc.
+- Code audit found 4 real issues:
+  1. INEFFICIENCY: rememberScanResults wrote pool rows SEQUENTIALLY (up to 30 roundtrips x ~100ms on Neon = seconds of tail latency on EVERY engine scan). Now classifies merges vs creates first (no DB), then applies both in parallel chunks of 8.
+  2. INEFFICIENCY: serveFromPool shipped up to 400 full pool rows and sorted in JS. Now Postgres does the rotation sort (orderBy relation lastServedAt asc nulls first, then lastSeenAt desc) and only the head 150 rows ship. JS sort kept as deterministic tiebreak.
+  3. BUG: daily scan allowance window refilled at 02:00 SAST, not midnight as the copy promised (the shift-back-then-floor shortcut skipped the final 2h shift back to UTC). Fixed with true SAST midnight computation.
+  4. SCALE: ScanRun grew one row per scan forever (cooldown, daily cap and warm window all live within one day). Daily cron now prunes rows older than 45 days (prunedScans in the cron response).
+  5. SCALE: cron stalest-first website recheck had no index on lastVerifiedAt. Added @@index([lastVerifiedAt]) on LeadPool (schema additive, db push on Vercel build).
+- E2E hardened (coverage gaps closed):
+  - Reveal honesty contract NOW TESTED end to end: discover -> save top lead to pipeline (POST /api/leads) -> reveal (charged only when real contact) -> second reveal never charges twice. Previously skipped because discover results carry no id.
+  - Balance baseline for the credit-grant check taken just before subscribe, so a legitimate reveal charge can never fake a failed grant.
+  - New checks: discover names its engine (mode + source), every lead carries a real business name, NPO 30% sandbox amount = R139.30 with npoNumber stored.
+- QA: prisma validate OK (dummy URL; sandbox has no DATABASE_URL), tsc clean on src/ (only pre-existing skills/ error outside the build), next build OK. Deployed 7bebccc..82f5170.
+
+Stage Summary:
+- Production 82f5170: every engine scan is now seconds faster on the capture path, the serve path ships 2.5x less data, the daily allowance refills when the copy says it does, and the scan log can no longer grow forever. E2E suite now covers the reveal money contract and the NPO discount.
+- Post-deploy regression next: full E2E + pool probe live.
