@@ -207,7 +207,9 @@ async function searchNominatimLeads(
     }
     const res = await fetch(`${NOMINATIM}?${params}`, {
       headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(15_000),
+      // 10s cap: Nominatim answers in 1 to 3 seconds when it answers at all;
+      // a hanging call must never eat the scan's remaining budget.
+      signal: AbortSignal.timeout(10_000),
     })
     if (!res.ok) return { leads: [] }
     const rows = (await res.json()) as {
@@ -280,7 +282,8 @@ async function searchPhotonLeads(
     })
     const res = await fetch(`https://photon.komoot.io/api/?${params}`, {
       headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(12_000),
+      // 8s cap: Photon answers in 1 to 3 seconds when it answers at all.
+      signal: AbortSignal.timeout(8_000),
     })
     if (!res.ok) return { leads: [] }
     const json = (await res.json()) as {
@@ -368,22 +371,29 @@ export async function searchOsmLeads(
     return { ok: false, status: 503 }
   }
   try {
-    let result = await runOverpass(overpassQuery(place, tagFilters, limit, opts?.lat !== undefined))
+    // Reserve the tail of the budget for the fallbacks that actually answer
+    // from datacenter IPs (Nominatim's category search, then Photon): the
+    // Overpass phase gets whatever is left after an 18 second reserve, clamped
+    // to its usual 12s ceiling and a 4s floor. Without the reserve, hanging
+    // mirrors starved the fallbacks and every scan read "map directory busy".
+    const overpassCap = () => Math.max(4_000, Math.min(12_000, remaining() - 18_000))
+    let result = await runOverpass(overpassQuery(place, tagFilters, limit, opts?.lat !== undefined), overpassCap())
     // Category too narrow for this area (common in townships) → one generic sweep of
     // ALL named businesses. Still 100% real directory data. Only while budget lasts.
     if ((!result.ok || (result.data?.elements || []).length === 0) && tagFilters.length > 0 && remaining() > 20_000) {
-      result = await runOverpass(overpassQuery(place, [], limit, opts?.lat !== undefined))
+      result = await runOverpass(overpassQuery(place, [], limit, opts?.lat !== undefined), overpassCap())
     }
     if (!result.ok) {
       // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
       // category search (same OSM data, indexer-friendly, bounded around the mapped
       // point) picks up the slack, then Photon (most datacenter-friendly of all)
-      // before we admit defeat.
-      if (remaining() > 20_000) {
+      // before we admit defeat. Low gates: they answer in 1 to 3 seconds when
+      // they answer at all, so they get their turn even late in the scan.
+      if (remaining() > 10_000) {
         const nom = await searchNominatimLeads(area, definition, limit, place)
         if (nom.leads.length > 0) return nom
       }
-      if (remaining() > 8_000) {
+      if (remaining() > 5_000) {
         const ph = await searchPhotonLeads(area, definition, limit, place)
         if (ph.leads.length > 0) return ph
       }
@@ -419,9 +429,11 @@ export async function searchOsmLeads(
     if (leads.length === 0) {
       // Sparse township coverage in the map directory → Nominatim's category indexer
       // (same OSM data) gets one more shot, then Photon, before we admit defeat.
-      const nom = await searchNominatimLeads(area, definition, limit, place)
+      // Same low gates as the failure path — they only run while there is real
+      // runway, and they answer fast when they answer at all.
+      const nom = remaining() > 10_000 ? await searchNominatimLeads(area, definition, limit, place) : { leads: [] }
       if (nom.leads.length > 0) return nom
-      if (remaining() > 8_000) {
+      if (remaining() > 5_000) {
         const ph = await searchPhotonLeads(area, definition, limit, place)
         if (ph.leads.length > 0) return ph
       }

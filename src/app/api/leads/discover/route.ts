@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
-import { zaiGenerate, getUserZaiKey, getPlatformZaiKey } from '@/lib/zai'
+import { zaiGenerate, getUserZaiKey } from '@/lib/zai'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
@@ -15,14 +15,17 @@ export const maxDuration = 60
  * POST /api/leads/discover — source REAL leads.
  *
  * ENGINE CHAIN (first one with real results wins):
- *  1. The scan's LEADER depends on the setup: any saved z.ai key (a personal
- *     one under Integrations, or the operator's platform key in the
- *     environment, named ZAI_API_KEY or a friendly alias like GLM_key) puts
- *     z.ai GLM in front — about two cents per scan, no Google quota. Without
- *     one, Gemini with Google Search grounding leads (22s budget).
+ *  1. A PERSONAL z.ai key (the seller's own, under Integrations) puts GLM in
+ *     front — their credits, their control, about two cents per scan. The
+ *     PLATFORM GLM pool never fronts a grounded scan: its web search tool
+ *     draws on a separate cash balance, and while that is unfunded a platform
+ *     led scan always dies on the same refusal and drags a billing note the
+ *     seller cannot act on into every result. Without a personal key, Gemini
+ *     with Google Search grounding leads (22s budget).
  *  2. The other engine backs up automatically: z.ai GLM brings live Web Search
  *     grounding that ignores Google's quota mood; Gemini grounds on Google
- *     Search when z.ai can't answer.
+ *     Search when z.ai can't answer. The GLM engine takes the lead spot back
+ *     automatically the moment its search balance is funded.
  *  3. OpenStreetMap real directory (keyless) with DeepSeek ranking when a
  *     DeepSeek key exists — ranks reality, never supplies contact facts.
  *  4. Explee verified data when configured.
@@ -300,13 +303,16 @@ export async function POST(req: NextRequest) {
 
   const t0 = Date.now()
 
-  // WHO LEADS THE SCAN: a saved z.ai key puts the GLM engine in front — a
-  // personal key under Integrations (their credits, their control) or the
-  // operator's platform key (deployed for exactly this: deterministic scans
-  // that ignore Google's quota mood mid presentation). Google steps down to
-  // automatic backup. Without any z.ai key the classic order holds: Gemini
-  // first, and no z.ai stop at all.
-  const zaiFirst = Boolean(await getUserZaiKey(userId)) || Boolean(getPlatformZaiKey())
+  // WHO LEADS THE SCAN: a PERSONAL z.ai key (the seller's own credits, their
+  // control) puts the GLM engine in front. The platform GLM pool stays OUT of
+  // the lead spot: its web search tool draws on a separate cash balance, and
+  // while that is unfunded a platform led scan always dies on the same refusal
+  // and drags its billing note into every result. Gemini (the seller's own key
+  // or the platform key) leads instead; the GLM engine keeps its place as the
+  // automatic second engine and takes the lead back the moment its search
+  // balance is funded.
+  const personalZai = Boolean(await getUserZaiKey(userId))
+  const zaiFirst = personalZai
 
   const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000, trace: geminiTrace })
   const geminiTrace: string[] = []
@@ -363,7 +369,10 @@ export async function POST(req: NextRequest) {
    * rejected key points at Integrations.
    */
   const zaiWhy = (who: string): string | undefined => {
-    if (!zai || zai.ok) return undefined
+    // The platform GLM pool's balance is the operator's business, never the
+    // seller's noise: only a PERSONAL key's refusal names a fix the reader
+    // can actually act on. Platform refusals stay silent.
+    if (!personalZai || !zai || zai.ok) return undefined
     if (zai.reason === 'BALANCE')
       return `Heads up: both GLM doors refused the web search tool for balance, so ${who} carried this scan. A small top up or a search bundle on the billing page of the platform where your credits live puts it back in front.`
     if (zai.reason === 'RATE')
@@ -447,7 +456,7 @@ export async function POST(req: NextRequest) {
       ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
       ...(osm.note ? { osmNote: osm.note } : {}),
       ...(body.debug ? { glmTrace, geminiTrace } : {}),
-      note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed. AI ranking is resting, so these are unranked.`,
+      note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed.`,
     })
   }
 
@@ -464,7 +473,7 @@ export async function POST(req: NextRequest) {
   const mapWhy = osm.note ? ` ${osm.note}` : ' The map directory had nothing for that description either.'
   const engineErrors: { error: string; reason?: string }[] = []
   if (!ai.ok) engineErrors.push({ error: ai.error })
-  if (zai && !zai.ok) engineErrors.push({ error: zai.error, reason: zai.reason })
+  if (personalZai && zai && !zai.ok) engineErrors.push({ error: zai.error, reason: zai.reason })
   const engineError = engineErrors.length
     ? engineErrors.find((e) => e.reason === 'BALANCE' || e.reason === 'KEY_INVALID' || e.reason === 'RATE')?.error ?? engineErrors[0].error
     : ''

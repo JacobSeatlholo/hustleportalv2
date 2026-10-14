@@ -119,10 +119,14 @@ function benchKey(key: string): void {
  * within a minute. Without this bench the drained model sits at the head of every
  * later walk: pure latency tax plus pointless request volume. A day bucket rides
  * the bench 30 minutes; a zero limit (needs billing or a different project, it
- * never self-heals) six hours. In-memory per serverless instance, same as keyCooldown.
+ * never self-heals) six hours. A PER MINUTE wall rides a short 65 second bench:
+ * it clears itself in about a minute, and benching stops repeated scans from
+ * re paying the same 429 storm while the window refills. In-memory per serverless
+ * instance, same as keyCooldown.
  */
 const MODEL_QUOTA_COOLDOWN_MS = 30 * 60_000
 const MODEL_QUOTA_COOLDOWN_ZERO_MS = 6 * 60 * 60_000
+const MODEL_RATE_COOLDOWN_MS = 65_000
 const modelQuotaCooldown = new Map<string, number>()
 function modelQuotaTag(key: string, model: string): string {
   return `${keyTag(key)}|${model}`
@@ -136,11 +140,14 @@ function modelDrained(key: string, model: string): boolean {
   }
   return true
 }
-function benchModelQuota(key: string, model: string, zeroLimit: boolean): void {
-  modelQuotaCooldown.set(
-    modelQuotaTag(key, model),
-    Date.now() + (zeroLimit ? MODEL_QUOTA_COOLDOWN_ZERO_MS : MODEL_QUOTA_COOLDOWN_MS)
-  )
+function benchModelQuota(key: string, model: string, kind: 'day' | 'zero' | 'minute'): void {
+  const ms =
+    kind === 'zero'
+      ? MODEL_QUOTA_COOLDOWN_ZERO_MS
+      : kind === 'minute'
+        ? MODEL_RATE_COOLDOWN_MS
+        : MODEL_QUOTA_COOLDOWN_MS
+  modelQuotaCooldown.set(modelQuotaTag(key, model), Date.now() + ms)
 }
 /** Google names the exhausted bucket with a numeric limit — 0 means no free tier for this model here. */
 function quotaZeroLimit(raw: string): boolean {
@@ -192,14 +199,6 @@ function classify(status: number, body: string): ErrorClass {
   return 'OTHER'
 }
 
-/** Google sometimes names a short retryDelay in the 429 body — honour it when tiny (≤8s). */
-function quotaRetryDelayMs(raw: string): number | null {
-  const m = raw.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)
-  if (!m) return null
-  const s = parseFloat(m[1])
-  return s > 0 && s <= 8 ? Math.ceil(s * 1000) : null
-}
-
 function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: boolean): string {
   const own = ownKey
     ? ' This happened with your saved Gemini key. You can remove it under Integrations to use HustlePortal AI instead.'
@@ -210,9 +209,19 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
     case 'PERMISSION':
       return `Google blocked the AI request (403 Permission denied).${own ? ' Fastest fix: create a brand new key at aistudio.google.com/apikey and save it under Integrations. Or clear the key\'s API and website restrictions in Google Cloud console. HustlePortal AI covers you meanwhile.' : ' The platform AI key\'s Google project is currently restricted. A fresh project key is needed. You can add your own free Gemini key under Integrations to go live instantly.'}`
     case 'QUOTA':
+      // Google names the drained bucket in the 429 body: a PER MINUTE wall
+      // recovers in about a minute, everything else (a per DAY drain or a bare
+      // project level wall) waits for the daily reset at midnight Pacific,
+      // around 09:00 South African time. Saying "try again in a minute" to a
+      // drained day sent the seller retrying against a wall for hours.
+      if (/PerMinute/i.test(detail)) {
+        return own
+          ? 'Your saved Gemini key is pacing its free requests this minute. It refills on its own in about a minute, so one more try usually lands.'
+          : 'The AI engine is pacing its free requests this minute. One more try usually lands.'
+      }
       return own
-        ? 'Your saved Gemini key has reached its free quota for now. It recovers as the quota windows reset. Try again in a minute.'
-        : 'The AI engine is resting its free quota right now. It refills on its own, with the daily reset around 02:00 South African time, and real map results still power your search meanwhile.'
+        ? 'Your saved Gemini key has used its free daily search allowance for now. Google refills it at its daily reset, around 09:00 South African time.'
+        : 'The AI engine has used its free daily search allowance for now. Google refills it at its daily reset, around 09:00 South African time.'
     case 'MODEL':
       // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.
       return 'Google is rotating its AI models right now and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically. Please try again in a minute.'
@@ -365,7 +374,6 @@ async function callGemini(
   const failures: Failure[] = []
   let userKeyFailure: Failure | null = null // remember WHY the user's key was bypassed → honest notice on fallback success
   let timedOut = false
-  const quotaRetried = new Set<string>() // (key:model) pairs already given their named-delay retry
   // Hard deadline for the WHOLE chain: per-attempt timeouts shrink as the clock
   // runs down, so (keys × models) can never stack past the caller's budget —
   // the single biggest cause of Vercel 504s on slow paths.
@@ -433,10 +441,13 @@ async function callGemini(
             break
           }
           if (cls === 'QUOTA') {
-            // Day bucket drained (or a zero free-tier limit on this model): bench the
-            // (key,model) pair so later walks skip straight to models with headroom.
+            // Bench the drained bucket so later walks skip straight to models
+            // with headroom: a DAY wall (or a zero free tier limit) rides the
+            // long bench, a MINUTE wall rides the short one so repeated scans
+            // stop re paying the same 429 storm while the window refills.
             const zero = quotaZeroLimit(raw)
-            if (/PerDay/i.test(raw) || zero) benchModelQuota(key, model, zero)
+            if (/PerDay/i.test(raw) || zero) benchModelQuota(key, model, zero ? 'zero' : 'day')
+            else if (/PerMinute/i.test(raw)) benchModelQuota(key, model, 'minute')
             // A 429 with NO named bucket (bare RESOURCE_EXHAUSTED, no quotaId in the
             // body) is a PROJECT-level wall — every sibling model shares it, so
             // walking the pool would just hammer Google. Break the walk WITHOUT
@@ -447,14 +458,9 @@ async function callGemini(
             }
             // 429 is a PER-MODEL quota bucket on free tier, not key-wide: the next
             // Flash model usually still has headroom, so rotate instead of giving
-            // up. If Google names a short retryDelay for this model, honour it once.
-            const delayMs = quotaRetryDelayMs(raw)
-            const tag = `${ownKey ? 'u' : 'p'}:${model}`
-            if (delayMs !== null && !quotaRetried.has(tag) && Date.now() + delayMs < deadline - 2_000) {
-              quotaRetried.add(tag)
-              await new Promise((r) => setTimeout(r, delayMs))
-              continue // same model, after the delay Google asked for
-            }
+            // up. (The old park and retry after Google's named delay is retired:
+            // benching plus rotation keeps the same recovery odds without parking
+            // a scan for up to 8 seconds per drained model.)
             continue // next model — separate quota bucket
           }
           // Model-level problems (404 etc.): try the next model on this key.
