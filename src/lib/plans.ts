@@ -1,6 +1,7 @@
 /**
  * Subscription plans — the predictable-MRR engine.
- * Target: R45,000/month. e.g. 100 Operator + 50 Boss = R44,850, or 226 Operator.
+ * Target: R45,000/month. e.g. 151 Operator at the normal R299, or
+ * 100 Operator + 50 Boss = R54,850 at normal prices.
  * ZAR only. Plans sold via Yoco Checkout (manual renewal — the user is never
  * auto-charged); renewal nudged in-app + by email 5 days out.
  *
@@ -17,6 +18,12 @@ export interface PlanDef {
   priceCents: number
   /** Annual price in cents = 10 months (2 months free). */
   annualCents: number
+  /** What the plan normally costs once the launch special ends. Display
+   * anchor only: cards show it gently struck through beside the launch
+   * price. The chargeable amount stays priceCents / annualCents. Absent =
+   * no special running for this plan. */
+  normalCents?: number
+  normalAnnualCents?: number
   /** Lead-reveal credits granted on every activation/renewal (cents of wallet credit). */
   revealCredits: number
   perks: string[]
@@ -35,8 +42,10 @@ export const PLANS: PlanDef[] = [
     id: 'HUSTLER',
     name: 'Operator',
     tagline: 'For owner-operators building steady momentum.',
-    priceCents: 19900, // R199
-    annualCents: annualOf(19900), // R1,990/yr — 2 months free
+    priceCents: 19900, // R199 launch special — what clients pay today
+    annualCents: annualOf(19900), // R1,990/yr — 2 months free at the launch price
+    normalCents: 29900, // R299 — the everyday price, shown subtly on cards
+    normalAnnualCents: annualOf(29900), // R2,990/yr — the everyday annual
     revealCredits: 5 * LEAD_REVEAL_PRICE_CENTS, // 5 verified reveals
     perks: [
       'Unlimited AI Co-Founder & email drafts',

@@ -484,7 +484,7 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
           {[
             {
-              name: 'Operator', priceCents: 19900, icon: <Rocket className="h-5 w-5 text-brand" />,
+              name: 'Operator', priceCents: 19900, normalCents: 29900, icon: <Rocket className="h-5 w-5 text-brand" />,
               tagline: 'For owner-operators building steady momentum.',
               perks: ['Unlimited AI Co-Founder & email drafts', '5 verified lead reveals every month, unused ones roll over', 'Invoices, calendar, reports, exports', 'R50 credit for every business owner you refer'],
             },
@@ -500,6 +500,9 @@ export default function Landing() {
                 <div className="text-right">
                   <div className="font-display text-3xl">{currency.price(p.priceCents)}</div>
                   <div className="text-[10px] text-muted-foreground">per month</div>
+                  {'normalCents' in p && p.normalCents ? (
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Normally <span className="line-through">{currency.price(p.normalCents)}</span> · launch special</div>
+                  ) : null}
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{p.tagline}</p>
@@ -515,7 +518,7 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          Go annual and get 2 months free: {currency.price(199000)} Operator · {currency.price(499000)} Boss. Registered nonprofits pay 30% less with their NPO number.
+          Go annual and get 2 months free: {currency.price(199000)} Operator <span className="line-through">{currency.price(299000)}</span> · {currency.price(499000)} Boss. Registered nonprofits pay 30% less with their NPO number.
           Secure card payments by Yoco · never auto-charged · pause anytime · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
         {currency.note && <p className="text-center text-[11px] text-muted-foreground/80">{currency.note}</p>}

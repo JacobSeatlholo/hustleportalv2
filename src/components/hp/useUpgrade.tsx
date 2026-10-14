@@ -134,7 +134,7 @@ export default function UpgradeListener() {
             </ul>
           )}
           <p className="text-[11px] text-muted-foreground">
-            Operator starts at R199 a month. Pause or cancel any time. Annual works out to 2 months free.
+            Operator is R199 a month during launch, normally R299. Pause or cancel any time. Annual works out to 2 months free.
           </p>
           <div className="flex gap-2">
             <Button onClick={goPlans} className="flex-1">

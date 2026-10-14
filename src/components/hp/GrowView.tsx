@@ -41,6 +41,8 @@ const PLANS = [
     annual: 'R1,990',
     priceCents: 19900,
     annualCents: 199000,
+    normalCents: 29900,
+    normalAnnualCents: 299000,
     tagline: 'For owner-operators building steady momentum.',
     icon: <Sparkles className="h-5 w-5 text-brand" />,
     perks: [
@@ -369,6 +371,9 @@ export default function GrowView() {
                       <>
                         <div className="font-display text-2xl">{currency.price(isAnnual ? p.annualCents : p.priceCents)}</div>
                         <div className="text-[10px] text-muted-foreground">{isAnnual ? 'per year, 2 months free' : 'per month'}</div>
+                        {'normalCents' in p && p.normalCents ? (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">Normally <span className="line-through">{currency.price(isAnnual ? p.normalAnnualCents : p.normalCents)}</span> · launch special</div>
+                        ) : null}
                       </>
                     )}
                   </div>
