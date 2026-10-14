@@ -455,3 +455,32 @@ Work Log:
 
 Stage Summary:
 - AQ auth key support shipped on top of 38e85b6 (commit pending push). User next step: paste the AQ key under Integrations → Gemini card (instant, no redeploy, probed on save); Vercel GEMINI_API_KEY platform slot is the optional later move for all users. Once saved, the scan chain runs GLM (tokens covered by pack) → Gemini grounded (free Google search) → OSM + DeepSeek fallback. Scan test fires the moment they confirm the save.
+
+---
+Task ID: 43i
+Agent: Super Z (main)
+Task: User demanded plug and play: AI search must work immediately after registration. Their scan still fell through "even with the new key added" (AQ Gemini key). Find why the Gemini leg failed, fix it, and prove fresh-user scans end to end.
+
+Work Log:
+- plugnplay_probe (fresh QA user, zero keys) on production: GLM both doors 429 (known), OSM delivered 3 real leads but "AI ranking is resting" (platform DeepSeek key MISSING), and the diagnose verdict was DAMNING: "No key could complete a live AI call".
+- KEY DISCOVERY: the platform GEMINI_API_KEY in Vercel is ALREADY the user's new AQ key (masked AQ.Ab8…esXg) — they put it in Vercel instead of Integrations. ListModels with the AQ header carrier: 200, 46 models visible → the AQ carrier from 43h is PROVEN working live.
+- The failure: live-generate on gemini-flash-latest TIMED OUT (20s). Google rotated the flash alias to a thinking model; quiet thinking minutes do not fit scan/probe budgets. The alias sat at the head of every pool and probe.
+- Shipped (one commit): liteFirst() reorders the discovered pool lite-first on the search path (speed flag threaded through callGemini); thinkingConfigFor(model) adds thinkingBudget 0 (named 2.5 models) / thinkingLevel low (named 3.x models), aliases untouched; status probe + diagnose live walk now lead with lite models and raise probe maxOutputTokens 8→64 so thinking cannot strangle a healthy probe; discover route final NONE note now ALSO names the Google engine's own error instead of burying it under the GLM balance refusal; settings route trims pasted values on store (trailing newline keys can no longer poison headers).
+
+Stage Summary:
+- Deployed for retest: fresh-user scan should now run GLM refuse → Gemini backup on lite models with thinking off (platform AQ key, proven valid) → grounded AI leads with ZERO user setup. OSM + DeepSeek stay behind as fallback (platform DeepSeek key still missing — user can add their DeepSeek key to Vercel for ranked fresh-user leads). Post-deploy plugnplay probe decides success.
+
+---
+Task ID: 43j
+Agent: Super Z (main)
+Task: User demanded plug and play AI search after registration. After the latency fixes, fresh-user scans still fell to OSM. Find the real scan-time Gemini failure and fix or explain it.
+
+Work Log:
+- Added geminiTrace (per-model scan visibility, debug mode) mirroring glmTrace; threaded through callGemini/geminiGenerate and every discover response shape.
+- Trace reveal: EVERY grounded call 429s instantly (~120ms) "You exceeded your current quota" across all 12 pool models; 2.5-flash family 404s "no longer available to new users". The ungrounded live probe (gemini-flash-lite-latest) succeeds 200 right before the scan — generation quota is fine, the GOOGLE SEARCH GROUNDING bucket for this project is drained.
+- Full 429 body captured (trace slice raised to 1600 + quotaId/limit/retryDelay extraction with pretty-JSON tolerant regexes): bare RESOURCE_EXHAUSTED, NO named quotaId — a project-level wall. The user's AI Studio dashboard earlier showed ~490 429 attempts today: the drain is consistent with the day's QA/scan storms hitting grounded endpoints.
+- Quota-storm breaker shipped: on a bare 429 (no named bucket) the model walk breaks immediately instead of hammering all 12 models, WITHOUT benching the key (ungrounded features — mail, OCR — share the project but not this bucket and stay healthy). Named-bucket 429s keep per-model rotation.
+- Production deploys this task: ab6b4c7 (latency discipline + honest note + trim), 31b958d (geminiTrace), f56a03d/d9ae347/e5528af (trace capture + storm breaker).
+
+Stage Summary:
+- Plug and play chain is structurally complete and proven piecewise: fresh user → GLM refuse (honest) → Gemini grounded (ready; AQ platform key verified 200; blocked ONLY by the project's drained grounding bucket right now) → OSM real leads (3 real Soweto businesses every probe). Paths to live grounding: (1) fresh Google project + fresh key = fresh bucket instantly, (2) wait for Google's daily reset (~09:00 SAST / midnight Pacific), (3) small z.ai cash top up revives the GLM search leg (100M token pack already pays tokens). Monitor at https://ai.dev/rate-limit. Platform DeepSeek key still missing — fresh-user OSM leads stay unranked until the user adds their DeepSeek key to Vercel.
