@@ -82,6 +82,7 @@ interface ExecData {
     keyMode: 'live' | 'test' | null
     webhookConfigured: boolean
     webhookSource: string
+    webhookMode: 'live' | 'test' | null
     recent: {
       id: string
       amountCents: number
@@ -1000,6 +1001,12 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
       ? 'Checkout runs on test keys right now. Swap in your live key on Vercel to take real money.'
       : 'Add your Yoco secret key on Vercel, then redeploy, to take card payments.'
 
+  // The webhook only confirms payments for the key world it was registered in.
+  // A secret saved in the wrong key shape, or a webhook left in test mode,
+  // would swallow real payments silently, so the dashboard says so plainly.
+  const webhookReady = payments.webhookConfigured && payments.keyMode !== null && payments.webhookMode === payments.keyMode
+  const webhookStale = payments.webhookConfigured && payments.keyMode !== null && payments.webhookMode !== payments.keyMode
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -1012,11 +1019,11 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
         <p className="text-xs text-muted-foreground">{modeNote}</p>
 
         {payments.keyMode && (
-          payments.webhookConfigured ? (
+          webhookReady ? (
             <div className="flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs">
               <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <div className="font-medium text-emerald-400">Webhook registered</div>
+                <div className="font-medium text-emerald-400">Webhook registered for {payments.keyMode} mode</div>
                 <div className="text-muted-foreground">Every payment confirms itself: wallets credit and plans activate the moment Yoco says paid.</div>
               </div>
             </div>
@@ -1024,8 +1031,12 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
               <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium text-amber-400">Register the webhook to finish the setup</div>
-                <div className="text-muted-foreground">Without it, card payments wait unclaimed instead of crediting wallets. One tap fixes it.</div>
+                <div className="font-medium text-amber-400">
+                  {webhookStale
+                    ? `The webhook was registered for ${payments.webhookMode || 'another'} mode`
+                    : 'Register the webhook to finish the setup'}
+                </div>
+                <div className="text-muted-foreground">One tap points Yoco at this deployment, so {payments.keyMode} payments credit wallets automatically instead of waiting unclaimed.</div>
               </div>
               <Button size="sm" className="h-7 bg-brand text-black hover:bg-brand/90 shrink-0" disabled={busy} onClick={registerWebhook}>
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3 w-3 mr-1" />} Register

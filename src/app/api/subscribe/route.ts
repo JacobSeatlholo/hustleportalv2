@@ -8,6 +8,11 @@ import { rewardOnSubscribe } from '@/lib/referral'
 const MONTHLY_RENEW_DAYS = 35 // 30-day month + 5-day grace
 const ANNUAL_RENEW_DAYS = 370 // 365-day year + 5-day grace
 
+// Instant sandbox activation exists for automated QA probes only. Real
+// visitors never get a plan without paying, even while the gateway is being
+// connected: they get an honest message instead of free months.
+const QA_SANDBOX_DOMAIN = '@hustleqa.example.com'
+
 function requestOrigin(req: NextRequest) {
   const proto = req.headers.get('x-forwarded-proto') ?? 'https'
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'localhost:3000'
@@ -23,6 +28,8 @@ function requestOrigin(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const account = await db.user.findUnique({ where: { id: userId }, select: { email: true } })
+  const isQaAccount = Boolean(account?.email?.toLowerCase().endsWith(QA_SANDBOX_DOMAIN))
 
   const { plan: planId, cycle: rawCycle, npoNumber: rawNpo } = await req.json().catch(() => ({}))
   const plan = getPlan(String(planId || ''))
@@ -71,7 +78,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Sandbox mode — instant activation for demos (same quota grant as the live webhook).
+  // Sandbox mode — instant activation, QA probe accounts only (same quota
+  // grant as the live webhook). Anyone else gets an honest answer, never a
+  // free plan: the gateway is simply still being connected for them.
+  if (!isQaAccount) {
+    return NextResponse.json(
+      { error: 'We are connecting the card gateway right now. Subscriptions open again shortly, and every free feature stays open meanwhile.' },
+      { status: 503 },
+    )
+  }
   const renewsAt = new Date(Date.now() + (cycle === 'ANNUAL' ? ANNUAL_RENEW_DAYS : MONTHLY_RENEW_DAYS) * 24 * 60 * 60 * 1000)
   const sub = await db.subscription.upsert({
     where: { userId },

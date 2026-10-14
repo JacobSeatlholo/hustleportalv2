@@ -55,9 +55,10 @@ async function main() {
   // 2b. Yoco payment gateway: the live key must be wired and visible (no secrets).
   const yoco = await req('GET', '/api/webhooks/yoco')
   check('yoco status endpoint answers', yoco.status === 200 && yoco.json?.ok === true, `status ${yoco.status}`)
-  check('yoco secret key present and well formed', yoco.json?.secretKey?.present === true && yoco.json?.secretKey?.validFormat === true, `mode=${yoco.json?.mode || 'none'}`)
+  check('yoco secret key present and well formed', yoco.json?.secretKey?.present === true && yoco.json?.secretKey?.validFormat === true, `mode=${yoco.json?.mode || 'none'}${yoco.json?.secretKey?.hint ? ` hint=${yoco.json.secretKey.hint}` : ''}`)
   check('yoco runs in LIVE mode (real rands)', yoco.json?.mode === 'live', `mode=${yoco.json?.mode || 'none'}`)
-  check('yoco webhook signing secret stored (launch critical)', yoco.json?.configured === true, `source=${yoco.json?.source || 'none'}${yoco.json?.configured ? '' : ' — open the exec dashboard and tap Register'}`)
+  const whReady = yoco.json?.configured === true && (yoco.json?.mode !== 'live' || yoco.json?.webhookMode === 'live')
+  check('yoco webhook ready for the current key mode (launch critical)', whReady, `mode=${yoco.json?.mode || 'none'} webhook=${yoco.json?.webhookMode || 'none'}${whReady ? '' : ' — open the exec dashboard and tap Register'}`)
 
   // 3. Welcome email — lastSend is admin-only (Task 24), so a MEMBER account can
   // only verify registration succeeded and the send path was awaited (no error).

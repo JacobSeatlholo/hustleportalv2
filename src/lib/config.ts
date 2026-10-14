@@ -8,6 +8,7 @@ export const CONFIG_KEYS = {
   TOPUP_PACKS: 'topup_packs', // JSON [{id,name,amountCents,creditCents,bonus}]
   MODE: 'mode', // DEMO | LIVE
   YOCO_WEBHOOK_SECRET: 'yoco_webhook_secret', // whsec_... from registering the checkout webhook
+  YOCO_WEBHOOK_MODE: 'yoco_webhook_mode', // 'live' | 'test' — which key world the webhook was registered in
   CAMPAIGN_AUTO_CENTS: 'campaign_auto_cents', // top-ups at or above this auto run a client campaign
 } as const
 

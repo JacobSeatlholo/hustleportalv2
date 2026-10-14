@@ -12,12 +12,19 @@ function requestOrigin(req: NextRequest) {
   return `${proto}://${host}`
 }
 
+// Instant sandbox top ups exist for automated QA probes only. Real visitors
+// never get wallet credit without paying, even while the gateway is being
+// connected: they get an honest message instead of free credit.
+const QA_SANDBOX_DOMAIN = '@hustleqa.example.com'
+
 // POST /api/wallet/topup — start a wallet top-up.
 //  - YOCO_SECRET_KEY set  -> creates a PENDING TopUp + real Yoco Checkout, returns redirectUrl.
 //  - No key configured    -> sandbox mode: confirms instantly (demo environments).
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const account = await db.user.findUnique({ where: { id: userId }, select: { email: true } })
+  const isQaAccount = Boolean(account?.email?.toLowerCase().endsWith(QA_SANDBOX_DOMAIN))
   const { packageId } = await req.json()
   const packs = await getConfigJson<{ id: string; name: string; amountCents: number; creditCents: number; bonus: number }[]>(
     CONFIG_KEYS.TOPUP_PACKS,
@@ -65,7 +72,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Sandbox mode (no YOCO_SECRET_KEY configured) — instant confirmation for demos.
+  // Sandbox mode (no YOCO_SECRET_KEY configured) — instant confirmation, QA
+  // probe accounts only. Anyone else gets an honest answer, never free credit.
+  if (!isQaAccount) {
+    return NextResponse.json(
+      { error: 'We are connecting the card gateway right now. Wallet top ups open again shortly.' },
+      { status: 503 },
+    )
+  }
   const topUp = await db.topUp.create({
     data: {
       userId,

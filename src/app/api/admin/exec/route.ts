@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { getYocoKeyMode, getYocoWebhookSecret } from '@/lib/yoco'
+import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
 // GET /api/admin/exec — the Executive Dashboard feed: platform KPIs + the full
 // client roster (plan, account status, wallet, activity). Exec only.
@@ -13,7 +14,7 @@ export async function GET() {
   const d7 = new Date(now - 7 * 86_400_000)
   const d30 = new Date(now - 30 * 86_400_000)
 
-  const [userCount, new7, new30, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret] = await Promise.all([
+  const [userCount, new7, new30, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: d7 } } }),
     db.user.count({ where: { createdAt: { gte: d30 } } }),
@@ -36,6 +37,7 @@ export async function GET() {
       select: { id: true, userId: true, amountCents: true, creditCents: true, provider: true, reference: true, createdAt: true, paidAt: true },
     }),
     getYocoWebhookSecret(),
+    getConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE),
   ])
 
   // Lazy subscription truth: ACTIVE only while renewsAt stands; PAUSED, PAST_DUE, CANCELED as-is.
@@ -132,6 +134,7 @@ export async function GET() {
       keyMode: getYocoKeyMode(),
       webhookConfigured: Boolean(webhookSecret),
       webhookSource: process.env.YOCO_WEBHOOK_SECRET ? 'env' : webhookSecret ? 'config' : 'none',
+      webhookMode: webhookModeRow || null,
       recent: recentPaid.map((t) => ({
         id: t.id,
         amountCents: t.amountCents,

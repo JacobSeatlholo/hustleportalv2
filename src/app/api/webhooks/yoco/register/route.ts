@@ -11,10 +11,12 @@ export async function GET() {
   const user = await db.user.findUnique({ where: { id: me }, select: { role: true } })
   if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const secret = await getYocoWebhookSecret()
+  const webhookMode = await getConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE)
   return NextResponse.json({
     ok: true,
     configured: Boolean(secret),
     source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none',
+    webhookMode: webhookMode || null,
     secretKeySet: Boolean(getYocoSecretKey()),
   })
 }
@@ -49,6 +51,9 @@ export async function POST(req: NextRequest) {
   try {
     const webhook = await registerYocoWebhook(secretKey, webhookUrl)
     await setConfig(CONFIG_KEYS.YOCO_WEBHOOK_SECRET, webhook.secret)
+    // Remember which key world this webhook speaks for: a test era webhook
+    // never confirms live payments, so the dashboard compares modes honestly.
+    await setConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE, webhook.mode === 'live' ? 'live' : 'test')
     return NextResponse.json({
       ok: true,
       webhook: { id: webhook.id, mode: webhook.mode, name: webhook.name, url: webhook.url },

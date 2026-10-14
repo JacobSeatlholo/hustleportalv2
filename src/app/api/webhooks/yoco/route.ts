@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { awardXp } from '@/lib/gamification'
 import { verifyYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, getYocoKeyMode, type YocoWebhookEvent } from '@/lib/yoco'
+import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { rewardOnSubscribe } from '@/lib/referral'
 import { getPlan, grantPlanRevealCredits } from '@/lib/plans'
 
@@ -12,11 +13,24 @@ export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const secret = await getYocoWebhookSecret()
+  const [webhookMode, keyStatus] = await Promise.all([
+    getConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE),
+    Promise.resolve(getYocoSecretKeyStatus()),
+  ])
+  // When the saved value is not a secret key (a publishable pk_ key or a
+  // whsec_ webhook secret, say), show just its shape so the owner can see
+  // what went into Vercel and swap in the right sk_ key. A valid key never
+  // exposes more than its mode.
+  const raw = process.env.YOCO_SECRET_KEY?.trim() || ''
+  const shapeHint = keyStatus.present && !keyStatus.validFormat && raw.length > 11
+    ? `${raw.slice(0, 7)}...${raw.slice(-4)} (${raw.length} chars)`
+    : undefined
   return NextResponse.json({
     ok: true,
     configured: Boolean(secret),
     source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none',
-    secretKey: getYocoSecretKeyStatus(),
+    webhookMode: webhookMode || null,
+    secretKey: { ...keyStatus, ...(shapeHint ? { hint: shapeHint } : {}) },
     // 'live' | 'test' | null — lets the owner (and probes) confirm real money
     // mode without exposing any key material.
     mode: getYocoKeyMode(),
