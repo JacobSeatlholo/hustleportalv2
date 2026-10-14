@@ -670,3 +670,18 @@ Stage Summary:
 
 Stage Summary:
 - Production 363c2ac: the Explee key the owner added on Vercel is LIVE in the product. Every client topup at or above R500 now fires a real Explee campaign (0.5 Explee credits per company from the owner's explee balance), the owner gets the result email naming the engine and remaining balance, and leads land on the per client bench in the Exec Dashboard for one tap review. The verified pool remains the honest free fallback whenever Explee is quiet. Probe scripts: explee_live_probe.mjs, explee_bench_probe.mjs.
+
+---
+Task ID: 49
+Agent: Super Z (main)
+Task: "I want the price to be R299 now. keep R199 as the launch special. subtly put in that the normal price is R299/month."
+
+Work Log:
+- Design decision (zero payment risk): priceCents / annualCents stay R199 / R1,990 — the charged amounts (subscribe route, Yoco checkout, existing subscription rows, NPO 30% math = R139.30) are untouched. Added normalCents: 29900 + normalAnnualCents: 299000 to the Operator PlanDef as a display only anchor. Absent on Boss = no special.
+- Surfaces: Landing plan card shows "Normally R299 · launch special" (gentle strikethrough, 10px muted) under the price; the annual line shows R1,990 Operator with R2,990 struck through; GrowView card carries the same anchor on both cycles; useUpgrade dialog copy now reads "Operator is R199 a month during launch, normally R299." Copy rules held: no hyphens, gentle not salesy.
+- plans.ts header comment updated to normal price MRR math. tsc clean. Lint errors present are pre-existing in untouched files.
+- Deploy f1fa5fa. Verified live: served chunk 9b727f07d5d1e3b8.js contains the anchor renders + 29900 + the new dialog line (landing is client rendered so HTML curl cannot see it; chunk grep is the honest check).
+- Regression: E2E 37/37 PASS.
+
+Stage Summary:
+- Production f1fa5fa: everywhere a client sees the Operator plan they also see, quietly, that it is normally R299 a month — the R199 launch special framing is live on the landing page, the in app plans view and the upgrade dialog. What clients are charged is unchanged (R199 / R1,990, NPO R139.30 / R1,393). When the launch ends, set priceCents 29900 + annualCents 299000 and drop the two normal fields: one file, no other edits.
