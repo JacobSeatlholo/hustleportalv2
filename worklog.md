@@ -517,3 +517,21 @@ Work Log:
 
 Stage Summary:
 - The product now delivers real, contact-bearing leads for the user's exact query on a day when Google grounding is drained, the GLM search wallet is unfunded, AND Overpass mirrors are down. Nominatim bracket phrases are the reliable directory workhorse. AI grounded scans return when the user creates a key in a NEW Google project (per-project bucket) or at the daily reset. GLM plain ranking observed flaky this run (free rung timeouts) and stays as a best effort layer above the raw floor.
+
+---
+Task ID: 44
+Agent: Super Z (main)
+Task: User confirmed scans work and asked for measures so leads stay FRESH and ACTIVE forever, the finder survives onboarding scale, and every lead stays real and verifiable.
+
+Work Log:
+- Designed and shipped the VERIFIED LEAD POOL: three new tables (LeadPool: one deduped row per real business ever found, fingerprint name+area; LeadPoolHit: topic fingerprint to business links; ScanRun: per scan log doubling as rate limit anchor and warm window).
+- Engine capture pass (rememberScanResults in src/lib/leadpool.ts): every scan result from ANY engine (Gemini, ZAI, OSM, Explee) lands in the pool with first/last seen, confirmCount bump on re-sightings (the still active signal), SA phone normalization to +27 with shape check, website liveness ping (HEAD then GET then http, 3.5s, max 8 sites, budget guarded), verify score 0 to 100 (real source 40, phone 20, live site 25, reconfirmed 15), merge never clobbers good facts with blanks, OSM node/way ids become openstreetmap.org source links.
+- Pool first serving in discover route: topic fingerprint = normalized seller words + area (or 1km GPS bucket) computed BEFORE seller site context, so every seller describing the same client in the same area shares one pool topic. Enough fresh records (21 days, non stale) = instant serve, ZERO engine calls. 10 minute warm window serves partial pools when anyone scanned the topic recently. Both exclude leads the seller already saved and rotate least recently served faces first.
+- Guardrails: 12s cooldown between ANY scans per user + daily allowance (free 25, paid 100), DB backed (survives serverless churn), gentle copy with Retry-After, no hyphens.
+- Freshness cron /api/cron/leads-refresh (vercel.json 30 4 * * *): demotes businesses unseen 60 days to stale (never served fresh again), re-pings the 60 stalest websites, upgrades to active or drops the website badge honestly. Zero AI quota.
+- UI (LeadsView): Verified pool mode badge, per lead chips "Checked · website live" / "Checked · phone on file" / "Confirmed · phone on file" / "Reconfirmed on scans" / "Map listed" / "Web found" plus "seen X days ago" freshness line.
+- AI and OSM answers now ALSO top up from the pool when engines return fewer than asked, and the OSM path keeps ranking order + seller whys while adding verification chips.
+- Deployed 7bebccc (5ebbba7..7bebccc). Live production probe scripts/pool_probe.mjs with the user's EXACT wellness scan: 6/6 PASS. Seller A first scan: OSM, 5 real Cape Town businesses with real phones, chips live (3 website live, 1 phone on file, 1 map listed). Rescan 13s later: mode POOL, zero engine calls. Immediate third scan: gentle 429 cooldown. Brand new seller B first ever scan same topic: mode POOL instant, zero engine calls. All on fresh zero key QA users, so plug and play still holds.
+
+Stage Summary:
+- The three promises are live in production: FRESH (re-sightings prove active, 60 day demotion, rotation keeps new faces coming, verified chips show exactly how fresh), VERIFIABLE (every lead carries a badge backed by a real check and a clickable source link, anti fabrication verifier unchanged), SCALE (first scan of a topic pays, everyone after serves free, cooldown + daily caps stop abuse, OSM floor untouched). Onboarding can now never stampede the engines: a thousand sellers on the same topic cost one scan.
