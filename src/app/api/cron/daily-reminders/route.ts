@@ -59,8 +59,18 @@ export async function GET(req: NextRequest) {
     perUser.set(uid, entry)
   }
 
+  // Paused accounts get silence: a suspended owner's tasks stay due, but the
+  // push door stays shut until the exec restores them.
+  const recipientIds = [...perUser.keys()]
+  const statusRows = recipientIds.length
+    ? await db.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, accountStatus: true } })
+    : []
+  const activeIds = new Set(statusRows.filter((s) => s.accountStatus !== 'SUSPENDED').map((s) => s.id))
+
   let notified = 0
+  let skippedSuspended = 0
   for (const [userId, { count, lines }] of perUser) {
+    if (!activeIds.has(userId)) { skippedSuspended++; continue }
     const body = [
       'Open HustlePortal to knock them out — small daily wins compound.',
       lines.length ? lines.join('\n') : '',
@@ -75,5 +85,5 @@ export async function GET(req: NextRequest) {
     if (r.sent > 0) notified++
   }
 
-  return NextResponse.json({ ok: true, usersWithDueTasks: perUser.size, notified })
+  return NextResponse.json({ ok: true, usersWithDueTasks: perUser.size, notified, skippedSuspended })
 }
