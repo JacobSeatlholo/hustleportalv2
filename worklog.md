@@ -629,3 +629,20 @@ Work Log:
 Stage Summary:
 - Production b1e2da9: the credit story is fully automated — client loads credit → owner gets an email with everything needed to act → a campaign fires through the Explee API (or the free verified pool until the key is set) → leads wait in a per client pool on the Exec Dashboard → owner adds the winners to that client's pipeline in one tap. Nothing reaches a client's pipeline without the owner's tap. NOTE: 3 QA probe topups fired real notification emails to the CEO inbox (live proof; QA client names "Pool Probe").
 - Next doors: Yoco live keys (YOCO_SECRET_KEY + webhook secret in Vercel) turn the sandbox topups into real money; Explee API key in the Exec Dashboard settings switches campaigns from the verified pool to live Explee data (0.5 credits/company, balance shown in the result email).
+
+---
+Task ID: 46-research
+Agent: main
+Task: Explee API research + env var naming for API key
+
+Work Log:
+- Fetched https://explee.com/ and located public API docs at https://api.explee.com/public/api/docs
+- Downloaded OpenAPI spec (https://api.explee.com/public/api/openapi.json, v1.0.0) and mapped all endpoints
+- Confirmed auth: single API key via X-API-Key header, resolves to whole organization (no workspace ID needed)
+- Rate limit: 10000 req/hour, 150 concurrent
+
+Stage Summary:
+- ENV VAR DECISION: save key as EXPLEE_API_KEY in Vercel (Production + Preview). No other explee credentials required.
+- Full automation confirmed possible via API: POST /autogtm/campaigns (create), /campaigns/import (own leads), /approve, /start, /stop, GET /autogtm/hot-leads, GET /campaigns/{id}/inbox, GET /billing/balance, POST /search/people, POST /find-and-enrich
+- This validates the full chain: client credit top-up -> email notify owner -> automated explee campaign -> hot-leads -> per-client pool in exec dashboard -> owner injects into client pipeline
+- OpenAPI spec cached at scripts/tmp/explee_openapi.json for implementation reference
