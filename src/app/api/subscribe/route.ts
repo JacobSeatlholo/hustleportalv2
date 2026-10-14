@@ -73,7 +73,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: checkout.mode ?? 'test', redirectUrl: checkout.redirectUrl, subscription: sub })
     } catch (e) {
       const status = e instanceof YocoError ? e.status : 500
-      const msg = e instanceof Error ? e.message : 'Payment provider error'
+      const detail = e instanceof Error ? e.message : 'Payment provider error'
+      console.error('[subscribe] yoco checkout failed:', detail)
+      // Clients get a gentle, honest line; the raw detail lives in the logs
+      // and on the exec dashboard for the owner to act on.
+      const msg = status === 502 || status === 504
+        ? 'Card payments are momentarily unavailable. Please try again in a moment.'
+        : detail
       return NextResponse.json({ error: msg }, { status })
     }
   }
