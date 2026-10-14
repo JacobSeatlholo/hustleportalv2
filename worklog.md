@@ -424,3 +424,18 @@ Work Log:
 
 Stage Summary:
 - Production 452c8f2. Engine chain healthy, map directory still delivering real Soweto leads on every scan. The single blocker is platform mismatch: Zhipu key + z.ai credits. The fix is one z.ai-minted key (docs.z.ai top right API Keys button) saved under Integrations or GLM_key. The product now names the key's home platform on every billing refusal, so the mismatch is visible without a debug trace.
+
+---
+Task ID: 43g
+Agent: Super Z (main)
+Task: User sent a Billing History screenshot from z.ai to challenge the "your key is a Zhipu key" story. Correct the record, fix whatever the screenshot proves, and retest.
+
+Work Log:
+- CORRECTION of 43e/43f: the billing history shows API Key ID 5aa56e637fa... (the OLD key, same 5aa56e prefix as the masked platform key) billed for INFERENCE on z.ai, plus a Prepaid Resource Pack "100 million GLM-" (Paid). The keys were z.ai keys ALL ALONG. One login serves both doors (a z.ai key passes auth on the Zhipu door), so the "the refusing door is the key's home" inference was wrong and is retracted. The user's $10 became a 100M token Resource Pack, not cash balance (cash $0, bonus $0).
+- Root cause finally precise: model inference is covered (billing history: inference postpaid entries Paid), but the WEB SEARCH TOOL is billed as a separate service and neither billing pocket covers it: Zhipu door "余额不足或无可用资源包", z.ai door "Insufficient balance or no resource package. Please recharge."
+- Fixed the real engine bug (38e85b6): the search walk's one knock arrears short circuit ended the walk on the FIRST door's refusal and never asked the second door. Now arrearsDoors counts across the walk and the walk only ends with BALANCE after BOTH doors refuse; probeZaiSearch likewise asks both doors and keeps the most informative refusal (billing beats auth).
+- Retracted the ownership claims: status row and diagnose no longer say "This key belongs to {door}" (false under shared auth); they now say both doors refused and name the fix (small top up or search bundle where the credits live). discover zaiWhy BALANCE copy aligned.
+- Live retest on production 38e85b6: trace shows BOTH doors refusing (zhipu 426ms Chinese words, z.ai 776ms English words), scan still delivered 3 real Soweto leads via OSM with the honest both doors notice. The walk fix is proven live; the remaining blocker is genuinely billing side.
+
+Stage Summary:
+- Production 38e85b6. Engine chain final and honest: both doors asked, real leads every scan, no fabricated contacts. The ONE remaining user action: on z.ai billing, either Add Payment with a small amount (search calls cost a fraction of a cent, $2 to $5 is hundreds of grounded searches) or buy a search bundle under Usage Bundles. The 100M token pack keeps paying the model side; it just cannot pay the web search tool.
