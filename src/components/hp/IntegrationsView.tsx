@@ -40,7 +40,7 @@ const INTEGRATIONS: {
     key: 'GEMINI_API_KEY',
     title: 'Gemini API key (optional)',
     icon: <Sparkles className="h-4 w-4 text-brand" />,
-    placeholder: 'AIza…',
+    placeholder: 'AIza… or AQ… (Google issues both)',
     helper: 'The AI already runs on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
     secret: true,
   },

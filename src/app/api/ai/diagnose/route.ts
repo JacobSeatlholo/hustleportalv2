@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { getUserGeminiKey, getPlatformGeminiKey } from '@/lib/gemini'
+import { getUserGeminiKey, getPlatformGeminiKey, geminiFetchTarget } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
 import { resolveZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
 
 export const maxDuration = 60
-
-const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 /**
  * GET /api/ai/diagnose — WHY is AI failing? Tests the full key chain the same way
@@ -275,8 +273,10 @@ export async function GET() {
   for (const { source, key } of keys) {
     // 1) ListModels — catches disabled API, restricted keys, bad keys
     try {
-      const res = await fetch(`${BASE}/models?key=${encodeURIComponent(key)}&pageSize=100`, {
+      const target = geminiFetchTarget(key, '/models?pageSize=100')
+      const res = await fetch(target.url, {
         method: 'GET',
+        headers: target.headers,
         signal: AbortSignal.timeout(15_000),
       })
       const raw = await res.text().catch(() => '')
@@ -327,9 +327,10 @@ export async function GET() {
     const unavailable: string[] = []
     for (const model of tryModels) {
       try {
-        const res = await fetch(`${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+        const target = geminiFetchTarget(key, `/models/${model}:generateContent`)
+        const res = await fetch(target.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...target.headers },
           body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: OK' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
           signal: AbortSignal.timeout(20_000),
         })

@@ -37,6 +37,25 @@ const MODEL_PREFERENCE = [
 ] as const
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
+/**
+ * Google now mints TWO key generations: classic AIza… keys and the newer AI Studio
+ * "auth keys" that start with AQ. — both are valid Gemini API keys. They hit the exact
+ * same endpoints; what differs is the carrier. Classic keys ride the ?key= query param;
+ * AQ auth keys ride the documented x-goog-api-key header. Choosing by prefix keeps both
+ * generations on one code path with zero guesswork.
+ */
+export function geminiFetchTarget(
+  key: string,
+  pathAndQuery: string
+): { url: string; headers: Record<string, string> } {
+  const k = key.trim()
+  if (/^AIza/.test(k)) {
+    const sep = pathAndQuery.includes('?') ? '&' : '?'
+    return { url: `${BASE}${pathAndQuery}${sep}key=${encodeURIComponent(k)}`, headers: {} }
+  }
+  return { url: `${BASE}${pathAndQuery}`, headers: { 'x-goog-api-key': k } }
+}
+
 /** Pool cache — PER KEY (a user key and the platform key can see different model
  * lists), verified against ListModels, refreshed on this TTL. The pool is the FULL
  * ranked list of usable flash models, not one winner: Google's free-tier quota is
@@ -251,10 +270,11 @@ async function resolveModels(key: string): Promise<string[]> {
   const hit = modelCache.get(keyTag(key))
   if (hit && now - hit.at < MODEL_TTL_MS) return hit.models
   try {
-    const res = await fetch(
-      `${BASE}/models?key=${encodeURIComponent(key)}&pageSize=1000`,
-      { signal: AbortSignal.timeout(10_000) }
-    )
+    const target = geminiFetchTarget(key, '/models?pageSize=1000')
+    const res = await fetch(target.url, {
+      headers: target.headers,
+      signal: AbortSignal.timeout(10_000),
+    })
     if (res.ok) {
       const data = (await res.json()) as {
         models?: { name?: string; supportedGenerationMethods?: string[] }[]
@@ -352,9 +372,10 @@ async function callGemini(
       const remaining = deadline - Date.now()
       if (remaining <= 2_000) break
       try {
-        const res = await fetch(`${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+        const target = geminiFetchTarget(key, `/models/${model}:generateContent`)
+        const res = await fetch(target.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...target.headers },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(remaining),
         })
@@ -510,15 +531,20 @@ export interface GeminiKeyValidation {
  */
 export async function validateGeminiKey(key: string): Promise<GeminiKeyValidation> {
   const k = key.trim()
-  if (!/^AIza[0-9A-Za-z_-]{30,}$/.test(k)) {
+  // Two valid generations: classic AIza… (about 39 chars) and the newer AI Studio
+  // auth keys starting with AQ. (longer). The ListModels probe below is the real
+  // verdict — the shape check only catches obvious paste mistakes.
+  if (!/^(AIza[0-9A-Za-z_-]{30,}|AQ\S{30,})$/.test(k)) {
     return {
       ok: false,
       status: 'INVALID',
-      message: 'That does not look like a Gemini API key — keys start with "AIza" and are about 39 characters. Copy the full key from aistudio.google.com/apikey.',
+      message: 'That does not look like a Gemini API key. Valid keys start with "AIza" (classic) or "AQ." (the newer AI Studio auth key). Copy the full key from aistudio.google.com/apikey.',
     }
   }
   try {
-    const res = await fetch(`${BASE}/models?key=${encodeURIComponent(k)}&pageSize=1`, {
+    const target = geminiFetchTarget(k, '/models?pageSize=1')
+    const res = await fetch(target.url, {
+      headers: target.headers,
       signal: AbortSignal.timeout(10_000),
     })
     if (res.ok) {

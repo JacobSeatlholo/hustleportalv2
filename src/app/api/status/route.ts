@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { readLastSystemSend } from '@/lib/mailer'
 import { deepseekBalance, getPlatformDeepseekKey } from '@/lib/deepseek'
 import { getPlatformZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
+import { geminiFetchTarget } from '@/lib/gemini'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,11 +61,12 @@ async function aiService(): Promise<Svc> {
   // drained still passes ListModels, which would show "Live" while every scan fails.
   // One 8-token call per 45s cache window — honest status at negligible cost.
   try {
+    const target = geminiFetchTarget(key, '/models/gemini-flash-latest:generateContent')
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(key),
+      target.url,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...target.headers },
         body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply: OK' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
         signal: AbortSignal.timeout(6_000),
       },
