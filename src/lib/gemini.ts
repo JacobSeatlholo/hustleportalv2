@@ -220,7 +220,7 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
           : 'The AI engine is pacing its free requests this minute. One more try usually lands.'
       }
       return own
-        ? 'Your saved Gemini key has used its free daily search allowance for now. Google refills it at its daily reset, around 09:00 South African time.'
+        ? 'Your saved Gemini key has used its free daily search allowance for now. Google refills it around 09:00 South African time. A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
         : 'The AI engine has used its free daily search allowance for now. Google refills it at its daily reset, around 09:00 South African time.'
     case 'MODEL':
       // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.

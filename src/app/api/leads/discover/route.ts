@@ -26,8 +26,10 @@ export const maxDuration = 60
  *     grounding that ignores Google's quota mood; Gemini grounds on Google
  *     Search when z.ai can't answer. The GLM engine takes the lead spot back
  *     automatically the moment its search balance is funded.
- *  3. OpenStreetMap real directory (keyless) with DeepSeek ranking when a
- *     DeepSeek key exists — ranks reality, never supplies contact facts.
+ *  3. OpenStreetMap real directory (keyless), ranked by AI with the anti
+ *     fabrication guarantee: the seller's own DeepSeek key leads, the GLM
+ *     engine on the already paid token pack carries everyone else. Ranks
+ *     reality, never supplies contact facts.
  *  4. Explee verified data when configured.
  *
  * No fabricated companies, no synthetic contacts: real results or an honest
@@ -139,30 +141,19 @@ function parseLeadList(text: string, cap: number, city: string) {
 }
 
 /**
- * DeepSeek enrichment of REAL map records. The model only decides WHICH source
- * businesses fit the seller and WHY; every contact field in the answer is
- * copied verbatim from the source record it matched, and any answer that does
- * not map back to a real record is dropped. This is the anti-fabrication
- * guarantee: DeepSeek ranks reality, it never supplies facts.
+ * Shared ranking prompt: the AI only decides WHICH source businesses fit the
+ * seller and WHY. Every contact field in the answer is copied verbatim from
+ * the source record it matched, and any answer that does not map back to a
+ * real record is dropped. This is the anti fabrication guarantee: the engine
+ * ranks reality, it never supplies facts.
  */
-async function enrichOsmWithDeepseek(
-  userId: string,
-  definition: string,
-  raw: AiLead[],
-  cap: number,
-  t0: number
-): Promise<{ leads: (AiLead & { company: string })[]; notice?: string } | null> {
-  if (raw.length === 0) return null
-  const remaining = t0 + 54_000 - Date.now()
-  if (remaining < 6_000) return null // no runway to rank: hand back the raw real records
-  // Compact, numbered source list. Everything DeepSeek may know about the leads
-  // lives here, so the server can verify the answer against it.
+function rankingPrompt(definition: string, raw: AiLead[], cap: number) {
   const source = raw
     .map((l, i) =>
       `${i + 1}. company: ${l.company} | type: ${l.industry || 'unknown'}${l.city ? ` | area: ${l.city}` : ''}${l.phone ? ` | phone: ${l.phone}` : ''}${l.website ? ` | website: ${l.website}` : ''}`
     )
     .join('\n')
-  const res = await deepseekGenerate(userId, {
+  return {
     system:
       'You are a meticulous lead qualifier for South African small businesses. You receive a numbered list of REAL businesses from the OpenStreetMap directory and a seller description. You pick which of those real businesses are worth the seller contacting. You NEVER invent a company, phone number, website or email: every field you output must come from the list. If nothing fits, return fewer leads.',
     prompt:
@@ -176,18 +167,12 @@ async function enrichOsmWithDeepseek(
       `- never output phone, website or email. Those stay attached from the source automatically.\n` +
       `- drop businesses that clearly do not fit. Fewer, better leads win.\n` +
       `Return ONLY JSON: {"leads":[{"company":"","industry":"","why":"","score":3}]}`,
-    json: true,
-    temperature: 0.3,
-    maxTokens: 1400,
-    timeoutMs: Math.max(6_000, Math.min(22_000, remaining - 1_000)),
-  })
-  if (!res.ok) {
-    // Real failure (no key, credits out, busy): the raw real records still flow.
-    // Credit and key problems are worth a gentle mention so the user can act.
-    if (res.reason === 'BALANCE' || res.reason === 'KEY_INVALID') return { leads: [], notice: res.error }
-    return null
   }
-  const parsed = parseJsonLoose<{ leads?: AiLead[] }>(res.text)
+}
+
+/** Shared verifier: every answer company must map back to a real source record. */
+function matchRankedToSource(text: string, raw: AiLead[], cap: number): (AiLead & { company: string })[] | null {
+  const parsed = parseJsonLoose<{ leads?: AiLead[] }>(text)
   const byKey = new Map<string, AiLead>()
   for (const r of raw) byKey.set(normKey(r.company || ''), r)
   const out: (AiLead & { company: string })[] = []
@@ -212,7 +197,102 @@ async function enrichOsmWithDeepseek(
   }
   if (out.length === 0) return null // qualifier rejected everything: the raw floor beats an empty win
   out.sort((a, b) => (b.score || 0) - (a.score || 0))
-  return { leads: out.slice(0, cap) }
+  return out.slice(0, cap)
+}
+
+/**
+ * DeepSeek enrichment of REAL map records: the DeepSeek flavour of the shared
+ * ranking contract above. Runs only when the seller saved their own DeepSeek
+ * key (their credits, their control).
+ */
+async function enrichOsmWithDeepseek(
+  userId: string,
+  definition: string,
+  raw: AiLead[],
+  cap: number,
+  t0: number
+): Promise<{ leads: (AiLead & { company: string })[]; notice?: string } | null> {
+  if (raw.length === 0) return null
+  const remaining = t0 + 54_000 - Date.now()
+  if (remaining < 6_000) return null // no runway to rank: hand back the raw real records
+  const { system, prompt } = rankingPrompt(definition, raw, cap)
+  const res = await deepseekGenerate(userId, {
+    system,
+    prompt,
+    json: true,
+    temperature: 0.3,
+    maxTokens: 1400,
+    timeoutMs: Math.max(6_000, Math.min(22_000, remaining - 1_000)),
+  })
+  if (!res.ok) {
+    // Real failure (no key, credits out, busy): the raw real records still flow.
+    // Credit and key problems are worth a gentle mention so the user can act.
+    if (res.reason === 'BALANCE' || res.reason === 'KEY_INVALID') return { leads: [], notice: res.error }
+    return null
+  }
+  const leads = matchRankedToSource(res.text, raw, cap)
+  if (!leads) return null
+  return { leads }
+}
+
+/**
+ * GLM enrichment of REAL map records: the same ranking contract, carried by
+ * the GLM engine on PLAIN generation (no web search tool, no Google, no
+ * DeepSeek key). The token pack behind the platform key already pays for this,
+ * so ranking works for every seller with zero setup, even on days when both
+ * grounded web engines are resting their quotas.
+ */
+async function enrichOsmWithGlm(
+  userId: string,
+  definition: string,
+  raw: AiLead[],
+  cap: number,
+  t0: number,
+  trace?: string[]
+): Promise<{ leads: (AiLead & { company: string })[] } | null> {
+  if (raw.length === 0) return null
+  const remaining = t0 + 54_000 - Date.now()
+  if (remaining < 6_000) return null
+  const { system, prompt } = rankingPrompt(definition, raw, cap)
+  const res = await zaiGenerate(userId, {
+    system,
+    prompt,
+    json: true,
+    temperature: 0.3,
+    maxTokens: 1400,
+    timeoutMs: Math.max(6_000, Math.min(20_000, remaining - 1_000)),
+    trace,
+  })
+  // Any refusal (pacing, credits, no key) simply hands the raw real records
+  // through: real unranked leads beat no leads, and the balance noise stays out.
+  if (!res.ok) return null
+  const leads = matchRankedToSource(res.text, raw, cap)
+  if (!leads) return null
+  return { leads }
+}
+
+/**
+ * Map record ranking, engine agnostic: the seller's own DeepSeek key leads,
+ * the GLM engine (token pack, zero setup) carries everyone else, and raw real
+ * records flow when no engine can answer. Returns the engine that ranked, so
+ * the note tells the truth.
+ */
+async function enrichOsmWithAi(
+  userId: string,
+  definition: string,
+  raw: AiLead[],
+  cap: number,
+  t0: number,
+  trace?: string[]
+): Promise<{ leads: (AiLead & { company: string })[]; notice?: string; engine: string } | null> {
+  const ds = await enrichOsmWithDeepseek(userId, definition, raw, cap, t0)
+  if (ds && ds.leads.length > 0) return { ...ds, engine: 'DeepSeek' }
+  const glm = await enrichOsmWithGlm(userId, definition, raw, cap, t0, trace)
+  if (glm && glm.leads.length > 0) return { ...glm, engine: 'the GLM engine' }
+  // DeepSeek's actionable complaint (the seller's own key out of credits or
+  // rejected) survives only when GLM had nothing either.
+  if (ds?.notice) return { leads: [], notice: ds.notice, engine: '' }
+  return null
 }
 
 function normKey(s: string): string {
@@ -435,8 +515,9 @@ export async function POST(req: NextRequest) {
   if (osm.leads.length > 0) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
     const dirNotice = zaiWhy('the real business directory')
-    const ranked = await enrichOsmWithDeepseek(userId, definition, osm.leads as AiLead[], cap, t0)
+    const ranked = await enrichOsmWithAi(userId, definition, osm.leads as AiLead[], cap, t0, glmTrace)
     if (ranked && ranked.leads.length > 0) {
+      const engineName = ranked.engine || 'AI'
       return NextResponse.json({
         leads: ranked.leads,
         mode: 'OSM',
@@ -445,8 +526,8 @@ export async function POST(req: NextRequest) {
         ...(osm.note ? { osmNote: osm.note } : {}),
         ...(body.debug ? { glmTrace, geminiTrace } : {}),
         note: teaser
-          ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by DeepSeek AI. Contact details come straight from the directory.`
-          : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by DeepSeek AI to what you sell. Contact details as listed in the directory.`,
+          ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by ${engineName}. Contact details come straight from the directory.`
+          : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by ${engineName} to what you sell. Contact details as listed in the directory.`,
       })
     }
     return NextResponse.json({
