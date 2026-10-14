@@ -437,6 +437,14 @@ async function callGemini(
             // (key,model) pair so later walks skip straight to models with headroom.
             const zero = quotaZeroLimit(raw)
             if (/PerDay/i.test(raw) || zero) benchModelQuota(key, model, zero)
+            // A 429 with NO named bucket (bare RESOURCE_EXHAUSTED, no quotaId in the
+            // body) is a PROJECT-level wall — every sibling model shares it, so
+            // walking the pool would just hammer Google. Break the walk WITHOUT
+            // benching the key: ungrounded calls (mail, OCR) share the project but
+            // not this bucket, and they are still healthy.
+            if (!/quotaId|QuotaFailure|PerDay|PerMinute/i.test(raw)) {
+              break
+            }
             // 429 is a PER-MODEL quota bucket on free tier, not key-wide: the next
             // Flash model usually still has headroom, so rotate instead of giving
             // up. If Google names a short retryDelay for this model, honour it once.
