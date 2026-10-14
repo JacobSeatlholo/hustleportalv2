@@ -432,7 +432,7 @@ function ProjectSwitcher() {
 
 const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
   key: 'admin',
-  label: 'Admin',
+  label: 'Exec Dashboard',
   icon: <ShieldCheck className="h-4 w-4" />,
 }
 

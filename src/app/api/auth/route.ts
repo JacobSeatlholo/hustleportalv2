@@ -7,6 +7,7 @@ import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
 import { attributeSignup } from '@/lib/referral'
 import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
+import { ensureExecAdmin } from '@/lib/admin'
 
 const RESET_TTL_MS = 30 * 60 * 1000
 
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
       })
       await createSession(user.id)
       await ensureWallet(user.id)
+      // Master account (exec email): make sure its exec flags exist. Idempotent,
+      // touches nothing besides the two privilege flags on that one email.
+      await ensureExecAdmin(user).catch(() => {})
       // welcome bonus — R99 in lead credits: enough for real teaser reveals,
       // the taste that sells the R199 Operator plan
       const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
@@ -132,8 +136,15 @@ export async function POST(req: NextRequest) {
       if (!user || !(await verifyPassword(String(password), user.passwordHash))) {
         return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
       }
+      if (user.accountStatus === 'SUSPENDED') {
+        return NextResponse.json(
+          { error: 'This account is paused. Reply to any HustlePortal email or contact support@hustleportal.online and we will restore it for you.' },
+          { status: 403 }
+        )
+      }
       await createSession(user.id)
       await ensureWallet(user.id)
+      await ensureExecAdmin(user).catch(() => {})
       await bumpChallenge(user.id, 'login')
       return NextResponse.json({ ok: true })
     }

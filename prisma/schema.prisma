@@ -19,6 +19,9 @@ model User {
   city         String?
   phone        String?
   role         String   @default("MEMBER") // ADMIN | MEMBER
+  accountStatus String  @default("ACTIVE") // ACTIVE | SUSPENDED (exec can pause an account; suspended = locked out everywhere)
+  suspendedAt  DateTime?
+  suspendReason String?
   xp           Int      @default(0)
   refCode      String?  @unique // personal invite code (lazy-generated)
   platformAdmin Boolean @default(false)

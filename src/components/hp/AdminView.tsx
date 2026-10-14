@@ -1,18 +1,677 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
-import { Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift, Repeat2, Trophy } from 'lucide-react'
+import {
+  Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
+  Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
+  Building2, ReceiptText, History, CircleDot,
+} from 'lucide-react'
+
+// =================== Executive Dashboard ===================
+// The business owner's control room: every client, their plan, their money,
+// their pipeline. Pause or restore accounts, and load leads into any client's
+// pipeline straight from here.
+
+interface Kpis {
+  members: number
+  new7: number
+  new30: number
+  subscribers: number
+  mrrCents: number
+  subsPastDue: number
+  subsPaused: number
+  subsCanceled: number
+  topups30dCents: number
+  walletFloatCents: number
+  leadsPlatform: number
+  suspended: number
+}
+
+interface RosterRow {
+  id: string
+  name: string
+  email: string
+  businessName: string | null
+  city: string | null
+  industry: string | null
+  joinedAt: string
+  accountStatus: string
+  suspendedAt: string | null
+  isAdmin: boolean
+  walletCents: number
+  plan: string | null
+  subStatus: string
+  subCycle: string | null
+  subAmountCents: number
+  renewsAt: string | null
+  npoNumber: string | null
+  counts: { leads: number; clients: number; invoices: number; projects: number }
+  lastActiveAt: string | null
+}
+
+interface ExecData {
+  kpis: Kpis
+  roster: RosterRow[]
+}
+
+interface TopUpRow {
+  id: string
+  packageId: string
+  amountCents: number
+  creditCents: number
+  status: string
+  provider: string
+  reference: string
+  providerRef: string | null
+  createdAt: string
+  paidAt: string | null
+}
+
+interface TxRow {
+  id: string
+  type: string
+  amount: number
+  description: string
+  balanceAfter: number
+  createdAt: string
+}
+
+interface ProjectRow {
+  id: string
+  name: string
+  isDefault: boolean
+  industry: string | null
+  createdAt: string
+  counts: { leads: number; clients: number; invoices: number }
+}
+
+interface InvoiceRow {
+  id: string
+  number: string
+  clientName: string
+  status: string
+  total: number
+  issuedAt: string
+  paidAt: string | null
+}
+
+interface ClientDetail {
+  client: {
+    id: string
+    email: string
+    name: string
+    businessName: string | null
+    industry: string | null
+    city: string | null
+    phone: string | null
+    isAdmin: boolean
+    accountStatus: string
+    suspendedAt: string | null
+    suspendReason: string | null
+    createdAt: string
+    wallet: { balance: number }
+    subscription: {
+      plan: string
+      status: string
+      billingCycle: string
+      amountCents: number
+      provider: string
+      reference: string
+      npoNumber: string | null
+      pausedUntil: string | null
+      startedAt: string | null
+      renewsAt: string | null
+    } | null
+    subStatus: string
+  }
+  payments: { topups: TopUpRow[]; creditTxs: TxRow[] }
+  projects: ProjectRow[]
+  pipeline: { stages: Record<string, number>; total: number }
+  clientsCount: number
+  invoices: InvoiceRow[]
+}
+
+function timeAgo(iso?: string | null): string {
+  if (!iso) return 'never'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 60_000) return 'just now'
+  const m = Math.floor(ms / 60_000)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 7) return `${d}d ago`
+  const w = Math.floor(d / 7)
+  return `${w}w ago`
+}
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return 'never'
+  return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const PLAN_LABEL: Record<string, string> = { HUSTLER: 'Operator', BOSS: 'Boss' }
+
+function PlanChip({ plan, cycle }: { plan: string | null; cycle: string | null }) {
+  if (!plan) return <Badge variant="outline" className="text-[10px] text-muted-foreground">No plan</Badge>
+  return (
+    <Badge className="bg-brand/15 text-brand border border-brand/30 text-[10px] hover:bg-brand/15">
+      {PLAN_LABEL[plan] || plan}{cycle === 'ANNUAL' ? ' · Annual' : ''}
+    </Badge>
+  )
+}
+
+function SubChip({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    ACTIVE: { label: 'Paying', cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+    PAST_DUE: { label: 'Past due', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+    PAUSED: { label: 'Plan paused', cls: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
+    CANCELED: { label: 'Canceled', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+    PENDING: { label: 'Checkout open', cls: 'bg-white/10 text-muted-foreground border-white/15' },
+    NONE: { label: 'Free', cls: 'bg-white/10 text-muted-foreground border-white/15' },
+  }
+  const s = map[status] || map.NONE
+  return <Badge variant="outline" className={`text-[10px] border ${s.cls}`}>{s.label}</Badge>
+}
+
+function AcctChip({ status }: { status: string }) {
+  if (status === 'SUSPENDED') {
+    return <Badge variant="outline" className="text-[10px] bg-rose-500/15 text-rose-400 border-rose-500/30"><Pause className="h-2.5 w-2.5 mr-1" />Paused</Badge>
+  }
+  return <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/25"><CircleDot className="h-2.5 w-2.5 mr-1" />Active</Badge>
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified', QUOTE_SENT: 'Quote sent', WON: 'Won', LOST: 'Lost',
+}
+
+// =================== Pause dialog (shared: roster row + drawer) ===================
+
+function PauseDialog({ target, onOpenChange, onDone }: {
+  target: RosterRow | null
+  onOpenChange: (open: boolean) => void
+  onDone: () => void
+}) {
+  const { toast } = useToast()
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { setReason('') }, [target?.id])
+
+  async function confirmPause() {
+    if (!target) return
+    setBusy(true)
+    try {
+      await api(`/api/admin/exec/client/${target.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'SUSPENDED', reason: reason.trim() || undefined }),
+      })
+      toast({ title: `${target.name} is paused`, description: 'They are signed out and cannot sign in until you restore them.' })
+      onOpenChange(false)
+      onDone()
+    } catch (e) {
+      toast({ title: 'Could not pause', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AlertDialog open={!!target} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Pause {target?.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            They lose access the moment you confirm: every screen locks, sign in is refused with a friendly
+            message. Their data, leads and wallet stay exactly as they are. You can restore them in one tap.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="pause-reason">Reason (they will see this when support asks)</Label>
+          <Textarea id="pause-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="e.g. Payment conversation open" />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Keep them active</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={busy}
+            className="bg-rose-600 text-white hover:bg-rose-700"
+            onClick={(e) => { e.preventDefault(); confirmPause() }}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4 mr-1" />} Pause account
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+// =================== Add leads dialog ===================
+
+interface LeadDraft {
+  company?: string
+  contactName?: string
+  role?: string
+  email?: string
+  phone?: string
+  website?: string
+  industry?: string
+  city?: string
+  value?: number
+  notes?: string
+}
+
+function parseBulk(text: string): LeadDraft[] {
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\s*[|,;]\s*/)
+      const [company, contactName = '', phone = '', email = '', city = ''] = parts
+      return {
+        company: company?.trim() || undefined,
+        contactName: contactName?.trim() || undefined,
+        phone: phone?.trim() || undefined,
+        email: email?.trim() || undefined,
+        city: city?.trim() || undefined,
+      }
+    })
+    .filter((l) => l.company)
+}
+
+function AddLeadsDialog({ clientId, clientName, open, onOpenChange, onDone }: {
+  clientId: string
+  clientName: string
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onDone: () => void
+}) {
+  const { toast } = useToast()
+  const [source, setSource] = useState('EXPLEE')
+  const [busy, setBusy] = useState(false)
+  const [company, setCompany] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [role, setRole] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [website, setWebsite] = useState('')
+  const [city, setCity] = useState('')
+  const [industry, setIndustry] = useState('')
+  const [value, setValue] = useState('')
+  const [bulk, setBulk] = useState('')
+
+  function reset() {
+    setCompany(''); setContactName(''); setRole(''); setPhone(''); setEmail(''); setWebsite(''); setCity(''); setIndustry(''); setValue(''); setBulk('')
+  }
+
+  async function submit(leads: LeadDraft[]) {
+    if (leads.length === 0) {
+      toast({ title: 'Nothing to load yet', description: 'Add a company name first.', variant: 'destructive' })
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await api<{ message?: string; created?: number }>(`/api/admin/exec/client/${clientId}/leads`, {
+        method: 'POST',
+        body: JSON.stringify({ source, leads }),
+      })
+      toast({ title: 'Leads delivered', description: res.message || `Loaded into ${clientName}'s pipeline.` })
+      reset()
+      onOpenChange(false)
+      onDone()
+    } catch (e) {
+      toast({ title: 'Could not load leads', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto hp-scroll">
+        <DialogHeader>
+          <DialogTitle>Load leads into {clientName}&apos;s pipeline</DialogTitle>
+          <DialogDescription>
+            Pull a lead from Explee or type one from a call. They land in stage New, in their default workspace,
+            the moment you save. Duplicates are skipped automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-1.5">
+          <Label>Where do these come from?</Label>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EXPLEE">Explee</SelectItem>
+              <SelectItem value="MANUAL">Typed by me</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Tabs defaultValue="single">
+          <TabsList className="grid grid-cols-2 w-full">
+            <TabsTrigger value="single">One lead</TabsTrigger>
+            <TabsTrigger value="bulk">Paste a list</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="single" className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>Company *</Label>
+              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Thabo Plumbers" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Contact person</Label>
+                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Thabo N." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Their role</Label>
+                <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Owner" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="082 555 1234" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="owner@company.co.za" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Website</Label>
+                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="company.co.za" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Soweto" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Industry</Label>
+                <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Plumbing" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Deal value (R)</Label>
+                <Input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2500" />
+              </div>
+            </div>
+            <Button className="w-full" disabled={busy} onClick={() => submit([{
+              company, contactName: contactName || undefined, role: role || undefined, phone: phone || undefined,
+              email: email || undefined, website: website || undefined, city: city || undefined,
+              industry: industry || undefined, value: Number(value) || undefined,
+            }])}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Load into pipeline
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="bulk" className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>One lead per line</Label>
+              <Textarea
+                rows={7}
+                value={bulk}
+                onChange={(e) => setBulk(e.target.value)}
+                placeholder={"Company | Contact | Phone | Email | City\nThabo Plumbers | Thabo N. | 082 555 1234 | thabo@example.co.za | Soweto\nMama's Kitchen | Nomsa | 071 222 3344 | | Johannesburg"}
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate with pipes or commas. Company name first, the rest is optional. Extras like website can be
+                edited later by the client.
+              </p>
+            </div>
+            <Button className="w-full" disabled={busy} onClick={() => submit(parseBulk(bulk))}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Load list into pipeline
+            </Button>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =================== Client drawer ===================
+
+function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
+  id: string | null
+  onClose: () => void
+  onChanged: () => void
+  onPauseRequest: (row: RosterRow) => void
+}) {
+  const { toast } = useToast()
+  const [detail, setDetail] = useState<ClientDetail | null>(null)
+  const [loadedId, setLoadedId] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  const [addOpen, setAddOpen] = useState(false)
+
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    api<ClientDetail>(`/api/admin/exec/client/${id}`)
+      .then((d) => { if (alive) { setDetail(d); setLoadedId(id) } })
+      .catch((e) => {
+        if (alive) toast({ title: 'Could not open client', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      })
+    return () => { alive = false }
+  }, [id, tick])
+
+  const fresh = detail && loadedId === id ? detail : null
+  const c = fresh?.client
+  const sub = c?.subscription
+
+  return (
+    <Sheet open={!!id} onOpenChange={(o) => { if (!o) onClose() }}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto hp-scroll p-0">
+        {!c ? (
+          <div className="p-6 space-y-3">
+            <Skeleton className="h-16 rounded-xl" /><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-40 rounded-xl" />
+          </div>
+        ) : (
+          <div className="divide-y">
+            {/* Identity */}
+            <div className="p-5 pb-4">
+              <SheetHeader className="p-0 text-left">
+                <div className="flex items-start gap-3">
+                  <div className="h-12 w-12 rounded-full bg-brand/15 text-brand flex items-center justify-center text-lg font-bold shrink-0">
+                    {c.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <SheetTitle className="text-lg leading-tight">{c.name}{c.businessName ? <span className="text-muted-foreground font-normal"> · {c.businessName}</span> : null}</SheetTitle>
+                    <SheetDescription className="text-xs">{c.email}{c.city ? ` · ${c.city}` : ''}{c.industry ? ` · ${c.industry}` : ''}</SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+              <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                <AcctChip status={c.accountStatus} />
+                <PlanChip plan={c.subscription?.plan ?? null} cycle={c.subscription?.billingCycle ?? null} />
+                <SubChip status={c.subStatus} />
+                {c.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[10px]">exec</Badge>}
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Joined {fmtDate(c.createdAt)} · {c.accountStatus === 'SUSPENDED' ? 'Access paused' : 'Access active'}
+              </div>
+              {c.accountStatus === 'SUSPENDED' && (
+                <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+                  Paused {c.suspendedAt ? timeAgo(c.suspendedAt) : ''}{c.suspendReason ? ` · ${c.suspendReason}` : ''}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {!c.isAdmin && (
+                  c.accountStatus === 'SUSPENDED' ? (
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={false}
+                      onClick={async () => {
+                        try {
+                          await api(`/api/admin/exec/client/${c.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ACTIVE' }) })
+                          toast({ title: `${c.name} is back on`, description: 'They can sign in again right now. Nothing was lost.' })
+                          setTick((t) => t + 1); onChanged()
+                        } catch (e) {
+                          toast({ title: 'Could not restore', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+                        }
+                      }}>
+                      <Play className="h-4 w-4 mr-1" /> Restore access
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
+                      onClick={() => onPauseRequest({
+                        id: c.id, name: c.name, email: c.email, businessName: c.businessName, city: c.city,
+                        industry: c.industry, joinedAt: c.createdAt, accountStatus: c.accountStatus,
+                        suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, walletCents: c.wallet?.balance ?? 0,
+                        plan: c.subscription?.plan ?? null, subStatus: c.subStatus, subCycle: c.subscription?.billingCycle ?? null,
+                        subAmountCents: c.subscription?.amountCents ?? 0, renewsAt: c.subscription?.renewsAt ?? null,
+                        npoNumber: c.subscription?.npoNumber ?? null,
+                        counts: { leads: detail?.pipeline.total ?? 0, clients: detail?.clientsCount ?? 0, invoices: detail?.invoices.length ?? 0, projects: detail?.projects.length ?? 0 },
+                        lastActiveAt: null,
+                      })}>
+                      <Pause className="h-4 w-4 mr-1" /> Pause account
+                    </Button>
+                  )
+                )}
+                <Button size="sm" className="bg-brand text-black hover:bg-brand/90" onClick={() => setAddOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Add leads
+                </Button>
+              </div>
+            </div>
+
+            {/* Plan */}
+            {sub && (
+              <div className="p-5 py-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><Crown className="h-3.5 w-3.5 text-brand" /> Plan</div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <span className="font-medium">{PLAN_LABEL[sub.plan] || sub.plan}</span>
+                  <span className="text-muted-foreground">{rands(sub.amountCents)}{sub.billingCycle === 'ANNUAL' ? ' / year' : ' / month'}</span>
+                  {sub.renewsAt && <span className="text-muted-foreground">Renews {fmtDate(sub.renewsAt)}</span>}
+                  {sub.npoNumber && <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">NPO {sub.npoNumber}</Badge>}
+                </div>
+              </div>
+            )}
+
+            {/* Money */}
+            <div className="p-5 py-4 space-y-3">
+              <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><History className="h-3.5 w-3.5 text-brand" /> Money</div>
+              <div className="flex flex-wrap gap-3">
+                <div className="rounded-lg border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><Wallet className="h-3 w-3" /> Wallet</div>
+                  <div className="font-display text-lg">{rands(c.wallet?.balance ?? 0)}</div>
+                </div>
+                <div className="rounded-lg border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><Target className="h-3 w-3" /> Pipeline</div>
+                  <div className="font-display text-lg">{detail?.pipeline.total ?? 0} leads</div>
+                </div>
+                <div className="rounded-lg border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Workspaces</div>
+                  <div className="font-display text-lg">{detail?.projects.length ?? 0}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground mb-1.5">Top ups (wallet purchases)</div>
+                <div className="rounded-lg border divide-y max-h-48 overflow-y-auto hp-scroll">
+                  {(detail?.payments.topups.length ?? 0) === 0 && (
+                    <div className="px-3 py-2.5 text-xs text-muted-foreground">No top ups yet.</div>
+                  )}
+                  {detail?.payments.topups.map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                      <Badge variant="outline" className={`text-[9px] ${t.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : t.status === 'FAILED' ? 'bg-rose-500/15 text-rose-400 border-rose-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}>{t.status}</Badge>
+                      <span className="font-medium w-20">{rands(t.amountCents)}</span>
+                      <span className="text-muted-foreground flex-1 truncate">{t.reference}{t.providerRef ? ` · ${t.providerRef}` : ''}</span>
+                      <span className="text-muted-foreground">{timeAgo(t.paidAt || t.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground mb-1.5">Credit ledger</div>
+                <div className="rounded-lg border divide-y max-h-48 overflow-y-auto hp-scroll">
+                  {(detail?.payments.creditTxs.length ?? 0) === 0 && (
+                    <div className="px-3 py-2.5 text-xs text-muted-foreground">No credit movements yet.</div>
+                  )}
+                  {detail?.payments.creditTxs.map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                      <span className={`font-medium w-20 ${t.amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{t.amount < 0 ? '' : '+'}{rands(Math.abs(t.amount))}</span>
+                      <span className="text-muted-foreground flex-1 truncate">{t.description}</span>
+                      <span className="text-muted-foreground">{timeAgo(t.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Workspaces */}
+            <div className="p-5 py-4">
+              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-brand" /> Workspaces</div>
+              <div className="rounded-lg border divide-y">
+                {(detail?.projects.length ?? 0) === 0 && <div className="px-3 py-2.5 text-xs text-muted-foreground">No workspaces yet.</div>}
+                {detail?.projects.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    <span className="flex-1 truncate">{p.name}</span>
+                    <Badge variant="outline" className="text-[9px]">{p.counts.leads} leads</Badge>
+                    <Badge variant="outline" className="text-[9px]">{p.counts.clients} clients</Badge>
+                    <Badge variant="outline" className="text-[9px]">{p.counts.invoices} invoices</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pipeline shape */}
+            <div className="p-5 py-4">
+              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><Target className="h-3.5 w-3.5 text-brand" /> Pipeline stages</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(STAGE_LABEL).map(([k, label]) => (
+                  <Badge key={k} variant="outline" className="text-[10px]">{label} · {detail?.pipeline.stages?.[k] ?? 0}</Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Invoices */}
+            <div className="p-5 py-4">
+              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><ReceiptText className="h-3.5 w-3.5 text-brand" /> Recent invoices</div>
+              <div className="rounded-lg border divide-y max-h-48 overflow-y-auto hp-scroll">
+                {(detail?.invoices.length ?? 0) === 0 && <div className="px-3 py-2.5 text-xs text-muted-foreground">No invoices yet.</div>}
+                {detail?.invoices.map((inv) => (
+                  <div key={inv.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                    <span className="font-medium">{inv.number}</span>
+                    <span className="text-muted-foreground flex-1 truncate">{inv.clientName}</span>
+                    <Badge variant="outline" className="text-[9px]">{inv.status}</Badge>
+                    <span className="font-medium">{rands(Math.round(inv.total * 100))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {c && (
+          <AddLeadsDialog
+            clientId={c.id}
+            clientName={c.name}
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            onDone={() => { setTick((t) => t + 1); onChanged() }}
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// =================== Revenue mission (kept) ===================
 
 interface GrowthData {
   mrr: { cents: number; targetCents: number; percent: number }
@@ -38,7 +697,6 @@ function GrowthSection() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* MRR progress */}
         <div>
           <div className="flex items-baseline justify-between mb-1.5">
             <div className="font-display text-3xl">{rands(data.mrr.cents)}<span className="text-sm text-muted-foreground font-sans"> MRR</span></div>
@@ -53,7 +711,6 @@ function GrowthSection() {
           </div>
         </div>
 
-        {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MiniStat icon={<Users className="h-3.5 w-3.5" />} label="Members" value={String(data.members.total)} sub={`+${data.members.newThisMonth} this month`} />
           <MiniStat icon={<Crown className="h-3.5 w-3.5" />} label="Subscribers" value={String(data.subscriptions.active)} sub={`${data.subscriptions.pastDue} past due · ${data.subscriptions.canceled} canceled`} />
@@ -61,7 +718,6 @@ function GrowthSection() {
           <MiniStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Top-ups 30d" value={rands(data.topups.last30DaysCents)} sub="one-off credit sales" />
         </div>
 
-        {/* Referral leaderboard — teams invite teams */}
         {data.leaderboard.length > 0 && (
           <div>
             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-brand" /> Top recruiters — the growth engine</div>
@@ -78,7 +734,6 @@ function GrowthSection() {
           </div>
         )}
 
-        {/* Reverse-churn signal */}
         <p className="text-xs text-muted-foreground">
           {data.referrals.viaReferralActive} of {data.subscriptions.active} active subscribers arrived via referral —
           referred members are your stickiest. Keep the invite loop warm.
@@ -98,6 +753,8 @@ function MiniStat({ icon, label, value, sub }: { icon: React.ReactNode; label: s
   )
 }
 
+// =================== Executive Dashboard (main) ===================
+
 interface AdminData {
   config: {
     expleeKeySet: boolean
@@ -110,16 +767,39 @@ interface AdminData {
   users: { id: string; name: string; email: string; businessName: string | null; role: string; xp: number; createdAt: string; wallet: { balance: number } | null }[]
 }
 
+function KpiCard({ icon, label, value, sub, hot }: { icon: React.ReactNode; label: string; value: string; sub?: string; hot?: boolean }) {
+  return (
+    <div className={`rounded-xl border bg-card p-4 ${hot ? 'border-brand/50' : ''}`}>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{icon}{label}</div>
+      <div className={`font-display text-2xl mt-1 ${hot ? 'text-brand' : ''}`}>{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
 export default function AdminView() {
   const { toast } = useToast()
+  const [exec, setExec] = useState<ExecData | null>(null)
   const [data, setData] = useState<AdminData | null>(null)
+  const [q, setQ] = useState('')
+  const [filter, setFilter] = useState('ALL')
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [pauseTarget, setPauseTarget] = useState<RosterRow | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+
+  // lead economy config (kept from the classic admin panel)
   const [apiKey, setApiKey] = useState('')
   const [leadPrice, setLeadPrice] = useState('')
   const [mode, setMode] = useState('DEMO')
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  async function load() {
+  useEffect(() => {
+    api<ExecData>('/api/admin/exec').then(setExec).catch(() => setExec(null))
+  }, [tick])
+
+  async function loadConfig() {
     try {
       const d = await api<AdminData>('/api/admin/config')
       setData(d)
@@ -131,8 +811,7 @@ export default function AdminView() {
   }
 
   useEffect(() => {
-    load()
-     
+    loadConfig()
   }, [])
 
   async function save() {
@@ -148,7 +827,7 @@ export default function AdminView() {
       })
       toast({ title: 'Settings saved' })
       setApiKey('')
-      await load()
+      await loadConfig()
     } catch (e) {
       toast({ title: 'Save failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -156,104 +835,249 @@ export default function AdminView() {
     }
   }
 
-  if (!data) {
-    return <div className="space-y-4"><Skeleton className="h-28 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>
+  async function restore(row: RosterRow) {
+    setBusyId(row.id)
+    try {
+      await api(`/api/admin/exec/client/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ACTIVE' }) })
+      toast({ title: `${row.name} is back on`, description: 'They can sign in again right now. Nothing was lost.' })
+      setTick((t) => t + 1)
+    } catch (e) {
+      toast({ title: 'Could not restore', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
   }
 
+  const roster = exec?.roster ?? []
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return roster.filter((u) => {
+      if (filter === 'PAUSED' && u.accountStatus !== 'SUSPENDED') return false
+      if (filter === 'PAYING' && u.subStatus !== 'ACTIVE') return false
+      if (filter === 'NOPLAN' && u.plan) return false
+      if (!needle) return true
+      return [u.name, u.email, u.businessName, u.city, u.industry]
+        .some((f) => (f || '').toLowerCase().includes(needle))
+    })
+  }, [roster, q, filter])
+
+  const k = exec?.kpis
+  const spotlight = roster.slice(0, 5)
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-3xl">Admin</h1>
-        <p className="text-sm text-muted-foreground">Platform settings, lead economics and users.</p>
+    <div className="space-y-4 pb-24">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl">Executive Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Every client, their money, their pipeline. You are in control.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setTick((t) => t + 1)} className="shrink-0">
+          <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+        </Button>
       </div>
 
-      <GrowthSection />
+      {/* KPIs */}
+      {!k ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <KpiCard hot icon={<UserPlus className="h-3 w-3" />} label="New signups 7d" value={String(k.new7)} sub={`+${k.new30} in 30 days`} />
+          <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.members)} sub={k.suspended > 0 ? `${k.suspended} paused` : 'all active'} />
+          <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due`} />
+          <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub="wallet purchases" />
+          <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
+          <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub="across all pipelines" />
+        </div>
+      )}
 
-      {/* Stats */}
-      <div className="grid sm:grid-cols-3 gap-3">
-        <StatCard icon={<Users className="h-4 w-4" />} label="Users" value={String(data.stats.userCount)} />
-        <StatCard icon={<Target className="h-4 w-4" />} label="Leads in platform" value={String(data.stats.leadCount)} />
-        <StatCard icon={<Coins className="h-4 w-4" />} label="Top-ups processed" value={rands(data.stats.topupTotal)} />
-      </div>
-
-      {/* Config */}
+      {/* Newest members spotlight */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Lead economy &amp; integrations</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Explee API key</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  type={showKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={data.config.expleeKeySet ? data.config.expleeKeyMasked : 'Paste key from explee.com → API Keys'}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {data.config.expleeKeySet
-                ? 'Key configured — lead discovery uses live Explee data.'
-                : 'No key yet — lead discovery runs in demo mode. Get yours at explee.com (API Keys in account settings).'}
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Lead reveal price (R)</Label>
-              <Input type="number" value={leadPrice} onChange={(e) => setLeadPrice(e.target.value)} />
-              <p className="text-xs text-muted-foreground">What clients pay in credits to unlock contact details. Your margin over Explee cost lives here.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Data mode</Label>
-              <Select value={mode} onValueChange={setMode}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEMO">Demo (fallback data)</SelectItem>
-                  <SelectItem value="LIVE">Live (Explee)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Save settings
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Users */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Users</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-brand" /> Newest members
+            {k && k.new7 > 0 && <Badge className="bg-brand text-black hover:bg-brand text-[10px]">{k.new7} this week</Badge>}
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
-          <div className="divide-y max-h-[50vh] overflow-y-auto hp-scroll">
-            {data.users.map((u) => (
+          <div className="divide-y">
+            {spotlight.length === 0 && (
+              <div className="px-4 py-4 text-sm text-muted-foreground">No signups yet. Share your referral code to change that.</div>
+            )}
+            {spotlight.map((u) => (
               <div key={u.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
                   {u.name.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium truncate">
-                    {u.name} {u.businessName && <span className="text-muted-foreground font-normal">· {u.businessName}</span>}
+                    {u.name}{u.businessName ? <span className="text-muted-foreground font-normal"> · {u.businessName}</span> : ''}
+                    {u.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[9px] ml-1.5">exec</Badge>}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                  <div className="text-xs text-muted-foreground truncate">{u.email}{u.city ? ` · ${u.city}` : ''}</div>
                 </div>
-                {u.role === 'ADMIN' && <Badge className="bg-sidebar text-white hover:bg-sidebar">admin</Badge>}
-                <span className="text-xs text-muted-foreground hidden sm:block">{u.xp} XP</span>
-                <span className="text-xs font-medium w-16 text-right">{rands(u.wallet?.balance ?? 0)}</span>
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <PlanChip plan={u.plan} cycle={u.subCycle} />
+                  <AcctChip status={u.accountStatus} />
+                </div>
+                <span className="text-xs text-muted-foreground w-16 text-right shrink-0">{timeAgo(u.joinedAt)}</span>
+                <Button variant="outline" size="sm" onClick={() => setOpenId(u.id)} className="shrink-0">Open</Button>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Client roster */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-brand" /> All clients
+              <span className="text-xs text-muted-foreground font-normal">{filtered.length} of {roster.length}</span>
+            </CardTitle>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative">
+                <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, business, city" className="pl-8 h-9 sm:w-56" />
+              </div>
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="h-9 sm:w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Everyone</SelectItem>
+                  <SelectItem value="PAYING">Paying subscribers</SelectItem>
+                  <SelectItem value="NOPLAN">No plan yet</SelectItem>
+                  <SelectItem value="PAUSED">Paused accounts</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y max-h-[60vh] overflow-y-auto hp-scroll">
+            {filtered.length === 0 && (
+              <div className="px-4 py-6 text-sm text-muted-foreground text-center">No clients match. Clear the search or pick another filter.</div>
+            )}
+            {filtered.map((u) => (
+              <div key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+                <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
+                  {u.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-[2] basis-40">
+                  <div className="text-sm font-medium truncate">
+                    {u.name}{u.businessName ? <span className="text-muted-foreground font-normal"> · {u.businessName}</span> : ''}
+                    {u.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[9px] ml-1.5">exec</Badge>}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 basis-48">
+                  <PlanChip plan={u.plan} cycle={u.subCycle} />
+                  <SubChip status={u.subStatus} />
+                  <AcctChip status={u.accountStatus} />
+                </div>
+                <div className="text-xs text-muted-foreground basis-36">
+                  <span className="font-medium text-foreground">{rands(u.walletCents)}</span> wallet · {u.counts.leads} leads
+                  <div>joined {timeAgo(u.joinedAt)} · last seen {timeAgo(u.lastActiveAt)}</div>
+                </div>
+                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                  {u.accountStatus === 'SUSPENDED' ? (
+                    <Button variant="outline" size="sm" className="h-8 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" disabled={busyId === u.id} onClick={() => restore(u)}>
+                      {busyId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1" />} Restore
+                    </Button>
+                  ) : (
+                    !u.isAdmin && (
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => setPauseTarget(u)}>
+                        <Pause className="h-3.5 w-3.5" />
+                      </Button>
+                    )
+                  )}
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => setOpenId(u.id)}>Open</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ClientSheet
+        id={openId}
+        onClose={() => setOpenId(null)}
+        onChanged={() => setTick((t) => t + 1)}
+        onPauseRequest={(row) => setPauseTarget(row)}
+      />
+      <PauseDialog
+        target={pauseTarget}
+        onOpenChange={(o) => { if (!o) setPauseTarget(null) }}
+        onDone={() => { setPauseTarget(null); setTick((t) => t + 1) }}
+      />
+
+      <GrowthSection />
+
+      {/* Stats */}
+      {data && (
+        <div className="grid sm:grid-cols-3 gap-3">
+          <StatCard icon={<Users className="h-4 w-4" />} label="Users" value={String(data.stats.userCount)} />
+          <StatCard icon={<Target className="h-4 w-4" />} label="Leads in platform" value={String(data.stats.leadCount)} />
+          <StatCard icon={<Coins className="h-4 w-4" />} label="Top-ups processed" value={rands(data.stats.topupTotal)} />
+        </div>
+      )}
+
+      {/* Config */}
+      {data && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Lead economy &amp; integrations</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Explee API key</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={data.config.expleeKeySet ? data.config.expleeKeyMasked : 'Paste key from explee.com → API Keys'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {data.config.expleeKeySet
+                  ? 'Key configured — lead discovery uses live Explee data.'
+                  : 'No key yet — lead discovery runs in demo mode. Get yours at explee.com (API Keys in account settings).'}
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Lead reveal price (R)</Label>
+                <Input type="number" value={leadPrice} onChange={(e) => setLeadPrice(e.target.value)} />
+                <p className="text-xs text-muted-foreground">What clients pay in credits to unlock contact details. Your margin over Explee cost lives here.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Data mode</Label>
+                <Select value={mode} onValueChange={setMode}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DEMO">Demo (fallback data)</SelectItem>
+                    <SelectItem value="LIVE">Live (Explee)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Save settings
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
