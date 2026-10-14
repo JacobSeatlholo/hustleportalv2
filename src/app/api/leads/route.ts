@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { company, contactName, email, phone, website, industry, city, country, source, teamId, value, notes, externalId, unlocked, score, why, projectId } = body
+  const { company, contactName, role, profileUrl, email, phone, website, industry, city, country, source, teamId, value, notes, externalId, unlocked, score, why, projectId } = body
   if (!company || !String(company).trim()) {
     return NextResponse.json({ error: 'Company name is required.' }, { status: 400 })
   }
@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
       teamId: teamId || null,
       company: String(company).trim(),
       contactName: contactName || null,
+      role: (role || null) as string | null,
+      profileUrl: (profileUrl || null) as string | null,
       email: email || null,
       phone: phone || null,
       website: website || null,

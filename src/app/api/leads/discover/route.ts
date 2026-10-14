@@ -54,6 +54,8 @@ export const maxDuration = 60
 interface AiLead {
   company?: string
   contactName?: string
+  role?: string
+  profileUrl?: string
   email?: string
   phone?: string
   website?: string
@@ -88,6 +90,25 @@ function saneWebsite(v?: string): string | undefined {
   const s = clean(v)
   if (!s) return undefined
   return s.replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
+}
+
+/** A public profile page (LinkedIn, Facebook, team page, directory) — copied verbatim from search results, never constructed. */
+function saneProfileUrl(v?: string): string | undefined {
+  const s = clean(v)
+  if (!s) return undefined
+  const url = /^https?:\/\//i.test(s) ? s : `https://${s}`
+  if (!/^https?:\/\/[^\s]+\.[^\s]{2,}$/i.test(url)) return undefined
+  if (url.length > 300) return undefined
+  return url
+}
+
+/** A person's name as seen in a public source: letters (and common separators), no filler words. */
+function sanePersonName(v?: string): string | undefined {
+  const s = clean(v)
+  if (!s || s.length < 3 || s.length > 60) return undefined
+  if (!/^[\p{L}][\p{L}'.\- ]+$/u.test(s)) return undefined
+  if (/^(n\/a|none|unknown|not found|no name)$/i.test(s.trim())) return undefined
+  return s
 }
 
 /**
@@ -131,7 +152,9 @@ function parseLeadList(text: string, cap: number, city: string) {
   return (parsed?.leads || [])
     .map((l) => ({
       company: clean(l.company),
-      contactName: clean(l.contactName),
+      contactName: sanePersonName(l.contactName),
+      role: clean(l.role)?.slice(0, 60),
+      profileUrl: saneProfileUrl(l.profileUrl),
       email: saneEmail(l.email),
       phone: sanePhone(l.phone),
       website: saneWebsite(l.website),
@@ -310,10 +333,86 @@ function normKey(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
+/**
+ * THE PEOPLE PASS — one grounded AI call that names the humans behind the
+ * businesses the scan just found. Directory records (the OSM path) carry
+ * phones but rarely owner names, yet owner names are publicly listed all over
+ * the web: the business's own site, LinkedIn and Facebook pages, directories,
+ * news. The AI looks ONLY at what search actually surfaced, and every answer
+ * company must map back to a real lead from this scan (the same anti
+ * fabrication contract as ranking: reality in, reality out).
+ *
+ * Budget rules: it runs ONLY when the scan clock has runway left, and in
+ * PARALLEL with the map ranking call so it never adds wall time. A refusal,
+ * a timeout or an empty answer simply means the leads flow without names —
+ * the scan itself never waits on this pass to succeed.
+ */
+async function enrichWithPeople(
+  userId: string,
+  leads: (AiLead & { company: string })[],
+  t0: number,
+  trace?: string[]
+): Promise<Map<string, { contactName: string; role?: string; profileUrl?: string }>> {
+  const out = new Map<string, { contactName: string; role?: string; profileUrl?: string }>()
+  const candidates = leads.filter((l) => !l.contactName).slice(0, 6)
+  if (candidates.length === 0) return out
+  const remaining = t0 + 54_000 - Date.now()
+  if (remaining < 13_000) return out // no runway: leads flow without names, honestly
+  const list = candidates
+    .map((l, i) => `${i + 1}. ${l.company}${l.city ? ` (${l.city})` : ''}${l.website ? ` website: ${l.website}` : ''}`)
+    .join('\n')
+  try {
+    const res = await geminiGenerate(userId, {
+      search: true,
+      json: true,
+      system:
+        'You find the PEOPLE who run South African businesses, grounded in live web search results. You report ONLY names that actually appear in a public source you saw (the business\'s own website, public LinkedIn pages, Facebook pages, directories, news articles). NEVER guess a name, NEVER construct an email, phone or profile link. If no person is publicly named for a business, skip that business.',
+      prompt:
+        `For each business below, find the publicly named owner, founder, manager or decision maker:\n${list}\n\n` +
+        `Rules:\n` +
+        `- company: copy the business name EXACTLY as listed above.\n` +
+        `- contactName: the person's name exactly as the source writes it.\n` +
+        `- role: Owner, Founder, Manager, Buyer and so on, as the source says.\n` +
+        `- profileUrl: ONLY when you actually saw a public profile page for this person (LinkedIn, Facebook, the company team page, a directory listing). Copy the web address exactly.\n` +
+        `- Skip any business where you found no publicly named person.\n` +
+        `Return ONLY JSON: {"people":[{"company":"","contactName":"","role":"","profileUrl":""}]}`,
+      maxOutputTokens: 900,
+      timeoutMs: 12_000,
+      trace,
+    })
+    if (!res.ok) return out // quota mood, drained day: no names, no noise
+    const parsed = parseJsonLoose<{ people?: AiLead[] }>(res.text)
+    const byKey = new Map(candidates.map((l) => [normKey(l.company), l]))
+    for (const p of parsed?.people || []) {
+      const name = sanePersonName(p?.contactName)
+      const src = byKey.get(normKey(clean(p?.company) || ''))
+      if (!name || !src) continue // not a real company of this scan, or not a real name: dropped
+      const role = clean(p?.role)?.slice(0, 60)
+      const profileUrl = saneProfileUrl(p?.profileUrl)
+      out.set(normKey(src.company), { contactName: name, ...(role ? { role } : {}), ...(profileUrl ? { profileUrl } : {}) })
+    }
+  } catch {
+    /* the people pass is sugar: never fatal */
+  }
+  return out
+}
+
+/** Attach named humans to the leads they belong to. Never clobbers a name another engine already found. */
+function mergePeople<T extends OutLead>(leads: T[], people: Map<string, { contactName: string; role?: string; profileUrl?: string }>): T[] {
+  if (people.size === 0) return leads
+  return leads.map((l) => {
+    if (l.contactName) return l
+    const p = people.get(normKey(l.company || ''))
+    return p ? { ...l, contactName: p.contactName, ...(p.role ? { role: p.role } : {}), ...(p.profileUrl ? { profileUrl: p.profileUrl } : {}) } : l
+  })
+}
+
 /** A lead as it leaves the route: engine facts + pool verification chips. */
 type OutLead = {
   company?: string
   contactName?: string
+  role?: string
+  profileUrl?: string
   email?: string
   phone?: string
   website?: string
@@ -459,17 +558,18 @@ export async function POST(req: NextRequest) {
     search: true,
     json: true,
     system:
-      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number or email. When unsure, return fewer leads rather than risk a fake one. South African context first (townships, suburbs, metros).',
+      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South African context first (townships, suburbs, metros).',
     prompt:
       `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
       `Rules:\n` +
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
+      `- PEOPLE ARE THE PRIZE: a named human beats a switchboard. When the results publicly name the owner, founder or decision maker of a business, include contactName (their real name as written), role (Owner, Manager, Buyer and so on) and profileUrl ONLY when the results show a public profile page for them (LinkedIn, Facebook, the company team page, a directory). Copy every field exactly as you saw it. NEVER construct or guess a name or a link.\n` +
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
       `- NEVER construct an address from a pattern — if the phone/email is not in the results, omit the field.\n` +
       `- "why" = one line on why THIS business likely needs the seller (reference what you saw).\n` +
       `- score = 1-5 fit for the seller.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
-      `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","why":"","score":3}]}`,
+      `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","role":"","profileUrl":"","why":"","score":3}]}`,
   })
 
   const t0 = Date.now()
@@ -624,18 +724,26 @@ export async function POST(req: NextRequest) {
   if (osm.leads.length > 0) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
     const dirNotice = zaiWhy('the real business directory')
-    const ranked = await enrichOsmWithAi(userId, definition, osm.leads as AiLead[], cap, t0, glmTrace)
-    // Capture + verify: map records land in the shared pool (deduped, phones
-    // normalized, websites pinged while budget allows), then the answer keeps
-    // its ranking order and tops up with fresh pool faces never saved before.
+    // Map ranking (GLM plain generation) and the People Pass (Gemini grounded)
+    // draw on DIFFERENT engines and different quotas, so they run side by
+    // side: the scan answers in the same time, with names AND reasons.
+    const [ranked, people] = await Promise.all([
+      enrichOsmWithAi(userId, definition, osm.leads as AiLead[], cap, t0, glmTrace),
+      enrichWithPeople(userId, osm.leads as unknown as (AiLead & { company: string })[], t0, geminiTrace),
+    ])
+    const leadsWithPeople = mergePeople(osm.leads as unknown as OutLead[], people)
+    // Capture + verify: map records (with the humans just named) land in the
+    // shared pool (deduped, phones normalized, websites pinged while budget
+    // allows), then the answer keeps its ranking order and tops up with fresh
+    // pool faces never saved before.
     const stamps = await rememberScanResults({
       topicFp,
       area: areaLabel,
       source: 'OSM',
-      leads: osm.leads as RememberLead[],
+      leads: leadsWithPeople as unknown as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(osm.leads, stamps)
+    let final: OutLead[] = decorateLeads(leadsWithPeople, stamps)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })

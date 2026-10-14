@@ -157,6 +157,8 @@ model Lead {
   teamId      String?
   company     String
   contactName String?
+  role        String? // the human's part: Owner, Manager, Buyer
+  profileUrl  String? // public profile page where this person is named (LinkedIn, team page, directory)
   email       String?
   phone       String?
   website     String?
@@ -600,6 +602,8 @@ model LeadPool {
   email          String?
   website        String?
   contactName    String?
+  role           String?   // the human's part: Owner, Manager, Buyer
+  profileUrl     String?   // public profile page where this person is named
   why            String?   // last fit line from ranking
   score          Int?      // last AI fit score 1..5
   lat            Float?

@@ -225,6 +225,8 @@ export async function userSavedKeys(userId: string): Promise<Set<string>> {
 export interface PoolLead {
   company: string
   contactName?: string
+  role?: string
+  profileUrl?: string
   email?: string
   phone?: string
   website?: string
@@ -242,6 +244,8 @@ function poolToLead(p: LeadPoolRow): PoolLead {
   return {
     company: p.company,
     ...(p.contactName ? { contactName: p.contactName } : {}),
+    ...(p.role ? { role: p.role } : {}),
+    ...(p.profileUrl ? { profileUrl: p.profileUrl } : {}),
     ...(p.email ? { email: p.email } : {}),
     ...(p.phone ? { phone: p.phoneRaw || p.phone } : {}),
     ...(p.website ? { website: p.website } : {}),
@@ -310,6 +314,8 @@ export async function serveFromPool(opts: {
 export interface RememberLead {
   company: string
   contactName?: string
+  role?: string
+  profileUrl?: string
   email?: string
   phone?: string
   website?: string
@@ -417,6 +423,8 @@ export async function rememberScanResults(opts: {
           email: prev.email || l.email || null,
           website: prev.website || l.website || null,
           contactName: prev.contactName || l.contactName || null,
+          role: prev.role || l.role || null,
+          profileUrl: prev.profileUrl || l.profileUrl || null,
           industry: prev.industry || l.industry || null,
           city: prev.city || l.city || null,
           why: l.why || prev.why || null,
@@ -464,6 +472,8 @@ export async function rememberScanResults(opts: {
           email: l.email || null,
           website: l.website || null,
           contactName: l.contactName || null,
+          role: l.role || null,
+          profileUrl: l.profileUrl || null,
           why: l.why || null,
           score: typeof l.score === 'number' ? l.score : null,
           lat: typeof l.lat === 'number' ? l.lat : null,

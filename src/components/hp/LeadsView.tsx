@@ -342,6 +342,8 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
 interface DiscoverResult {
   company: string
   contactName?: string
+  role?: string
+  profileUrl?: string
   email?: string
   phone?: string
   website?: string
@@ -700,6 +702,13 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{r.company}</div>
                         <div className="text-xs text-muted-foreground">{r.industry || 'Business'} · {r.city || 'SA'}</div>
+                        {(r.contactName || r.profileUrl) && (
+                          <div className="text-[11px] text-brand mt-0.5 flex items-center gap-1 min-w-0">
+                            <User className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{r.contactName ? `Ask for ${r.contactName}${r.role ? ` (${r.role})` : ''}` : 'Decision maker on file'}</span>
+                            {r.profileUrl && <a className="underline shrink-0" href={r.profileUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>public profile</a>}
+                          </div>
+                        )}
                         {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
                         {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
                         <div className="flex gap-2 mt-1 text-[11px]">
@@ -868,6 +877,16 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* the human: a named person and their public profile are free facts, never paid contact detail */}
+          {(lead.contactName || lead.role || lead.profileUrl) && (
+            <div className="rounded-xl border bg-card p-3 text-sm flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <div className="truncate">{lead.contactName || 'Decision maker on file'}{lead.role ? ` · ${lead.role}` : ''}</div>
+                {lead.profileUrl && <a className="text-xs text-brand underline" href={lead.profileUrl} target="_blank" rel="noopener noreferrer">Public profile</a>}
+              </div>
+            </div>
+          )}
           {/* contact block */}
           {lead.unlocked ? (
             <div className="rounded-xl border bg-card p-3 space-y-2 text-sm">

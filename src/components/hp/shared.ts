@@ -119,6 +119,8 @@ export interface Lead {
   id: string
   company: string
   contactName: string | null
+  role: string | null
+  profileUrl: string | null
   email: string | null
   phone: string | null
   website: string | null
