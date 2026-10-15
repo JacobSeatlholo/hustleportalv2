@@ -2,7 +2,11 @@
 
 function esc(v: unknown): string {
   if (v == null) return ''
-  const s = String(v)
+  let s = String(v)
+  // Formula-injection guard: spreadsheet apps execute cells that open with
+  // = + - @ (or tab/CR shortcuts). Prefixing with a tick keeps the data
+  // readable and keeps a crafted export from running formulas on open.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
   return s
 }

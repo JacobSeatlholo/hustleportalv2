@@ -68,6 +68,12 @@ export async function POST(req: NextRequest) {
   if (teamId) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
     if (!member) return NextResponse.json({ error: 'Not a member of that team.' }, { status: 403 })
+    // Assignment integrity: a team task can only land on someone who is
+    // actually IN that team — no assigning across the membership wall.
+    if (assigneeId && assigneeId !== userId) {
+      const assignee = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId: assigneeId } } })
+      if (!assignee) return NextResponse.json({ error: 'That person is not a member of this team.' }, { status: 400 })
+    }
     // team tasks cannot be private
   } else if (assigneeId && assigneeId !== userId) {
     return NextResponse.json({ error: 'Personal tasks can only be assigned to you.' }, { status: 400 })

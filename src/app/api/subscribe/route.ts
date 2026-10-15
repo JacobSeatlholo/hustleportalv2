@@ -91,9 +91,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Sandbox mode — instant activation, QA probe accounts only (same quota
-  // grant as the live webhook). Anyone else gets an honest answer, never a
-  // free plan: the gateway is simply still being connected for them.
-  if (!isQaAccount) {
+  // grant as the live webhook). Double-gated: the email suffix AND a server
+  // env switch. Anyone can REGISTER a @hustleqa.example.com address (email is
+  // not verified at signup), so the env switch is what actually stands between
+  // a stranger and a free paid plan when the gateway is ever offline.
+  const sandboxArmed = process.env.QA_SANDBOX_ENABLED?.trim() === '1'
+  if (!isQaAccount || !sandboxArmed) {
     return NextResponse.json(
       { error: 'We are connecting the card gateway right now. Subscriptions open again shortly, and every free feature stays open meanwhile.' },
       { status: 503 },

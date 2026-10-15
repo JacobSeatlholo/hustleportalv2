@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { normalizePhone } from '@/lib/whatsapp'
+import { rateLimit } from '@/lib/ratelimit'
 
 /**
  * Per-user WhatsApp Cloud API webhook: /api/whatsapp/webhook/{uid}
@@ -54,7 +55,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ uid: strin
     const user = await db.user.findUnique({ where: { id: uid } })
     if (!user) return NextResponse.json({ ok: true }) // swallow — wrong endpoint, don't leak
 
+    // Hardening: the webhook is unauthenticated by design (Meta signs with the
+    // app secret, which per-user setups do not carry), so it gets two doors:
+    //  1. A per-user rate ceiling — a forged message storm cannot flood the
+    //     client list or the push surface.
+    //  2. Inbound messages only capture for users who actually connected
+    //     WhatsApp (an access token on file). Everyone else: polite 200, zero writes.
+    const gate = rateLimit(`wa:webhook:${uid}`, 60, 60 * 1000)
+    if (!gate.ok) return NextResponse.json({ ok: true, throttled: true })
+
+    const connected = await db.userSetting.findUnique({ where: { userId_key: { userId: uid, key: 'WA_ACCESS_TOKEN' } } })
     const body = (await req.json().catch(() => ({}))) as WaWebhookBody
+
+    if (!connected?.value) {
+      // Delivery-status posts for a number that was never connected: acknowledge
+      // and drop. No client rows can be planted through an unused webhook.
+      return NextResponse.json({ ok: true })
+    }
+
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
         const value = change.value

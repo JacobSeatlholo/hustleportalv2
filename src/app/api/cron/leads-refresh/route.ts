@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContacts, cityFromText, type RememberLead } from '@/lib/leadpool'
 import { expleeHotLeads, projectLabelForCampaign } from '@/lib/explee'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
+import { globalCooldown } from '@/lib/ratelimit'
 
 export const maxDuration = 60
 
@@ -19,13 +20,20 @@ export const maxDuration = 60
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return true // no secret configured — rely on the endpoint being harmless
+  if (!secret) return true // no secret configured — cooldown below keeps abuse bounded
   const header = req.headers.get('authorization') || ''
   return header === `Bearer ${secret}`
 }
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Same cooldown law as daily-reminders: the scheduled pinger passes, a
+  // hammering stranger gets honest "already ran" answers instead of repeated
+  // external API walks (Explee pulls + website pings cost real credits).
+  const cooldown = globalCooldown('cron:leads-refresh', 30 * 60 * 1000)
+  if (!cooldown.ran) {
+    return NextResponse.json({ ok: true, skipped: 'cooldown', retryAfterSec: cooldown.retryAfterSec })
+  }
   const t0 = Date.now()
 
   // 1) Demote the long unseen: 60 days without a scan re confirming it.

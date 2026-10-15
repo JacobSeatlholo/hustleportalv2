@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
+import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { resolveProject } from '@/lib/workspace'
 import { db } from '@/lib/db'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
+import { safeUrl } from '@/lib/ssrf'
 
 export const maxDuration = 60
 
@@ -23,19 +25,12 @@ export const maxDuration = 60
 const MAX_HTML_BYTES = 3 * 1024 * 1024
 const MAX_TEXT_CHARS = 14_000
 
-function normalizeUrl(raw: string): string | null {
-  let v = raw.trim()
-  if (!v) return null
-  if (!/^https?:\/\//i.test(v)) v = `https://${v}`
-  try {
-    const u = new URL(v)
-    if (!/^https?:$/.test(u.protocol)) return null
-    if (!u.hostname.includes('.')) return null
-    if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(u.hostname)) return null
-    return u.toString()
-  } catch {
-    return null
-  }
+async function normalizeUrl(raw: string): Promise<string | null> {
+  // Hardened: syntactic checks PLUS a DNS resolve whose every answer must be
+  // public — string blocklists alone miss octal IPs, IPv6 loopback and DNS
+  // that points at private/link-local space (cloud metadata included).
+  const verdict = await safeUrl(raw)
+  return verdict.ok ? verdict.url! : null
 }
 
 function isDnsFailure(e: unknown): boolean {
@@ -195,8 +190,14 @@ export interface BusinessAnalysis {
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // AI cost guard: one daily allowance per account, checked BEFORE any
+  // Gemini/DeepSeek spend. Generous for humans, a wall for scripts.
+  const budget = await consumeAiBudget(userId)
+  if (!budget.ok) {
+    return NextResponse.json(aiBudgetExceeded(budget), { status: 429 })
+  }
   const body = await req.json().catch(() => ({}))
-  const url = normalizeUrl(String(body.url || ''))
+  const url = await normalizeUrl(String(body.url || ''))
   if (!url) {
     return NextResponse.json({ error: 'Enter a valid business web address, e.g. bloombeauty.co.za' }, { status: 400 })
   }
@@ -213,8 +214,10 @@ export async function POST(req: NextRequest) {
     const candidates = domainCandidates(new URL(url).hostname).slice(0, 2)
     for (const c of candidates) {
       const candidateUrl = `https://${c}/`
-      if (!(await probeReachable(candidateUrl))) continue
-      const rescued = await fetchPage(candidateUrl)
+      const safeCandidate = await safeUrl(candidateUrl)
+      if (!safeCandidate.ok) continue
+      if (!(await probeReachable(safeCandidate.url!))) continue
+      const rescued = await fetchPage(safeCandidate.url!)
       if ('text' in rescued) {
         page = rescued
         notices.push(`We could not find ${new URL(url).hostname}, so we read ${new URL(rescued.finalUrl).hostname} instead. That is the address worth saving on your profile.`)

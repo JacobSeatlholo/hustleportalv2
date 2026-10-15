@@ -109,12 +109,19 @@ export function scoreFor(checks: VerifyChecks, confirmCount: number, hasWebsite:
   return Math.max(0, Math.min(100, s))
 }
 
-/** HEAD, then GET, then plain http. A server that answers at all counts as live. */
+/** HEAD, then GET, then plain http. A server that answers at all counts as live.
+ * SSRF guard: the host must resolve to public internet space before a single
+ * byte is fetched — lead websites are attacker-influenceable data (imports,
+ * pasted contact lists), so this fetch is a doorway that stays locked. */
 export async function pingWebsite(host: string): Promise<boolean> {
+  const { safeUrl } = await import('@/lib/ssrf')
+  const clean = host.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').trim()
+  const verdict = await safeUrl(`https://${clean}`)
+  if (!verdict.ok) return false
   const attempts: { url: string; method: 'HEAD' | 'GET' }[] = [
-    { url: `https://${host}`, method: 'HEAD' },
-    { url: `https://${host}`, method: 'GET' },
-    { url: `http://${host}`, method: 'GET' },
+    { url: `https://${clean}`, method: 'HEAD' },
+    { url: `https://${clean}`, method: 'GET' },
+    { url: `http://${clean}`, method: 'GET' },
   ]
   for (const a of attempts) {
     try {

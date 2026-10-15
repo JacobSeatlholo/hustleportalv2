@@ -27,11 +27,16 @@ model User {
   platformAdmin Boolean @default(false)
   resetTokenHash  String?   // sha256 of the password-reset token (never the token itself)
   resetTokenExpiry DateTime? // single-use, 30-minute window
+  // Session epoch: bumped on every password reset/change. JWTs embed the epoch
+  // they were issued under, so a reset instantly kills every older session —
+  // a stolen cookie stops working the moment the owner reclaims the account.
+  sessionEpoch Int @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   teamsOwned         Team[]              @relation("TeamOwner")
   memberships        TeamMember[]
+  aiUsage            AiUsage[]
   tasksCreated       Task[]              @relation("TaskCreator")
   tasksAssigned      Task[]              @relation("TaskAssignee")
   leads              Lead[]
@@ -737,4 +742,19 @@ model ClientPoolLead {
   @@unique([userId, fingerprint])
   @@index([userId, status])
   @@index([createdAt])
+}
+
+// Daily AI usage counter — the cost guard for the Gemini/DeepSeek generation
+// surfaces. One row per user per SAST day; the route checks the cap BEFORE the
+// spend, the increment is atomic (upsert), so parallel calls cannot sneak past.
+model AiUsage {
+  id     String @id @default(cuid())
+  userId String
+  day    String // SAST day stamp, e.g. "2026-10-16"
+  count  Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([day])
 }

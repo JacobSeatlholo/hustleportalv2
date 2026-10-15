@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireExec } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,10 +78,19 @@ export async function GET() {
     steps['diag-fatal'] = e instanceof Error ? e.message.slice(0, 120) : 'unknown'
   }
 
+  // Hardened disclosure: an anonymous visitor gets liveness + integration
+  // PRESENCE booleans only. The deep diagnostics (table inventory, error
+  // classes, step-by-step results) are an owner/exec eye — they describe the
+  // database schema shape, which is attack-planning material, not public info.
+  const gate = await requireExec()
+  const detail = gate.ok
+    ? { error: dbPingError, tables, userQuery, steps }
+    : { error: null, tables: null, userQuery: null, steps: {} }
+
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
-    db: { ping: dbPing, error: dbPingError, tables, userQuery, steps },
+    db: { ping: dbPing, ...detail },
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
       emailPlatformKey: Boolean(process.env.RESEND_API_KEY?.trim()),

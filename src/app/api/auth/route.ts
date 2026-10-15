@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, verifyPassword } from '@/lib/auth'
+import { rateLimit, rateLimitClear, clientIp, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, addCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
@@ -22,6 +23,12 @@ export async function POST(req: NextRequest) {
 
     if (action === 'register') {
       const { email, password, name, businessName, industry, city, phone } = body
+      // Account-creation flood guard: stops scripted mass registration and the
+      // welcome-mail noise it would generate. Generous for a real human.
+      const regGate = rateLimit(`register:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
+      if (!regGate.ok) {
+        return NextResponse.json(tooMany(regGate.retryAfterSec), { status: 429 })
+      }
       if (!email || !password || !name) {
         return NextResponse.json({ error: 'Name, email and password are required.' }, { status: 400 })
       }
@@ -132,10 +139,24 @@ export async function POST(req: NextRequest) {
       if (!email || !password) {
         return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })
       }
+      // Brute-force doors: a wide per-IP door for whole offices behind one NAT,
+      // and a narrow per-email door that ONLY failed attempts open. The owner
+      // typing the right password can never be locked out by an attacker
+      // hammering their address — success clears the failure counter.
+      const ipGate = rateLimit(`login:ip:${clientIp(req)}`, 60, 5 * 60 * 1000)
+      const emailKey = `login:fail:${String(email).toLowerCase().trim()}`
+      if (!ipGate.ok) {
+        return NextResponse.json(tooMany(ipGate.retryAfterSec), { status: 429 })
+      }
+      const failGate = rateLimit(emailKey, 8, 15 * 60 * 1000)
+      if (!failGate.ok) {
+        return NextResponse.json(tooMany(failGate.retryAfterSec), { status: 429 })
+      }
       const user = await db.user.findUnique({ where: { email: String(email).toLowerCase().trim() } })
       if (!user || !(await verifyPassword(String(password), user.passwordHash))) {
         return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
       }
+      rateLimitClear(emailKey)
       if (user.accountStatus === 'SUSPENDED') {
         return NextResponse.json(
           { error: 'This account is paused. Reply to any HustlePortal email or contact support@hustleportal.online and we will restore it for you.' },
@@ -153,6 +174,17 @@ export async function POST(req: NextRequest) {
       const email = String(body.email || '').toLowerCase().trim()
       if (!email || !email.includes('@')) {
         return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
+      }
+      // Mail-bombing doors: every request here sends a real email, so both the
+      // requester's IP and the victim's inbox get their own narrow limits.
+      const ipGate = rateLimit(`forgot:ip:${clientIp(req)}`, 5, 60 * 60 * 1000)
+      const emailGate = rateLimit(`forgot:email:${email}`, 3, 60 * 60 * 1000)
+      if (!ipGate.ok || !emailGate.ok) {
+        // Same neutral message as a miss — no new information for an attacker.
+        return NextResponse.json({
+          ok: true,
+          message: 'If an account exists for that email, a reset link is on its way — check your inbox (and spam, just in case).',
+        })
       }
       const user = await db.user.findUnique({ where: { email } })
       if (!user) {
@@ -201,6 +233,10 @@ export async function POST(req: NextRequest) {
     if (action === 'reset') {
       const token = String(body.token || '').trim()
       const password = String(body.password || '')
+      const resetGate = rateLimit(`reset:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
+      if (!resetGate.ok) {
+        return NextResponse.json(tooMany(resetGate.retryAfterSec), { status: 429 })
+      }
       if (!token) return NextResponse.json({ error: 'Reset link is missing its token.' }, { status: 400 })
       if (password.length < 6) {
         return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 })
@@ -217,6 +253,9 @@ export async function POST(req: NextRequest) {
           passwordHash: await hashPassword(password),
           resetTokenHash: null,
           resetTokenExpiry: null,
+          // New epoch: every session cookie issued before this reset is dead
+          // on its next request — a stolen cookie cannot outlive the fix.
+          sessionEpoch: { increment: 1 },
         },
       })
       // Sign them straight in — one less step on a small screen.

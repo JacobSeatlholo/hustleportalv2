@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sendPushToUser } from '@/lib/push'
+import { globalCooldown } from '@/lib/ratelimit'
 
 export const maxDuration = 60
 
@@ -9,17 +10,24 @@ export const maxDuration = 60
  * Pushes "N tasks due today" to every user with push subscriptions + tasks due today.
  *
  * Auth: Vercel Cron sends `Authorization: Bearer $CRON_SECRET` when CRON_SECRET is set.
- * If the env is absent we accept the call (it only sends notifications — harmless).
+ * If the env is absent we accept the call (it only sends notifications — harmless),
+ * BUT behind a 10-minute global cooldown: the scheduled pinger fires once a day and
+ * sails through, while a stranger hammering the URL gets honest "already ran" answers
+ * instead of a push blast to every user on the platform.
  */
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return true // no secret configured — rely on the endpoint being harmless
+  if (!secret) return true // no secret configured — cooldown below keeps abuse bounded
   const header = req.headers.get('authorization') || ''
   return header === `Bearer ${secret}`
 }
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const cooldown = globalCooldown('cron:daily-reminders', 10 * 60 * 1000)
+  if (!cooldown.ran) {
+    return NextResponse.json({ ok: true, skipped: 'cooldown', retryAfterSec: cooldown.retryAfterSec })
+  }
 
   // "Today" in South Africa — the whole customer base is SAST (UTC+2) today.
   const now = new Date()

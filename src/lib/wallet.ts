@@ -6,18 +6,21 @@ export async function ensureWallet(userId: string) {
   return db.wallet.create({ data: { userId, balance: 0 } })
 }
 
-/** Spend credits. Returns null if insufficient balance. */
+/** Spend credits. Returns null if insufficient balance. Atomic: the balance
+ * gate and the decrement are one conditional UPDATE, so two concurrent
+ * reveals can never both spend the same cents (double-spend race closed). */
 export async function spendCredits(userId: string, amountCents: number, description: string) {
-  const wallet = await ensureWallet(userId)
-  if (wallet.balance < amountCents) return null
-  const balance = wallet.balance - amountCents
-  const [walletUpdated, tx] = await db.$transaction([
-    db.wallet.update({ where: { userId }, data: { balance } }),
-    db.creditTx.create({
-      data: { userId, type: 'LEAD_REVEAL', amount: -amountCents, description, balanceAfter: balance },
-    }),
-  ])
-  return { wallet: walletUpdated, tx }
+  await ensureWallet(userId)
+  const claim = await db.wallet.updateMany({
+    where: { userId, balance: { gte: amountCents } },
+    data: { balance: { decrement: amountCents } },
+  })
+  if (claim.count === 0) return null
+  const wallet = await db.wallet.findUnique({ where: { userId } })
+  const tx = await db.creditTx.create({
+    data: { userId, type: 'LEAD_REVEAL', amount: -amountCents, description, balanceAfter: wallet?.balance ?? 0 },
+  })
+  return { wallet, tx }
 }
 
 export async function addCredits(

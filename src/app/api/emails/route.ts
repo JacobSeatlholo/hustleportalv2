@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { sendMail } from '@/lib/mailer'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
+import { rateLimit, tooMany } from '@/lib/ratelimit'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -21,6 +22,14 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Send-rate ceiling per account: a human never hits 60 sends in an hour,
+  // but this door sends real email through the platform mail engine — the
+  // ceiling keeps a compromised or scripted account from turning HustlePortal
+  // into a spam relay. 60/hour, generous and honest.
+  const sendGate = rateLimit(`emails:send:${userId}`, 60, 60 * 60 * 1000)
+  if (!sendGate.ok) {
+    return NextResponse.json(tooMany(sendGate.retryAfterSec), { status: 429 })
+  }
   const body = await req.json().catch(() => ({}))
   const to = String(body.to || '').trim()
   const subject = String(body.subject || '').trim()

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
 import { geminiGenerate } from '@/lib/gemini'
 
@@ -13,6 +14,12 @@ const NO_KEY_MSG =
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // AI cost guard: one daily allowance per account, checked BEFORE any
+  // Gemini/DeepSeek spend. Generous for humans, a wall for scripts.
+  const budget = await consumeAiBudget(userId)
+  if (!budget.ok) {
+    return NextResponse.json(aiBudgetExceeded(budget), { status: 429 })
+  }
   const answers = await req.json()
 
   const user = await db.user.findUnique({ where: { id: userId } })
