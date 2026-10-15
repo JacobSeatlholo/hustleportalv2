@@ -220,12 +220,13 @@ async function expleeGetJson(
  * at one screenful. Pass campaignId to focus on a single campaign (the API
  * filters server side); omit it for the whole organization.
  */
-export async function expleeHotLeads(opts?: { limit?: number; campaignId?: number; apiKey?: string }): Promise<ExpleeHotLeadsResult> {
+export async function expleeHotLeads(opts?: { limit?: number; campaignId?: number; apiKey?: string; pages?: number }): Promise<ExpleeHotLeadsResult> {
   const apiKey = (opts?.apiKey ?? (await getConfig(CONFIG_KEYS.EXPLEE_API_KEY))).trim()
   const empty = { leads: [], total: 0, hasMore: false, campaigns: [], mode: 'NONE' as const }
   if (apiKey.length <= 5) return { ...empty, note: 'No Explee key configured yet.' }
 
   const limit = Math.min(Math.max(opts?.limit ?? 200, 1), 200)
+  const maxPages = Math.min(Math.max(opts?.pages ?? 25, 1), 25)
   const campaignId =
     typeof opts?.campaignId === 'number' && Number.isFinite(opts.campaignId) && opts.campaignId > 0
       ? opts.campaignId
@@ -262,7 +263,7 @@ export async function expleeHotLeads(opts?: { limit?: number; campaignId?: numbe
   let hasMore = firstRes.data?.has_more === true
   let nextOffset = typeof firstRes.data?.next_offset === 'number' ? firstRes.data.next_offset : null
   let pages = 1
-  while (hasMore && nextOffset !== null && nextOffset > 0 && pages < 25) {
+  while (hasMore && nextOffset !== null && nextOffset > 0 && pages < maxPages) {
     const pageRes = await expleeGetJson(
       `/public/api/v1/autogtm/hot-leads?limit=${limit}&offset=${nextOffset}${campaignParam}`,
       apiKey

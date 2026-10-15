@@ -14,6 +14,7 @@ import {
   recentTopicScan,
   rememberScanResults,
   serveFromPool,
+  serveExpleeBoost,
   topicFingerprint,
   userSavedKeys,
   type RememberLead,
@@ -437,6 +438,32 @@ function decorateLeads<T extends OutLead>(
   })
 }
 
+/**
+ * The team verified floor: when an answer comes up short of the ask, active
+ * contacts our own outreach already reached (real companies, real replies on
+ * real campaigns) top it up. Only ever fills the shortfall, never a company
+ * already on the answer or in the seller's pipeline. Each topped lead wears
+ * its own honest badge on the card.
+ */
+async function topUpWithTeamVerified(
+  leads: OutLead[],
+  cap: number,
+  city: string,
+  excludeKeys: Set<string>
+): Promise<{ leads: OutLead[]; boosted: number }> {
+  const room = cap - leads.length
+  if (room <= 0) return { leads, boosted: 0 }
+  const have = new Set(leads.map((l) => normKey(l.company || '')))
+  const boost = await serveExpleeBoost({
+    cap: room,
+    excludeKeys: new Set([...excludeKeys, ...have]),
+    city: city || undefined,
+  })
+  const fresh = boost.filter((b) => !have.has(normKey(b.company || '')))
+  if (fresh.length === 0) return { leads, boosted: 0 }
+  return { leads: [...leads, ...fresh], boosted: fresh.length }
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -517,7 +544,13 @@ export async function POST(req: NextRequest) {
   // grows. Rotation: least recently served faces first, so scanning again keeps
   // meeting businesses the seller has never contacted.
   const excludeKeys = await userSavedKeys(userId)
-  const pooled = await serveFromPool({ topicFp, cap, excludeKeys })
+  let pooled: OutLead[] = await serveFromPool({ topicFp, cap, excludeKeys })
+  let poolBoosted = 0
+  if (pooled.length < cap) {
+    const up = await topUpWithTeamVerified(pooled, cap, city, excludeKeys)
+    pooled = up.leads
+    poolBoosted = up.boosted
+  }
   if (pooled.length >= cap) {
     await logScanRun(userId, topicFp, 'POOL', pooled.length, true)
     return NextResponse.json({
@@ -525,7 +558,9 @@ export async function POST(req: NextRequest) {
       mode: 'POOL',
       source: 'POOL',
       fromPool: true,
-      note: 'Fresh faces from the verified lead pool. Every business here was confirmed on a recent scan and none are already in your pipeline. Scan again anytime and the pool keeps rotating in businesses you have not met yet.',
+      note:
+        'Fresh faces from the verified lead pool. Every business here was confirmed on a recent scan and none are already in your pipeline. Scan again anytime and the pool keeps rotating in businesses you have not met yet.' +
+        (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : ''),
     })
   }
   if (pooled.length > 0 && (await recentTopicScan(topicFp, 10))) {
@@ -535,7 +570,9 @@ export async function POST(req: NextRequest) {
       mode: 'POOL',
       source: 'POOL',
       fromPool: true,
-      note: `Served while the pool warms up: a recent scan just mapped this ground, so these ${pooled.length} verified leads are ready now. Your next scan in a few minutes brings fresh faces too.`,
+      note:
+        `Served while the pool warms up: a recent scan just mapped this ground, so these ${pooled.length} verified leads are ready now. Your next scan in a few minutes brings fresh faces too.` +
+        (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : ''),
     })
   }
 
@@ -627,6 +664,9 @@ export async function POST(req: NextRequest) {
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
+    }
+    if (final.length < cap) {
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys)).leads
     }
     await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
     const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
@@ -748,6 +788,9 @@ export async function POST(req: NextRequest) {
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
+    }
+    if (final.length < cap) {
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys)).leads
     }
     const rankScore = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l.score || 0]))
     const rankedById = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l]))

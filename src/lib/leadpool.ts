@@ -148,6 +148,7 @@ function badgeFor(p: { verifyChecks: string | null; confirmCount: number; source
   if (checks.websiteOk === true) return 'Checked · website live'
   if (checks.phoneOk && p.confirmCount >= 2) return 'Confirmed · phone on file'
   if (checks.phoneOk) return 'Checked · phone on file'
+  if (p.source === 'EXPLEE') return 'Team verified contact'
   if (p.confirmCount >= 2) return 'Reconfirmed on scans'
   if (p.source === 'OSM') return 'Map listed'
   return 'Web found'
@@ -298,7 +299,15 @@ export async function serveFromPool(opts: {
     if (sa !== sb) return sa - sb // never served faces first, then least recently served
     return b.lastSeenAt.getTime() - a.lastSeenAt.getTime()
   })
-  const serve = rows.slice(0, cap)
+  // One company can exist under two fingerprints (seen once with a city, once
+  // without). A single serve must never hand the seller the same face twice.
+  const seenCompanies = new Set<string>()
+  const serve = rows.filter((p) => {
+    const key = normKey(p.company)
+    if (!key || seenCompanies.has(key)) return false
+    seenCompanies.add(key)
+    return true
+  }).slice(0, cap)
   if (serve.length === 0) return []
   try {
     await db.leadPool.updateMany({
@@ -309,6 +318,212 @@ export async function serveFromPool(opts: {
     /* rotation bookkeeping must never break a serve */
   }
   return serve.map(poolToLead)
+}
+
+/**
+ * The team verified floor: when a topic's own serve comes up short, active
+ * contacts the Business Hustle outreach team has already reached (real
+ * replies on real campaigns) top the answer up. City matches first, then
+ * anywhere in South Africa. Rotation aware, never a company the seller
+ * already saved, and only ever a top up — topic matched faces always come
+ * first when the pool has them.
+ */
+export async function serveExpleeBoost(opts: {
+  cap: number
+  excludeKeys: Set<string>
+  city?: string
+  maxAgeDays?: number
+}): Promise<PoolLead[]> {
+  const cap = Math.max(0, Math.min(30, opts.cap))
+  if (cap === 0) return []
+  const maxAge = opts.maxAgeDays ?? 45
+  const cutoff = new Date(Date.now() - maxAge * 86_400_000)
+  const base = {
+    active: true,
+    source: 'EXPLEE' as const,
+    verifyState: { not: 'stale' },
+    lastSeenAt: { gte: cutoff },
+  }
+  // Two passes: same city first when the scan named one, then the whole country.
+  const passes: Record<string, unknown>[] = opts.city ? [{ ...base, city: { equals: opts.city, mode: 'insensitive' } }, base] : [base]
+  const picked: LeadPoolRow[] = []
+  const seen = new Set<string>()
+  for (const where of passes) {
+    if (picked.length >= cap) break
+    const rows = await db.leadPool.findMany({
+      where,
+      orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { lastSeenAt: 'desc' }],
+      take: cap * 3,
+    })
+    for (const r of rows) {
+      if (picked.length >= cap) break
+      const key = normKey(r.company)
+      if (!key || seen.has(key) || opts.excludeKeys.has(key)) continue
+      seen.add(key)
+      picked.push(r)
+    }
+  }
+  if (picked.length === 0) return []
+  try {
+    await db.leadPool.updateMany({
+      where: { id: { in: picked.map((s) => s.id) } },
+      data: { timesServed: { increment: 1 }, lastServedAt: new Date() },
+    })
+  } catch {
+    /* rotation bookkeeping must never break a serve */
+  }
+  return picked.map(poolToLead)
+}
+
+// ---------- ingesting the team's verified outreach contacts ----------
+
+export interface IngestSummary {
+  total: number
+  created: number
+  merged: number
+  skipped: number
+  pinged: number
+  sample: string[]
+}
+
+/**
+ * Land verified outreach contacts (the team's own Explee campaigns: real
+ * companies, real replies) in the shared pool. Same merge law as scan
+ * results: good facts on file are never erased with blanks, phones normalize
+ * to +27, a bounded batch of websites gets pinged. Dry run classifies
+ * everything and writes nothing, so the owner can preview the landing.
+ */
+export async function ingestVerifiedContacts(opts: {
+  area: string
+  contacts: RememberLead[]
+  maxPings?: number
+  dryRun?: boolean
+}): Promise<IngestSummary> {
+  const summary: IngestSummary = { total: 0, created: 0, merged: 0, skipped: 0, pinged: 0, sample: [] }
+  // Company is the pool's identity: a row without one cannot land (no
+  // fabrication, a person's name is not a company).
+  const rows: RememberLead[] = []
+  const seen = new Set<string>()
+  for (const l of opts.contacts) {
+    const company = (l.company || '').trim()
+    if (!company) { summary.skipped++; continue }
+    const key = normKey(company)
+    if (!key || seen.has(key)) { summary.skipped++; continue }
+    seen.add(key)
+    rows.push(l)
+  }
+  summary.total = rows.length
+  if (rows.length === 0) return summary
+  const now = new Date()
+
+  const fps = rows.map((l) => `${normKey(l.company)}|${normKey(l.city || opts.area)}`)
+  let existing: LeadPoolRow[] = []
+  try {
+    existing = await db.leadPool.findMany({ where: { fingerprint: { in: fps } } })
+  } catch {
+    summary.skipped += rows.length
+    return summary
+  }
+  const byFp = new Map(existing.map((p) => [p.fingerprint, p]))
+
+  // Websites get pinged ONCE per new face: merged rows already carry their
+  // checks on file, and the daily refresh re checks the whole pool anyway.
+  const newRows = rows.filter((l) => !byFp.get(`${normKey(l.company)}|${normKey(l.city || opts.area)}`))
+  const maxPings = Math.max(opts.maxPings ?? 24, 0)
+  const pingList = maxPings > 0 ? newRows.filter((l) => l.website).slice(0, maxPings) : []
+  const siteOk = new Map<string, boolean>()
+  await chunked(pingList, 8, async (l) => {
+    const host = hostOf(l.website)
+    if (!host) return
+    siteOk.set(normKey(l.company), await pingWebsite(host))
+    summary.pinged++
+  })
+
+  for (const l of rows) {
+    const key = normKey(l.company)
+    const fp = `${key}|${normKey(l.city || opts.area)}`
+    const phone = normalizeSaPhone(l.phone)
+    const websiteOk = siteOk.get(key)
+    const prev = byFp.get(fp)
+    if (prev) {
+      summary.merged++
+      if (opts.dryRun || summary.sample.length < 8) {
+        if (!opts.dryRun && prev.company) summary.sample.push(prev.company)
+      }
+      if (opts.dryRun) continue
+      const prevChecks = parseChecksSource(prev.verifyChecks)
+      const checks: VerifyChecks = {
+        phoneOk: prevChecks.phoneOk || phone.ok,
+        ...(websiteOk !== undefined ? { websiteOk } : prevChecks.websiteOk !== undefined ? { websiteOk: prevChecks.websiteOk } : {}),
+      }
+      const confirmCount = prev.confirmCount + 1
+      try {
+        await db.leadPool.update({
+          where: { id: prev.id },
+          data: {
+            lastSeenAt: now,
+            lastVerifiedAt: now,
+            confirmCount,
+            verifyScore: scoreFor(checks, confirmCount, Boolean(prev.website || l.website)),
+            verifyState: checks.websiteOk === true ? 'active' : prev.verifyState === 'stale' ? 'listed' : prev.verifyState,
+            verifyChecks: JSON.stringify({ ...checks, checkedAt: now.toISOString() }),
+            phone: prev.phone || phone.e164 || null,
+            phoneRaw: prev.phoneRaw || l.phone || null,
+            email: prev.email || l.email || null,
+            website: prev.website || l.website || null,
+            contactName: prev.contactName || l.contactName || null,
+            role: prev.role || l.role || null,
+            profileUrl: prev.profileUrl || l.profileUrl || null,
+            why: prev.why || l.why || null,
+            sourceRef: prev.sourceRef || l.profileUrl || null,
+          },
+        })
+      } catch {
+        /* one merge failing never blocks the rest */
+      }
+      continue
+    }
+    summary.created++
+    if (summary.sample.length < 8) summary.sample.push(l.company.trim())
+    if (opts.dryRun) continue
+    const checks: VerifyChecks = {
+      phoneOk: phone.ok,
+      ...(websiteOk === true ? { websiteOk: true } : websiteOk === false ? { websiteOk: false } : {}),
+    }
+    const score = scoreFor(checks, 1, Boolean(l.website))
+    try {
+      await db.leadPool.create({
+        data: {
+          fingerprint: fp,
+          company: l.company.trim().slice(0, 160),
+          industry: l.industry?.slice(0, 120) || null,
+          city: l.city?.slice(0, 120) || null,
+          areaLabel: opts.area?.slice(0, 160) || null,
+          phone: phone.e164 || null,
+          phoneRaw: l.phone || null,
+          email: l.email || null,
+          website: l.website || null,
+          contactName: l.contactName || null,
+          role: l.role || null,
+          profileUrl: l.profileUrl || null,
+          why: l.why || null,
+          score: typeof l.score === 'number' ? l.score : null,
+          source: 'EXPLEE',
+          sourceRef: l.profileUrl || null,
+          confirmCount: 1,
+          verifyScore: score,
+          verifyState: checks.websiteOk === true ? 'active' : 'listed',
+          verifyChecks: JSON.stringify({ ...checks, checkedAt: now.toISOString() }),
+          firstSeenAt: now,
+          lastSeenAt: now,
+          lastVerifiedAt: now,
+        },
+      })
+    } catch {
+      /* a fingerprint race with a live scan: harmless, the scan row wins */
+    }
+  }
+  return summary
 }
 
 // ---------- remembering (the capture + verify pass) ----------

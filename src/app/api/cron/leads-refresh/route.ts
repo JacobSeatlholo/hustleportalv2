@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { pingWebsite, hostOf, scoreFor, parseChecksSource } from '@/lib/leadpool'
+import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContacts, type RememberLead } from '@/lib/leadpool'
+import { expleeHotLeads } from '@/lib/explee'
+import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
 export const maxDuration = 60
 
@@ -24,6 +26,7 @@ function authorized(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const t0 = Date.now()
 
   // 1) Demote the long unseen: 60 days without a scan re confirming it.
   const staleCut = new Date(Date.now() - 60 * 86_400_000)
@@ -80,5 +83,55 @@ export async function GET(req: NextRequest) {
     where: { createdAt: { lt: new Date(Date.now() - 45 * 86_400_000) } },
   })
 
-  return NextResponse.json({ ok: true, demoted: demoted.count, rechecked: batch.length, live, dead, prunedScans: pruned.count })
+  // 4) FEED: the pool drinks from the team's own outreach. Every day the
+  //    newest Explee hot leads (real people at real companies who REPLIED to
+  //    a Business Hustle campaign) land in the shared Verified Lead Pool, so
+  //    every member scans into a floor of credible, verifiable businesses —
+  //    even on a topic no scan has ever warmed. Free read, bounded (one page,
+  //    ten website pings), idempotent (the merge law dedupes repeats). A
+  //    failure here never breaks the freshness work above.
+  let feed: { pulled: number; created: number; merged: number; skipped: number } | { error: string } | null = null
+  try {
+    if (Date.now() - t0 < 30_000) {
+      const apiKey = (await getConfig(CONFIG_KEYS.EXPLEE_API_KEY)).trim()
+      if (apiKey.length > 5) {
+        const hot = await expleeHotLeads({ limit: 200, pages: 1 })
+        if (hot.mode === 'LIVE' && hot.leads.length > 0) {
+          const contacts: RememberLead[] = []
+          for (const h of hot.leads) {
+            const company = h.companyName?.trim()
+            if (!company) continue // a person without a company is not a pool row
+            const reply = h.whyHot?.trim().slice(0, 160)
+            const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
+            contacts.push({
+              company,
+              ...(h.name?.trim() ? { contactName: h.name.trim() } : {}),
+              ...(h.jobTitle?.trim() ? { role: h.jobTitle.trim().slice(0, 60) } : {}),
+              ...(h.email?.trim() ? { email: h.email.trim() } : {}),
+              ...(h.phone?.trim() ? { phone: h.phone.trim() } : {}),
+              ...(h.companyDomain && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(h.companyDomain) ? { website: `https://${h.companyDomain}` } : {}),
+              ...(h.linkedinUrl && /^https?:\/\//i.test(h.linkedinUrl) ? { profileUrl: h.linkedinUrl } : {}),
+              why: reply ? `Warm reply to ${campaignLine}: ${reply}` : `Warm reply to ${campaignLine}`,
+            })
+          }
+          const summary = await ingestVerifiedContacts({ area: 'South Africa', contacts, maxPings: 10 })
+          feed = { pulled: summary.total, created: summary.created, merged: summary.merged, skipped: summary.skipped }
+        } else {
+          feed = { pulled: 0, created: 0, merged: 0, skipped: 0 }
+        }
+      }
+    }
+  } catch (e) {
+    feed = { error: e instanceof Error ? e.message.slice(0, 160) : 'feed failed' }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    demoted: demoted.count,
+    rechecked: batch.length,
+    live,
+    dead,
+    prunedScans: pruned.count,
+    ...(feed ? { feed } : {}),
+  })
 }
