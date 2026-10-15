@@ -728,3 +728,20 @@ Stage Summary:
 - Production d31aaf6: the Exec Dashboard now shows the Explee pulse. The owner opens the dashboard and sees every hot lead the businesshustle campaigns warmed up — who they are, which campaign, why they are hot, when — without opening Explee, plus a richer newest accounts view (8 recent sign ups with plan, subscription, account status, wallet, leads).
 - YOCO VERDICT AFTER THE OWNER'S SWAP: checkout still 401s. Masked shape proof: Vercel now holds yoco_li...08d0 (59 chars) — a NEW value (old was ...d381), so the paste landed, but both values fail Yoco auth. Pattern: the portal's key identifier chip (yoco_live_...) is being copied instead of the revealed secret key. OWNER TODO: Yoco Portal → API keys → reveal/copy the SECRET KEY value (reads sk_live_...) → replace YOCO_SECRET_KEY on Vercel → redeploy → tap Register on the Payments card. E2E then goes full green by itself (35/39 now; the 4 fails are exactly checkout 401 x3 + webhook not registered for live).
 - Regression: exec_prod_probe 11/11 (incl hotleads walls), explee_live_probe 5/5, e2e 35/39 (4 = Yoco key gate), hotleads_local_qa 20/20.
+
+---
+Task ID: 52
+Agent: Super Z (main)
+Task: "done." (owner rotated the key and redeployed, Yoco outage ended) :: verify the money path, then full launch rehearsal QA.
+
+Work Log:
+- World state: status.yoco.com flipped to All Systems Operational; www health ok; apex hustleportal.online already 308 redirects to www while the domain verifies.
+- Key fingerprint via yoco_status_diag.mjs: NOW "sk_live...d29a (36 chars)" - the owner pulled the real gateway secret from the Business Portal (Connect > Gateway). The subscribe probe returned 200 with a real hosted checkout URL (c.yoco.com/checkout/ch_...) and a PENDING subscription at R199. THE 401 ERA IS OVER.
+- Mode label scare: the response said mode:"test" but that was OUR fallback (checkout.mode ?? 'test') - Yoco's create checkout response carries no mode field. Checkout page title reads "Make a R199.00 payment to Business Hustle Ltd" with no test banner. Fixed both routes to report mode from the key text (getYocoKeyMode) instead of a fake 'test'.
+- Git: sandbox reset had rolled local back behind origin/main; realigned with reset --hard origin/main (deployed 36309b4 is the truth), re-applied the mode fix, paramiko reinstalled for the deploy helper.
+
+Stage Summary:
+- Production candidate: sk_live gateway key LIVE, checkout opens, subscriptions record PENDING correctly. Remaining for full money flow: owner taps Register webhook on the exec Payments card (ADMIN gated) - Yoco's register response names the mode as the final word. Then the full E2E rehearsal decides launch readiness.
+- Note: the previous session's hot leads work was recorded as Task ID 51 in its own entry; this entry continues from it.
+
+Task 52 addendum (outage discovery): owner surfaced status.yoco.com mid swap. Live API check (statuspage v2): {"indicator":"critical","description":"Major System Outage"} with Online payments, Card machines, POS, Table by Yoco ALL full_outage (11:16 SAST). Two stacked causes of checkout failure: (A) wrong credential class (yoco_live_ app key, proven twice) and (B) the outage. (A) fixed by the owner via the Business Portal; (B) cleared itself. Status feed for future probes: https://status.yoco.com/api/v2/status.json

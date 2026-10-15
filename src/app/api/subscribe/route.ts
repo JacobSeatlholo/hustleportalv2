@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { getPlan, grantPlanRevealCredits, isValidNpoNumber, normalizeNpoNumber, priceWithNpoDiscount } from '@/lib/plans'
-import { getYocoSecretKey, createYocoCheckout, YocoError } from '@/lib/yoco'
+import { getYocoSecretKey, getYocoKeyMode, createYocoCheckout, YocoError } from '@/lib/yoco'
 import { rewardOnSubscribe } from '@/lib/referral'
 
 const MONTHLY_RENEW_DAYS = 35 // 30-day month + 5-day grace
@@ -70,7 +70,9 @@ export async function POST(req: NextRequest) {
         name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
       })
       await db.subscription.update({ where: { id: sub.id }, data: { providerRef: checkout.id } })
-      return NextResponse.json({ ok: true, mode: checkout.mode ?? 'test', redirectUrl: checkout.redirectUrl, subscription: sub })
+      // Yoco's create checkout response carries no mode field: the key text
+      // decides (sk_live_ = live). Only a missing key falls back to test.
+      return NextResponse.json({ ok: true, mode: checkout.mode ?? getYocoKeyMode() ?? 'test', redirectUrl: checkout.redirectUrl, subscription: sub })
     } catch (e) {
       const status = e instanceof YocoError ? e.status : 500
       const detail = e instanceof Error ? e.message : 'Payment provider error'

@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { getConfigJson, CONFIG_KEYS } from '@/lib/config'
 import { awardXp } from '@/lib/gamification'
-import { getYocoSecretKey, createYocoCheckout, YocoError } from '@/lib/yoco'
+import { getYocoSecretKey, getYocoKeyMode, createYocoCheckout, YocoError } from '@/lib/yoco'
 
 function requestOrigin(req: NextRequest) {
   const proto = req.headers.get('x-forwarded-proto') ?? 'https'
@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
         name: `${pack.name} credit pack`,
       })
       await db.topUp.update({ where: { id: topUp.id }, data: { providerRef: checkout.id } })
-      return NextResponse.json({ ok: true, mode: checkout.mode ?? 'test', redirectUrl: checkout.redirectUrl, topUp })
+      // Same mode rule as subscribe: Yoco omits mode on checkout creation,
+      // the key text decides. Never scare the owner with a fake 'test'.
+      return NextResponse.json({ ok: true, mode: checkout.mode ?? getYocoKeyMode() ?? 'test', redirectUrl: checkout.redirectUrl, topUp })
     } catch (e) {
       await db.topUp.update({ where: { id: topUp.id }, data: { status: 'FAILED' } })
       const status = e instanceof YocoError ? e.status : 500
