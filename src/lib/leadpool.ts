@@ -143,12 +143,12 @@ export function parseChecksSource(json?: string | null): VerifyChecks {
   }
 }
 
-function badgeFor(p: { verifyChecks: string | null; confirmCount: number; source: string; website: string | null }): string {
+function badgeFor(p: { verifyChecks: string | null; confirmCount: number; source: string; website: string | null; poolTag?: string | null }): string {
   const checks = parseChecksSource(p.verifyChecks)
-  // Team contacts lead with the team status the seller can trust, then name
-  // the strongest check behind them — "Team verified · website live" reads
-  // exactly like what it is: we reached them, and the site answered.
-  if (p.source === 'EXPLEE') {
+  // A team status is EARNED: only contacts under an outreach project (the
+  // campaigns the team actually ran) may say "Team verified". Verified data
+  // rows that came in through search keep the honest platform badges.
+  if (p.source === 'EXPLEE' && p.poolTag) {
     if (checks.websiteOk === true) return 'Team verified · website live'
     if (checks.phoneOk) return 'Team verified · phone checked'
     if (p.confirmCount >= 2) return 'Team verified · reconfirmed'
@@ -157,6 +157,7 @@ function badgeFor(p: { verifyChecks: string | null; confirmCount: number; source
   if (checks.websiteOk === true) return 'Checked · website live'
   if (checks.phoneOk && p.confirmCount >= 2) return 'Confirmed · phone on file'
   if (checks.phoneOk) return 'Checked · phone on file'
+  if (p.source === 'EXPLEE') return 'Verified contact'
   if (p.confirmCount >= 2) return 'Reconfirmed on scans'
   if (p.source === 'OSM') return 'Map listed'
   return 'Web found'
@@ -477,6 +478,11 @@ export async function serveExpleeBoost(opts: {
   }
   const picked: LeadPoolRow[] = []
   const seen = new Set<string>()
+  // WHO TO ASK FOR is a promise: inside every niche + city class, faces that
+  // carry a real contact name meet the seller first. Unnamed faces only step
+  // in when the named ones run short — never ahead of them.
+  const named = ordered.filter((r) => r.contactName)
+  ordered = [...named, ...ordered.filter((r) => !r.contactName)]
   for (const r of ordered) {
     if (picked.length >= cap) break
     const key = normKey(r.company)
