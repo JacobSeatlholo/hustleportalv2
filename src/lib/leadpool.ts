@@ -442,11 +442,13 @@ export async function serveExpleeBoost(opts: {
   }
   // One wide read, then order in memory: niche first, city second, rest last.
   // The rotation order from the DB (least recently served first) survives the
-  // partition, so repeat scans keep meeting new faces inside every class.
+  // partition, so repeat scans keep meeting new faces inside every class. The
+  // window is wide on purpose: never served faces from every niche sit at the
+  // front, and a narrow window could squeeze a topic's own faces out entirely.
   const candidates = await db.leadPool.findMany({
     where: base,
     orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { lastSeenAt: 'desc' }],
-    take: Math.max(cap * 6, 30),
+    take: Math.max(cap * 6, 150),
   })
   const travelRows: LeadPoolRow[] = []
   const generalRows: LeadPoolRow[] = []
