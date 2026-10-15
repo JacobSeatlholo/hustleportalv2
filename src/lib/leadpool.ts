@@ -145,10 +145,18 @@ export function parseChecksSource(json?: string | null): VerifyChecks {
 
 function badgeFor(p: { verifyChecks: string | null; confirmCount: number; source: string; website: string | null }): string {
   const checks = parseChecksSource(p.verifyChecks)
+  // Team contacts lead with the team status the seller can trust, then name
+  // the strongest check behind them — "Team verified · website live" reads
+  // exactly like what it is: we reached them, and the site answered.
+  if (p.source === 'EXPLEE') {
+    if (checks.websiteOk === true) return 'Team verified · website live'
+    if (checks.phoneOk) return 'Team verified · phone checked'
+    if (p.confirmCount >= 2) return 'Team verified · reconfirmed'
+    return 'Team verified contact'
+  }
   if (checks.websiteOk === true) return 'Checked · website live'
   if (checks.phoneOk && p.confirmCount >= 2) return 'Confirmed · phone on file'
   if (checks.phoneOk) return 'Checked · phone on file'
-  if (p.source === 'EXPLEE') return 'Team verified contact'
   if (p.confirmCount >= 2) return 'Reconfirmed on scans'
   if (p.source === 'OSM') return 'Map listed'
   return 'Web found'
@@ -235,15 +243,19 @@ export interface PoolLead {
   website?: string
   industry?: string
   city?: string
-  why?: string
   score?: number
   verified?: string
   seenAgo?: string
   verifyScore?: number
   sourceRef?: string
+  local?: boolean
 }
 
-function poolToLead(p: LeadPoolRow): PoolLead {
+// The seller sees a clean card: who to ask, where to find them, and the
+// honest status. The team's campaign conversation ("warm reply to ...")
+// lives in the pool row for the owner's eyes on the Executive Dashboard —
+// it never rides a member response.
+function poolToLead(p: LeadPoolRow, local = false): PoolLead {
   return {
     company: p.company,
     ...(p.contactName ? { contactName: p.contactName } : {}),
@@ -254,12 +266,12 @@ function poolToLead(p: LeadPoolRow): PoolLead {
     ...(p.website ? { website: p.website } : {}),
     ...(p.industry ? { industry: p.industry } : {}),
     ...(p.city ? { city: p.city } : {}),
-    ...(p.why ? { why: p.why } : {}),
     ...(p.score ? { score: p.score } : {}),
     verified: badgeFor(p),
     seenAgo: p.lastSeenAt ? seenAgo(p.lastSeenAt) : undefined,
     ...(p.verifyScore ? { verifyScore: p.verifyScore } : {}),
     ...(p.sourceRef ? { sourceRef: p.sourceRef } : {}),
+    ...(local ? { local: true } : {}),
   }
 }
 
@@ -273,6 +285,7 @@ export async function serveFromPool(opts: {
   cap: number
   excludeKeys: Set<string>
   maxAgeDays?: number
+  city?: string
 }): Promise<PoolLead[]> {
   const cap = Math.max(1, Math.min(30, opts.cap))
   const maxAge = opts.maxAgeDays ?? 21
@@ -317,7 +330,8 @@ export async function serveFromPool(opts: {
   } catch {
     /* rotation bookkeeping must never break a serve */
   }
-  return serve.map(poolToLead)
+  const want = normKey(opts.city || '')
+  return serve.map((p) => poolToLead(p, Boolean(want) && normKey(p.city || '').includes(want)))
 }
 
 /**
@@ -360,6 +374,18 @@ function topicWordSet(text: string): Set<string> {
       .split(/[^a-z]+/)
       .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
   )
+}
+
+/**
+ * LOCATION IS VITAL: a contact only helps the seller if it sits where they
+ * sell. Normalized both ways so "Sandton, Johannesburg" answers a
+ * Johannesburg scan — while a face from another city never sneaks in.
+ */
+function cityMatches(rowCity: string | null, wantCity: string): boolean {
+  const row = normKey(rowCity || '')
+  const want = normKey(wantCity || '')
+  if (!row || !want) return false
+  return row.includes(want) || want.includes(row)
 }
 
 /** A general row earns its place by sharing at least one real word with the topic. */
@@ -411,10 +437,18 @@ export async function serveExpleeBoost(opts: {
   let ordered: LeadPoolRow[] = travelTopic
     ? [...travelRows, ...generalRows.filter((r) => rowMatchesTopic(r, topicWords))]
     : generalRows.filter((r) => rowMatchesTopic(r, topicWords))
-  if (opts.city) {
-    const c = opts.city.toLowerCase().trim()
-    const inCity = ordered.filter((r) => (r.city || '').toLowerCase().includes(c))
-    if (inCity.length > 0) ordered = [...inCity, ...ordered.filter((r) => !inCity.includes(r))]
+  // The seller named a place: only faces that sit there may serve. A Cape
+  // Town scan must never be topped up with Johannesburg names just to fill
+  // the list — when nobody in the area fits, the boost steps aside and the
+  // city grounded engines carry the answer instead.
+  const cityScope = Boolean(opts.city) && !/^anywhere/i.test(opts.city || '')
+  const inCityIds = new Set<string>()
+  if (cityScope) {
+    ordered = ordered.filter((r) => {
+      const hit = cityMatches(r.city, opts.city || '')
+      if (hit) inCityIds.add(r.id)
+      return hit
+    })
   }
   const picked: LeadPoolRow[] = []
   const seen = new Set<string>()
@@ -434,7 +468,7 @@ export async function serveExpleeBoost(opts: {
   } catch {
     /* rotation bookkeeping must never break a serve */
   }
-  return picked.map(poolToLead)
+  return picked.map((p) => poolToLead(p, inCityIds.has(p.id)))
 }
 
 // ---------- ingesting the team's verified outreach contacts ----------

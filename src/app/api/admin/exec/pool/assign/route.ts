@@ -137,7 +137,9 @@ export async function POST(req: NextRequest) {
           stage: 'NEW',
           value: 0,
           unlocked: Boolean(p.email || p.phone),
-          notes: `Hand picked for you by the Business Hustle team from our verified contact pool.${p.why ? ` Fit: ${p.why}` : ''}${p.website ? ` Verify them at ${p.website}` : ''}`,
+          // A clean note for the seller: who handed it over and how to check
+          // it. The team's campaign conversation stays on the dashboard.
+          notes: `Hand picked for you by the Business Hustle team from our verified contact pool.${p.website ? ` Verify them at ${p.website}` : ''}`,
         },
         select: { id: true },
       })

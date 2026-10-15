@@ -40,7 +40,11 @@ interface UrlAnalysis {
   analyzedAt?: string
 }
 
-const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
+const INDUSTRIES = [
+  'Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction',
+  'Food & Bev', 'Health', 'Beauty & Wellness', 'Travel & Tours', 'Transport & Logistics',
+  'Cleaning Services', 'Security Services', 'Education & Training', 'Other',
+]
 
 export default function ProfileView() {
   const { session, loadSession, logout, activeProjectId, setActiveProject, bumpRefresh } = useHp()
@@ -49,6 +53,7 @@ export default function ProfileView() {
     name: '', businessName: '', industry: '', city: '', phone: '',
   })
   const [saving, setSaving] = useState(false)
+  const [customIndustry, setCustomIndustry] = useState('')
   const [teams, setTeams] = useState<TeamInfo[]>([])
   const [teamName, setTeamName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -162,7 +167,9 @@ export default function ProfileView() {
   async function save() {
     setSaving(true)
     try {
-      await api('/api/profile', { method: 'PATCH', body: JSON.stringify(form) })
+      // "Other" is a door, not a label: the typed value IS the industry.
+      const resolved = form.industry === 'Other' && customIndustry.trim() ? { ...form, industry: customIndustry.trim() } : form
+      await api('/api/profile', { method: 'PATCH', body: JSON.stringify(resolved) })
       toast({ title: 'Profile saved' })
       await loadSession()
     } catch (e) {
@@ -533,6 +540,17 @@ export default function ProfileView() {
                         {i}
                       </button>
                     ))}
+                    {(form.industry === 'Other' || (form.industry !== '' && !INDUSTRIES.includes(form.industry))) && (
+                      <Input
+                        placeholder="Tell us your industry, e.g. Car wash"
+                        value={form.industry === 'Other' ? customIndustry : form.industry}
+                        onChange={(e) =>
+                          form.industry === 'Other'
+                            ? setCustomIndustry(e.target.value)
+                            : setForm({ ...form, industry: e.target.value })
+                        }
+                      />
+                    )}
                   </div>
                 </div>
                 <CityField value={form.city} onChange={(v) => setForm({ ...form, city: v })} label="City" hint="Pick a shortcut, type any city or township, or tag your location — nothing is stored until you save." />

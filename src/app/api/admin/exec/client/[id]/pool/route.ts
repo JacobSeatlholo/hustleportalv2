@@ -113,7 +113,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
           source: w.source === 'EXPLEE' ? 'TEAM' : w.source,
           stage: 'NEW',
           value: 0,
-          notes: `Loaded by the business owner from the exec lead pool.${w.why ? ` Fit: ${w.why}` : ''}${w.sourceRef ? ` Source: ${w.sourceRef}` : ''}`,
+          notes: `Loaded by the business owner from the verified lead pool.${w.website ? ` Verify them at ${w.website}` : ''}${w.sourceRef ? ` Source: ${w.sourceRef}` : ''}`,
         },
         select: { id: true },
       })

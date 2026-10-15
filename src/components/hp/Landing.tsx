@@ -25,7 +25,11 @@ const SERVICE_ICONS: Record<string, React.ReactNode> = {
   brain: <Brain className="h-5 w-5" />,
 }
 
-const INDUSTRIES = ['Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction', 'Food & Bev', 'Health', 'Other']
+const INDUSTRIES = [
+  'Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction',
+  'Food & Bev', 'Health', 'Beauty & Wellness', 'Travel & Tours', 'Transport & Logistics',
+  'Cleaning Services', 'Security Services', 'Education & Training', 'Other',
+]
 
 
 export default function Landing() {
@@ -40,6 +44,7 @@ export default function Landing() {
   const [name, setName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [industry, setIndustry] = useState('')
+  const [customIndustry, setCustomIndustry] = useState('')
   const [city, setCity] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -62,7 +67,7 @@ export default function Landing() {
       if (mode === 'register') {
         await api('/api/auth', {
           method: 'POST',
-          body: JSON.stringify({ action: 'register', name, businessName, industry, city, email, password, refCode: localStorage.getItem('hp_ref') }),
+          body: JSON.stringify({ action: 'register', name, businessName, industry: industry === 'Other' ? (customIndustry.trim() || 'Other') : industry, city, email, password, refCode: localStorage.getItem('hp_ref') }),
         })
         localStorage.removeItem('hp_ref')
       } else {
@@ -252,7 +257,7 @@ export default function Landing() {
                     <div className="space-y-1.5">
                       <Label>Industry</Label>
                       <div className="flex flex-wrap gap-1">
-                        {INDUSTRIES.slice(0, 5).map((i) => (
+                        {INDUSTRIES.map((i) => (
                           <button
                             key={i}
                             type="button"
@@ -263,6 +268,13 @@ export default function Landing() {
                           </button>
                         ))}
                       </div>
+                      {industry === 'Other' && (
+                        <Input
+                          placeholder="Tell us your industry, e.g. Car wash"
+                          value={customIndustry}
+                          onChange={(e) => setCustomIndustry(e.target.value)}
+                        />
+                      )}
                     </div>
                     <CityField value={city} onChange={setCity} label="City" hint="Pick a shortcut or type any city, township or suburb — or tag your location." />
                   </div>

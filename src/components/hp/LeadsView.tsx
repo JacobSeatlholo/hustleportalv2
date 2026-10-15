@@ -375,6 +375,7 @@ interface DiscoverResult {
   seenAgo?: string
   verifyScore?: number
   sourceRef?: string
+  local?: boolean
 }
 
 type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'POOL' | 'NONE'
@@ -723,7 +724,12 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{r.company}</div>
-                        <div className="text-xs text-muted-foreground">{r.industry || 'Business'} · {r.city || 'SA'}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <span className="truncate">{r.industry || 'Business'} · {r.city || 'SA'}</span>
+                          {r.local && (
+                            <span className="shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 text-[10px] font-medium">in your area</span>
+                          )}
+                        </div>
                         {(r.contactName || r.profileUrl) && (
                           <div className="text-[11px] text-brand mt-0.5 flex items-center gap-1 min-w-0">
                             <User className="h-3 w-3 shrink-0" />

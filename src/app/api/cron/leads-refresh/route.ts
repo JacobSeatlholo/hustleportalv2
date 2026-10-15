@@ -129,14 +129,15 @@ export async function GET(req: NextRequest) {
 
   // 5) WHITELABEL SWEEP: a member's pipeline carries neutral labels only.
   //    Historic rows still wearing the internal outreach tag get the neutral
-  //    face (TEAM), and any note that ever named the internal tool is
-  //    rewritten in the platform's own words. Idempotent, bounded, silent.
+  //    face (TEAM), and any note that ever named the internal tool or quoted
+  //    a campaign reply is rewritten in the platform's own words — the
+  //    seller's notes stay clean. Idempotent, bounded, silent.
   let swept = 0
   try {
     const relabeled = await db.lead.updateMany({ where: { source: 'EXPLEE' }, data: { source: 'TEAM' } })
     swept += relabeled.count
     const tainted = await db.lead.findMany({
-      where: { notes: { contains: 'Explee' } },
+      where: { OR: [{ notes: { contains: 'Explee' } }, { notes: { contains: 'Warm reply to' } }] },
       select: { id: true, notes: true },
       take: 200,
     })
@@ -144,7 +145,15 @@ export async function GET(req: NextRequest) {
       await db.lead
         .update({
           where: { id: t.id },
-          data: { notes: (t.notes || '').replace(/HustlePortal exec from Explee/gi, 'the Business Hustle team').replace(/Explee/gi, 'the team') },
+          data: {
+            notes: (t.notes || '')
+              .replace(/Fit: Warm reply to [^.]*\.?/gi, '')
+              .replace(/Warm reply to [^.]*\.?/gi, '')
+              .replace(/HustlePortal exec from Explee/gi, 'the Business Hustle team')
+              .replace(/Explee/gi, 'the team')
+              .replace(/\s{2,}/g, ' ')
+              .trim(),
+          },
         })
         .catch(() => {})
       swept++

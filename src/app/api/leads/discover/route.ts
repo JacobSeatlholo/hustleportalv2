@@ -443,17 +443,21 @@ function decorateLeads<T extends OutLead>(
  * contacts our own outreach already reached (real companies, real replies on
  * real campaigns) top it up. Only ever fills the shortfall, never a company
  * already on the answer or in the seller's pipeline. Each topped lead wears
- * its own honest badge on the card.
+ * its own honest badge on the card. LOCATION IS VITAL: with a named city the
+ * boost serves in area faces only, and a GPS pin without a city name reads
+ * the pool's own mind — no coordinates to compare against — so the boost
+ * steps aside and the pin grounded engines carry the answer instead.
  */
 async function topUpWithTeamVerified(
   leads: OutLead[],
   cap: number,
   city: string,
   excludeKeys: Set<string>,
-  matchText: string
+  matchText: string,
+  allowBoost = true
 ): Promise<{ leads: OutLead[]; boosted: number }> {
   const room = cap - leads.length
-  if (room <= 0) return { leads, boosted: 0 }
+  if (room <= 0 || !allowBoost) return { leads, boosted: 0 }
   const have = new Set(leads.map((l) => normKey(l.company || '')))
   const boost = await serveExpleeBoost({
     cap: room,
@@ -546,10 +550,13 @@ export async function POST(req: NextRequest) {
   // grows. Rotation: least recently served faces first, so scanning again keeps
   // meeting businesses the seller has never contacted.
   const excludeKeys = await userSavedKeys(userId)
-  let pooled: OutLead[] = await serveFromPool({ topicFp, cap, excludeKeys })
+  // The boost may only leave home when the scan says where home is: a GPS pin
+  // without a city name gives the team floor nothing to match against.
+  const boostAllowed = !hasPin || Boolean(city)
+  let pooled: OutLead[] = await serveFromPool({ topicFp, cap, excludeKeys, city: city || undefined })
   let poolBoosted = 0
   if (pooled.length < cap) {
-    const up = await topUpWithTeamVerified(pooled, cap, city, excludeKeys, definition)
+    const up = await topUpWithTeamVerified(pooled, cap, city, excludeKeys, definition, boostAllowed)
     pooled = up.leads
     poolBoosted = up.boosted
   }
@@ -601,6 +608,7 @@ export async function POST(req: NextRequest) {
     prompt:
       `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
       `Rules:\n` +
+      `- AREA IS THE PROMISE: every business must sit inside ${pinArea || area} or its immediate surroundings. Finding fewer real ones there beats padding the list with businesses from other cities.\n` +
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
       `- PEOPLE ARE THE PRIZE: a named human beats a switchboard. When the results publicly name the owner, founder or decision maker of a business, include contactName (their real name as written), role (Owner, Manager, Buyer and so on) and profileUrl ONLY when the results show a public profile page for them (LinkedIn, Facebook, the company team page, a directory). Copy every field exactly as you saw it. NEVER construct or guess a name or a link.\n` +
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
@@ -664,11 +672,11 @@ export async function POST(req: NextRequest) {
     let final: OutLead[] = decorateLeads(leads, stamps)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
-      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
+      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
     }
     if (final.length < cap) {
-      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition)).leads
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition, boostAllowed)).leads
     }
     await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
     const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
@@ -788,11 +796,11 @@ export async function POST(req: NextRequest) {
     let final: OutLead[] = decorateLeads(leadsWithPeople, stamps)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
-      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]) })
+      const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
     }
     if (final.length < cap) {
-      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition)).leads
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition, boostAllowed)).leads
     }
     const rankScore = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l.score || 0]))
     const rankedById = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l]))
