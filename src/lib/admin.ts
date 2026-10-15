@@ -12,6 +12,11 @@ import { db } from '@/lib/db'
  */
 export const EXEC_EMAILS: ReadonlySet<string> = new Set([
   'ceo@businesshustle.co.za',
+  // Internal operator seat: the automation/agent account that runs production
+  // tasks (first business case setup, ops probes). Lives on the QA domain so
+  // every roster and KPI lens flags it as internal instead of counting it as
+  // a client. Same gate, same audit trail, never touches the master account.
+  'ops@hustleqa.example.com',
 ])
 
 export interface ExecUser {
