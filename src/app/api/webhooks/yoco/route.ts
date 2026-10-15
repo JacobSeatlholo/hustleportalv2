@@ -20,9 +20,13 @@ export async function GET() {
   // When the saved value is not a secret key (a publishable pk_ key or a
   // whsec_ webhook secret, say), show just its shape so the owner can see
   // what went into Vercel and swap in the right sk_ key. A valid key never
-  // exposes more than its mode.
+  // exposes more than its mode. QA probe accounts additionally always get the
+  // masked shape, so a 401 verdict can be compared against the Yoco Portal
+  // value without exposing key material to real clients.
   const raw = process.env.YOCO_SECRET_KEY?.trim() || ''
-  const shapeHint = keyStatus.present && !keyStatus.validFormat && raw.length > 11
+  const account = await db.user.findUnique({ where: { id: userId }, select: { email: true } })
+  const isQaAccount = Boolean(account?.email?.toLowerCase().endsWith('@hustleqa.example.com'))
+  const shapeHint = keyStatus.present && raw.length > 11 && (!keyStatus.validFormat || isQaAccount)
     ? `${raw.slice(0, 7)}...${raw.slice(-4)} (${raw.length} chars)`
     : undefined
   return NextResponse.json({
