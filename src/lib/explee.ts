@@ -155,6 +155,27 @@ export async function searchLeads(
   return { leads: r.leads, mode: r.mode, ...(r.note ? { note: r.note } : {}) }
 }
 
+// =================== Outreach projects ===================
+// The outreach runs under two projects on the platform. Campaigns map to
+// their project so pool rows carry the label the owner filters and hands
+// over by. A campaign that matches no project falls back to its own name in
+// the why line only: the pool tag stays empty rather than guessed.
+
+export const TRAVEL_PROJECT = 'Honest travel experience'
+export const HOUSE_PROJECT = 'businesshustle.co.za'
+
+const TRAVEL_CAMPAIGN_RE =
+  /travel|explor|holiday|tour|trip|wander|safari|accommodat|hotel|guest|lodg|backpack|flight|adventure|itiner/i
+const HOUSE_CAMPAIGN_RE = /hustle|businesshustle|business\.co|smme|entrepreneur|founder/i
+
+export function projectLabelForCampaign(campaignName?: string): string | undefined {
+  const s = (campaignName || '').toLowerCase()
+  if (!s) return undefined
+  if (TRAVEL_CAMPAIGN_RE.test(s)) return TRAVEL_PROJECT
+  if (HOUSE_CAMPAIGN_RE.test(s)) return HOUSE_PROJECT
+  return undefined
+}
+
 // =================== Outreach pulse: hot leads ===================
 // The owner's campaigns talk to prospects around the clock. When one replies
 // with real interest, Explee marks it hot and this is how the Executive

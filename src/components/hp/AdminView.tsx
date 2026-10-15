@@ -22,11 +22,12 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
-  Flame, ExternalLink,
+  Flame, ExternalLink, HandCoins,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -410,7 +411,7 @@ function AddLeadsDialog({ clientId, clientName, open, onOpenChange, onDone }: {
         <DialogHeader>
           <DialogTitle>Load leads into {clientName}&apos;s pipeline</DialogTitle>
           <DialogDescription>
-            Pull a lead from Explee or type one from a call. They land in stage New, in their default workspace,
+            Paste a lead from your outreach or type one from a call. They land in stage New, in their default workspace,
             the moment you save. Duplicates are skipped automatically.
           </DialogDescription>
         </DialogHeader>
@@ -420,7 +421,7 @@ function AddLeadsDialog({ clientId, clientName, open, onOpenChange, onDone }: {
           <Select value={source} onValueChange={setSource}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="EXPLEE">Explee</SelectItem>
+              <SelectItem value="EXPLEE">Team outreach</SelectItem>
               <SelectItem value="MANUAL">Typed by me</SelectItem>
             </SelectContent>
           </Select>
@@ -556,7 +557,7 @@ function PoolCard({ detail, busy, onRun, onAction }: {
 
       {lastCampaign && (
         <div className="text-[10px] text-muted-foreground mb-2">
-          Last campaign {timeAgo(lastCampaign.createdAt)} · {lastCampaign.fromPool ? 'Verified pool' : 'Explee live'} · {lastCampaign.leadCount} added
+          Last campaign {timeAgo(lastCampaign.createdAt)} · {lastCampaign.fromPool ? 'Verified pool' : 'Live search'} · {lastCampaign.leadCount} added
           {pool.campaigns.length > 1 ? ` · ${pool.campaigns.length} recent` : ''}
         </div>
       )}
@@ -585,7 +586,7 @@ function PoolCard({ detail, busy, onRun, onAction }: {
                 {r.why && <div className="text-[10px] text-muted-foreground/80 truncate italic">&ldquo;{r.why}&rdquo;</div>}
               </div>
               <Badge variant="outline" className={`text-[9px] shrink-0 ${r.source === 'EXPLEE' ? 'border-brand/40 text-brand' : 'border-emerald-500/40 text-emerald-400'}`}>
-                {r.source === 'EXPLEE' ? 'Explee' : 'Verified pool'}
+                {r.source === 'EXPLEE' ? 'Team verified' : 'Verified pool'}
               </Badge>
               <Button size="sm" variant="outline" className="h-7 shrink-0 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" disabled={busy} onClick={() => onAction('add', [r.id])}>
                 <Check className="h-3 w-3 mr-0.5" /> Add
@@ -1237,6 +1238,228 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
   )
 }
 
+// =================== Verified pool card (the owner's hand pick) ===================
+// The shared verified pool: real companies the outreach reached and the
+// scans confirmed. Pick a member, pick contacts, one tap lands them in that
+// member's pipeline, stage New, at no cost to them. Labels follow the
+// outreach projects so the owner always knows which door a face came from.
+
+interface PoolBrowseRow {
+  id: string
+  company: string
+  contactName?: string
+  role?: string
+  email?: string
+  phone?: string
+  website?: string
+  city?: string
+  industry?: string
+  poolTag?: string
+  why?: string
+  verifyScore: number
+  confirmCount: number
+  served: number
+  seenAt?: string
+}
+
+function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
+  const { toast } = useToast()
+  const [memberId, setMemberId] = useState('')
+  const [rows, setRows] = useState<PoolBrowseRow[] | null>(null)
+  const [facets, setFacets] = useState<{ tag: string; count: number }[]>([])
+  const [total, setTotal] = useState(0)
+  const [tag, setTag] = useState('')
+  const [q, setQ] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [feeding, setFeeding] = useState(false)
+
+  async function browse(nextTag: string = tag, nextQ: string = q) {
+    setBusy(true)
+    try {
+      const params = new URLSearchParams()
+      if (nextTag) params.set('tag', nextTag)
+      if (nextQ.trim()) params.set('q', nextQ.trim())
+      const d = await api<{ total: number; facets: { tag: string; count: number }[]; rows: PoolBrowseRow[] }>(
+        `/api/admin/exec/pool/assign?${params.toString()}`
+      )
+      setRows(d.rows)
+      setFacets(d.facets)
+      setTotal(d.total)
+      setPicked(new Set())
+    } catch (e) {
+      toast({ title: 'Could not load the pool', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    browse('', '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function feedNow() {
+    setFeeding(true)
+    try {
+      const d = await api<{ message?: string }>('/api/admin/exec/pool/explee-ingest', {
+        method: 'POST',
+        body: JSON.stringify({ maxPings: 12 }),
+      })
+      toast({ title: 'Pool fed', description: d.message })
+      await browse()
+    } catch (e) {
+      toast({ title: 'The feed did not land', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setFeeding(false)
+    }
+  }
+
+  async function handOver() {
+    if (!memberId || picked.size === 0) return
+    setBusy(true)
+    try {
+      const d = await api<{ message?: string }>('/api/admin/exec/pool/assign', {
+        method: 'POST',
+        body: JSON.stringify({ userId: memberId, poolIds: [...picked] }),
+      })
+      toast({ title: 'Handed over', description: d.message })
+      await browse()
+    } catch (e) {
+      toast({ title: 'Could not hand over', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const member = roster.find((r) => r.id === memberId)
+  const members = roster.filter((r) => !r.isQa)
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <HandCoins className="h-4 w-4 text-brand" /> Verified pool
+          {total > 0 && <Badge className="bg-brand text-black hover:bg-brand text-[10px]">{total} contacts</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Real contacts our outreach reached and the scans confirmed. Pick a member, pick contacts, and they land in that
+          pipeline, stage New, free for them. Each one carries its own verification so the member can check it and pitch.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Select value={memberId} onValueChange={setMemberId}>
+            <SelectTrigger className="sm:w-[260px] h-9"><SelectValue placeholder="Pick a member" /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name}{m.businessName ? ` · ${m.businessName}` : ''} · {m.counts.leads} leads
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="relative flex-1">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') browse(tag, q) }}
+              placeholder="Search company, city, industry or contact"
+              className="h-9 pl-8 text-sm"
+            />
+          </div>
+          <Button size="sm" variant="outline" className="h-9 shrink-0" disabled={busy} onClick={() => browse(tag, q)}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1" />} Search
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 shrink-0 border-brand/40 text-brand hover:bg-brand/10" disabled={feeding} onClick={feedNow}>
+            {feeding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />} Pull new contacts
+          </Button>
+        </div>
+
+        {facets.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => { setTag(''); browse('', q) }}
+              className={`text-[10px] px-2 py-1 rounded-full border ${tag === '' ? 'border-brand/60 text-brand bg-brand/10' : 'border-border text-muted-foreground hover:text-foreground'}`}
+            >
+              All
+            </button>
+            {facets.map((f) => (
+              <button
+                key={f.tag || 'untagged'}
+                type="button"
+                onClick={() => { setTag(f.tag); browse(f.tag, q) }}
+                className={`text-[10px] px-2 py-1 rounded-full border ${tag === f.tag ? 'border-brand/60 text-brand bg-brand/10' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                {f.tag || 'Untagged'} · {f.count}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="rounded-lg border divide-y max-h-80 overflow-y-auto hp-scroll">
+          {(rows ?? []).length === 0 && (
+            <div className="px-3 py-4 text-xs text-muted-foreground">
+              Nothing here yet. Tap Pull new contacts to bring in the newest verified faces, or clear the search.
+            </div>
+          )}
+          {(rows ?? []).map((r) => (
+            <label key={r.id} className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-muted/40">
+              <Checkbox
+                checked={picked.has(r.id)}
+                onCheckedChange={(c) => {
+                  setPicked((prev) => {
+                    const next = new Set(prev)
+                    if (c) next.add(r.id)
+                    else next.delete(r.id)
+                    return next
+                  })
+                }}
+                className="shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">
+                  {r.company}
+                  {r.contactName ? <span className="text-muted-foreground font-normal"> · ask for {r.contactName}{r.role ? ` (${r.role})` : ''}</span> : ''}
+                </div>
+                <div className="text-muted-foreground truncate">
+                  {[r.city, r.industry, r.phone, r.email].filter(Boolean).join(' · ') || 'no contact facts yet'}
+                </div>
+                {r.why && <div className="text-[10px] text-muted-foreground/80 truncate italic">&ldquo;{r.why}&rdquo;</div>}
+              </div>
+              <Badge variant="outline" className="text-[9px] shrink-0 border-emerald-500/40 text-emerald-400">
+                {r.verifyScore >= 80 ? 'Website live' : r.confirmCount >= 2 ? 'Confirmed' : 'Verified'}
+              </Badge>
+              {r.poolTag && (
+                <Badge variant="outline" className="text-[9px] shrink-0 border-brand/40 text-brand">{r.poolTag}</Badge>
+              )}
+            </label>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            {picked.size > 0 ? `${picked.size} picked` : 'Nothing picked yet'}
+            {member ? ` · for ${member.name}` : ' · pick a member first'}
+          </span>
+          <Button
+            size="sm"
+            className="h-8 bg-brand text-black hover:bg-brand/90"
+            disabled={busy || !memberId || picked.size === 0}
+            onClick={handOver}
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+            Add {picked.size || ''} {picked.size === 1 ? 'contact' : 'contacts'} to {member ? `${member.name.split(' ')[0]}'s` : 'their'} pipeline
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // =================== Executive Dashboard (main) ===================
 
 interface AdminData {
@@ -1387,6 +1610,9 @@ export default function AdminView() {
 
       {/* Hot leads: live replies from the Explee campaigns */}
       <HotLeadsCard />
+
+      {/* Verified pool: the owner's hand pick, straight into any member's pipeline */}
+      <VerifiedPoolCard roster={roster} />
 
       {/* Newest members spotlight */}
       <Card>

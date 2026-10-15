@@ -449,7 +449,8 @@ async function topUpWithTeamVerified(
   leads: OutLead[],
   cap: number,
   city: string,
-  excludeKeys: Set<string>
+  excludeKeys: Set<string>,
+  matchText: string
 ): Promise<{ leads: OutLead[]; boosted: number }> {
   const room = cap - leads.length
   if (room <= 0) return { leads, boosted: 0 }
@@ -458,6 +459,7 @@ async function topUpWithTeamVerified(
     cap: room,
     excludeKeys: new Set([...excludeKeys, ...have]),
     city: city || undefined,
+    matchText,
   })
   const fresh = boost.filter((b) => !have.has(normKey(b.company || '')))
   if (fresh.length === 0) return { leads, boosted: 0 }
@@ -547,7 +549,7 @@ export async function POST(req: NextRequest) {
   let pooled: OutLead[] = await serveFromPool({ topicFp, cap, excludeKeys })
   let poolBoosted = 0
   if (pooled.length < cap) {
-    const up = await topUpWithTeamVerified(pooled, cap, city, excludeKeys)
+    const up = await topUpWithTeamVerified(pooled, cap, city, excludeKeys, definition)
     pooled = up.leads
     poolBoosted = up.boosted
   }
@@ -666,7 +668,7 @@ export async function POST(req: NextRequest) {
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
     }
     if (final.length < cap) {
-      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys)).leads
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition)).leads
     }
     await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
     const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
@@ -790,7 +792,7 @@ export async function POST(req: NextRequest) {
       final = [...final, ...topUp.filter((t) => !have.has(normKey(t.company)))]
     }
     if (final.length < cap) {
-      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys)).leads
+      final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition)).leads
     }
     const rankScore = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l.score || 0]))
     const rankedById = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l]))
@@ -838,7 +840,7 @@ export async function POST(req: NextRequest) {
     })
     const final = decorateLeads(ex.leads as unknown as OutLead[], stamps)
     await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
-    return NextResponse.json({ ...ex, leads: final, source: 'EXPLEE' })
+    return NextResponse.json({ ...ex, leads: final, source: 'TEAM' })
   }
 
   // One clean, honest message. No clause pile ups: name what happened, give the next move.

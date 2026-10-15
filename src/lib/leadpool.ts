@@ -327,12 +327,28 @@ export async function serveFromPool(opts: {
  * anywhere in South Africa. Rotation aware, never a company the seller
  * already saved, and only ever a top up — topic matched faces always come
  * first when the pool has them.
+ *
+ * NICETY IS THE POINT: a contact only helps the seller if it fits their
+ * business. Outreach projects are labelled, so a travel project contact
+ * never tops up a cleaning scan. The label rides on poolTag; untagged rows
+ * fall back to their industry words. General business contacts (the wide
+ * project) stay usable everywhere because a real business owner is a real
+ * prospect for real services.
  */
+
+const TRAVEL_WORDS_RE = /travel|tour|holiday|safari|accommodat|hotel|guest house|lodg|backpack|explor|adventure|trip|itiner|flight/i
+
+function rowIsTravel(r: LeadPoolRow): boolean {
+  if (r.poolTag) return /travel/i.test(r.poolTag)
+  return TRAVEL_WORDS_RE.test(r.industry || '')
+}
+
 export async function serveExpleeBoost(opts: {
   cap: number
   excludeKeys: Set<string>
   city?: string
   maxAgeDays?: number
+  matchText?: string
 }): Promise<PoolLead[]> {
   const cap = Math.max(0, Math.min(30, opts.cap))
   if (cap === 0) return []
@@ -344,24 +360,35 @@ export async function serveExpleeBoost(opts: {
     verifyState: { not: 'stale' },
     lastSeenAt: { gte: cutoff },
   }
-  // Two passes: same city first when the scan named one, then the whole country.
-  const passes: Record<string, unknown>[] = opts.city ? [{ ...base, city: { equals: opts.city, mode: 'insensitive' } }, base] : [base]
+  // One wide read, then order in memory: niche first, city second, rest last.
+  // The rotation order from the DB (least recently served first) survives the
+  // partition, so repeat scans keep meeting new faces inside every class.
+  const candidates = await db.leadPool.findMany({
+    where: base,
+    orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { lastSeenAt: 'desc' }],
+    take: Math.max(cap * 6, 30),
+  })
+  const travelRows: LeadPoolRow[] = []
+  const generalRows: LeadPoolRow[] = []
+  for (const r of candidates) (rowIsTravel(r) ? travelRows : generalRows).push(r)
+  const topic = (opts.matchText || '').toLowerCase()
+  const travelTopic = TRAVEL_WORDS_RE.test(topic)
+  // A travel project face on a non travel scan is exactly the fluff the
+  // product refuses to serve: off niche, off they go.
+  let ordered = travelTopic ? [...travelRows, ...generalRows] : generalRows
+  if (opts.city) {
+    const c = opts.city.toLowerCase().trim()
+    const inCity = ordered.filter((r) => (r.city || '').toLowerCase().includes(c))
+    if (inCity.length > 0) ordered = [...inCity, ...ordered.filter((r) => !inCity.includes(r))]
+  }
   const picked: LeadPoolRow[] = []
   const seen = new Set<string>()
-  for (const where of passes) {
+  for (const r of ordered) {
     if (picked.length >= cap) break
-    const rows = await db.leadPool.findMany({
-      where,
-      orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { lastSeenAt: 'desc' }],
-      take: cap * 3,
-    })
-    for (const r of rows) {
-      if (picked.length >= cap) break
-      const key = normKey(r.company)
-      if (!key || seen.has(key) || opts.excludeKeys.has(key)) continue
-      seen.add(key)
-      picked.push(r)
-    }
+    const key = normKey(r.company)
+    if (!key || seen.has(key) || opts.excludeKeys.has(key)) continue
+    seen.add(key)
+    picked.push(r)
   }
   if (picked.length === 0) return []
   try {
@@ -475,6 +502,7 @@ export async function ingestVerifiedContacts(opts: {
             role: prev.role || l.role || null,
             profileUrl: prev.profileUrl || l.profileUrl || null,
             why: prev.why || l.why || null,
+            poolTag: prev.poolTag || l.poolTag || null,
             sourceRef: prev.sourceRef || l.profileUrl || null,
           },
         })
@@ -509,6 +537,7 @@ export async function ingestVerifiedContacts(opts: {
           why: l.why || null,
           score: typeof l.score === 'number' ? l.score : null,
           source: 'EXPLEE',
+          poolTag: l.poolTag?.slice(0, 120) || null,
           sourceRef: l.profileUrl || null,
           confirmCount: 1,
           verifyScore: score,
@@ -543,6 +572,7 @@ export interface RememberLead {
   externalId?: string
   lat?: number
   lng?: number
+  poolTag?: string // the outreach project this verified contact came from
 }
 
 export interface VerifyStamp {

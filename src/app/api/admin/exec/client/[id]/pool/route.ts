@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   // add / addAll → the client's pipeline. Workspace: explicit projectId (validated)
   // else the client's default project. Sources ride along so the client sees
-  // exactly where each face came from.
+  // exactly where each face came from, in words a member understands.
   const project = await resolveProject(id, typeof body?.projectId === 'string' ? body.projectId : null)
 
   let added = 0
@@ -110,7 +110,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
           industry: w.industry,
           city: w.city,
           country: w.country,
-          source: w.source,
+          source: w.source === 'EXPLEE' ? 'TEAM' : w.source,
           stage: 'NEW',
           value: 0,
           notes: `Loaded by the business owner from the exec lead pool.${w.why ? ` Fit: ${w.why}` : ''}${w.sourceRef ? ` Source: ${w.sourceRef}` : ''}`,

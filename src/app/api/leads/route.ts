@@ -49,6 +49,12 @@ export async function POST(req: NextRequest) {
   if (!company || !String(company).trim()) {
     return NextResponse.json({ error: 'Company name is required.' }, { status: 400 })
   }
+  // Where a lead came from, in words a member understands. The internal
+  // tooling keeps its own labels in the pool; a member's pipeline only ever
+  // carries the neutral face: TEAM, POOL, WEB, MAP, MANUAL, CSV.
+  const srcRaw = String(source || '').toUpperCase()
+  const NEUTRAL_SOURCES = ['TEAM', 'POOL', 'WEB', 'OSM', 'ZAI', 'GEMINI', 'MANUAL', 'CSV']
+  const safeSource = srcRaw === 'EXPLEE' ? 'TEAM' : NEUTRAL_SOURCES.includes(srcRaw) ? srcRaw : 'MANUAL'
   // Every lead belongs to a workspace. Explicit projectId wins (validated against the
   // owner); anything else falls back to the default workspace so no lead is ever orphaned.
   const project = await resolveProject(userId, projectId ?? null)
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest) {
       industry: industry || null,
       city: city || null,
       country: country || 'South Africa',
-      source: source || 'MANUAL',
+      source: safeSource,
       value: Number(value) || 0,
       notes: notes || why || null, // AI scout's "why they need you" lands as the first note
       externalId: externalId || null,

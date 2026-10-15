@@ -26,6 +26,26 @@ import {
   Search, RefreshCw, X, HandCoins, MapPin,
 } from 'lucide-react'
 
+// Where a lead came from, in words a member understands. Internal tooling
+// names stay internal: the pipeline always shows the honest, neutral face.
+function sourceLabel(s?: string | null): string {
+  switch (String(s || '').toUpperCase()) {
+    case 'TEAM':
+    case 'EXPLEE':
+      return 'Team verified'
+    case 'POOL':
+      return 'Verified pool'
+    case 'OSM':
+      return 'Map listed'
+    case 'MANUAL':
+      return 'Added by you'
+    case 'CSV':
+      return 'Imported'
+    default:
+      return 'Web found' // WEB, ZAI, GEMINI and anything new
+  }
+}
+
 export default function LeadsView() {
   const { session, activeProjectId, loadSession, bumpRefresh } = useHp()
   const { toast } = useToast()
@@ -238,7 +258,7 @@ export default function LeadsView() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm">{l.company}</div>
-                    <div className="text-xs text-muted-foreground truncate">{l.city || 'SA'} · {l.industry || 'Business'} · {l.source}</div>
+                    <div className="text-xs text-muted-foreground truncate">{l.city || 'SA'} · {l.industry || 'Business'} · {sourceLabel(l.source)}</div>
                   </div>
                   <Badge variant="outline" className="text-xs hidden sm:inline-flex">{STAGES.find((s) => s.key === l.stage)?.label}</Badge>
                   <span className="text-sm font-medium w-20 text-right">{l.value > 0 ? randsPlain(l.value) : '—'}</span>
@@ -274,7 +294,7 @@ const LeadCard = memo(function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: 
         {lead.city || 'South Africa'}
       </div>
       <div className="mt-2 flex items-center gap-1 flex-wrap">
-        <Badge variant="outline" className="text-[10px]">{lead.source}</Badge>
+        <Badge variant="outline" className="text-[10px]">{sourceLabel(lead.source)}</Badge>
         {lead.industry && <Badge variant="secondary" className="text-[10px]">{lead.industry}</Badge>}
         {!lead.unlocked ? (
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Lock className="h-3 w-3" /> locked</span>
@@ -502,7 +522,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
       saveDiscMem(targetProject, { definition, city, siteUrl, limit })
       setResults(res.leads)
       setMode(res.mode)
-      setResSource(res.source || (res.mode === 'LIVE' ? 'EXPLEE' : 'WEB'))
+      setResSource(res.source || (res.mode === 'LIVE' ? 'TEAM' : 'WEB'))
       setNote(res.notice ? `${res.notice} ${res.note || ''}`.trim() : res.note || '')
       setSelected(new Set(res.leads.map((l) => l.company)))
       if (autoAdd && res.leads.length > 0) {
@@ -873,7 +893,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
         <DialogHeader>
           <DialogTitle>{lead.company}</DialogTitle>
           <DialogDescription>
-            {lead.industry || 'Business'} · {lead.city || 'South Africa'} · from {lead.source}
+            {lead.industry || 'Business'} · {lead.city || 'South Africa'} · {sourceLabel(lead.source)}
             {lead.score != null && ` · fit ${lead.score}/5`}
           </DialogDescription>
         </DialogHeader>

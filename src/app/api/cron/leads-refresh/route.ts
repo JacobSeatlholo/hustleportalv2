@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContacts, type RememberLead } from '@/lib/leadpool'
-import { expleeHotLeads } from '@/lib/explee'
+import { expleeHotLeads, projectLabelForCampaign } from '@/lib/explee'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
 export const maxDuration = 60
@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
             if (!company) continue // a person without a company is not a pool row
             const reply = h.whyHot?.trim().slice(0, 160)
             const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
+            const tag = projectLabelForCampaign(h.campaignName)
             contacts.push({
               company,
               ...(h.name?.trim() ? { contactName: h.name.trim() } : {}),
@@ -112,6 +113,7 @@ export async function GET(req: NextRequest) {
               ...(h.companyDomain && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(h.companyDomain) ? { website: `https://${h.companyDomain}` } : {}),
               ...(h.linkedinUrl && /^https?:\/\//i.test(h.linkedinUrl) ? { profileUrl: h.linkedinUrl } : {}),
               why: reply ? `Warm reply to ${campaignLine}: ${reply}` : `Warm reply to ${campaignLine}`,
+              ...(tag ? { poolTag: tag } : {}),
             })
           }
           const summary = await ingestVerifiedContacts({ area: 'South Africa', contacts, maxPings: 10 })
@@ -125,6 +127,32 @@ export async function GET(req: NextRequest) {
     feed = { error: e instanceof Error ? e.message.slice(0, 160) : 'feed failed' }
   }
 
+  // 5) WHITELABEL SWEEP: a member's pipeline carries neutral labels only.
+  //    Historic rows still wearing the internal outreach tag get the neutral
+  //    face (TEAM), and any note that ever named the internal tool is
+  //    rewritten in the platform's own words. Idempotent, bounded, silent.
+  let swept = 0
+  try {
+    const relabeled = await db.lead.updateMany({ where: { source: 'EXPLEE' }, data: { source: 'TEAM' } })
+    swept += relabeled.count
+    const tainted = await db.lead.findMany({
+      where: { notes: { contains: 'Explee' } },
+      select: { id: true, notes: true },
+      take: 200,
+    })
+    for (const t of tainted) {
+      await db.lead
+        .update({
+          where: { id: t.id },
+          data: { notes: (t.notes || '').replace(/HustlePortal exec from Explee/gi, 'the Business Hustle team').replace(/Explee/gi, 'the team') },
+        })
+        .catch(() => {})
+      swept++
+    }
+  } catch {
+    /* the sweep never blocks the freshness work */
+  }
+
   return NextResponse.json({
     ok: true,
     demoted: demoted.count,
@@ -132,6 +160,7 @@ export async function GET(req: NextRequest) {
     live,
     dead,
     prunedScans: pruned.count,
+    whitelabelSwept: swept,
     ...(feed ? { feed } : {}),
   })
 }

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const body = await req.json().catch(() => ({}))
   const incoming: IncomingLead[] = Array.isArray(body?.leads) ? body.leads.slice(0, 200) : []
-  const source = body?.source === 'EXPLEE' ? 'EXPLEE' : 'MANUAL'
+  const source = body?.source === 'EXPLEE' ? 'TEAM' : 'MANUAL' // the member sees the neutral face: the team hand picked it
   if (incoming.length === 0) {
     return NextResponse.json({ error: 'Give me at least one lead with a company name.' }, { status: 400 })
   }
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       industry: l.industry ? String(l.industry).trim() : null,
       city,
       value: Number.isFinite(Number(l.value)) && Number(l.value) > 0 ? Number(l.value) : 0,
-      notes: l.notes ? String(l.notes).slice(0, 500) : (source === 'EXPLEE' ? 'Loaded by HustlePortal exec from Explee.' : 'Loaded by HustlePortal exec.'),
+      notes: l.notes ? String(l.notes).slice(0, 500) : (source === 'TEAM' ? 'Hand picked for you by the Business Hustle team from our verified contacts.' : 'Loaded for you by the Business Hustle team.'),
       source,
       stage: 'NEW',
     })

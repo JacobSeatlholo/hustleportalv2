@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { ingestVerifiedContacts, type RememberLead } from '@/lib/leadpool'
-import { expleeHotLeads } from '@/lib/explee'
+import { expleeHotLeads, projectLabelForCampaign, TRAVEL_PROJECT, HOUSE_PROJECT } from '@/lib/explee'
 
 export const maxDuration = 60
 
@@ -72,6 +72,7 @@ function hotLeadToContact(h: {
   if (!company) return null // a person without a company is not a pool row: never fabricated
   const reply = clean(h.whyHot)?.slice(0, 160)
   const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
+  const tag = projectLabelForCampaign(h.campaignName)
   return {
     company,
     ...(clean(h.name) ? { contactName: clean(h.name) } : {}),
@@ -81,6 +82,7 @@ function hotLeadToContact(h: {
     ...(h.companyDomain && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(h.companyDomain) ? { website: `https://${h.companyDomain}` } : {}),
     ...(saneUrl(h.linkedinUrl) ? { profileUrl: saneUrl(h.linkedinUrl) } : {}),
     why: reply ? `Warm reply to ${campaignLine}: ${reply}` : `Warm reply to ${campaignLine}`,
+    ...(tag ? { poolTag: tag } : {}),
   }
 }
 
@@ -97,6 +99,7 @@ function pastedToContact(raw: Record<string, unknown>): RememberLead | null {
     ...(clean(raw.industry) ? { industry: clean(raw.industry)!.slice(0, 120) } : {}),
     ...(clean(raw.city) ? { city: clean(raw.city)!.slice(0, 120) } : {}),
     ...(saneUrl(raw.profileUrl) ? { profileUrl: saneUrl(raw.profileUrl) } : {}),
+    ...(clean(raw.poolTag) ? { poolTag: clean(raw.poolTag)!.slice(0, 120) } : {}),
   }
 }
 
@@ -104,15 +107,19 @@ export async function GET(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok && !cronAuthorized(req)) return gate.res
 
-  const [bySource, activeTotal] = await Promise.all([
+  const [bySource, byTag, activeTotal] = await Promise.all([
     db.leadPool.groupBy({ by: ['source'], _count: { _all: true } }),
+    db.leadPool.groupBy({ by: ['poolTag'], where: { source: 'EXPLEE' }, _count: { _all: true } }),
     db.leadPool.count({ where: { active: true, verifyState: { not: 'stale' } } }),
   ])
   const sources: Record<string, number> = {}
   for (const g of bySource) sources[g.source] = g._count._all
+  const tags: Record<string, number> = {}
+  for (const g of byTag) tags[g.poolTag || 'untagged'] = g._count._all
   return NextResponse.json({
     ok: true,
-    pool: { bySource: sources, activeTotal },
+    pool: { bySource: sources, byTag: tags, activeTotal },
+    projects: [TRAVEL_PROJECT, HOUSE_PROJECT],
     note: 'POST here with dryRun true to preview, then dryRun false (or omit it) to land the team verified contacts in the pool. Default pull is the Explee outreach hot leads; pass contacts for a pasted list.',
   })
 }

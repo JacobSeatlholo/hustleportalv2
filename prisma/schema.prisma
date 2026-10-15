@@ -613,6 +613,7 @@ model LeadPool {
   lat            Float?
   lng            Float?
   source         String    // GEMINI | ZAI | OSM | EXPLEE
+  poolTag        String?   // the outreach project this verified contact came from
   sourceRef      String?   // OSM node/way link or directory url
   confirmCount   Int       @default(1)
   verifyScore    Int       @default(0) // 0..100
