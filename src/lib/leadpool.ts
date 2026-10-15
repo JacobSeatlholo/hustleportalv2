@@ -330,8 +330,8 @@ export async function serveFromPool(opts: {
   } catch {
     /* rotation bookkeeping must never break a serve */
   }
-  const want = normKey(opts.city || '')
-  return serve.map((p) => poolToLead(p, Boolean(want) && normKey(p.city || '').includes(want)))
+  const want = opts.city || ''
+  return serve.map((p) => poolToLead(p, cityMatches(p.city, want)))
 }
 
 /**
@@ -378,14 +378,39 @@ function topicWordSet(text: string): Set<string> {
 
 /**
  * LOCATION IS VITAL: a contact only helps the seller if it sits where they
- * sell. Normalized both ways so "Sandton, Johannesburg" answers a
- * Johannesburg scan — while a face from another city never sneaks in.
+ * sell. Matching is metro aware — sellers say "Johannesburg" while records
+ * say "Sandton" or "Midrand" — so the floor serves true metro neighbours
+ * and never crosses a real city line.
  */
-function cityMatches(rowCity: string | null, wantCity: string): boolean {
+const METRO_ALIASES: Record<string, string[]> = {
+  johannesburg: ['sandton', 'midrand', 'soweto', 'randburg', 'fourways', 'roodepoort', 'alexandra', 'lenasia', 'diepsloot', 'braamfontein', 'rosebank', 'orangefarm'],
+  pretoria: ['centurion', 'hatfield', 'akasia', 'tshwane', 'mamelodi'],
+  ekurhuleni: ['benoni', 'boksburg', 'kemptonpark', 'germiston', 'alberton', 'springs', 'edenvale', 'bedfordview', 'tembisa', 'katlehong', 'vosloorus', 'brakpan'],
+  capetown: ['bellville', 'durbanville', 'claremont', 'milnerton', 'khayelitsha', 'gugulethu', 'seapoint', 'mitchellsplain', 'rondebosch', 'wynberg', 'goodwood', 'tableview', 'kraaifontein', 'athlone'],
+  durban: ['umhlanga', 'pinetown', 'chatsworth', 'kwamashu', 'umlazi', 'amanzimtoti', 'westville', 'hillcrest', 'ethekwini'],
+  bloemfontein: ['mangaung'],
+  nelspruit: ['mbombela'],
+  eastlondon: ['buffalocity'],
+  gqeberha: ['portelizabeth', 'nelsonmandelabay'],
+}
+
+function metroOf(norm: string): string | null {
+  if (!norm) return null
+  for (const metro of Object.keys(METRO_ALIASES)) if (norm.includes(metro)) return metro
+  for (const [metro, aliases] of Object.entries(METRO_ALIASES)) {
+    for (const a of aliases) if (norm.includes(a)) return metro
+  }
+  return null
+}
+
+export function cityMatches(rowCity: string | null | undefined, wantCity: string | null | undefined): boolean {
   const row = normKey(rowCity || '')
   const want = normKey(wantCity || '')
   if (!row || !want) return false
-  return row.includes(want) || want.includes(row)
+  if (row.includes(want) || want.includes(row)) return true
+  const mr = metroOf(row)
+  const mw = metroOf(want)
+  return Boolean(mr && mw && mr === mw)
 }
 
 /** A general row earns its place by sharing at least one real word with the topic. */
@@ -651,6 +676,9 @@ export interface VerifyStamp {
   confirmCount: number
   verified: string
   seenAgo: string
+  contactName?: string
+  role?: string
+  profileUrl?: string
 }
 
 async function chunked<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -758,6 +786,9 @@ export async function rememberScanResults(opts: {
         confirmCount,
         verified: badgeFor(updated),
         seenAgo: 'seen today',
+        ...(updated.contactName ? { contactName: updated.contactName } : {}),
+        ...(updated.role ? { role: updated.role } : {}),
+        ...(updated.profileUrl ? { profileUrl: updated.profileUrl } : {}),
       })
     } catch {
       /* one record failing never blocks the rest */
@@ -813,6 +844,9 @@ export async function rememberScanResults(opts: {
         confirmCount: 1,
         verified: badgeFor(created),
         seenAgo: 'seen today',
+        ...(created.contactName ? { contactName: created.contactName } : {}),
+        ...(created.role ? { role: created.role } : {}),
+        ...(created.profileUrl ? { profileUrl: created.profileUrl } : {}),
       })
     } catch {
       /* a duplicate fingerprint from a parallel scan: harmless, skip */

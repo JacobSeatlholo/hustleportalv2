@@ -10,6 +10,7 @@ import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 import { resolveProject } from '@/lib/workspace'
 import {
   checkScanAllowance,
+  cityMatches,
   logScanRun,
   recentTopicScan,
   rememberScanResults,
@@ -427,14 +428,28 @@ type OutLead = {
   sourceRef?: string
 }
 
-/** Attach the pool's verification chips to the leads the engines just found. */
+/** Attach the pool's verification chips, known humans and the area mark to what the engines just found. */
 function decorateLeads<T extends OutLead>(
   leads: T[],
-  stamps: Map<string, VerifyStamp>
-): (T & { verified?: string; seenAgo?: string; verifyScore?: number })[] {
+  stamps: Map<string, VerifyStamp>,
+  city?: string
+): (T & { verified?: string; seenAgo?: string; verifyScore?: number; local?: boolean })[] {
   return leads.map((l) => {
     const s = l.company ? stamps.get(normKey(l.company)) : undefined
-    return s ? { ...l, verified: s.verified, seenAgo: s.seenAgo, verifyScore: s.verifyScore } : l
+    const merged = s
+      ? {
+          ...l,
+          verified: s.verified,
+          seenAgo: s.seenAgo,
+          verifyScore: s.verifyScore,
+          // The team already knows a human at this company: the seller sees
+          // who to ask for, without a second search.
+          ...(s.contactName && !l.contactName ? { contactName: s.contactName } : {}),
+          ...(s.role && !l.role ? { role: s.role } : {}),
+          ...(s.profileUrl && !l.profileUrl ? { profileUrl: s.profileUrl } : {}),
+        }
+      : l
+    return city && cityMatches(merged.city, city) ? { ...merged, local: true } : merged
   })
 }
 
@@ -669,7 +684,7 @@ export async function POST(req: NextRequest) {
       leads: leads as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(leads, stamps)
+    let final: OutLead[] = decorateLeads(leads, stamps, city || undefined)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
@@ -793,7 +808,7 @@ export async function POST(req: NextRequest) {
       leads: leadsWithPeople as unknown as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(leadsWithPeople, stamps)
+    let final: OutLead[] = decorateLeads(leadsWithPeople, stamps, city || undefined)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
@@ -846,7 +861,7 @@ export async function POST(req: NextRequest) {
       leads: ex.leads as unknown as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    const final = decorateLeads(ex.leads as unknown as OutLead[], stamps)
+    const final = decorateLeads(ex.leads as unknown as OutLead[], stamps, city || undefined)
     await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
     return NextResponse.json({ ...ex, leads: final, source: 'TEAM' })
   }
