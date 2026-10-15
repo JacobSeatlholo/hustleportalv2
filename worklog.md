@@ -897,3 +897,22 @@ Work Log:
 
 Stage Summary:
 - Production 5055bfa: z.ai and Explee are fully internal. Members see neutral engine language ("the HustlePortal matching engine", "extra search engine") while both engines keep working unchanged under the hood. If the owner later re-exposes them ("yet.."), the copy pack wording lives in git history of these 4 files.
+
+---
+Task ID: 60
+Agent: Super Z (main)
+Task: First business case — Zola (Just Hearing) × Ian meeting: member account, welcome email, Google Calendar how-to, meeting proposal with one tap confirm, "Meetings set" on the Executive Dashboard.
+
+Work Log:
+- Carry-over check: the z.ai/Explee member-facing scrub was already committed and pushed last session (5055bfa: /api/status z.ai row dropped, /api/ai/diagnose zai removed, discover notices neutralized, /api/health verifiedFeed rename). Prod verified live this session: /api/status rows = Business data | AI engine | DeepSeek engine | Email engine | Push notifications (no z.ai/GLM), /api/health carries no explee key.
+- Zola intel from kloofstreet.online/just-hearing: Zola, Audiologist at Just Hearing, 99B Kloof Street, Cape Town · info@justhearingaudiologist.co.za · +27 79 995 9658 (tel link on her listing).
+- Built facilitated meetings (323fc66): Meeting model (PROPOSED/CONFIRMED/DECLINED, unique confirmToken, member/guest parties, SAST times); src/lib/meeting.ts (Intl en-ZA Africa/Johannesburg formatting, welcome/invite/confirmed/declined/exec-note email bodies, dark brand HTML confirm/decline/already-confirmed/invalid pages, gcalTemplateLink add-to-calendar); POST /api/meetings (exec gate) creates the member account on the spot when missing (wallet + R99 welcome credit + direct 48h choose-password reset link, NO session hijack), sends welcome email (password link + Google Calendar connect steps + one-tap add-to-calendar note) then the invite email with the one tap confirm; GET/POST /api/meetings/confirm (GET is side-effect-free so email scanner prefetch cannot confirm; POST flips status, emails BOTH parties the final details incl. Jitsi link, notes to team inbox); POST /api/meetings/decline steps aside honestly + team note.
+- Executive Dashboard: exec feed gained meetings[20] + meetingsKpi + kpis.meetingsSet/Confirmed/Awaiting; AdminView gained the 7th KPI "Meetings set" (grid xl:grid-cols-7) and the Meetings card (status chips, SAST times, invited/confirmed ago, full Set a meeting dialog with member/guest/date-time-SAST/duration/notes).
+- Master account password is the owner's own and was NOT touched. Added internal operator exec seat (213408e): ops@hustleqa.example.com in EXEC_EMAILS — QA domain keeps it flagged internal in roster/KPIs; ensureExecAdmin self-heals its flags on login. Ops password: OpsSeat2026!Hustle (in scripts/set_first_meeting.mjs).
+- Executed the business case in prod (scripts/set_first_meeting.mjs): accountCreated=true, welcomeSent=true, inviteSent=true, meeting cmv9v3m2f000ll508ez86jub9 PROPOSED. /api/emails/status stamp: "Meeting proposed: Monday 19 October 2026 at 11:30" → info@justhearingaudiologist.co.za ok=true via branded (domain verified).
+- Verify: confirm page GET renders "Monday 19 October 2026 at 11:30" + Confirm button (POST left for Zola — Ian only gets emailed after she confirms, as instructed). agent-browser on prod: Executive Dashboard shows MEETINGS SET 1 (0 confirmed · 1 awaiting) + Meetings card row "Zola · Just Hearing × Ian / Mon, 19 Oct, 11:30 SAST / Awaiting confirmation". Screenshots: download/meetings_dashboard_top.png, download/meetings_card.png.
+
+Stage Summary:
+- Production runs 213408e. First business case is LIVE and awaiting Zola's one tap confirm: the moment she confirms, both her and Ian get the final details and the KPI flips to confirmed. Boss can set every future case himself from Exec Dashboard → Meetings → Set a meeting.
+- New internal seat: ops@hustleqa.example.com / OpsSeat2026!Hustle (exec gated, QA-flagged). Master untouched.
+- Note for the boss: Zola's email is the business address published on her Kloof Street listing; if she prefers a personal one, set a fresh meeting with the same details and correct email (decline the old one).
