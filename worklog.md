@@ -820,3 +820,16 @@ Work Log:
 
 Stage Summary:
 - Production e99ddc1: the member sees exactly what the owner specified — business name, who to ask for, company url, verified email, honest status ("Team verified · website live" etc.), and everything sits in the seller's own area. The campaign conversation stays on the Executive Dashboard where it belongs. The signup flow now captures any industry in South Africa. One open item for the owner: set CRON_SECRET on Vercel to lock the cron endpoint.
+
+---
+Task ID: 56
+Agent: Super Z (main)
+Task: "How do i set the CRON_SECRET? give me step by step guide." -> owner set it -> "done."
+
+Work Log:
+- Confirmed both cron routes share the identical authorized() pattern (CRON_SECRET env, Bearer match), so one env var locks both /api/cron/leads-refresh and /api/cron/daily-reminders.
+- Generated a 48 char hex secret, walked the owner through Vercel Settings -> Environment Variables -> Production -> redeploy.
+- Verified live on production after the owner's deploy: no header -> 401 on BOTH paths; with Bearer token -> 200 on BOTH paths. The open endpoint security flag from Task 55 is closed. Vercel's scheduler sends the bearer automatically, so the 04:30 leads refresh and 05:00 daily reminders run untouched.
+
+Stage Summary:
+- The one pre-flight action before going public is done. Launch verdict stands: GO. Watch list for week one unchanged (first 50 signups: discover mode mix, Yoco checkouts, webhook events; travel heavy floor diversifies via daily feed; Neon pooled endpoint only if connections climb).
