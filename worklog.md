@@ -879,3 +879,21 @@ Work Log:
 
 Stage Summary:
 - Production da1bf52 live: the z.ai API key option no longer renders in the user facing Integrations view. Existing saved keys keep working server side. Optional follow up: hide the "z.ai GLM engine" line in System status if the owner wants all z.ai plumbing out of member view.
+
+---
+Task ID: 60
+Agent: Super Z (main)
+Task: "yes. The things to keep internal is z.ai and explee.. no forward facing mentions of that, yet.."
+
+Work Log:
+- Swept all member-facing surfaces for z.ai / GLM / Zhipu / Explee mentions. DeepSeek deliberately stays forward facing (owner listed only z.ai + explee as internal; it has a member key card). AdminView untouched (owner only).
+- /api/status: removed the z.ai GLM engine row AND its 45s probe (function + import + services array) - members no longer see it, platform stops spending probe credits on an invisible row. Operator keeps engine health via admin diagnostics + probe scripts.
+- /api/ai/diagnose: removed zaiDiag (function, imports, payload field) and the z.ai verdict branch. Member JSON now carries only Gemini checks + DeepSeek diag.
+- /api/leads/discover: neutralized 4 member-visible strings: (1) scan note no longer names "the z.ai GLM engine" / "the GLM engine on the Zhipu open platform" - one engine-agnostic wording; (2) personal-key fallback notices now say "the extra search engine" instead of GLM doors; (3) map ranking sentence now says "the HustlePortal matching engine" instead of "the GLM engine"; (4) Gemini-to-GLM backup notice says "backup live search engine". DeepSeek keeps its name in ranking sentences.
+- /api/health: public JSON key explee renamed to verifiedFeed (env var EXPLEE_API_KEY unchanged).
+- Confirmed already-clean surfaces: LeadsView sourceLabel maps EXPLEE to "Team verified" and ZAI to "Web found" (render-safe), leadpool writes no Explee notes, cron leads-refresh scrubs legacy "Explee" notes on every run.
+- tsc clean for src/. Commit 5055bfa pushed; deploy verified via the verifiedFeed fingerprint in /api/health.
+- Live browser verification (probe account): Integrations shows Business data / AI engine / DeepSeek engine / Email engine / Push notifications - zero z.ai/GLM/Zhipu/Explee strings in page text; AI diagnostics run verdict + checks clean. Screenshot: scripts/verify_engines_internal.png.
+
+Stage Summary:
+- Production 5055bfa: z.ai and Explee are fully internal. Members see neutral engine language ("the HustlePortal matching engine", "extra search engine") while both engines keep working unchanged under the hood. If the owner later re-exposes them ("yet.."), the copy pack wording lives in git history of these 4 files.
