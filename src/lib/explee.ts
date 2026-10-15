@@ -214,24 +214,34 @@ async function expleeGetJson(
  * the businesshustle workspace), newest first, with campaign names joined so
  * the owner can see which campaign warmed each prospect up. A failed campaign
  * list never hides hot leads: names fall back to the campaign id.
+ *
+ * "All" means all: the walk keeps fetching pages through next_offset until the
+ * server says there are none left, so a growing campaign never gets truncated
+ * at one screenful. Pass campaignId to focus on a single campaign (the API
+ * filters server side); omit it for the whole organization.
  */
-export async function expleeHotLeads(opts?: { limit?: number; apiKey?: string }): Promise<ExpleeHotLeadsResult> {
+export async function expleeHotLeads(opts?: { limit?: number; campaignId?: number; apiKey?: string }): Promise<ExpleeHotLeadsResult> {
   const apiKey = (opts?.apiKey ?? (await getConfig(CONFIG_KEYS.EXPLEE_API_KEY))).trim()
   const empty = { leads: [], total: 0, hasMore: false, campaigns: [], mode: 'NONE' as const }
   if (apiKey.length <= 5) return { ...empty, note: 'No Explee key configured yet.' }
 
   const limit = Math.min(Math.max(opts?.limit ?? 200, 1), 200)
-  const [campaignsRes, leadsRes] = await Promise.all([
+  const campaignId =
+    typeof opts?.campaignId === 'number' && Number.isFinite(opts.campaignId) && opts.campaignId > 0
+      ? opts.campaignId
+      : null
+  const campaignParam = campaignId ? `&campaign_id=${campaignId}` : ''
+  const [campaignsRes, firstRes] = await Promise.all([
     expleeGetJson('/public/api/v1/autogtm/campaigns', apiKey),
-    expleeGetJson(`/public/api/v1/autogtm/hot-leads?limit=${limit}`, apiKey),
+    expleeGetJson(`/public/api/v1/autogtm/hot-leads?limit=${limit}${campaignParam}`, apiKey),
   ])
 
-  if (!leadsRes.ok) {
+  if (!firstRes.ok) {
     const why =
-      leadsRes.status === 401
+      firstRes.status === 401
         ? 'Explee rejected the API key. Paste a fresh one in settings.'
-        : leadsRes.status
-          ? `Explee responded with HTTP ${leadsRes.status}.`
+        : firstRes.status
+          ? `Explee responded with HTTP ${firstRes.status}.`
           : 'Could not reach Explee — try again shortly.'
     return { ...empty, note: why }
   }
@@ -244,8 +254,28 @@ export async function expleeHotLeads(opts?: { limit?: number; apiKey?: string })
     .map((c) => ({ id: c.id as number, name: String(c.name ?? `Campaign ${c.id}`), status: String(c.status ?? '') }))
   const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]))
 
-  const rows = Array.isArray(leadsRes.data?.leads) ? (leadsRes.data!.leads as Record<string, unknown>[]) : []
-  const leads: ExpleeHotLead[] = rows
+  const rows = Array.isArray(firstRes.data?.leads) ? (firstRes.data!.leads as Record<string, unknown>[]) : []
+  const allRows = [...rows]
+
+  // Walk the remaining pages. Guarded at 25 pages so a surprise can never hang
+  // the dashboard: 25 x 200 already covers five thousand warm prospects.
+  let hasMore = firstRes.data?.has_more === true
+  let nextOffset = typeof firstRes.data?.next_offset === 'number' ? firstRes.data.next_offset : null
+  let pages = 1
+  while (hasMore && nextOffset !== null && nextOffset > 0 && pages < 25) {
+    const pageRes = await expleeGetJson(
+      `/public/api/v1/autogtm/hot-leads?limit=${limit}&offset=${nextOffset}${campaignParam}`,
+      apiKey
+    )
+    if (!pageRes.ok) break
+    const pageRows = Array.isArray(pageRes.data?.leads) ? (pageRes.data!.leads as Record<string, unknown>[]) : []
+    allRows.push(...pageRows)
+    hasMore = pageRes.data?.has_more === true
+    nextOffset = typeof pageRes.data?.next_offset === 'number' ? pageRes.data.next_offset : null
+    pages += 1
+  }
+
+  const leads: ExpleeHotLead[] = allRows
     .map((r) => {
       const campaignId = Number(r.campaign_id ?? 0)
       return {
@@ -268,8 +298,8 @@ export async function expleeHotLeads(opts?: { limit?: number; apiKey?: string })
 
   return {
     leads,
-    total: typeof leadsRes.data?.total === 'number' ? leadsRes.data.total : leads.length,
-    hasMore: leadsRes.data?.has_more === true,
+    total: typeof firstRes.data?.total === 'number' ? firstRes.data.total : leads.length,
+    hasMore,
     campaigns,
     mode: 'LIVE',
   }

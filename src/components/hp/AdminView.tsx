@@ -36,6 +36,8 @@ import {
 
 interface Kpis {
   members: number
+  qaAccounts: number
+  realMembers: number
   new7: number
   new30: number
   subscribers: number
@@ -64,6 +66,7 @@ interface RosterRow {
   accountStatus: string
   suspendedAt: string | null
   isAdmin: boolean
+  isQa: boolean
   walletCents: number
   plan: string | null
   subStatus: string
@@ -737,7 +740,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                       onClick={() => onPauseRequest({
                         id: c.id, name: c.name, email: c.email, businessName: c.businessName, city: c.city,
                         industry: c.industry, joinedAt: c.createdAt, accountStatus: c.accountStatus,
-                        suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, walletCents: c.wallet?.balance ?? 0,
+                        suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, isQa: Boolean(c.email?.toLowerCase().endsWith('@hustleqa.example.com')), walletCents: c.wallet?.balance ?? 0,
                         plan: c.subscription?.plan ?? null, subStatus: c.subStatus, subCycle: c.subscription?.billingCycle ?? null,
                         subAmountCents: c.subscription?.amountCents ?? 0, renewsAt: c.subscription?.renewsAt ?? null,
                         npoNumber: c.subscription?.npoNumber ?? null,
@@ -1001,11 +1004,13 @@ function HotLeadsCard() {
   const [data, setData] = useState<HotLeadsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAll, setShowAll] = useState(false)
+  const [campaignSel, setCampaignSel] = useState('ALL')
 
-  async function load() {
+  async function load(sel = campaignSel) {
     setLoading(true)
     try {
-      setData(await api<HotLeadsData>('/api/admin/exec/hotleads'))
+      const qs = sel === 'ALL' ? '' : `?campaignId=${sel}`
+      setData(await api<HotLeadsData>(`/api/admin/exec/hotleads${qs}`))
     } catch {
       setData(null)
     } finally {
@@ -1015,8 +1020,15 @@ function HotLeadsCard() {
 
   useEffect(() => { load() }, [])
 
+  function onCampaignChange(v: string) {
+    setCampaignSel(v)
+    setShowAll(false)
+    load(v)
+  }
+
   const leads = data?.leads ?? []
   const shown = showAll ? leads : leads.slice(0, 6)
+  const focused = campaignSel !== 'ALL' ? data?.campaigns.find((c) => String(c.id) === campaignSel) : null
 
   return (
     <Card>
@@ -1025,15 +1037,30 @@ function HotLeadsCard() {
           <CardTitle className="text-base flex items-center gap-2 flex-wrap">
             <Flame className="h-4 w-4 text-brand" /> Hot leads
             {data?.engine === 'LIVE' && (
-              <Badge className="bg-brand text-black hover:bg-brand text-[10px]">{data.total} waiting for you</Badge>
+              <Badge className="bg-brand text-black hover:bg-brand text-[10px]">
+                {data.total} {focused ? `in ${focused.name}` : 'waiting for you'}
+              </Badge>
             )}
             {data?.fetchedAt && (
               <span className="text-[10px] text-muted-foreground font-normal">updated {timeAgo(data.fetchedAt)}</span>
             )}
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="shrink-0">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Refresh
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {data && data.campaigns.length > 0 && (
+              <Select value={campaignSel} onValueChange={onCampaignChange}>
+                <SelectTrigger className="h-8 w-36 sm:w-44 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All campaigns</SelectItem>
+                  {data.campaigns.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Refresh
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -1243,6 +1270,9 @@ export default function AdminView() {
   const [pauseTarget, setPauseTarget] = useState<RosterRow | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  // Automated QA probe accounts stay out of sight by default: the owner's lens
+  // is the real business. One tap brings them back for auditing.
+  const [showQa, setShowQa] = useState(false)
 
   // lead economy config (kept from the classic admin panel)
   const [apiKey, setApiKey] = useState('')
@@ -1311,6 +1341,7 @@ export default function AdminView() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return roster.filter((u) => {
+      if (!showQa && u.isQa) return false
       if (filter === 'PAUSED' && u.accountStatus !== 'SUSPENDED') return false
       if (filter === 'PAYING' && u.subStatus !== 'ACTIVE') return false
       if (filter === 'NOPLAN' && u.plan) return false
@@ -1318,10 +1349,10 @@ export default function AdminView() {
       return [u.name, u.email, u.businessName, u.city, u.industry]
         .some((f) => (f || '').toLowerCase().includes(needle))
     })
-  }, [roster, q, filter])
+  }, [roster, q, filter, showQa])
 
   const k = exec?.kpis
-  const spotlight = roster.slice(0, 8)
+  const spotlight = roster.filter((u) => !u.isQa).slice(0, 8)
 
   return (
     <div className="space-y-4 pb-24">
@@ -1343,7 +1374,7 @@ export default function AdminView() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <KpiCard hot icon={<UserPlus className="h-3 w-3" />} label="New signups 7d" value={String(k.new7)} sub={`+${k.new30} in 30 days`} />
-          <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.members)} sub={k.suspended > 0 ? `${k.suspended} paused` : 'all active'} />
+          <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.realMembers)} sub={`${k.suspended > 0 ? `${k.suspended} paused` : 'all active'}${k.qaAccounts > 0 ? ` · ${k.qaAccounts} QA` : ''}`} />
           <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due${k.testMrrCents > 0 ? ` · ${rands(k.testMrrCents)} in test plans` : ''}`} />
           <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub={`live card money${k.sandboxTopups30dCents > 0 ? ` · ${rands(k.sandboxTopups30dCents)} in tests` : ''}`} />
           <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
@@ -1418,6 +1449,14 @@ export default function AdminView() {
                   <SelectItem value="PAUSED">Paused accounts</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className={showQa ? 'h-9 border-brand/40 text-brand' : 'h-9 text-muted-foreground'}
+                onClick={() => setShowQa((v) => !v)}
+              >
+                {showQa ? 'QA shown' : 'Show QA'}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1435,6 +1474,7 @@ export default function AdminView() {
                   <div className="text-sm font-medium truncate">
                     {u.name}{u.businessName ? <span className="text-muted-foreground font-normal"> · {u.businessName}</span> : ''}
                     {u.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[9px] ml-1.5">exec</Badge>}
+                    {u.isQa && <Badge variant="outline" className="text-[9px] ml-1.5 border-muted-foreground/30 text-muted-foreground">QA</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                 </div>

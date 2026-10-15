@@ -6,6 +6,12 @@ import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
 // GET /api/admin/exec — the Executive Dashboard feed: platform KPIs + the full
 // client roster (plan, account status, wallet, activity). Exec only.
+//
+// QA probe accounts (@hustleqa.example.com) are automated test registrations
+// from this build pipeline, never real sign ups. They are excluded from the
+// growth KPIs and the newest members spotlight, and flagged on roster rows so
+// the owner's lens always shows the real business first.
+const QA_DOMAIN = 'hustleqa.example.com'
 export async function GET() {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
@@ -14,10 +20,11 @@ export async function GET() {
   const d7 = new Date(now - 7 * 86_400_000)
   const d30 = new Date(now - 30 * 86_400_000)
 
-  const [userCount, new7, new30, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow] = await Promise.all([
+  const [userCount, new7, new30, qaAccounts, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow] = await Promise.all([
     db.user.count(),
-    db.user.count({ where: { createdAt: { gte: d7 } } }),
-    db.user.count({ where: { createdAt: { gte: d30 } } }),
+    db.user.count({ where: { createdAt: { gte: d7 }, email: { not: { endsWith: QA_DOMAIN } } } }),
+    db.user.count({ where: { createdAt: { gte: d30 }, email: { not: { endsWith: QA_DOMAIN } } } }),
+    db.user.count({ where: { email: { endsWith: QA_DOMAIN } } }),
     db.subscription.findMany({
       select: { userId: true, plan: true, status: true, billingCycle: true, amountCents: true, renewsAt: true, npoNumber: true, provider: true },
     }),
@@ -95,6 +102,7 @@ export async function GET() {
       accountStatus: u.accountStatus,
       suspendedAt: u.suspendedAt,
       isAdmin: u.role === 'ADMIN' || u.platformAdmin,
+      isQa: u.email.toLowerCase().endsWith(QA_DOMAIN),
       walletCents: u.wallet?.balance ?? 0,
       plan: sub ? sub.plan : null,
       subStatus: sub ? (subLive ? 'ACTIVE' : sub.status === 'ACTIVE' ? 'PAST_DUE' : sub.status) : 'NONE',
@@ -111,6 +119,8 @@ export async function GET() {
   return NextResponse.json({
     kpis: {
       members: userCount,
+      qaAccounts,
+      realMembers: userCount - qaAccounts,
       new7,
       new30,
       subscribers: liveSubs.length,
