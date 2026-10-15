@@ -682,7 +682,9 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                   {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : mode === 'POOL' ? 'Verified pool' : 'Verified data'}
                 </Badge>
               </div>
-              <div className="max-h-64 overflow-y-auto hp-scroll space-y-1.5">
+              {/* Results grow with the dialog's own scroll — one scroll
+                  context, no thumb fight on phones. */}
+              <div className="space-y-1.5">
                 {results.map((r) => {
                   const alreadyIn = addedKeys.has(r.company)
                   return (
