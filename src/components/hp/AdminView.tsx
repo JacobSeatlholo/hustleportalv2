@@ -26,6 +26,7 @@ import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
+  Flame, ExternalLink,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -964,6 +965,144 @@ function MiniStat({ icon, label, value, sub }: { icon: React.ReactNode; label: s
   )
 }
 
+// =================== Hot leads card (live from Explee) ===================
+// The businesshustle campaigns talk to prospects around the clock. When one
+// replies with real interest, Explee marks it hot and this card mirrors it
+// here, no tab switching. Read why they are hot, then answer from the
+// Explee inbox where the full conversation lives.
+
+interface HotLeadRow {
+  personId: string
+  campaignId: number
+  campaignName?: string
+  name?: string
+  email?: string
+  jobTitle?: string
+  companyName?: string
+  companyDomain?: string
+  linkedinUrl?: string
+  phone?: string
+  whyHot?: string
+  becameHotAt?: string
+}
+
+interface HotLeadsData {
+  total: number
+  hasMore: boolean
+  campaigns: { id: number; name: string; status: string }[]
+  leads: HotLeadRow[]
+  engine: 'LIVE' | 'NONE'
+  fetchedAt?: string
+  note?: string | null
+  cached?: boolean
+}
+
+function HotLeadsCard() {
+  const [data, setData] = useState<HotLeadsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showAll, setShowAll] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try {
+      setData(await api<HotLeadsData>('/api/admin/exec/hotleads'))
+    } catch {
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const leads = data?.leads ?? []
+  const shown = showAll ? leads : leads.slice(0, 6)
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            <Flame className="h-4 w-4 text-brand" /> Hot leads
+            {data?.engine === 'LIVE' && (
+              <Badge className="bg-brand text-black hover:bg-brand text-[10px]">{data.total} waiting for you</Badge>
+            )}
+            {data?.fetchedAt && (
+              <span className="text-[10px] text-muted-foreground font-normal">updated {timeAgo(data.fetchedAt)}</span>
+            )}
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="shrink-0">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {!data && loading && (
+          <div className="px-4 py-4 space-y-2">
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+          </div>
+        )}
+        {data && data.engine === 'NONE' && (
+          <div className="px-4 py-4 text-sm text-muted-foreground">
+            {data.note || 'Explee has no answers right now.'} Campaigns keep working either way: the moment a reply warms up it lands here.
+          </div>
+        )}
+        {data && data.engine === 'LIVE' && leads.length === 0 && (
+          <div className="px-4 py-4 text-sm text-muted-foreground">
+            No hot leads yet. Your campaigns keep reaching out, and the moment a prospect replies with interest they show up here first.
+          </div>
+        )}
+        {leads.length > 0 && (
+          <div className="divide-y">
+            {shown.map((l) => (
+              <div key={l.personId} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-brand/15 text-brand flex items-center justify-center text-xs font-bold shrink-0">
+                    {(l.name || l.email || '?').slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">
+                      {l.name || l.email || 'Unnamed prospect'}
+                      {l.companyName ? <span className="text-muted-foreground font-normal"> · {l.companyName}</span> : ''}
+                      {l.jobTitle ? <span className="text-muted-foreground font-normal"> · {l.jobTitle}</span> : ''}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {l.email}{l.phone ? ` · ${l.phone}` : ''}{l.companyDomain ? ` · ${l.companyDomain}` : ''}
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                    {l.campaignName && (
+                      <Badge variant="outline" className="text-[9px] border-brand/30 text-brand">{l.campaignName}</Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">hot {timeAgo(l.becameHotAt)}</span>
+                  </div>
+                </div>
+                {l.whyHot && (
+                  <p className="mt-2 ml-11 text-xs text-muted-foreground border-l-2 border-brand/30 pl-2 line-clamp-2">
+                    &ldquo;{l.whyHot}&rdquo;
+                  </p>
+                )}
+              </div>
+            ))}
+            {!showAll && leads.length > shown.length && (
+              <button type="button" onClick={() => setShowAll(true)} className="w-full px-4 py-2.5 text-xs text-brand hover:bg-brand/5 text-left">
+                Show all {leads.length} hot leads
+              </button>
+            )}
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+              <span>Answer from your Explee inbox to keep each conversation warm.</span>
+              <a href="https://explee.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand hover:underline shrink-0">
+                Open Explee <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // =================== Payments card (the money, live) ===================
 // The owner's at a glance answer to one question: is real card money flowing
 // and does every rand land safely? Gateway mode, webhook state, and the latest
@@ -1182,7 +1321,7 @@ export default function AdminView() {
   }, [roster, q, filter])
 
   const k = exec?.kpis
-  const spotlight = roster.slice(0, 5)
+  const spotlight = roster.slice(0, 8)
 
   return (
     <div className="space-y-4 pb-24">
@@ -1215,6 +1354,9 @@ export default function AdminView() {
       {/* Payments: gateway mode, webhook state, latest settled money */}
       <PaymentsCard payments={exec?.payments ?? null} onChanged={() => setTick((t) => t + 1)} />
 
+      {/* Hot leads: live replies from the Explee campaigns */}
+      <HotLeadsCard />
+
       {/* Newest members spotlight */}
       <Card>
         <CardHeader className="pb-2">
@@ -1240,8 +1382,10 @@ export default function AdminView() {
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{u.email}{u.city ? ` · ${u.city}` : ''}</div>
                 </div>
-                <div className="hidden sm:flex items-center gap-1.5">
+                <div className="hidden md:flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground mr-1">{rands(u.walletCents)} · {u.counts.leads} leads</span>
                   <PlanChip plan={u.plan} cycle={u.subCycle} />
+                  <SubChip status={u.subStatus} />
                   <AcctChip status={u.accountStatus} />
                 </div>
                 <span className="text-xs text-muted-foreground w-16 text-right shrink-0">{timeAgo(u.joinedAt)}</span>

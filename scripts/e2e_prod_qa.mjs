@@ -60,6 +60,10 @@ async function main() {
   const whReady = yoco.json?.configured === true && (yoco.json?.mode !== 'live' || yoco.json?.webhookMode === 'live')
   check('yoco webhook ready for the current key mode (launch critical)', whReady, `mode=${yoco.json?.mode || 'none'} webhook=${yoco.json?.webhookMode || 'none'}${whReady ? '' : ' — open the exec dashboard and tap Register'}`)
 
+  // 2c. Exec hotleads wall: the Explee pulse on the dashboard stays exec only
+  const hotWall = await req('GET', '/api/admin/exec/hotleads')
+  check('exec hotleads wall for clients (403)', hotWall.status === 403, `status ${hotWall.status}`)
+
   // 3. Welcome email — lastSend is admin-only (Task 24), so a MEMBER account can
   // only verify registration succeeded and the send path was awaited (no error).
   const mail = await req('GET', '/api/emails/status')

@@ -1,6 +1,8 @@
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
-const EXPLEE_BASE = 'https://api.explee.com'
+// Base override exists for local QA only (a mock server plays Explee);
+// production never sets it and always talks to the real API.
+const EXPLEE_BASE = process.env.EXPLEE_BASE?.trim() || 'https://api.explee.com'
 
 export interface ExpleeLead {
   externalId: string
@@ -151,4 +153,124 @@ export async function searchLeads(
 ): Promise<{ leads: ExpleeLead[]; mode: 'LIVE' | 'NONE'; note?: string }> {
   const r = await expleeSearchCompanies({ definition, city, limit })
   return { leads: r.leads, mode: r.mode, ...(r.note ? { note: r.note } : {}) }
+}
+
+// =================== Outreach pulse: hot leads ===================
+// The owner's campaigns talk to prospects around the clock. When one replies
+// with real interest, Explee marks it hot and this is how the Executive
+// Dashboard sees it without opening Explee. Contract:
+// GET /public/api/v1/autogtm/hot-leads  -> { leads: HotLeadItem[], total, has_more, next_offset }
+// GET /public/api/v1/autogtm/campaigns  -> { campaigns: [{ id, name, status, ... }], total }
+
+export interface ExpleeCampaignInfo {
+  id: number
+  name: string
+  status: string
+}
+
+export interface ExpleeHotLead {
+  personId: string
+  campaignId: number
+  campaignName?: string
+  name?: string
+  email?: string
+  jobTitle?: string
+  companyName?: string
+  companyDomain?: string
+  linkedinUrl?: string
+  phone?: string
+  country?: string
+  whyHot?: string
+  becameHotAt?: string
+}
+
+export interface ExpleeHotLeadsResult {
+  leads: ExpleeHotLead[]
+  total: number
+  hasMore: boolean
+  campaigns: ExpleeCampaignInfo[]
+  mode: 'LIVE' | 'NONE'
+  note?: string
+}
+
+async function expleeGetJson(
+  path: string,
+  apiKey: string
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> | null }> {
+  try {
+    const res = await fetch(`${EXPLEE_BASE}${path}`, {
+      headers: { 'X-API-Key': apiKey },
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) return { ok: false, status: res.status, data: null }
+    return { ok: true, status: res.status, data: (await res.json()) as Record<string, unknown> }
+  } catch {
+    return { ok: false, status: 0, data: null }
+  }
+}
+
+/**
+ * Every hot lead across the whole Explee organization (the API key resolves to
+ * the businesshustle workspace), newest first, with campaign names joined so
+ * the owner can see which campaign warmed each prospect up. A failed campaign
+ * list never hides hot leads: names fall back to the campaign id.
+ */
+export async function expleeHotLeads(opts?: { limit?: number; apiKey?: string }): Promise<ExpleeHotLeadsResult> {
+  const apiKey = (opts?.apiKey ?? (await getConfig(CONFIG_KEYS.EXPLEE_API_KEY))).trim()
+  const empty = { leads: [], total: 0, hasMore: false, campaigns: [], mode: 'NONE' as const }
+  if (apiKey.length <= 5) return { ...empty, note: 'No Explee key configured yet.' }
+
+  const limit = Math.min(Math.max(opts?.limit ?? 200, 1), 200)
+  const [campaignsRes, leadsRes] = await Promise.all([
+    expleeGetJson('/public/api/v1/autogtm/campaigns', apiKey),
+    expleeGetJson(`/public/api/v1/autogtm/hot-leads?limit=${limit}`, apiKey),
+  ])
+
+  if (!leadsRes.ok) {
+    const why =
+      leadsRes.status === 401
+        ? 'Explee rejected the API key. Paste a fresh one in settings.'
+        : leadsRes.status
+          ? `Explee responded with HTTP ${leadsRes.status}.`
+          : 'Could not reach Explee — try again shortly.'
+    return { ...empty, note: why }
+  }
+
+  const campaignRows = Array.isArray(campaignsRes.data?.campaigns)
+    ? (campaignsRes.data!.campaigns as Record<string, unknown>[])
+    : []
+  const campaigns: ExpleeCampaignInfo[] = campaignRows
+    .filter((c) => typeof c.id === 'number')
+    .map((c) => ({ id: c.id as number, name: String(c.name ?? `Campaign ${c.id}`), status: String(c.status ?? '') }))
+  const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]))
+
+  const rows = Array.isArray(leadsRes.data?.leads) ? (leadsRes.data!.leads as Record<string, unknown>[]) : []
+  const leads: ExpleeHotLead[] = rows
+    .map((r) => {
+      const campaignId = Number(r.campaign_id ?? 0)
+      return {
+        personId: String(r.person_id ?? ''),
+        campaignId,
+        campaignName: campaignMap.get(campaignId) || (campaignId ? `Campaign ${campaignId}` : undefined),
+        name: (r.name as string) || undefined,
+        email: (r.email as string) || undefined,
+        jobTitle: (r.job_title as string) || undefined,
+        companyName: (r.company_name as string) || undefined,
+        companyDomain: (r.company_domain as string) || undefined,
+        linkedinUrl: (r.linkedin_url as string) || undefined,
+        phone: (r.phone as string) || undefined,
+        country: (r.country as string) || undefined,
+        whyHot: (r.why_hot as string) || undefined,
+        becameHotAt: (r.became_hot_at as string) || undefined,
+      }
+    })
+    .filter((l) => l.personId)
+
+  return {
+    leads,
+    total: typeof leadsRes.data?.total === 'number' ? leadsRes.data.total : leads.length,
+    hasMore: leadsRes.data?.has_more === true,
+    campaigns,
+    mode: 'LIVE',
+  }
 }

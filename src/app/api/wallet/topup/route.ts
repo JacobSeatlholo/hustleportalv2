@@ -70,11 +70,12 @@ export async function POST(req: NextRequest) {
       const detail = e instanceof Error ? e.message : 'Payment provider error'
       console.error('[topup] yoco checkout failed:', detail)
       // Clients get a gentle, honest line; the raw detail lives in the logs
-      // and on the exec dashboard for the owner to act on.
+      // and on the exec dashboard for the owner to act on. QA probe accounts
+      // may see the raw provider detail so diagnosis never needs log access.
       const msg = status === 502 || status === 504
         ? 'Card payments are momentarily unavailable. Please try again in a moment.'
         : detail
-      return NextResponse.json({ error: msg }, { status })
+      return NextResponse.json({ error: msg, ...(isQaAccount ? { yocoDetail: detail } : {}) }, { status })
     }
   }
 

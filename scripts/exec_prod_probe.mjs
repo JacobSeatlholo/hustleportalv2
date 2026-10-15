@@ -32,6 +32,8 @@ async function main() {
   // 1. Deployment marker: route exists now (401 unauthed, not 404)
   const anon = await call('/api/admin/exec')
   check('new route live: /api/admin/exec -> 401 unauthed', anon.status === 401, `status ${anon.status}`)
+  const anonHl = await call('/api/admin/exec/hotleads')
+  check('hotleads route live: 401 unauthed', anonHl.status === 401, `status ${anonHl.status}`)
 
   // 2. Fresh outsider session -> the whole exec surface is a 403 wall
   const email = `execqa_${Date.now()}@hustleqa.example.com`
@@ -39,17 +41,19 @@ async function main() {
   const cookie = (reg.setCookie || '').split(';')[0]
   check('fresh QA client registered', reg.status === 200 && !!cookie)
 
-  const [feed, detail, patch, inject, cfg] = await Promise.all([
+  const [feed, detail, patch, inject, hl, cfg] = await Promise.all([
     call('/api/admin/exec', { cookie }),
     call('/api/admin/exec/client/clx_probe_id', { cookie }),
     call('/api/admin/exec/client/clx_probe_id', { method: 'PATCH', cookie, body: { status: 'SUSPENDED' } }),
     call('/api/admin/exec/client/clx_probe_id/leads', { method: 'POST', cookie, body: { leads: [{ company: 'X' }] } }),
+    call('/api/admin/exec/hotleads', { cookie }),
     call('/api/admin/config', { cookie }),
   ])
   check('feed 403', feed.status === 403, `status ${feed.status}`)
   check('detail 403', detail.status === 403, `status ${detail.status}`)
   check('suspend 403', patch.status === 403, `status ${patch.status}`)
   check('inject 403', inject.status === 403, `status ${inject.status}`)
+  check('hotleads 403', hl.status === 403, `status ${hl.status}`)
   check('legacy admin config still 403 for non-admin', cfg.status === 403, `status ${cfg.status}`)
 
   // 3. The outsider's own session is healthy (auth path untouched by the exec gate)
