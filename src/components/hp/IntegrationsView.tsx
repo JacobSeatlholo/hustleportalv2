@@ -10,7 +10,7 @@ import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import {
   KeyRound, Loader2, Mail, Sparkles, CalendarCheck2, Trash2,
-  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal, Activity, Globe, Brain,
+  MessageCircle, Copy, Check, Plug, ShieldCheck, ExternalLink, Stethoscope, SendHorizontal, Activity, Brain,
 } from 'lucide-react'
 
 const INTEGRATIONS: {
@@ -42,14 +42,6 @@ const INTEGRATIONS: {
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza… or AQ… (Google issues both)',
     helper: 'The AI already runs on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
-    secret: true,
-  },
-  {
-    key: 'ZAI_API_KEY',
-    title: 'z.ai GLM key (pay as you go engine)',
-    icon: <Globe className="h-4 w-4 text-brand" />,
-    placeholder: 'Your z.ai API key',
-    helper: 'Pay as you go from the z.ai open platform. Once saved, lead discovery runs live web search grounding on YOUR credits FIRST, with Gemini as automatic backup — roughly two cents per scan, hundreds of scans per $10 top up.',
     secret: true,
   },
   {
@@ -538,8 +530,8 @@ export default function IntegrationsView() {
   const [mailTesting, setMailTesting] = useState(false)
   const [mailVerdict, setMailVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
   const [geminiVerdict, setGeminiVerdict] = useState<{ ok: boolean; msg: string } | null>(null)
-  // Verdicts for the pay as you go engine keys (DeepSeek, z.ai): keyed by setting key
-  // so each card renders its own save time probe result.
+  // Verdict for the pay as you go engine key (DeepSeek): keyed by setting key
+  // so the card renders its own save time probe result.
   const [engineVerdicts, setEngineVerdicts] = useState<Record<string, { ok: boolean; msg: string }>>({})
 
   const load = useCallback(async () => {
@@ -560,7 +552,7 @@ export default function IntegrationsView() {
     const value = (drafts[key] ?? '').trim()
     setSaving(key)
     if (key === 'GEMINI_API_KEY') setGeminiVerdict(null)
-    if (key === 'DEEPSEEK_API_KEY' || key === 'ZAI_API_KEY') {
+    if (key === 'DEEPSEEK_API_KEY') {
       setEngineVerdicts((v) => ({ ...v, [key]: undefined as never }))
     }
     try {
@@ -583,8 +575,8 @@ export default function IntegrationsView() {
             : 'HustlePortal AI automatically covers the gap, so nothing breaks. See the note under the key for the fix.',
           variant: res.validation.ok ? 'default' : 'destructive',
         })
-      } else if ((key === 'DEEPSEEK_API_KEY' || key === 'ZAI_API_KEY') && res.validation) {
-        const engine = key === 'DEEPSEEK_API_KEY' ? 'DeepSeek' : 'z.ai'
+      } else if (key === 'DEEPSEEK_API_KEY' && res.validation) {
+        const engine = 'DeepSeek'
         setEngineVerdicts((v) => ({ ...v, [key]: { ok: res.validation!.ok, msg: res.validation!.message } }))
         toast({
           title: res.validation.ok ? `${engine} key verified ✓` : `Key saved — but ${engine} flagged something`,
