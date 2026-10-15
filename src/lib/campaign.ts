@@ -251,7 +251,7 @@ export async function runClientCampaign(
     const saved = new Set(
       (await db.lead.findMany({ where: { userId }, select: { company: true }, take: 5000 })).map((l) => normKey(l.company))
     )
-    const served = await serveFromPool({ topicFp, cap: limit, excludeKeys: saved })
+    const served = await serveFromPool({ topicFp, cap: limit, excludeKeys: saved, city: city || undefined })
     inputs = served.map((p) => ({
       company: p.company,
       contactName: p.contactName,
@@ -262,7 +262,6 @@ export async function runClientCampaign(
       website: p.website,
       industry: p.industry,
       city: p.city || city || undefined,
-      why: p.why,
       score: p.score,
       source: 'POOL' as const,
       sourceRef: p.sourceRef,
