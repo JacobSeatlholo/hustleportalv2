@@ -849,3 +849,17 @@ Work Log:
 
 Stage Summary:
 - Delivered /home/z/my-project/download/HustlePortal_Launch_Storm_Copy_Pack.docx. Owner pastes and posts per day, replies from the arsenal, numbers only from the Executive Dashboard. Launch verdict GO stands from Task 56.
+
+---
+Task ID: 58
+Agent: Super Z (main)
+Task: "Lets create a prompt I can take to another chat to manage the marketing of this platform."
+
+Work Log:
+- Compiled a self contained marketing operator prompt from all locked strategy (Task 57 decisions: product voice, pure urgency, 6 channels, R0, 1hr/day, cold start, 5 day storm) plus full product facts (lead engine, Team verified, in your area, R99 credit, 5 per scan, R199 HUSTLER, NPO 30 percent, Yoco, founding 50).
+- Included: identity, product knowledge, 10 voice copy laws (no emoji, no hyphens, no invented numbers), audience, per channel playbooks (comment INFO pattern, reply strategy), asset specs (logo video, screenshot library, video 2 shot list, bios), 5 day storm schedule, honest funnel maths with daily targets table and day 3 checkpoint, full 6 question reply arsenal, 8 guard rails, daily briefing format, post founding week rhythm, weekly metrics, escalation rules.
+- Deliberately excluded internal dev secrets (cron secret, master account, infra details) to keep the prompt safe for an external chat.
+- Saved as .md for clean copy paste into another AI chat (docx would introduce formatting artifacts).
+
+Stage Summary:
+- Delivered /home/z/my-project/download/HustlePortal_Marketing_Agent_Prompt.md. Owner takes the prompt (plus optionally the copy pack docx) to a separate chat to run marketing while development continues here. Next: back to platform development (Founding 50 counter on Executive Dashboard already proposed).
