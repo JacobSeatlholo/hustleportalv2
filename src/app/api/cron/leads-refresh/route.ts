@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContacts, type RememberLead } from '@/lib/leadpool'
+import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContacts, cityFromText, type RememberLead } from '@/lib/leadpool'
 import { expleeHotLeads, projectLabelForCampaign } from '@/lib/explee'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 
@@ -104,6 +104,9 @@ export async function GET(req: NextRequest) {
             const reply = h.whyHot?.trim().slice(0, 160)
             const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
             const tag = projectLabelForCampaign(h.campaignName)
+            // A reply to a city campaign puts the contact in that city's
+            // orbit — the honest fill for a pool row with no city on file.
+            const cityGuess = cityFromText(h.campaignName)
             contacts.push({
               company,
               ...(h.name?.trim() ? { contactName: h.name.trim() } : {}),
@@ -114,6 +117,7 @@ export async function GET(req: NextRequest) {
               ...(h.linkedinUrl && /^https?:\/\//i.test(h.linkedinUrl) ? { profileUrl: h.linkedinUrl } : {}),
               why: reply ? `Warm reply to ${campaignLine}: ${reply}` : `Warm reply to ${campaignLine}`,
               ...(tag ? { poolTag: tag } : {}),
+              ...(cityGuess ? { city: cityGuess } : {}),
             })
           }
           const summary = await ingestVerifiedContacts({ area: 'South Africa', contacts, maxPings: 10 })

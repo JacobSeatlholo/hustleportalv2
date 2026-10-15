@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
-import { ingestVerifiedContacts, type RememberLead } from '@/lib/leadpool'
+import { ingestVerifiedContacts, cityFromText, type RememberLead } from '@/lib/leadpool'
 import { expleeHotLeads, projectLabelForCampaign, TRAVEL_PROJECT, HOUSE_PROJECT } from '@/lib/explee'
 
 export const maxDuration = 60
@@ -73,6 +73,9 @@ function hotLeadToContact(h: {
   const reply = clean(h.whyHot)?.slice(0, 160)
   const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
   const tag = projectLabelForCampaign(h.campaignName)
+  // A reply to a city campaign puts the contact in that city's orbit — the
+  // honest fill for a pool row with no city on file.
+  const cityGuess = cityFromText(h.campaignName)
   return {
     company,
     ...(clean(h.name) ? { contactName: clean(h.name) } : {}),
@@ -83,6 +86,7 @@ function hotLeadToContact(h: {
     ...(saneUrl(h.linkedinUrl) ? { profileUrl: saneUrl(h.linkedinUrl) } : {}),
     why: reply ? `Warm reply to ${campaignLine}: ${reply}` : `Warm reply to ${campaignLine}`,
     ...(tag ? { poolTag: tag } : {}),
+    ...(cityGuess ? { city: cityGuess } : {}),
   }
 }
 

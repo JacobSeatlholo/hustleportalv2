@@ -414,6 +414,34 @@ export function cityMatches(rowCity: string | null | undefined, wantCity: string
   return Boolean(mr && mw && mr === mw)
 }
 
+const CITY_DISPLAY: Record<string, string> = {
+  johannesburg: 'Johannesburg', sandton: 'Sandton', midrand: 'Midrand', soweto: 'Soweto', randburg: 'Randburg', fourways: 'Fourways', roodepoort: 'Roodepoort', alexandra: 'Alexandra', lenasia: 'Lenasia', diepsloot: 'Diepsloot', braamfontein: 'Braamfontein', rosebank: 'Rosebank', orangefarm: 'Orange Farm',
+  pretoria: 'Pretoria', centurion: 'Centurion', hatfield: 'Hatfield', akasia: 'Akasia', tshwane: 'Tshwane', mamelodi: 'Mamelodi',
+  ekurhuleni: 'Ekurhuleni', benoni: 'Benoni', boksburg: 'Boksburg', kemptonpark: 'Kempton Park', germiston: 'Germiston', alberton: 'Alberton', springs: 'Springs', edenvale: 'Edenvale', bedfordview: 'Bedfordview', tembisa: 'Tembisa', katlehong: 'Katlehong', vosloorus: 'Vosloorus', brakpan: 'Brakpan',
+  capetown: 'Cape Town', bellville: 'Bellville', durbanville: 'Durbanville', claremont: 'Claremont', milnerton: 'Milnerton', khayelitsha: 'Khayelitsha', gugulethu: 'Gugulethu', seapoint: 'Sea Point', mitchellsplain: 'Mitchells Plain', rondebosch: 'Rondebosch', wynberg: 'Wynberg', goodwood: 'Goodwood', tableview: 'Table View', kraaifontein: 'Kraaifontein', athlone: 'Athlone', stellenbosch: 'Stellenbosch', paarl: 'Paarl', george: 'George',
+  durban: 'Durban', umhlanga: 'Umhlanga', pinetown: 'Pinetown', chatsworth: 'Chatsworth', kwamashu: 'KwaMashu', umlazi: 'Umlazi', amanzimtoti: 'Amanzimtoti', westville: 'Westville', hillcrest: 'Hillcrest', ethekwini: 'eThekwini', pietermaritzburg: 'Pietermaritzburg',
+  bloemfontein: 'Bloemfontein', mangaung: 'Mangaung', nelspruit: 'Nelspruit', mbombela: 'Mbombela', witbank: 'Witbank', emalahleni: 'eMalahleni',
+  eastlondon: 'East London', buffalocity: 'Buffalo City', gqeberha: 'Gqeberha', portelizabeth: 'Port Elizabeth', nelsonmandelabay: 'Nelson Mandela Bay',
+  polokwane: 'Polokwane', rustenburg: 'Rustenburg', kimberley: 'Kimberley', klerksdorp: 'Klerksdorp', mahikeng: 'Mahikeng',
+}
+
+/**
+ * The team's campaigns carry the geography in their names — "Johannesburg
+ * explorers" — and a warm reply to a city campaign IS location evidence.
+ * This reads any text and returns the place it names, longest match first so
+ * Durbanville never answers to Durban. It only ever fills a MISSING city on
+ * a pool row: a real fact on file is never overwritten with a guess.
+ */
+export function cityFromText(text: string | null | undefined): string | null {
+  const norm = normKey(text || '')
+  if (!norm) return null
+  let best: { display: string; len: number } | null = null
+  for (const [key, display] of Object.entries(CITY_DISPLAY)) {
+    if (norm.includes(key) && (!best || key.length > best.len)) best = { display, len: key.length }
+  }
+  return best?.display ?? null
+}
+
 /** A general row earns its place by sharing at least one real word with the topic. */
 function rowMatchesTopic(r: LeadPoolRow, topicWords: Set<string>): boolean {
   const hay = `${r.industry || ''} ${r.company || ''} ${r.why || ''}`.toLowerCase().split(/[^a-z]+/)
