@@ -330,17 +330,45 @@ export async function serveFromPool(opts: {
  *
  * NICETY IS THE POINT: a contact only helps the seller if it fits their
  * business. Outreach projects are labelled, so a travel project contact
- * never tops up a cleaning scan. The label rides on poolTag; untagged rows
- * fall back to their industry words. General business contacts (the wide
- * project) stay usable everywhere because a real business owner is a real
- * prospect for real services.
+ * never tops up a cleaning scan. A general contact must share a real word
+ * with the topic to serve at all. When nothing fits, the boost returns an
+ * empty hand and the topic matched engines carry the answer instead.
  */
 
 const TRAVEL_WORDS_RE = /travel|tour|holiday|safari|accommodat|hotel|guest house|lodg|backpack|explor|adventure|trip|itiner|flight/i
 
 function rowIsTravel(r: LeadPoolRow): boolean {
   if (r.poolTag) return /travel/i.test(r.poolTag)
-  return TRAVEL_WORDS_RE.test(r.industry || '')
+  return TRAVEL_WORDS_RE.test(`${r.industry || ''} ${r.company || ''}`)
+}
+
+// Words too generic to prove a contact fits a topic. "Taverns that need
+// signage services" must never match a row just because its industry says
+// "services" somewhere.
+const STOP_WORDS = new Set(
+  ('that this with need needs needing want wants from they them their have has will would could should '
+    + 'around south africa where which while being been more most some such only also than then when what '
+    + 'business businesses company companies services service client clients customer customers buyer buyers '
+    + 'area areas seller selling sell sold buy buys bought product products real realistic looking good great')
+    .split(' ')
+)
+
+function topicWordSet(text: string): Set<string> {
+  return new Set(
+    (text || '')
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
+  )
+}
+
+/** A general row earns its place by sharing at least one real word with the topic. */
+function rowMatchesTopic(r: LeadPoolRow, topicWords: Set<string>): boolean {
+  const hay = `${r.industry || ''} ${r.company || ''} ${r.why || ''}`.toLowerCase().split(/[^a-z]+/)
+  for (const w of hay) {
+    if (w.length >= 4 && !STOP_WORDS.has(w) && topicWords.has(w)) return true
+  }
+  return false
 }
 
 export async function serveExpleeBoost(opts: {
@@ -373,9 +401,16 @@ export async function serveExpleeBoost(opts: {
   for (const r of candidates) (rowIsTravel(r) ? travelRows : generalRows).push(r)
   const topic = (opts.matchText || '').toLowerCase()
   const travelTopic = TRAVEL_WORDS_RE.test(topic)
-  // A travel project face on a non travel scan is exactly the fluff the
-  // product refuses to serve: off niche, off they go.
-  let ordered = travelTopic ? [...travelRows, ...generalRows] : generalRows
+  const topicWords = topicWordSet(topic)
+  // The certainty the product sells: every face on an answer fits the
+  // seller's business. Travel project faces serve travel topics; any other
+  // face must share a real word with the topic or it stays in the pool —
+  // a safari house on a car wash scan is exactly the fluff the platform
+  // refuses. When nothing fits, the boost steps aside and the topic matched
+  // engines carry the answer instead.
+  let ordered: LeadPoolRow[] = travelTopic
+    ? [...travelRows, ...generalRows.filter((r) => rowMatchesTopic(r, topicWords))]
+    : generalRows.filter((r) => rowMatchesTopic(r, topicWords))
   if (opts.city) {
     const c = opts.city.toLowerCase().trim()
     const inCity = ordered.filter((r) => (r.city || '').toLowerCase().includes(c))
