@@ -745,3 +745,13 @@ Stage Summary:
 - Note: the previous session's hot leads work was recorded as Task ID 51 in its own entry; this entry continues from it.
 
 Task 52 addendum (outage discovery): owner surfaced status.yoco.com mid swap. Live API check (statuspage v2): {"indicator":"critical","description":"Major System Outage"} with Online payments, Card machines, POS, Table by Yoco ALL full_outage (11:16 SAST). Two stacked causes of checkout failure: (A) wrong credential class (yoco_live_ app key, proven twice) and (B) the outage. (A) fixed by the owner via the Business Portal; (B) cleared itself. Status feed for future probes: https://status.yoco.com/api/v2/status.json
+
+Task 52 (continued): launch rehearsal results.
+- Deploys: 9dcaf3d (honest mode label), f3275d1 (idempotency per attempt + stale checkout guard).
+- Rehearsal findings, both caught only because the key started working:
+  1. mode:"test" scare was OUR fallback (checkout.mode ?? 'test') - Yoco omits mode on create checkout. Fixed to report key text mode.
+  2. REAL LAUNCH BLOCKER: subscribe reused sub.id as Yoco Idempotency-Key; the row is upserted on replan, so the 2nd/3rd checkout replayed the key with a different payload and Yoco 502'd. Boss annual and NPO subscribe were broken for every user who changed plan or used an NPO number. Fixed with idempotencyKey = reference (fresh per attempt) + webhook stale-reference guard so an abandoned checkout can never activate the wrong plan at the wrong price.
+- E2E full fresh user journey: 38/39 PASS (register, welcome credit R99, discover POOL, pipeline, reveal honesty, no double charge, clients, invoice, task, finance, live Yoco subscribe redirect mode=live, Boss annual R4,990 checkout, NPO R139.30 checkout, pause walls, inventory CRUD, push, team invite join, logout).
+- Topup probe 6/6: live checkout opens, redirect to c.yoco.com, PENDING R500 recorded, ref HP-... (credits only when the webhook confirms a real payment).
+- Exec walls 11/11: unauthed 401 everywhere, non-admin 403 everywhere, QA session healthy.
+- Remaining for 39/39 and live money: OWNER taps Register webhook on the exec Payments card (ADMIN gated, registers with the sk_live key; Yoco's register response names the mode). Suggested final proof: one real self payment (R500 starter) to watch webhook credit + auto Explee campaign + exec email fire end to end.
