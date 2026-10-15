@@ -577,15 +577,32 @@ export async function ingestVerifiedContacts(opts: {
   let existing: LeadPoolRow[] = []
   try {
     existing = await db.leadPool.findMany({ where: { fingerprint: { in: fps } } })
+    // A company can already sit in the pool under a different fingerprint
+    // (seen once without a city, now landing with one). The company lookup
+    // catches those twins so the merge ENRICHES the row on file instead of
+    // growing a duplicate: the team's named faces gain their city.
+    const companies = [...new Set(rows.map((l) => l.company.trim()))]
+    if (companies.length > 0) {
+      const twins = await db.leadPool.findMany({ where: { company: { in: companies } }, orderBy: { lastSeenAt: 'desc' }, take: 400 })
+      existing = [...existing, ...twins]
+    }
   } catch {
     summary.skipped += rows.length
     return summary
   }
   const byFp = new Map(existing.map((p) => [p.fingerprint, p]))
+  const byCompany = new Map<string, LeadPoolRow>()
+  for (const p of existing) {
+    const k = normKey(p.company)
+    if (k && !byCompany.has(k)) byCompany.set(k, p)
+  }
 
   // Websites get pinged ONCE per new face: merged rows already carry their
   // checks on file, and the daily refresh re checks the whole pool anyway.
-  const newRows = rows.filter((l) => !byFp.get(`${normKey(l.company)}|${normKey(l.city || opts.area)}`))
+  const newRows = rows.filter((l) => {
+    const key = normKey(l.company)
+    return !byFp.get(`${key}|${normKey(l.city || opts.area)}`) && !byCompany.get(key)
+  })
   const maxPings = Math.max(opts.maxPings ?? 24, 0)
   const pingList = maxPings > 0 ? newRows.filter((l) => l.website).slice(0, maxPings) : []
   const siteOk = new Map<string, boolean>()
@@ -601,7 +618,7 @@ export async function ingestVerifiedContacts(opts: {
     const fp = `${key}|${normKey(l.city || opts.area)}`
     const phone = normalizeSaPhone(l.phone)
     const websiteOk = siteOk.get(key)
-    const prev = byFp.get(fp)
+    const prev = byFp.get(fp) ?? byCompany.get(key)
     if (prev) {
       summary.merged++
       if (opts.dryRun || summary.sample.length < 8) {
@@ -631,6 +648,8 @@ export async function ingestVerifiedContacts(opts: {
             contactName: prev.contactName || l.contactName || null,
             role: prev.role || l.role || null,
             profileUrl: prev.profileUrl || l.profileUrl || null,
+            industry: prev.industry || l.industry || null,
+            city: prev.city || l.city || null,
             why: prev.why || l.why || null,
             poolTag: prev.poolTag || l.poolTag || null,
             sourceRef: prev.sourceRef || l.profileUrl || null,
