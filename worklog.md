@@ -916,3 +916,32 @@ Stage Summary:
 - Production runs 213408e. First business case is LIVE and awaiting Zola's one tap confirm: the moment she confirms, both her and Ian get the final details and the KPI flips to confirmed. Boss can set every future case himself from Exec Dashboard → Meetings → Set a meeting.
 - New internal seat: ops@hustleqa.example.com / OpsSeat2026!Hustle (exec gated, QA-flagged). Master untouched.
 - Note for the boss: Zola's email is the business address published on her Kloof Street listing; if she prefers a personal one, set a fresh meeting with the same details and correct email (decline the old one).
+
+---
+Task ID: 61
+Agent: Super Z (main)
+Task: "high-level hacker... test the security measures on the system to ensure that it is solid and secure. I don't want to have an exploit or anything that might jeopardise the database in future let's harden Security."
+
+Work Log:
+- Attack surface mapped: 75 API routes, no middleware, single Node (standalone) behind Caddy on VPS. Master account never touched; testing used throwaway QA accounts only.
+- LIVE PROBES (non-destructive): forged-JWT test with the repo's dev secret against /api/auth/me -> 401 (prod AUTH_SECRET is set, fallback was dormant); alg=none rejected; all 16 unauth wall probes correctly 401/403; found /api/health leaking the full DB table inventory publicly; Set-Cookie had secure=false; zero security headers beyond Caddy's HSTS.
+- CRITICAL closed: auth.ts no longer falls back to the guessable dev secret in production (boot refuses without AUTH_SECRET; dev gets a random per-boot secret). Verified live: forge test still 401.
+- Sessions: new User.sessionEpoch (JWTs embed ep; checked on every request). Password reset now bumps the epoch, so a stolen cookie dies the moment the owner resets. Old tokens (no ep) valid while epoch=1 -> zero disruption to existing users incl. master.
+- Rate limits (new src/lib/ratelimit.ts, in-memory sliding window, single-server correct): login per-IP 60/5min + per-email 8 fails/15min (failures only — correct password never locked out, success clears counter); register 10/h/IP; forgot 5/h/IP + 3/h/victim-email with the same neutral reply (mail-bombing door shut); reset 10/h/IP. Verified live: exactly one 429 at the 9th wrong attempt.
+- AI cost caps (new src/lib/aiusage.ts + AiUsage table, atomic daily upsert): all 8 /api/ai generation routes consume budget before any Gemini/DeepSeek spend — free 60/day, paid 600/day (SAST day).
+- SSRF (new src/lib/ssrf.ts, DNS-resolving guard): business-url fetch + .co.za rescue probes + leadpool pingWebsite now resolve every address and refuse private/loopback/link-local/CGNAT/metadata space. Verified live: 169.254.169.254, localhost, 127.0.0.1, 192.168.1.1 all -> 400.
+- Wallet: spendCredits is now one atomic conditional UPDATE (double-spend race closed).
+- /api/health: tables/steps/error classes are exec-gated; public gets liveness + presence booleans only. Verified: public tables=null.
+- Headers (next.config.ts): CSP (Next-compatible, blocks external scripts, framing, object embeds, form-action to self+Yoco), X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy. Verified live on / + browser render clean (landing + logged-in dashboard, no console errors).
+- Cookie: secure=true in production (verified live: secure true, httpOnly, lax).
+- WhatsApp webhook: 60/min per-uid ceiling + inbound capture only for accounts that actually connected WhatsApp (no more client-row planting through unused webhooks).
+- Tasks: team task assignee must be a team member (cross-membership wall).
+- Emails: 60 sends/hour per account ceiling (anti spam-relay).
+- Cron endpoints: when CRON_SECRET unset they now sit behind a global cooldown (10min reminders / 30min leads-refresh) — scheduled pinger passes, hammering gets honest skip answers.
+- Subscribe: sandbox instant-plan now double-gated on QA_SANDBOX_ENABLED=1 env (email-suffix gate alone was forgeable since signup email is unverified). Latent path closed; no effect while Yoco live.
+- CSV export: formula-injection guard (=+-@ prefixed cells get a tick).
+- Regression: E2E 39/39 PASS, exec walls 11/11 PASS, browser landing + authenticated dashboard render clean under CSP. Commit 3c89b1b live (schema push sessionEpoch + AiUsage OK, db ping true).
+
+Stage Summary:
+- Production 3c89b1b: hardened end to end — sessions unforgeable + reset-revocable, brute force/mail bombing/AI cost abuse/SSRF/spam-relay doors all shut, security headers live, schema inventory no longer public. No behavior change for real users: all limits are above human usage; master account, Zola's pending confirm flow and all E2E flows verified intact.
+- Note for boss: server env has AUTH_SECRET set (probe proved it). If the cron pinger service supports headers, set CRON_SECRET on the server to fully lock the two cron doors (they are cooldown-bounded meanwhile).
