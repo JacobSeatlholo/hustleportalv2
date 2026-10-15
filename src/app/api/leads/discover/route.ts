@@ -324,7 +324,7 @@ async function enrichOsmWithAi(
   const ds = await enrichOsmWithDeepseek(userId, definition, raw, cap, t0)
   if (ds && ds.leads.length > 0) return { ...ds, engine: 'DeepSeek' }
   const glm = await enrichOsmWithGlm(userId, definition, raw, cap, t0, trace)
-  if (glm && glm.leads.length > 0) return { ...glm, engine: 'the GLM engine' }
+  if (glm && glm.leads.length > 0) return { ...glm, engine: 'the HustlePortal matching engine' }
   // DeepSeek's actionable complaint (the seller's own key out of credits or
   // rejected) survives only when GLM had nothing either.
   if (ds?.notice) return { leads: [], notice: ds.notice, engine: '' }
@@ -694,15 +694,11 @@ export async function POST(req: NextRequest) {
       final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition, boostAllowed)).leads
     }
     await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
-    const zaiEngineName = zaiEndpoint === 'zhipu' ? 'the GLM engine on the Zhipu open platform' : 'the z.ai GLM engine'
-    const baseNote =
-      engine === 'zai'
-        ? teaser
-          ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search on ${zaiEngineName}.`
-          : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, sourced by ${zaiEngineName}.`
-        : teaser
-          ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. These are real, publicly findable businesses — add them to your pipeline and start the conversation.`
-          : `Live web results grounded in Google Search — real, publicly findable businesses${pinArea ? ' within 5 km of your location' : ''}.`
+    // Engine names stay internal: the note describes the outcome, never the
+    // plumbing. Both grounded engines share one neutral wording.
+    const baseNote = teaser
+      ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search.`
+      : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''} — real, publicly findable businesses.`
     return NextResponse.json({
       leads: final,
       mode: 'AI_SEARCH',
@@ -725,14 +721,15 @@ export async function POST(req: NextRequest) {
   const zaiWhy = (who: string): string | undefined => {
     // The platform GLM pool's balance is the operator's business, never the
     // seller's noise: only a PERSONAL key's refusal names a fix the reader
-    // can actually act on. Platform refusals stay silent.
+    // can actually act on. Platform refusals stay silent. Engine names stay
+    // internal either way — the note explains the fallback, not the plumbing.
     if (!personalZai || !zai || zai.ok) return undefined
     if (zai.reason === 'BALANCE')
-      return `Heads up: both GLM doors refused the web search tool for balance, so ${who} carried this scan. A small top up or a search bundle on the billing page of the platform where your credits live puts it back in front.`
+      return `Heads up: the extra search engine behind this account was refused for balance this run, so ${who} carried the scan.`
     if (zai.reason === 'RATE')
-      return `Heads up: the GLM engine is pacing requests this minute, so ${who} carried the scan. One more try usually puts it back in front.`
+      return `Heads up: the extra search engine is pacing requests this minute, so ${who} carried the scan. One more try usually puts it back in front.`
     if (zai.reason === 'KEY_INVALID')
-      return `Heads up: the GLM key was not accepted, so ${who} carried the scan. Checking the key under Integrations puts it back in front.`
+      return `Heads up: a saved engine key was not accepted this run, so ${who} carried the scan.`
     return undefined
   }
 
@@ -767,7 +764,7 @@ export async function POST(req: NextRequest) {
     leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) {
       const engineNotice = !ai.ok
-        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the GLM engine. Everything below is still real, search grounded results.'
+        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the backup live search engine. Everything below is still real, search grounded results.'
         : undefined
       return aiSearchResponse(leads, 'zai', engineNotice, zai.endpoint)
     }

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { getUserGeminiKey, getPlatformGeminiKey, geminiFetchTarget, thinkingConfigFor } from '@/lib/gemini'
 import { resolveDeepseekKey } from '@/lib/deepseek'
-import { resolveZaiKey, probeZaiKey, probeZaiSearch } from '@/lib/zai'
 
 export const maxDuration = 60
 
@@ -141,92 +140,6 @@ async function deepseekDiag(userId: string): Promise<DeepseekDiag> {
   }
 }
 
-interface ZaiDiag {
-  configured: boolean
-  keySource: 'user' | 'platform' | 'none'
-  masked?: string
-  ok: boolean
-  message: string
-  searchOk?: boolean
-  searchRaw?: string | null
-}
-
-/** z.ai side of the chain: key present, accepted, and a REAL micro generation. */
-async function zaiDiag(userId: string): Promise<ZaiDiag> {
-  const { key, source } = await resolveZaiKey(userId)
-  if (!key) {
-    return {
-      configured: false,
-      keySource: 'none',
-      ok: false,
-      message: 'No z.ai key saved. Lead discovery rides on Gemini and the map directory.',
-    }
-  }
-  const who = source === 'user' ? 'your key' : 'the platform key'
-  const probe = await probeZaiKey(key, 15_000)
-  if (probe.status === 200) {
-    // Plain generation works. But lead scans live or die by the live web
-    // search tool, so that gets its own probe too: probeZaiSearch pins the
-    // paid workhorse model and FORCES a real search invocation, so a free
-    // flash rung answering plain generation can no longer dress an empty
-    // wallet up as search ready. The door's own words stay for the operator.
-    const sprobe = await probeZaiSearch(key, 12_000)
-    if (sprobe.ok) {
-      return {
-        configured: true,
-        keySource: source,
-        masked: mask(key),
-        ok: true,
-        searchOk: true,
-        message: `z.ai GLM is live on ${who}${sprobe.endpoint === 'zhipu' ? ' via the Zhipu open platform' : ''}. When Google acts up, lead discovery keeps running here on pay as you go credits, with live web search grounding.`,
-      }
-    }
-    return {
-      configured: true,
-      keySource: source,
-      masked: mask(key),
-      ok: false,
-      searchOk: false,
-      searchRaw: sprobe.words,
-      message: `GLM answers on ${who}, but the web search tool was refused for balance on both doors (status ${sprobe.status ?? 'none'}). One login serves both GLM doors and search is billed apart from model tokens, so a small top up or a search bundle on the billing page of the platform where your credits live is the part to fix. The engine said: ${sprobe.words || 'no message'}`,
-    }
-  }
-  if (probe.status === 401 || probe.status === 403) {
-    return {
-      configured: true,
-      keySource: source,
-      masked: mask(key),
-      ok: false,
-      message: `z.ai rejected ${who} on both GLM doors. Generate a fresh key on the API keys page of the platform where the credits live and save it where the old one lives.`,
-    }
-  }
-  if (probe.status === 402 || probe.status === 429) {
-    return {
-      configured: true,
-      keySource: source,
-      masked: mask(key),
-      ok: false,
-      message: `GLM is pacing requests or the credits behind ${who} are spent. A top up on the billing page revives it. The map directory and Gemini keep scans alive meanwhile.`,
-    }
-  }
-  if (probe.status === null) {
-    return {
-      configured: true,
-      keySource: source,
-      masked: mask(key),
-      ok: false,
-      message: 'Could not reach GLM just now. It retries automatically.',
-    }
-  }
-  return {
-    configured: true,
-    keySource: source,
-    masked: mask(key),
-    ok: false,
-    message: `GLM answered with status ${probe.status}. It retries on its own.`,
-  }
-}
-
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -257,17 +170,14 @@ export async function GET() {
   }
 
   const deepseek = await deepseekDiag(userId)
-  const zai = await zaiDiag(userId)
 
   if (keys.length === 0) {
     report.verdict = 'No Gemini key is configured at all — AI features are dormant.'
     report.advice.push('Add your free Gemini key under Integrations (aistudio.google.com → Get API key), or the operator must set GEMINI_API_KEY on the platform.')
-    if (zai.configured && zai.ok) {
-      report.verdict = 'Gemini has no key configured, but the z.ai GLM engine is live — lead discovery still works end to end with web search grounding.'
-    } else if (deepseek.configured && deepseek.ok) {
+    if (deepseek.configured && deepseek.ok) {
       report.verdict = 'Gemini has no key configured, but DeepSeek is live — lead scans still work end to end.'
     }
-    return NextResponse.json({ ok: true, deepseek, zai, ...report })
+    return NextResponse.json({ ok: true, deepseek, ...report })
   }
 
   for (const { source, key } of keys) {
@@ -410,5 +320,5 @@ export async function GET() {
       : 'No key could complete a live AI call — this is why scans return errors. Apply the advice below.'
   }
 
-  return NextResponse.json({ ok: true, deepseek, zai, ...report })
+  return NextResponse.json({ ok: true, deepseek, ...report })
 }

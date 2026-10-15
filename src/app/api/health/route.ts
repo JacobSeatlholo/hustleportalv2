@@ -87,7 +87,7 @@ export async function GET() {
       emailFrom: Boolean(process.env.RESEND_FROM?.trim()),
       authSecret: Boolean(process.env.AUTH_SECRET?.trim()),
       yoco: Boolean(process.env.YOCO_SECRET_KEY?.trim()),
-      explee: Boolean(process.env.EXPLEE_API_KEY?.trim()),
+      verifiedFeed: Boolean(process.env.EXPLEE_API_KEY?.trim()),
       database: Boolean(process.env.DATABASE_URL?.trim()),
     },
   })
