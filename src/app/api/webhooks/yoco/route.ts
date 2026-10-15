@@ -75,6 +75,14 @@ export async function POST(req: NextRequest) {
     if (payment.metadata?.subscriptionId) {
       const sub = await db.subscription.findUnique({ where: { id: String(payment.metadata.subscriptionId) } })
       if (sub) {
+        // Stale checkout guard: the user may have subscribed again after this
+        // checkout was created (the row is upserted with a new reference).
+        // Activating on an old payment would grant the WRONG plan at the WRONG
+        // price, so acknowledge and let the refund path handle it honestly.
+        if (payment.metadata?.reference && sub.reference && payment.metadata.reference !== sub.reference) {
+          console.error(`[webhook] stale checkout for subscription ${sub.id}: paid ${payment.metadata.reference}, row now ${sub.reference}`)
+          return NextResponse.json({ ok: true, matched: false, stale: true, paidReference: payment.metadata.reference, rowReference: sub.reference })
+        }
         // Idempotent claim: only transition PENDING -> ACTIVE once.
         const renewDays = sub.billingCycle === 'ANNUAL' ? 370 : 35
         const claim = await db.subscription.updateMany({

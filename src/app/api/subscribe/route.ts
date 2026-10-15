@@ -66,7 +66,10 @@ export async function POST(req: NextRequest) {
         failureUrl: `${origin}/?sub=failed`,
         metadata: { subscriptionId: sub.id, userId, plan: plan.id, cycle, reference, ...(npoNumber ? { npoNumber } : {}) },
         clientReferenceId: reference,
-        idempotencyKey: sub.id,
+        // One idempotency key per checkout ATTEMPT: the reference is fresh on
+        // every subscribe call, while sub.id is stable across upserts (same row,
+        // new plan) and Yoco rejects a reused key with a different payload.
+        idempotencyKey: reference,
         name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
       })
       await db.subscription.update({ where: { id: sub.id }, data: { providerRef: checkout.id } })
