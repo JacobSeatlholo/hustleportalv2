@@ -863,3 +863,19 @@ Work Log:
 
 Stage Summary:
 - Delivered /home/z/my-project/download/HustlePortal_Marketing_Agent_Prompt.md. Owner takes the prompt (plus optionally the copy pack docx) to a separate chat to run marketing while development continues here. Next: back to platform development (Founding 50 counter on Executive Dashboard already proposed).
+
+---
+Task ID: 59
+Agent: Super Z (main)
+Task: "Lets remove the z.ai API key option for front end users view in integrations."
+
+Work Log:
+- Located the z.ai card: ZAI_API_KEY entry in INTEGRATIONS array of src/components/hp/IntegrationsView.tsx (title "z.ai GLM key (pay as you go engine)").
+- Removed the card entry, removed now-unused Globe icon import, simplified engine verdict logic (engineVerdicts + save() branch) from "DEEPSEEK || ZAI" to DeepSeek only, updated the state comment.
+- Backend deliberately untouched: /api/settings allowlist + z.ai probe (route.ts) and src/lib/zai.ts engine still accept the key, so any key a user already saved keeps powering discovery silently. Frontend-only removal = zero breakage risk.
+- tsc clean for src/ (only pre-existing skill folder errors). Commit da1bf52 pushed via paramiko shim (reinstalled paramiko after sandbox reset: python3 -m pip install --break-system-packages paramiko).
+- Verified LIVE on production with agent-browser: registered throwaway probe account, opened Integrations, card order now Gmail / Gmail app password / Gemini / DeepSeek / Google Calendar — z.ai GLM key card absent. Screenshot: scripts/verify_no_zai_integrations.png.
+- Observation (not actioned, owner to decide): the System status card at the top of Integrations still shows a "z.ai GLM engine" health line mentioning "web search tool was refused for balance". That is an engine status readout, not the key option, so left as is per exact request scope.
+
+Stage Summary:
+- Production da1bf52 live: the z.ai API key option no longer renders in the user facing Integrations view. Existing saved keys keep working server side. Optional follow up: hide the "z.ai GLM engine" line in System status if the owner wants all z.ai plumbing out of member view.
