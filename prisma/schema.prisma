@@ -58,6 +58,44 @@ model User {
   taskComments       TaskComment[]
   projectMemberships ProjectMember[]  @relation("ProjectMemberUser")
   poolLeads          ClientPoolLead[]
+  meetingsOwned      Meeting[]        @relation("MeetingOwner")
+  meetingsAsMember   Meeting[]        @relation("MeetingMember")
+}
+
+// ============ FACILITATED MEETINGS (Executive Dashboard) ============
+// The owner sets a business meeting between a member (or soon-to-be member)
+// and an outside guest. The member confirms with one tap from the invite
+// email; on confirmation both parties get the final details.
+
+model Meeting {
+  id             String    @id @default(cuid())
+  ownerId        String // the exec account that set the meeting
+  title          String
+  memberUserId   String? // Zola's HustlePortal account, when one exists
+  memberName     String
+  memberEmail    String
+  memberBusiness String?
+  memberPhone    String?
+  guestName      String?
+  guestEmail     String
+  startsAt       DateTime
+  endsAt         DateTime?
+  meetLink       String? // Jitsi link (meet.ts)
+  status         String    @default("PROPOSED") // PROPOSED | CONFIRMED | DECLINED
+  confirmToken   String    @unique // one tap confirm/decline from the invite email
+  notes          String?
+  invitedAt      DateTime?
+  confirmedAt    DateTime?
+  emailsSentAt   DateTime? // when both parties were emailed the final details
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  owner  User  @relation("MeetingOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  member User? @relation("MeetingMember", fields: [memberUserId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, startsAt])
+  @@index([memberUserId])
+  @@index([status])
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============

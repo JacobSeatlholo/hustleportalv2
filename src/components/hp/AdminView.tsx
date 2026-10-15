@@ -27,7 +27,7 @@ import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
-  Flame, ExternalLink, HandCoins,
+  Flame, ExternalLink, HandCoins, CalendarClock,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -54,6 +54,9 @@ interface Kpis {
   poolNew: number
   poolArrivals24h: number
   suspended: number
+  meetingsSet?: number
+  meetingsConfirmed?: number
+  meetingsAwaiting?: number
 }
 
 interface RosterRow {
@@ -83,6 +86,8 @@ interface RosterRow {
 interface ExecData {
   kpis: Kpis
   roster: RosterRow[]
+  meetings?: MeetingRow[]
+  meetingsKpi?: { total: number; confirmed: number; awaiting: number; declined: number }
   payments?: {
     keyMode: 'live' | 'test' | null
     webhookConfigured: boolean
@@ -100,6 +105,23 @@ interface ExecData {
       clientBusiness: string | null
     }[]
   }
+}
+
+interface MeetingRow {
+  id: string
+  title: string
+  memberName: string
+  memberEmail: string
+  memberBusiness: string | null
+  guestName: string | null
+  guestEmail: string
+  startsAt: string
+  endsAt: string | null
+  meetLink: string | null
+  status: string
+  invitedAt: string | null
+  confirmedAt: string | null
+  createdAt: string
 }
 
 interface TopUpRow {
@@ -1136,6 +1158,252 @@ function HotLeadsCard() {
 // and does every rand land safely? Gateway mode, webhook state, and the latest
 // settled payments, straight from the ledger.
 
+// =================== Meetings: the business cases you set ===================
+// The owner facilitates a meeting between a member and an outside guest. The
+// member confirms with one tap from the invite email; on confirmation both
+// parties get the final details and the KPI counts it. The member's account is
+// created on the spot when they are not on the platform yet.
+
+const SAST_WHEN = (iso: string) =>
+  new Date(iso).toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+function MeetingStatusChip({ status }: { status: string }) {
+  if (status === 'CONFIRMED')
+    return <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-400">Confirmed</Badge>
+  if (status === 'DECLINED')
+    return <Badge variant="outline" className="text-[9px] border-zinc-500/40 text-zinc-400">Declined</Badge>
+  return <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-400">Awaiting confirmation</Badge>
+}
+
+const EMPTY_MEETING_FORM = {
+  memberName: '',
+  memberEmail: '',
+  memberBusiness: '',
+  memberPhone: '',
+  memberCity: 'Cape Town',
+  memberIndustry: '',
+  guestName: '',
+  guestEmail: '',
+  date: '',
+  time: '',
+  durationMin: '60',
+  notes: '',
+}
+
+function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; onChanged: () => void }) {
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({ ...EMPTY_MEETING_FORM })
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const rows = meetings || []
+  const confirmed = rows.filter((m) => m.status === 'CONFIRMED').length
+  const awaiting = rows.filter((m) => m.status === 'PROPOSED').length
+
+  async function submit() {
+    if (!form.memberName.trim() || !form.memberEmail.trim() || !form.guestEmail.trim() || !form.date || !form.time) {
+      toast({ title: 'A few details are missing', description: 'Member name, member email, guest email, date and time are required.', variant: 'destructive' })
+      return
+    }
+    setBusy(true)
+    try {
+      // South Africa stays on UTC+2 all year, so the offset is fixed and safe.
+      const startsAt = new Date(`${form.date}T${form.time}:00+02:00`).toISOString()
+      const r = await api<{ accountCreated: boolean; inviteSent: boolean; inviteError: string | null; welcomeError: string | null }>(
+        '/api/meetings',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            memberName: form.memberName,
+            memberEmail: form.memberEmail,
+            memberBusiness: form.memberBusiness || undefined,
+            memberPhone: form.memberPhone || undefined,
+            memberCity: form.memberCity || undefined,
+            memberIndustry: form.memberIndustry || undefined,
+            guestName: form.guestName || undefined,
+            guestEmail: form.guestEmail,
+            startsAt,
+            durationMin: Number(form.durationMin) || 60,
+            notes: form.notes || undefined,
+          }),
+        },
+      )
+      if (r.inviteSent) {
+        toast({
+          title: r.accountCreated ? 'Meeting set, account created' : 'Meeting set',
+          description: r.accountCreated
+            ? 'The welcome email (with the Google Calendar steps) and the invite with a one tap confirm are on their way to the member.'
+            : 'The invite email with a one tap confirm is on its way to the member. It shows here as awaiting until they confirm.',
+        })
+      } else {
+        toast({ title: 'Meeting saved, but the email failed', description: r.inviteError || 'Send it again from Meetings once mail is back.', variant: 'destructive' })
+      }
+      setOpen(false)
+      setForm({ ...EMPTY_MEETING_FORM })
+      onChanged()
+    } catch (e) {
+      toast({ title: 'Could not set the meeting', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const field = 'space-y-1.5'
+  const inputCls = 'h-9'
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-brand" /> Meetings
+            {rows.length > 0 && (
+              <span className="text-xs text-muted-foreground font-normal">
+                {confirmed} confirmed · {awaiting} awaiting
+              </span>
+            )}
+          </CardTitle>
+          <Button size="sm" className="bg-brand text-black hover:bg-brand h-8 shrink-0" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Set a meeting
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {!meetings && (
+            <div className="px-4 py-4 space-y-2">
+              <Skeleton className="h-10 rounded-lg" />
+              <Skeleton className="h-10 rounded-lg" />
+            </div>
+          )}
+          {meetings && rows.length === 0 && (
+            <div className="px-4 py-5 text-sm text-muted-foreground">
+              No meetings yet. Tap "Set a meeting": if the member is not on the platform yet, their account and welcome email go out in the same step, and the invite carries a one tap confirm.
+            </div>
+          )}
+          {rows.map((m) => (
+            <div key={m.id} className="flex items-start gap-3 px-4 py-3">
+              <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
+                {m.memberName.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate">
+                  {m.memberName}
+                  {m.memberBusiness ? <span className="text-muted-foreground font-normal"> · {m.memberBusiness}</span> : ''}
+                  <span className="text-muted-foreground font-normal"> × {m.guestName || m.guestEmail}</span>
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{m.title}</div>
+                <div className="text-xs mt-0.5">{SAST_WHEN(m.startsAt)} SAST</div>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                <MeetingStatusChip status={m.status} />
+                <span className="text-[10px] text-muted-foreground">
+                  {m.status === 'CONFIRMED' && m.confirmedAt
+                    ? `confirmed ${timeAgo(m.confirmedAt)}`
+                    : m.invitedAt
+                      ? `invited ${timeAgo(m.invitedAt)}`
+                      : ''}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Set a meeting</DialogTitle>
+            <DialogDescription>
+              If the member is not on the platform yet, their account is created and a welcome email (password link plus Google Calendar steps) goes out with the invite. They confirm the time with one tap, then both parties get the final details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className={field}>
+                <Label>Member name *</Label>
+                <Input className={inputCls} value={form.memberName} onChange={set('memberName')} placeholder="Zola" />
+              </div>
+              <div className={field}>
+                <Label>Member email *</Label>
+                <Input className={inputCls} type="email" value={form.memberEmail} onChange={set('memberEmail')} placeholder="zola@example.co.za" />
+              </div>
+              <div className={field}>
+                <Label>Member business</Label>
+                <Input className={inputCls} value={form.memberBusiness} onChange={set('memberBusiness')} placeholder="Just Hearing" />
+              </div>
+              <div className={field}>
+                <Label>Member phone</Label>
+                <Input className={inputCls} value={form.memberPhone} onChange={set('memberPhone')} placeholder="079 995 9658" />
+              </div>
+              <div className={field}>
+                <Label>Member city</Label>
+                <Input className={inputCls} value={form.memberCity} onChange={set('memberCity')} />
+              </div>
+              <div className={field}>
+                <Label>Member industry</Label>
+                <Input className={inputCls} value={form.memberIndustry} onChange={set('memberIndustry')} placeholder="Audiology" />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className={field}>
+                <Label>Guest name</Label>
+                <Input className={inputCls} value={form.guestName} onChange={set('guestName')} placeholder="Ian" />
+              </div>
+              <div className={field}>
+                <Label>Guest email *</Label>
+                <Input className={inputCls} type="email" value={form.guestEmail} onChange={set('guestEmail')} placeholder="guest@gmail.com" />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div className={field}>
+                <Label>Date *</Label>
+                <Input className={inputCls} type="date" value={form.date} onChange={set('date')} />
+              </div>
+              <div className={field}>
+                <Label>Time (SAST) *</Label>
+                <Input className={inputCls} type="time" value={form.time} onChange={set('time')} />
+              </div>
+              <div className={field}>
+                <Label>Duration</Label>
+                <Select value={form.durationMin} onValueChange={(v) => setForm((f) => ({ ...f, durationMin: v }))}>
+                  <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="45">45 minutes</SelectItem>
+                    <SelectItem value="60">60 minutes</SelectItem>
+                    <SelectItem value="90">90 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className={field}>
+              <Label>Notes for both parties (optional)</Label>
+              <Textarea value={form.notes} onChange={set('notes')} rows={2} placeholder="What the meeting is about." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+            <Button className="bg-brand text-black hover:bg-brand" onClick={submit} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CalendarClock className="h-4 w-4 mr-1" />}
+              Set the meeting
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
 function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData['payments']> | null; onChanged: () => void }) {
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
@@ -1595,15 +1863,19 @@ export default function AdminView() {
           <Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
           <KpiCard hot icon={<UserPlus className="h-3 w-3" />} label="New signups 7d" value={String(k.new7)} sub={`+${k.new30} in 30 days`} />
           <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.realMembers)} sub={`${k.suspended > 0 ? `${k.suspended} paused` : 'all active'}${k.qaAccounts > 0 ? ` · ${k.qaAccounts} QA` : ''}`} />
           <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due${k.testMrrCents > 0 ? ` · ${rands(k.testMrrCents)} in test plans` : ''}`} />
           <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub={`live card money${k.sandboxTopups30dCents > 0 ? ` · ${rands(k.sandboxTopups30dCents)} in tests` : ''}`} />
           <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
           <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub={`across all pipelines · ${k.poolNew} in pools${k.poolArrivals24h > 0 ? ` · +${k.poolArrivals24h} today` : ''}`} />
+          <KpiCard icon={<CalendarClock className="h-3 w-3" />} label="Meetings set" value={String(k.meetingsSet ?? 0)} sub={`${k.meetingsConfirmed ?? 0} confirmed · ${k.meetingsAwaiting ?? 0} awaiting`} />
         </div>
       )}
+
+      {/* Meetings: the business cases you set, with the one tap confirm state */}
+      <MeetingsCard meetings={exec?.meetings ?? null} onChanged={() => setTick((t) => t + 1)} />
 
       {/* Payments: gateway mode, webhook state, latest settled money */}
       <PaymentsCard payments={exec?.payments ?? null} onChanged={() => setTick((t) => t + 1)} />

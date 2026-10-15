@@ -20,7 +20,7 @@ export async function GET() {
   const d7 = new Date(now - 7 * 86_400_000)
   const d30 = new Date(now - 30 * 86_400_000)
 
-  const [userCount, new7, new30, qaAccounts, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow] = await Promise.all([
+  const [userCount, new7, new30, qaAccounts, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow, meetings, meetingsAll] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: d7 }, email: { not: { endsWith: QA_DOMAIN } } } }),
     db.user.count({ where: { createdAt: { gte: d30 }, email: { not: { endsWith: QA_DOMAIN } } } }),
@@ -45,6 +45,18 @@ export async function GET() {
     }),
     getYocoWebhookSecret(),
     getConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE),
+    // Facilitated meetings: the newest 20 for the Meetings card, plus a cheap
+    // status tally so the "Meetings set" KPI counts the whole book, not the page.
+    db.meeting.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true, title: true, memberName: true, memberEmail: true, memberBusiness: true,
+        guestName: true, guestEmail: true, startsAt: true, endsAt: true, meetLink: true,
+        status: true, invitedAt: true, confirmedAt: true, createdAt: true,
+      },
+    }),
+    db.meeting.groupBy({ by: ['status'], _count: { _all: true } }),
   ])
 
   // Lazy subscription truth: ACTIVE only while renewsAt stands; PAUSED, PAST_DUE, CANCELED as-is.
@@ -116,6 +128,14 @@ export async function GET() {
     }
   })
 
+  const statusCount = (s: string) => meetingsAll.find((r) => r.status === s)?._count._all || 0
+  const meetingsKpi = {
+    total: statusCount('PROPOSED') + statusCount('CONFIRMED'),
+    confirmed: statusCount('CONFIRMED'),
+    awaiting: statusCount('PROPOSED'),
+    declined: statusCount('DECLINED'),
+  }
+
   return NextResponse.json({
     kpis: {
       members: userCount,
@@ -136,7 +156,12 @@ export async function GET() {
       poolNew,
       poolArrivals24h,
       suspended: roster.filter((r) => r.accountStatus === 'SUSPENDED').length,
+      meetingsSet: meetingsKpi.total,
+      meetingsConfirmed: meetingsKpi.confirmed,
+      meetingsAwaiting: meetingsKpi.awaiting,
     },
+    meetings: meetings,
+    meetingsKpi,
     roster,
     // Payments: gateway mode + webhook state + the money pulse. The owner sees
     // at a glance that real rands flow and that Yoco confirmations land.
