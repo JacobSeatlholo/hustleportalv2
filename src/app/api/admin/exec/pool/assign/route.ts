@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const where = {
     active: true,
     verifyState: { not: 'stale' },
-    ...(tag ? { poolTag: tag } : {}),
+    ...(tag === 'untagged' ? { poolTag: null } : tag ? { poolTag: tag } : {}),
   }
   const [rows, facets, activeTotal] = await Promise.all([
     db.leadPool.findMany({

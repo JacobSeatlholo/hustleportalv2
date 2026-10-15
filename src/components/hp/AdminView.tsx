@@ -1391,7 +1391,7 @@ function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
               <button
                 key={f.tag || 'untagged'}
                 type="button"
-                onClick={() => { setTag(f.tag); browse(f.tag, q) }}
+                onClick={() => { setTag(f.tag || 'untagged'); browse(f.tag || 'untagged', q) }}
                 className={`text-[10px] px-2 py-1 rounded-full border ${tag === f.tag ? 'border-brand/60 text-brand bg-brand/10' : 'border-border text-muted-foreground hover:text-foreground'}`}
               >
                 {f.tag || 'Untagged'} · {f.count}
