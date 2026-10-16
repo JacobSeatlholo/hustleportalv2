@@ -977,3 +977,19 @@ Work Log:
 
 Stage Summary:
 - Production dea077b: HustlePortal is now fully legible to Google, Bing, AI answer engines and social preview bots in raw HTML, with machine readable pricing, features and company facts, a real sitemap and a welcoming crawler policy. Off-page steps that remain human-side: submit to Google Search Console + Bing Webmaster Tools, paste the sitemap there, request indexing, and earn the first backlinks (businesshustle.co.za, X bio, directories).
+
+---
+Task ID: 64
+Agent: Super Z (main)
+Task: "Zola has confirmed in person for the appointment be for the 22nd of October at 2pm.. Lets confirm this for her and send out the notification both to her and Ian.."
+
+Work Log:
+- Meeting cmv9v3m2f000ll508ez86jub9 was PROPOSED for Mon 19 Oct 11:30 SAST; sandbox has no prod DB access (deploy key is GitHub-only), so the move had to go through the app's own exec-gated API.
+- Built the missing capability (894d8ee): src/lib/meetingConfirm.ts shared confirmAndNotify engine (status flip + both-party emails + emailsSentAt + team note, identical behavior to the member one-tap); confirm route refactored onto it (behavior unchanged); new exec-only PATCH /api/meetings — reschedule a PROPOSED meeting (keeps duration, rejects past times) and/or record confirm:true for in-person confirmations, notes update supported.
+- Executed via ops seat (scripts/confirm_zola_meeting.mjs): PATCH {startsAt: 2026-10-22T12:00Z, confirm:true} -> status CONFIRMED, 14:00 SAST Thu 22 Oct (duration 60min kept), emails {member:true, guest:true} — Zola info@justhearingaudiologist.co.za and Ian ianmac108@gmail.com both emailed the final details incl. Jitsi link; team note confirmed delivered (lastSend = "Meeting confirmed: Zola of Just Hearing and Ian").
+- Fixed my own notes typo: 22 Oct 2026 is THURSDAY (script comment said Wed; emails were always correct — they render from the timestamp). Notes now read "Zola confirmed in person. Moved from Mon 19 Oct 11:30 to Thu 22 Oct 14:00."
+- Verified: old invite link now renders "Already confirmed" (no accidental double-booking); exec dashboard MEETINGS SET 1 (1 confirmed · 0 awaiting) with card "Zola · Just Hearing × Ian / Thu, 22 Oct, 14:00 SAST / Confirmed" (screenshot download/zola_meeting_confirmed_dashboard.png); PATCH walls: 401 unauth, 403 non-exec; exec walls 11/11 PASS; E2E 39/39 PASS.
+
+Stage Summary:
+- Production 894d8ee: Zola x Ian is CONFIRMED for Thursday 22 October 2026 at 14:00 SAST; both parties notified; KPI shows 1 confirmed. The boss can now reschedule or mark in-person confirmations himself from the exec tooling (PATCH is exec-gated; UI wiring can come later if wanted).
+- Ops seat password unchanged; master untouched.
