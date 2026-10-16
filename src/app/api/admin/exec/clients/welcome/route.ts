@@ -9,11 +9,13 @@ export const maxDuration = 60
 // POST /api/admin/exec/clients/welcome — the owner's welcome pass.
 //
 // Sends a welcome email from the OWNER's own account (ceo@businesshustle.co.za)
-// to every client imported from the owner's directory domain (default
-// kloofstreet.online), and logs every send in the OWNER's email log, so the
-// whole pass reflects in the owner's Mail section exactly like mail they sent
-// themselves. Sends go out under the owner's sending identity with Reply-To
-// pointed at the owner's inbox, so every reply lands with the owner.
+// to every client imported from the owner's directory domains — body { domain }
+// for one, { domains: [...] } for several (a directory roster can carry real
+// published addresses on the businesses' own domains alongside reserved slots
+// on the owner's domain). Every send is logged in the OWNER's email log, so
+// the whole pass reflects in the owner's Mail section exactly like mail they
+// sent themselves. Sends go out under the owner's sending identity with
+// Reply-To pointed at the owner's inbox, so every reply lands with the owner.
 //
 // Idempotent: anyone who already has a welcome email logged (same owner, same
 // recipient, welcome subject) is reported and NEVER resent. Reruns are always
@@ -61,9 +63,12 @@ export async function POST(req: NextRequest) {
   if (!gate.ok) return gate.res
 
   const body = await req.json().catch(() => ({}))
-  const domain = String(body.domain || 'kloofstreet.online').toLowerCase().trim().replace(/^@/, '')
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
-    return NextResponse.json({ error: 'A valid domain is required.' }, { status: 400 })
+  const rawDomains: unknown[] = Array.isArray(body.domains) && body.domains.length
+    ? body.domains
+    : [body.domain || 'kloofstreet.online']
+  const domains = rawDomains.map((d) => String(d).toLowerCase().trim().replace(/^@/, ''))
+  if (domains.some((d) => !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))) {
+    return NextResponse.json({ error: 'A valid domain (or domains[] list) is required.' }, { status: 400 })
   }
 
   const owner = await db.user.findUnique({
@@ -75,10 +80,10 @@ export async function POST(req: NextRequest) {
   }
   const ownerName = owner.name?.trim() || 'The Business Hustle team'
 
-  // Everyone imported from this directory domain: MEMBER accounts only, so the
-  // pass can never touch exec seats or QA probes.
+  // Everyone imported from these directory domains: MEMBER accounts only, so
+  // the pass can never touch exec seats or QA probes.
   const clients = await db.user.findMany({
-    where: { email: { endsWith: `@${domain}` }, role: 'MEMBER' },
+    where: { role: 'MEMBER', OR: domains.map((d) => ({ email: { endsWith: `@${d}` } })) },
     select: { id: true, email: true, name: true, businessName: true },
     orderBy: { createdAt: 'asc' },
   })
@@ -129,7 +134,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { ok: true, domain, owner: owner.email, total: clients.length, sent, skipped, failed, results },
+    { ok: true, domains, owner: owner.email, total: clients.length, sent, skipped, failed, results },
     { status: 200 },
   )
 }
