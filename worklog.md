@@ -1052,3 +1052,20 @@ Stage Summary:
 - Production 4f77e3c: the Zola x Ian appointment is in person at Medispa, 99 Kloof Street, Thu 22 Oct 2026 14:00 SAST, CONFIRMED. Share link unchanged (stable token): https://www.hustleportal.online/m/XjDBcYhDsWCWk4d_rbQS-A — same link for Zola and Ian, WhatsApp ready.
 - Honest flag: the earlier confirmation emails to Zola and Ian said "Online" with the Jitsi link. The meeting page and the dashboard now say the venue; the boss's WhatsApp message with the link is the heads up (or say the word and a venue update email goes out to both).
 - Future meetings set from the dashboard can carry a venue in the same step; online meetings keep the Jitsi flow unchanged.
+
+---
+Task ID: 68
+Agent: main (Z.ai)
+Task: POPIA / legal compliance audit of HustlePortal after boss challenged "look at the footer, PAIA manual + links"
+
+Work Log:
+- Verified footer (Landing.tsx): Terms of Service, Privacy & POPIA, Cookie Policy, PAIA Manual (BHW-PAIA-Manual-Integrated-with-POPIA.pdf, Dec 2025) all live and linked from landing + AppShell
+- Fetched businesshustle.co.za/privacy: named Information Officer (CEO, claimed IR-registered), six POPIA lawful bases with LiA, s69-style marketing rules (customer soft opt-in, prospect consent, once-only ask), s72 cross border, breach protocol with 72h regulator notice, retention + annual audits. Real work, not placeholder
+- Fetched businesshustle.co.za/terms: no lead-reveal or buyer-use clauses
+- Confirmed the gap: privacy notice has ZERO mention of lead generation, third party contact lists, or reveals. Terms have zero buyer-use restriction. Signup form (Landing.tsx register) has no Terms/Privacy agreement line
+- WebSearch verified: POPIA protects juristic persons too (companies are data subjects, s69 applies to them), public-record collection s12(2) + compatible further processing s15(3) accommodate OSM-sourced leads, IO registration + PAIA manual upload + PAIA annual report (30 June) run via IR eServices portal
+- mailer.ts already carries Terms + Privacy links in every email footer
+
+Stage Summary:
+- Verdict delivered: paper floor is standing, I was wrong to imply bare. Real gaps are narrow and small: (1) IR registration/manual-upload/annual-report claim needs confirmation in eServices portal (cannot verify externally), (2) privacy notice needs one lead-generation paragraph (drafted, house style, no hyphens), (3) terms need one buyer-use clause (drafted), (4) signup needs one agreement line (drafted), (5) delist/suppression request path for listed businesses (offer to build), (6) cookie banner parked low priority, (7) cross border clause align with hosting reality
+- No code shipped this task; three copy drafts + two small builds offered, boss decides
