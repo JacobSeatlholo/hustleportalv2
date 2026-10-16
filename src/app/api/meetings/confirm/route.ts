@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { sendSystemMail, TEAM_INBOX } from '@/lib/mailer'
 import {
-  confirmedEmail,
-  confirmedExecEmail,
   confirmPage,
   confirmedPage,
   alreadyConfirmedPage,
   invalidTokenPage,
   HTML_HEADERS,
-  meetingWhen,
-  memberLabel,
-  guestLabel,
 } from '@/lib/meeting'
+import { confirmAndNotify } from '@/lib/meetingConfirm'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,30 +48,8 @@ export async function POST(req: NextRequest) {
     return new NextResponse(invalidTokenPage(), { headers: HTML_HEADERS })
   }
 
-  await db.meeting.update({
-    where: { id: meeting.id },
-    data: { status: 'CONFIRMED', confirmedAt: new Date() },
-  })
-
-  // Final details to BOTH parties. Each send is independent: one rejection
-  // never silences the other.
-  const toMember = confirmedEmail(meeting, meeting.memberName)
-  const toGuest = confirmedEmail(meeting, meeting.guestName || meeting.guestEmail)
-  const [a, b] = await Promise.all([
-    sendSystemMail({ to: meeting.memberEmail, ...toMember }),
-    sendSystemMail({ to: meeting.guestEmail, ...toGuest }),
-  ])
-  await db.meeting
-    .update({ where: { id: meeting.id }, data: { emailsSentAt: new Date() } })
-    .catch(() => {})
-
-  // Quiet note so the team hears it the moment it happens (best effort).
-  const execNote = confirmedExecEmail(meeting)
-  await sendSystemMail({ to: TEAM_INBOX, ...execNote }).catch(() => {})
-
-  console.log(
-    `[meetings] confirmed: ${memberLabel(meeting)} and ${guestLabel(meeting)} — ${meetingWhen(meeting.startsAt)} · member mail ${a.ok ? 'sent' : 'FAILED'} · guest mail ${b.ok ? 'sent' : 'FAILED'}`,
-  )
+  // Final details to BOTH parties, via the shared confirm engine.
+  await confirmAndNotify(meeting)
 
   return new NextResponse(confirmedPage(meeting), { headers: HTML_HEADERS })
 }

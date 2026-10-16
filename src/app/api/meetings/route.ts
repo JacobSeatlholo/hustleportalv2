@@ -9,6 +9,7 @@ import { awardXp } from '@/lib/gamification'
 import { sendSystemMail } from '@/lib/mailer'
 import { jitsiMeetLink } from '@/lib/meet'
 import { welcomeEmail, inviteEmail, meetingWhen } from '@/lib/meeting'
+import { confirmAndNotify } from '@/lib/meetingConfirm'
 
 export const dynamic = 'force-dynamic'
 
@@ -167,4 +168,77 @@ export async function POST(req: NextRequest) {
     },
     { status: 201 },
   )
+}
+
+// PATCH /api/meetings — exec only: reschedule a proposed meeting and/or
+// record a confirmation on the member's behalf (she confirmed in person).
+// Confirmation runs through the same engine as the member's own one tap, so
+// both parties get the identical final-details email with the new time.
+export async function PATCH(req: NextRequest) {
+  const userId = await getUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const me = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, platformAdmin: true },
+  })
+  if (!me || !isExecUser(me)) {
+    return NextResponse.json({ error: 'Exec access required.' }, { status: 403 })
+  }
+
+  const body = await req.json().catch(() => ({}))
+  const id = String(body.id || '').trim()
+  if (!id) return NextResponse.json({ error: 'Meeting id is required.' }, { status: 400 })
+  const meeting = await db.meeting.findUnique({ where: { id } })
+  if (!meeting) return NextResponse.json({ error: 'Meeting not found.' }, { status: 404 })
+
+  let current = meeting
+
+  if (body.startsAt) {
+    if (meeting.status !== 'PROPOSED') {
+      return NextResponse.json({ error: 'Only a proposed meeting can be rescheduled.' }, { status: 400 })
+    }
+    const startsAt = new Date(String(body.startsAt))
+    if (Number.isNaN(startsAt.getTime())) {
+      return NextResponse.json({ error: 'A valid date and time is required.' }, { status: 400 })
+    }
+    if (startsAt.getTime() < Date.now() - 60_000) {
+      return NextResponse.json({ error: 'The meeting time is in the past.' }, { status: 400 })
+    }
+    // Keep the existing duration unless the operator asks for a new one.
+    const durationMin = Math.min(
+      Math.max(
+        Number(body.durationMin) ||
+          (meeting.endsAt
+            ? Math.round((meeting.endsAt.getTime() - meeting.startsAt.getTime()) / 60_000)
+            : 60),
+        15,
+      ),
+      240,
+    )
+    const endsAt = new Date(startsAt.getTime() + durationMin * 60_000)
+    current = await db.meeting.update({ where: { id }, data: { startsAt, endsAt } })
+  }
+
+  if (body.notes !== undefined) {
+    const notes = String(body.notes || '').trim() || null
+    current = await db.meeting.update({ where: { id }, data: { notes } })
+  }
+
+  if (body.confirm) {
+    if (current.status === 'DECLINED') {
+      return NextResponse.json({ error: 'This meeting was declined.' }, { status: 400 })
+    }
+    if (current.status === 'CONFIRMED') {
+      return NextResponse.json({ meeting: current, alreadyConfirmed: true, emails: null })
+    }
+    const emails = await confirmAndNotify(current)
+    current = (await db.meeting.findUnique({ where: { id } })) || current
+    return NextResponse.json({
+      meeting: current,
+      alreadyConfirmed: false,
+      emails: { member: emails.member.ok, guest: emails.guest.ok },
+    })
+  }
+
+  return NextResponse.json({ meeting: current })
 }
