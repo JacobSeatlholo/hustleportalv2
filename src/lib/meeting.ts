@@ -237,6 +237,7 @@ export function confirmedExecEmail(m: MeetingLike): { subject: string; body: str
 const PAGE_HEAD = (title: string) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
 <title>${title}</title></head>
 <body style="margin:0;background:#09090b;font-family:Arial,Helvetica,sans-serif;color:#fafafa;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
 <div style="width:100%;max-width:520px;">`
@@ -324,3 +325,231 @@ export function invalidTokenPage(): string {
 }
 
 export const HTML_HEADERS = { 'content-type': 'text/html; charset=utf-8' }
+
+// ------------------------------------------------------- shared meeting page
+//
+// The owner hands one unguessable link (/m/<shareToken>) to BOTH parties —
+// on WhatsApp, over email, however they talk. The page shows the appointment
+// details and lets either side leave a note or propose a new time; the owner
+// sees every update on the Executive Dashboard. Same visual language as the
+// confirm pages, zero client JavaScript, thumb friendly.
+
+export type SharedComment = {
+  id: string
+  side: string // MEMBER | GUEST
+  authorName: string
+  body: string
+  createdAt: Date
+}
+
+/** The share link the owner copies out of the Meetings card. */
+export function sharedUrl(shareToken: string): string {
+  return `${APP_BASE}/m/${shareToken}`
+}
+
+function statusBanner(status: string): string {
+  if (status === 'CONFIRMED')
+    return `<div style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);color:#6ee7b7;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">MEETING IS SET</div>`
+  if (status === 'DECLINED')
+    return `<div style="background:rgba(113,113,122,.12);border:1px solid rgba(113,113,122,.4);color:#a1a1aa;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">THE PROPOSED TIME WAS DECLINED — PROPOSE A NEW ONE BELOW</div>`
+  return `<div style="background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.4);color:#f5c518;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">AWAITING CONFIRMATION</div>`
+}
+
+function msgBanner(msg: string): string {
+  const map: Record<string, string> = {
+    posted: 'Note posted. The other side has been emailed.',
+    moved: 'New time proposed. Both parties have been emailed.',
+    confirmed: 'Confirmed. The meeting is set and everyone has the details.',
+    already: 'This meeting was already confirmed.',
+    slow: 'Too many updates in a short while. Give it a few minutes and try again.',
+    past: 'That time is in the past. Pick a time ahead of now.',
+    declined: 'This meeting was declined. Propose a new time instead.',
+    error: 'Something was missing in that form. Fill it in and try again.',
+  }
+  const text = map[msg]
+  if (!text) return ''
+  return `<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.35);color:#6ee7b7;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px;">${escapeHtml(text)}</div>`
+}
+
+function whoRows(m: MeetingLike): string {
+  const row = (label: string, value: string) =>
+    `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #27272a;"><span style="width:64px;flex-shrink:0;color:#f5c518;font-weight:bold;font-size:12px;letter-spacing:1px;padding-top:2px;">${label}</span><span style="font-size:15px;line-height:1.5;">${value}</span></div>`
+  return [
+    row('WHAT', escapeHtml(m.title)),
+    row('WHEN', `${escapeHtml(meetingWhen(m.startsAt))}<br/><span style="color:#a1a1aa;font-size:13px;">${escapeHtml(meetingLength(m.startsAt, m.endsAt))}</span>`),
+    row('MEMBER', `${escapeHtml(memberLabel(m))}<br/><span style="color:#a1a1aa;font-size:13px;">${escapeHtml(m.memberEmail)}</span>`),
+    row('GUEST', `${escapeHtml(guestLabel(m))}`),
+    row('WHERE', m.meetLink ? `Online. <a href="${m.meetLink}" style="color:#f5c518;word-break:break-all;">Join link</a>` : 'Online (link to follow)'),
+    ...(m.notes ? [row('NOTES', escapeHtml(m.notes))] : []),
+  ].join('')
+}
+
+function commentThread(comments: SharedComment[]): string {
+  if (!comments.length) {
+    return `<p style="color:#a1a1aa;font-size:13px;margin:8px 0 0;">No notes yet. Anything either of you wants to change or add, post it here.</p>`
+  }
+  const rows = comments.map((c) => {
+    const when = new Intl.DateTimeFormat('en-ZA', {
+      timeZone: SAST, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(c.createdAt)
+    return `<div style="border:1px solid #27272a;border-radius:12px;padding:12px 14px;margin-top:10px;background:#0d0d0f;">
+  <div style="font-size:12px;color:#f5c518;font-weight:bold;">${escapeHtml(c.authorName)} <span style="color:#71717a;font-weight:normal;">· ${escapeHtml(when)} SAST</span></div>
+  <div style="font-size:14px;line-height:1.5;margin-top:4px;white-space:pre-wrap;">${escapeHtml(c.body)}</div>
+</div>`
+  })
+  return rows.join('')
+}
+
+/** The full shared page: details, updates, and the actions either side may take. */
+export function sharedPageHtml(
+  m: MeetingLike & { shareToken: string; status: string },
+  comments: SharedComment[],
+  msg = '',
+): string {
+  const token = m.shareToken
+  const canConfirm = m.status === 'PROPOSED'
+  return `${PAGE_HEAD('Meeting: ' + m.title)}
+<div style="background:#111113;border:1px solid #27272a;border-radius:16px;padding:24px;">
+  ${statusBanner(m.status)}
+  <div style="margin-top:18px;">${whoRows(m)}</div>
+  ${msgBanner(msg)}
+  <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
+    <a href="${addToCalendarLink(m)}" style="flex:1;min-width:200px;text-align:center;background:#f5c518;color:#09090b;border-radius:12px;padding:14px;font-size:15px;font-weight:bold;text-decoration:none;">Add to Google Calendar</a>
+  </div>
+  ${canConfirm
+    ? `<form method="post" action="/api/meetings/shared" style="margin-top:14px;">
+    <input type="hidden" name="token" value="${token}" />
+    <input type="hidden" name="action" value="confirm" />
+    <button type="submit" style="width:100%;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.45);border-radius:12px;padding:14px;font-size:15px;font-weight:bold;cursor:pointer;">This time works — confirm it</button>
+  </form>`
+    : ''}
+</div>
+
+<div style="background:#111113;border:1px solid #27272a;border-radius:16px;padding:24px;margin-top:16px;">
+  <h2 style="margin:0;font-size:16px;">Updates</h2>
+  ${commentThread(comments)}
+  <form method="post" action="/api/meetings/shared" style="margin-top:16px;">
+    <input type="hidden" name="token" value="${token}" />
+    <input type="hidden" name="action" value="comment" />
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#d4d4d8;">
+      <label style="display:flex;align-items:center;gap:6px;border:1px solid #3f3f46;border-radius:10px;padding:8px 12px;cursor:pointer;">
+        <input type="radio" name="side" value="MEMBER" required style="accent-color:#f5c518;" /> ${escapeHtml(m.memberName)}
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;border:1px solid #3f3f46;border-radius:10px;padding:8px 12px;cursor:pointer;">
+        <input type="radio" name="side" value="GUEST" style="accent-color:#f5c518;" /> ${escapeHtml(m.guestName || 'Guest')}
+      </label>
+    </div>
+    <textarea name="body" rows="3" maxlength="2000" required placeholder="Add a note both sides and the team will see. Ask a question, add context, or say what should change." style="width:100%;margin-top:10px;background:#0d0d0f;color:#fafafa;border:1px solid #3f3f46;border-radius:12px;padding:12px;font-size:14px;font-family:inherit;box-sizing:border-box;"></textarea>
+    <button type="submit" style="width:100%;margin-top:10px;background:#f5c518;color:#09090b;border:0;border-radius:12px;padding:14px;font-size:15px;font-weight:bold;cursor:pointer;">Post note</button>
+  </form>
+</div>
+
+<div style="background:#111113;border:1px solid #27272a;border-radius:16px;padding:24px;margin-top:16px;">
+  <h2 style="margin:0 0 4px;font-size:16px;">Need a different time?</h2>
+  <p style="margin:0 0 12px;color:#a1a1aa;font-size:13px;">Propose one. Both parties get an email, and the meeting waits for a fresh confirm. South African time.</p>
+  <form method="post" action="/api/meetings/shared">
+    <input type="hidden" name="token" value="${token}" />
+    <input type="hidden" name="action" value="propose" />
+    <div style="display:flex;gap:10px;">
+      <input type="date" name="date" required style="flex:1;background:#0d0d0f;color:#fafafa;border:1px solid #3f3f46;border-radius:12px;padding:12px;font-size:14px;" />
+      <input type="time" name="time" required style="width:120px;background:#0d0d0f;color:#fafafa;border:1px solid #3f3f46;border-radius:12px;padding:12px;font-size:14px;" />
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#d4d4d8;margin-top:10px;">
+      <label style="display:flex;align-items:center;gap:6px;border:1px solid #3f3f46;border-radius:10px;padding:8px 12px;cursor:pointer;">
+        <input type="radio" name="side" value="MEMBER" required style="accent-color:#f5c518;" /> I am ${escapeHtml(m.memberName)}
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;border:1px solid #3f3f46;border-radius:10px;padding:8px 12px;cursor:pointer;">
+        <input type="radio" name="side" value="GUEST" style="accent-color:#f5c518;" /> I am ${escapeHtml(m.guestName || 'the guest')}
+      </label>
+    </div>
+    <button type="submit" style="width:100%;margin-top:10px;background:transparent;color:#a1a1aa;border:1px solid #3f3f46;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;">Propose this new time</button>
+  </form>
+</div>${PAGE_FOOT}`
+}
+
+// ------------------------------------------------------- shared page emails
+
+/** Note posted on the shared page — goes to the OTHER side, plus the link. */
+export function meetingNoteEmail(
+  m: MeetingLike,
+  recipientName: string,
+  authorName: string,
+  note: string,
+  shareUrl: string,
+): { subject: string; body: string } {
+  const f = first(recipientName)
+  const subject = `New note on your meeting: ${m.title}`
+  const body = [
+    `Hi ${f},`,
+    '',
+    `${authorName} added a note to your meeting:`,
+    '',
+    `"${note}"`,
+    '',
+    `WHEN: ${meetingWhen(m.startsAt)}`,
+    '',
+    'Read the whole thread and post your own note on your meeting page:',
+    shareUrl,
+    '',
+    'Keep this link handy. It is your meeting page: the details stay current and anything either side posts shows up there.',
+    '',
+    'Talk soon,',
+    'The HustlePortal team',
+    'Business Hustle · businesshustle.co.za',
+  ].join('\n')
+  return { subject, body }
+}
+
+/** New time proposed on the shared page — goes to BOTH sides. */
+export function meetingMovedEmail(
+  m: MeetingLike,
+  recipientName: string,
+  authorName: string,
+  shareUrl: string,
+): { subject: string; body: string } {
+  const f = first(recipientName)
+  const subject = `Time change proposed: ${meetingDay(m.startsAt)} at ${meetingTime(m.startsAt)}`
+  const body = [
+    `Hi ${f},`,
+    '',
+    `${authorName} proposed moving your meeting to:`,
+    '',
+    meetingWhen(m.startsAt),
+    '',
+    `WHAT: ${m.title}`,
+    `WHERE: Online. Join link: ${m.meetLink || 'to be confirmed'}`,
+    '',
+    'Open your meeting page to confirm the new time or suggest another:',
+    shareUrl,
+    '',
+    'The meeting is only set once one of you confirms the new time.',
+    '',
+    'Talk soon,',
+    'The HustlePortal team',
+    'Business Hustle · businesshustle.co.za',
+  ].join('\n')
+  return { subject, body }
+}
+
+/** Quiet note to the team inbox when something happens on the shared page. */
+export function meetingSharedExecEmail(
+  m: MeetingLike,
+  what: string,
+  authorName: string,
+  detail: string,
+): { subject: string; body: string } {
+  return {
+    subject: `Meeting update: ${m.title}`,
+    body: [
+      `${what} on the shared meeting page by ${authorName}.`,
+      '',
+      `${m.title}`,
+      meetingWhen(m.startsAt),
+      `${memberLabel(m)} (${m.memberEmail}) × ${guestLabel(m)}`,
+      '',
+      detail,
+      '',
+      'The full thread is on the Executive Dashboard under Meetings.',
+    ].join('\n'),
+  }
+}

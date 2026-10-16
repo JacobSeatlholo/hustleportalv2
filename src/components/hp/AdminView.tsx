@@ -27,7 +27,7 @@ import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
-  Flame, ExternalLink, HandCoins, CalendarClock,
+  Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -122,6 +122,8 @@ interface MeetingRow {
   invitedAt: string | null
   confirmedAt: string | null
   createdAt: string
+  shareToken?: string | null
+  comments?: number
 }
 
 interface TopUpRow {
@@ -1209,6 +1211,20 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
   const confirmed = rows.filter((m) => m.status === 'CONFIRMED').length
   const awaiting = rows.filter((m) => m.status === 'PROPOSED').length
 
+  // One tap: the meeting page link lands on the clipboard, ready to paste
+  // straight into WhatsApp. The toast repeats the URL in case the clipboard
+  // is locked down, so the link is always easy to get and send on.
+  async function copyShareLink(m: MeetingRow) {
+    if (!m.shareToken) return
+    const url = `${window.location.origin}/m/${m.shareToken}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: 'Link copied — paste it on', description: url })
+    } catch {
+      toast({ title: 'Your meeting link', description: url })
+    }
+  }
+
   async function submit() {
     if (!form.memberName.trim() || !form.memberEmail.trim() || !form.guestEmail.trim() || !form.date || !form.time) {
       toast({ title: 'A few details are missing', description: 'Member name, member email, guest email, date and time are required.', variant: 'destructive' })
@@ -1303,6 +1319,11 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                 </div>
                 <div className="text-xs text-muted-foreground truncate">{m.title}</div>
                 <div className="text-xs mt-0.5">{SAST_WHEN(m.startsAt)} SAST</div>
+                {!!m.comments && m.comments > 0 && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" /> {m.comments} note{m.comments === 1 ? '' : 's'} from the shared page
+                  </div>
+                )}
               </div>
               <div className="shrink-0 flex flex-col items-end gap-1">
                 <MeetingStatusChip status={m.status} />
@@ -1313,6 +1334,16 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                       ? `invited ${timeAgo(m.invitedAt)}`
                       : ''}
                 </span>
+                {m.shareToken && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[11px] gap-1"
+                    onClick={() => copyShareLink(m)}
+                  >
+                    <Link2 className="h-3 w-3" /> Copy link
+                  </Button>
+                )}
               </div>
             </div>
           ))}

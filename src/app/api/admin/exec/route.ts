@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { getYocoKeyMode, getYocoWebhookSecret } from '@/lib/yoco'
@@ -54,6 +55,8 @@ export async function GET() {
         id: true, title: true, memberName: true, memberEmail: true, memberBusiness: true,
         guestName: true, guestEmail: true, startsAt: true, endsAt: true, meetLink: true,
         status: true, invitedAt: true, confirmedAt: true, createdAt: true,
+        shareToken: true,
+        _count: { select: { comments: true } },
       },
     }),
     db.meeting.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -136,6 +139,20 @@ export async function GET() {
     declined: statusCount('DECLINED'),
   }
 
+  // Meetings set before sharing existed get their share token on first sight —
+  // idempotent, and the token only ever reaches the owner and the parties.
+  const meetingRows = await Promise.all(
+    meetings.map(async (m) => {
+      let shareToken = m.shareToken
+      if (!shareToken) {
+        shareToken = crypto.randomBytes(16).toString('base64url')
+        await db.meeting.update({ where: { id: m.id }, data: { shareToken } }).catch(() => {})
+      }
+      const { _count, ...rest } = m
+      return { ...rest, shareToken, comments: _count.comments }
+    }),
+  )
+
   return NextResponse.json({
     kpis: {
       members: userCount,
@@ -160,7 +177,7 @@ export async function GET() {
       meetingsConfirmed: meetingsKpi.confirmed,
       meetingsAwaiting: meetingsKpi.awaiting,
     },
-    meetings: meetings,
+    meetings: meetingRows,
     meetingsKpi,
     roster,
     // Payments: gateway mode + webhook state + the money pulse. The owner sees

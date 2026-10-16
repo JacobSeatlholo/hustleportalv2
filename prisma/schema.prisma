@@ -88,6 +88,7 @@ model Meeting {
   meetLink       String? // Jitsi link (meet.ts)
   status         String    @default("PROPOSED") // PROPOSED | CONFIRMED | DECLINED
   confirmToken   String    @unique // one tap confirm/decline from the invite email
+  shareToken     String?   @unique // unguessable link both parties open: details, comments, updates (/m/<token>)
   notes          String?
   invitedAt      DateTime?
   confirmedAt    DateTime?
@@ -95,12 +96,29 @@ model Meeting {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  owner  User  @relation("MeetingOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  member User? @relation("MeetingMember", fields: [memberUserId], references: [id], onDelete: SetNull)
+  owner    User             @relation("MeetingOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  member   User?            @relation("MeetingMember", fields: [memberUserId], references: [id], onDelete: SetNull)
+  comments MeetingComment[]
 
   @@index([ownerId, startsAt])
   @@index([memberUserId])
   @@index([status])
+}
+
+// Comments posted from the shared meeting page (/m/<token>). Either party can
+// leave a note; the owner sees them on the Executive Dashboard and new notes
+// email the other side, so the conversation never stalls.
+model MeetingComment {
+  id         String   @id @default(cuid())
+  meetingId  String
+  side       String // MEMBER | GUEST
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, createdAt])
 }
 
 // ============ COMPANY WORKSPACE (per-business context) ============

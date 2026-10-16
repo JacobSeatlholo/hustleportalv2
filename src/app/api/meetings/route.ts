@@ -24,7 +24,10 @@ function normalizeEmail(v: unknown): string {
 }
 
 // GET /api/meetings — exec sees every facilitated meeting; a member sees the
-// ones they are part of (so their own views can surface them later).
+// ones they are part of (so their own views can surface them later). Every row
+// carries its share link token (generated on the spot for meetings set before
+// sharing existed) so the owner can copy the /m/<token> link straight out of
+// the Meetings card, plus the note count from the shared page.
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,8 +41,22 @@ export async function GET() {
     where: exec ? {} : { memberUserId: me.id },
     orderBy: { createdAt: 'desc' },
     take: 50,
+    include: { _count: { select: { comments: true } } },
   })
-  return NextResponse.json({ meetings })
+  // Meetings set before sharing existed get their token on first sight —
+  // idempotent, and the token only ever reaches the owner and the parties.
+  const rows = await Promise.all(
+    meetings.map(async (m) => {
+      let shareToken = m.shareToken
+      if (!shareToken) {
+        shareToken = crypto.randomBytes(16).toString('base64url')
+        await db.meeting.update({ where: { id: m.id }, data: { shareToken } }).catch(() => {})
+      }
+      const { _count, ...rest } = m
+      return { ...rest, shareToken, comments: _count.comments }
+    }),
+  )
+  return NextResponse.json({ meetings: rows })
 }
 
 // POST /api/meetings — exec only: set a facilitated meeting.
@@ -137,6 +154,7 @@ export async function POST(req: NextRequest) {
       endsAt,
       meetLink: jitsiMeetLink(title),
       confirmToken: crypto.randomBytes(24).toString('hex'),
+      shareToken: crypto.randomBytes(16).toString('base64url'),
       notes,
       invitedAt: new Date(),
     },
