@@ -246,7 +246,7 @@ export default function Landing() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="r-name">Your name</Label>
-                      <Input id="r-name" placeholder="Jacob" value={name} onChange={(e) => setName(e.target.value)} />
+                      <Input id="r-name" placeholder="Joseph" value={name} onChange={(e) => setName(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="r-biz">Business name</Label>
