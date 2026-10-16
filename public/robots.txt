@@ -1,8 +1,16 @@
+# HustlePortal — search engines and AI crawlers are welcome.
+# Public content: https://www.hustleportal.online/ and https://www.hustleportal.online/llms.txt
+# Private: everything under /api (member data) and the password reset flow.
+
 User-agent: Googlebot
 Allow: /
+Disallow: /api/
+Disallow: /reset
 
 User-agent: Bingbot
 Allow: /
+Disallow: /api/
+Disallow: /reset
 
 User-agent: Twitterbot
 Allow: /
@@ -10,5 +18,103 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
+# ---------- AI search engines and assistants: explicitly welcome ----------
+
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Claude-User
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Claude-Search
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Applebot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Bytespider
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: meta-externalagent
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: DuckAssistBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+User-agent: YouBot
+Allow: /
+Disallow: /api/
+Disallow: /reset
+
+# ---------- everyone else ----------
+
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /reset
+
+Sitemap: https://www.hustleportal.online/sitemap.xml

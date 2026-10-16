@@ -1,0 +1,40 @@
+# HustlePortal
+
+> HustlePortal (hustleportal.online) is the Business OS for South African entrepreneurs. It puts AI powered lead sourcing, client management, invoicing, tasks, inventory and finance in one professional web app, with AI business plans and done for you expert services built in. A free account includes R99 in lead credits and needs no card.
+
+HustlePortal is built and run by Business Hustle, Simple Eternity Holdings (Pty) Ltd, a company based in Cape Town, South Africa. It is a progressive web app (PWA) that works on any phone, tablet or computer. The product is designed for entrepreneurs, startups and small and medium businesses across South Africa, including township and township economy businesses.
+
+## What members get
+
+- AI lead sourcing: the platform finds real businesses that match your offer, ranked by fit for your industry and city.
+- Verified contact reveals: spend prepaid wallet credits to reveal verified phone numbers and email addresses of decision makers.
+- Client management (CRM): keep every client, conversation and follow up in one place.
+- Invoicing and finance: send professional invoices and track money in and money out.
+- Tasks and inventory: plan the day, keep stock counts honest.
+- AI business plan: answer a few questions and get a structured, funder ready business plan.
+- Mail and calendar: run outreach and schedule meetings without leaving the platform.
+- Expert services: done for you landing pages, brand consulting and other services from the Business Hustle team.
+
+## Pricing
+
+- Free account: R99 in free lead credits to start, every tool included, no card required.
+- Operator plan: R199 per month (launch special, standard price R299) with monthly verified lead reveal credits. Annual at R1,990 gives two months free.
+- Boss plan: R499 per month with a larger monthly reveal quota, the best per lead price. Unused reveal credits roll over while the plan is active.
+
+## Company
+
+- Legal name: Simple Eternity Holdings (Pty) Ltd, trading as Business Hustle.
+- Location: Cape Town, Western Cape, South Africa.
+- Product: HustlePortal, live at https://hustleportal.online since 2025.
+- Phone: +27 74 481 5163.
+- Social: https://x.com/TeeJaySeatlholo
+- Company site: https://www.businesshustle.co.za
+
+## Links
+
+- [HustlePortal home](https://www.hustleportal.online/): the product, features, pricing and free signup.
+- [Robot access rules](https://www.hustleportal.online/robots.txt): search engine and AI crawler policy.
+
+## How to use this site
+
+Anyone may browse the public landing page. Creating an account is free and gives R99 in lead credits. Member data, lead contact details and business documents are private to each account and are not crawlable.
