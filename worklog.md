@@ -958,3 +958,22 @@ Work Log:
 
 Stage Summary:
 - Production 8f41373: signup placeholder now "Joseph". No other Jacob strings in the live build. Security hardening from Task 61 (3c89b1b) unaffected.
+
+---
+Task ID: 63
+Agent: Super Z (main)
+Task: "reachability and SEO, AI search engines understanding... prepare it for going viral. Ensure it is easy to find on the internet."
+
+Work Log:
+- AUDIT findings: sitemap.xml was a 404; llms.txt 404; robots.txt had no Sitemap directive and no AI crawler sections; no og:image anywhere (og-image.png 404 on live); no canonical; no JSON-LD (old site's schema was lost in rebuild); twitter:card was bare summary; and the critical one — page.tsx is a client component whose SSR output was just the loading splash, so GPTBot/ClaudeBot/PerplexityBot/social preview bots (no JS execution) saw an empty page.
+- FIXED SSR: page.tsx now always renders Landing (server render included) with the branded splash as a fixed overlay while sessionLoading — crawlers see full marketing HTML, logged in members keep the identical splash UX. Hydration-safe (zustand initial state matches server).
+- robots.txt rewritten: explicit welcome sections for GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-Search, anthropic-ai, PerplexityBot, Perplexity-User, Google-Extended, Applebot(-Extended), CCBot, Bytespider, meta-externalagent, Amazonbot, DuckAssistBot, YouBot; /api/ + /reset disallowed for crawlers; Sitemap directive added.
+- New src/app/sitemap.ts -> /sitemap.xml (homepage, weekly, priority 1).
+- New public/llms.txt: llmstxt-convention AI discovery file — what the product is, features, real pricing (Free R99 credits / Operator R199 launch (std R299) / Boss R499 from src/lib/plans.ts), company details, links. No internal engine brands mentioned.
+- New public/og-image.png (1200x630, generated via scripts/gen_og_image.mjs Playwright): black+gold brand card, wordmark, headline, feature chips, hustleportal.online.
+- layout.tsx: metadataBase moved to www (canonical host — apex 308s there), alternates.canonical=/, explicit robots index/follow + googleBot max-image-preview large / max-snippet -1, openGraph url+images, twitter summary_large_image+image, and JSON-LD @graph (Organization with real address/phone/sameAs, WebSite, SoftwareApplication with honest offers Free/Operator/Boss + featureList) injected server-side.
+- Live verified as GPTBot (no JS): landing sections in raw HTML, JSON-LD valid (@graph Organization, WebSite, SoftwareApplication; offers R0/R199/R499), canonical + og:image + twitter tags present; sitemap.xml 200 valid XML; robots.txt serving with Sitemap line; llms.txt 200; og-image.png 200 391KB.
+- Regression: E2E 39/39 PASS, exec walls 11/11 PASS. Browser: landing renders, zero console errors, fresh signup through the SSR landing reached the AppShell dashboard (screenshots download/seo_landing_verified.png, seo_loggedin_verified.png). Probe account seo_probe_2026@hustleqa.example.com left as QA artifact.
+
+Stage Summary:
+- Production dea077b: HustlePortal is now fully legible to Google, Bing, AI answer engines and social preview bots in raw HTML, with machine readable pricing, features and company facts, a real sitemap and a welcoming crawler policy. Off-page steps that remain human-side: submit to Google Search Console + Bing Webmaster Tools, paste the sitemap there, request indexing, and earn the first backlinks (businesshustle.co.za, X bio, directories).
