@@ -86,6 +86,7 @@ model Meeting {
   startsAt       DateTime
   endsAt         DateTime?
   meetLink       String? // Jitsi link (meet.ts)
+  location       String? // physical venue; when set the meeting is in person and the venue replaces the online join link everywhere
   status         String    @default("PROPOSED") // PROPOSED | CONFIRMED | DECLINED
   confirmToken   String    @unique // one tap confirm/decline from the invite email
   shareToken     String?   @unique // unguessable link both parties open: details, comments, updates (/m/<token>)

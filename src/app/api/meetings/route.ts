@@ -84,6 +84,9 @@ export async function POST(req: NextRequest) {
   const memberCity = String(body.memberCity || '').trim() || null
   const memberIndustry = String(body.memberIndustry || '').trim() || null
   const notes = String(body.notes || '').trim() || null
+  // A physical venue means the meeting is in person: no Jitsi link is created,
+  // and every page and email shows the venue instead of "Online".
+  const location = String(body.location || '').trim().slice(0, 200) || null
   let title = String(body.title || '').trim()
   const startsAt = body.startsAt ? new Date(body.startsAt) : null
   const durationMin = Math.min(Math.max(Number(body.durationMin) || 60, 15), 240)
@@ -152,7 +155,8 @@ export async function POST(req: NextRequest) {
       guestEmail,
       startsAt,
       endsAt,
-      meetLink: jitsiMeetLink(title),
+      meetLink: location ? null : jitsiMeetLink(title),
+      location,
       confirmToken: crypto.randomBytes(24).toString('hex'),
       shareToken: crypto.randomBytes(16).toString('base64url'),
       notes,
@@ -240,6 +244,21 @@ export async function PATCH(req: NextRequest) {
   if (body.notes !== undefined) {
     const notes = String(body.notes || '').trim() || null
     current = await db.meeting.update({ where: { id }, data: { notes } })
+  }
+
+  // Venue fix: set a physical location ("Medispa, 99 Kloof Street") or clear
+  // it to fall back to the online join link. The meet link itself can also be
+  // replaced or cleared the same way, so the owner can flip a meeting between
+  // in person and online without touching the database.
+  if (body.location !== undefined) {
+    const location = String(body.location || '').trim().slice(0, 200) || null
+    current = await db.meeting.update({ where: { id }, data: { location } })
+  }
+
+  if (body.meetLink !== undefined) {
+    const raw = String(body.meetLink || '').trim()
+    const meetLink = raw && /^https?:\/\//.test(raw) ? raw : null
+    current = await db.meeting.update({ where: { id }, data: { meetLink } })
   }
 
   if (body.confirm) {

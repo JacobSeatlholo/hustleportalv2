@@ -118,6 +118,7 @@ interface MeetingRow {
   startsAt: string
   endsAt: string | null
   meetLink: string | null
+  location?: string | null
   status: string
   invitedAt: string | null
   confirmedAt: string | null
@@ -1197,6 +1198,7 @@ const EMPTY_MEETING_FORM = {
   date: '',
   time: '',
   durationMin: '60',
+  location: '',
   notes: '',
 }
 
@@ -1249,6 +1251,7 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
             guestEmail: form.guestEmail,
             startsAt,
             durationMin: Number(form.durationMin) || 60,
+            location: form.location || undefined,
             notes: form.notes || undefined,
           }),
         },
@@ -1319,6 +1322,11 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                 </div>
                 <div className="text-xs text-muted-foreground truncate">{m.title}</div>
                 <div className="text-xs mt-0.5">{SAST_WHEN(m.startsAt)} SAST</div>
+                {m.location ? (
+                  <div className="text-xs text-muted-foreground mt-0.5 truncate">In person · {m.location}</div>
+                ) : (
+                  <div className="text-xs text-muted-foreground mt-0.5">Online</div>
+                )}
                 {!!m.comments && m.comments > 0 && (
                   <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
                     <MessageSquare className="h-3 w-3" /> {m.comments} note{m.comments === 1 ? '' : 's'} from the shared page
@@ -1416,6 +1424,10 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className={field}>
+              <Label>Location (optional)</Label>
+              <Input className={inputCls} value={form.location} onChange={set('location')} placeholder="Medispa, 99 Kloof Street. Leave empty for an online meeting." />
             </div>
             <div className={field}>
               <Label>Notes for both parties (optional)</Label>

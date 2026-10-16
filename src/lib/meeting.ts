@@ -26,6 +26,7 @@ export type MeetingLike = {
   startsAt: Date
   endsAt?: Date | null
   meetLink?: string | null
+  location?: string | null
   notes?: string | null
 }
 
@@ -85,10 +86,33 @@ export function addToCalendarLink(m: MeetingLike): string {
     uid: m.id,
     title: m.title,
     description: m.notes || undefined,
+    location: m.location || undefined,
     startsAt: m.startsAt,
     endsAt: m.endsAt || undefined,
   }
   return gcalTemplateLink(ev)
+}
+
+/** The WHERE cell on every HTML page. A physical venue always wins; an
+ *  online meeting shows the join link (or a promise of one). */
+function whereCell(m: MeetingLike): string {
+  if (m.location) {
+    const backup = m.meetLink
+      ? `<br/><span style="color:#a1a1aa;font-size:13px;">Online backup: <a href="${m.meetLink}" style="color:#f5c518;word-break:break-all;">join link</a></span>`
+      : ''
+    return `${escapeHtml(m.location)}${backup}`
+  }
+  return m.meetLink
+    ? `Online. <a href="${m.meetLink}" style="color:#f5c518;word-break:break-all;">Join link</a>`
+    : 'Online (link to follow)'
+}
+
+/** The WHERE line inside emails. */
+function whereLine(m: MeetingLike): string {
+  if (m.location) {
+    return `WHERE: ${m.location}${m.meetLink ? ` (online backup: ${m.meetLink})` : ''}`
+  }
+  return `WHERE: Online. Join link: ${m.meetLink || 'to be confirmed'}`
 }
 
 function first(name: string): string {
@@ -154,7 +178,7 @@ export function inviteEmail(m: MeetingLike & { confirmToken: string }): { subjec
     `WHAT: ${m.title}`,
     `WHEN: ${meetingWhen(m.startsAt)} — ${meetingLength(m.startsAt, m.endsAt)}`,
     `WITH: ${guestLabel(m)}`,
-    `WHERE: Online. Join link: ${m.meetLink || 'to be confirmed'}`,
+    whereLine(m),
     ...(m.notes ? ['', m.notes] : []),
     '',
     'IS THIS TIME GOOD FOR YOU?',
@@ -185,7 +209,7 @@ export function confirmedEmail(m: MeetingLike, recipientName: string): { subject
     `WHAT: ${m.title}`,
     `WHEN: ${meetingWhen(m.startsAt)} — ${meetingLength(m.startsAt, m.endsAt)}`,
     `WHO: ${memberLabel(m)} (${m.memberEmail}) and ${guestLabel(m)}`,
-    `WHERE: Online. Join link: ${m.meetLink || 'to be confirmed'}`,
+    whereLine(m),
     ...(m.notes ? ['', m.notes] : []),
     '',
     'ADD TO YOUR CALENDAR',
@@ -225,7 +249,7 @@ export function confirmedExecEmail(m: MeetingLike): { subject: string; body: str
     meetingWhen(m.startsAt),
     `${memberLabel(m)} (${m.memberEmail})`,
     `${guestLabel(m)}`,
-    `Join link: ${m.meetLink || 'to be confirmed'}`,
+    m.location ? `Venue: ${m.location}` : `Join link: ${m.meetLink || 'to be confirmed'}`,
     '',
     'It is live on your Executive Dashboard under Meetings.',
   ].join('\n')
@@ -253,7 +277,7 @@ function detailRows(m: MeetingLike): string {
     row('WHAT', escapeHtml(m.title)),
     row('WHEN', `${escapeHtml(meetingWhen(m.startsAt))}<br/><span style="color:#a1a1aa;font-size:13px;">${escapeHtml(meetingLength(m.startsAt, m.endsAt))}</span>`),
     row('WITH', escapeHtml(guestLabel(m))),
-    row('WHERE', m.meetLink ? `Online. <a href="${m.meetLink}" style="color:#f5c518;word-break:break-all;">Join link</a>` : 'Online (link to follow)'),
+    row('WHERE', whereCell(m)),
   ].join('')
 }
 
@@ -379,7 +403,7 @@ function whoRows(m: MeetingLike): string {
     row('WHEN', `${escapeHtml(meetingWhen(m.startsAt))}<br/><span style="color:#a1a1aa;font-size:13px;">${escapeHtml(meetingLength(m.startsAt, m.endsAt))}</span>`),
     row('MEMBER', `${escapeHtml(memberLabel(m))}<br/><span style="color:#a1a1aa;font-size:13px;">${escapeHtml(m.memberEmail)}</span>`),
     row('GUEST', `${escapeHtml(guestLabel(m))}`),
-    row('WHERE', m.meetLink ? `Online. <a href="${m.meetLink}" style="color:#f5c518;word-break:break-all;">Join link</a>` : 'Online (link to follow)'),
+    row('WHERE', whereCell(m)),
     ...(m.notes ? [row('NOTES', escapeHtml(m.notes))] : []),
   ].join('')
 }
@@ -517,7 +541,7 @@ export function meetingMovedEmail(
     meetingWhen(m.startsAt),
     '',
     `WHAT: ${m.title}`,
-    `WHERE: Online. Join link: ${m.meetLink || 'to be confirmed'}`,
+    whereLine(m),
     '',
     'Open your meeting page to confirm the new time or suggest another:',
     shareUrl,

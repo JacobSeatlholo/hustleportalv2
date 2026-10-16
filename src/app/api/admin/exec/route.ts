@@ -54,6 +54,7 @@ export async function GET() {
       select: {
         id: true, title: true, memberName: true, memberEmail: true, memberBusiness: true,
         guestName: true, guestEmail: true, startsAt: true, endsAt: true, meetLink: true,
+        location: true,
         status: true, invitedAt: true, confirmedAt: true, createdAt: true,
         shareToken: true,
         _count: { select: { comments: true } },
