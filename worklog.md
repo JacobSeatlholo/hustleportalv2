@@ -1034,3 +1034,21 @@ Stage Summary:
 - Owner's one-tap flow: Meetings card -> Copy link -> paste in WhatsApp. Real link for the Zola x Ian appointment: https://www.hustleportal.online/m/XjDBcYhDsWCWk4d_rbQS-A (same link works for both parties).
 - Either side can post notes, propose a new time (meeting flips to awaiting and everyone is emailed), and confirm a proposed time; every action emails the other side plus the team inbox, and the owner sees note counts on the dashboard.
 - Schema and tokens are additive and idempotent; nothing on the real meeting was modified during testing (lifecycle ran on throwaway QA rows only).
+
+---
+Task ID: 67
+Agent: Super Z (main)
+Task: "meeting is at 99 kloofstreet - Medispa, not online." Correct the Zola x Ian appointment venue: in person at the Medispa on 99 Kloof Street, not the online Jitsi call the record was set with.
+
+Work Log:
+- Probed the model: Meeting had no venue field at all — every page and email hardcoded "WHERE: Online. Join link" off meetLink (Jitsi, auto created), and exec PATCH could only touch time/notes/confirm.
+- Built the venue properly (commit 4f77e3c): Meeting.location (additive nullable column, db push on deploy). When set, the venue replaces the online join link EVERYWHERE: confirm + shared pages WHERE row, invite and final details emails, exec confirmation note, Google Calendar template link (location param), and the dashboard row now shows "In person · venue" vs "Online".
+- POST /api/meetings takes location (in person meetings get no Jitsi link at all); PATCH takes location and meetLink so the owner can flip any meeting between in person and online; set meeting form gained an optional Location input ("Leave empty for an online meeting").
+- Ran scripts/set_medispa_venue.mjs on prod with the ops seat: PATCH {location: "Medispa, 99 Kloof Street", meetLink: null} on the real meeting. Verified in one pass: venue stored, jitsi cleared, status still CONFIRMED, time still Thu 22 Oct 2026 14:00 SAST, notes untouched, shared page shows the venue with zero online references, gcal link carries the venue, dashboard row carries it. 14/14 PASS. No email was auto sent — the owner briefs both parties himself with the link (his stated WhatsApp plan).
+- Extended scripts/prod_meeting_share_verify.mjs: real page now asserts the venue and the ABSENCE of jitsi, plus a throwaway QA meeting created WITH location (no jitsi, venue on page + gcal + dashboard). 29/29 PASS.
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11.
+
+Stage Summary:
+- Production 4f77e3c: the Zola x Ian appointment is in person at Medispa, 99 Kloof Street, Thu 22 Oct 2026 14:00 SAST, CONFIRMED. Share link unchanged (stable token): https://www.hustleportal.online/m/XjDBcYhDsWCWk4d_rbQS-A — same link for Zola and Ian, WhatsApp ready.
+- Honest flag: the earlier confirmation emails to Zola and Ian said "Online" with the Jitsi link. The meeting page and the dashboard now say the venue; the boss's WhatsApp message with the link is the heads up (or say the word and a venue update email goes out to both).
+- Future meetings set from the dashboard can carry a venue in the same step; online meetings keep the Jitsi flow unchanged.
