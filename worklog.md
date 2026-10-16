@@ -1012,3 +1012,25 @@ Stage Summary:
 - Honest delivery caveat: the 7 @kloofstreet.online rows are reserved slots on the owner's own domain — real reach depends on mailboxes or forwarding on kloofstreet.online; the 5 real published addresses are live inboxes.
 - CEO Gmail App Password rejected → sends fell back to the HustlePortal engine (branded, working). Reconnect under Integrations → Gmail when convenient.
 - Bigger HustlePortal introduction campaign stays parked per the original "lets list them first" scope; the welcome pass pattern is reusable when the owner says go.
+
+---
+Task ID: 66
+Agent: Super Z (main)
+Task: "Ian wants a meeting link. on the meetings section, let me be able to send out a link from there to both zola and ian manually which shows information of their appointment and either side can make a comment or update the appointment accordingly. He asked me for a link on whatsapp, so it has to be easy for me to get and ssend on."
+
+Work Log:
+- Probed prod: one meeting exists — "Introduction: Zola (Just Hearing) and Ian", CONFIRMED Thu 22 Oct 14:00 SAST, Jitsi link set. Ian is the GUEST side, Zola the member side.
+- Schema (additive, db push on deploy): Meeting.shareToken (unique, nullable) + MeetingComment model (side MEMBER|GUEST, authorName, body, indexed by meeting+createdAt).
+- New shared page GET /m/<shareToken> (src/app/m/[token]/route.ts): server rendered dark page matching the confirm pages — status banner (MEETING IS SET / AWAITING / DECLINED), WHAT/WHEN (SAST)/MEMBER/GUEST/WHERE+NOTES rows, Add to Google Calendar, note thread, and three zero-JS HTML form actions. noindex + nofollow.
+- POST /api/meetings/shared: comment (note thread + emails the OTHER side + quiet team note), propose (SAST fixed +02:00 parse, future check, keeps duration, flips status to PROPOSED with confirmedAt/emailsSentAt reset, auto note "Proposed moving...", emails BOTH sides), confirm (same confirmAndNotify engine as the invite email). rateLimit 20/hour/token. All actions 303 back to the page with a msg banner.
+- meeting.ts: sharedPageHtml + meetingNoteEmail + meetingMovedEmail + meetingSharedExecEmail; PAGE_HEAD now carries noindex for every meeting page.
+- GET /api/meetings + GET /api/admin/exec: shareToken + comments count on every row, with LAZY backfill of tokens for pre-existing meetings (Zola's token materialised on first read).
+- MeetingsCard (AdminView): "Copy link" button per meeting — clipboard write + toast repeating the URL as fallback; "N notes from the shared page" line on the row.
+- Prod verification (scripts/prod_meeting_share_verify.mjs) 21/21 PASS: real page renders date/names/jitsi/noindex/forms; QA throwaway meeting full lifecycle — comment visible, propose 10:00->15:00 reopened to PROPOSED with auto note + confirm back, confirm -> MEETING IS SET, owner sees comments=2 + CONFIRMED, bad token graceful.
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11. Two QA probe meetings (member/guest @hustleqa.example.com) now exist from lifecycle tests — flagged QA emails, counted in the meetings KPI as known probe noise.
+- Deploy hiccup: sandbox reset wiped venv paramiko mid-session again; reinstalled from the durable shim path (.git/hp-deploy) and pushed clean.
+
+Stage Summary:
+- Owner's one-tap flow: Meetings card -> Copy link -> paste in WhatsApp. Real link for the Zola x Ian appointment: https://www.hustleportal.online/m/XjDBcYhDsWCWk4d_rbQS-A (same link works for both parties).
+- Either side can post notes, propose a new time (meeting flips to awaiting and everyone is emailed), and confirm a proposed time; every action emails the other side plus the team inbox, and the owner sees note counts on the dashboard.
+- Schema and tokens are additive and idempotent; nothing on the real meeting was modified during testing (lifecycle ran on throwaway QA rows only).
