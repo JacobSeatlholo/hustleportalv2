@@ -3,7 +3,7 @@ import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { normalizeCampaignFrom } from '@/lib/mailer'
 import {
-  readCampaignStates, writeCampaignState, type CampaignState,
+  readCampaignStates, writeCampaignState, unsubscribeUrl, type CampaignState,
 } from '@/lib/campaignqueue'
 
 /**
@@ -94,6 +94,18 @@ export async function POST(req: NextRequest) {
     .filter((e) => !suppressed.has(e) && !already.has(e))
     .map((e) => ({ email: e, leadId: wanted.get(e)!.leadId }))
 
+  if (toQueue.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      campaign: tag,
+      queued: 0,
+      skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
+      skippedDuplicate: existingRows.length,
+      invalid,
+      note: 'Nothing new to queue — everyone on this list already has a send or a strike against them.',
+    })
+  }
+
   await db.emailLog.createMany({
     data: toQueue.map((r) => ({
       userId: gate.me.id,
@@ -147,6 +159,10 @@ export async function GET() {
     readCampaignStates(),
   ])
 
+  // Signed unsubscribe link per row — exec eyes only. The link every
+  // recipient actually gets is baked into their email at send time.
+  const rowsOut = rows.map((r) => ({ ...r, unsubUrl: unsubscribeUrl(r.id) }))
+
   const campaigns: Record<string, { queued: number; sent: number; failed: number; bounced: number; skipped: number; opened: number; total: number }> = {}
   for (const row of rows) {
     const tag = row.campaign as string
@@ -163,7 +179,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     campaigns: Object.keys(campaigns).map((tag) => ({ tag, state: states[tag] || null, summary: campaigns[tag] })),
-    rows,
+    rows: rowsOut,
   })
 }
 

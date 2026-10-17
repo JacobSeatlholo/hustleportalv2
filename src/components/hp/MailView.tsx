@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { api, type EmailLogRow, type Lead, type CampaignRow, type CampaignSummary } from './shared'
+import { api, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -59,26 +59,60 @@ export default function MailView() {
   const [body, setBody] = useState('')
   const [draftId, setDraftId] = useState<string | null>(null)
 
-  // Campaigns (exec): bulk sends grouped by campaign with read receipts,
-  // one tap from a recipient row to a follow up task or the contact itself.
+  // Campaigns (exec): batch queues with read receipts — build the audience,
+  // review the draft, press Start, and the engine paces the sends like a human.
   const isAdmin = session?.user?.role === 'ADMIN'
   const [campaignRows, setCampaignRows] = useState<CampaignRow[] | null>(null)
+  const [campaigns, setCampaigns] = useState<CampaignInfo[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [taskRow, setTaskRow] = useState<CampaignRow | null>(null)
   const [task, setTask] = useState({ title: '', dueDate: '', dueTime: '', priority: 'MEDIUM', notes: '' })
   const [taskSaving, setTaskSaving] = useState(false)
 
+  // queue composer state
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [composerStep, setComposerStep] = useState<'audience' | 'message'>('audience')
+  const [audienceSearch, setAudienceSearch] = useState('')
+  const [pickIds, setPickIds] = useState<Set<string>>(new Set())
+  const [paste, setPaste] = useState('')
+  const [cName, setCName] = useState('')
+  const [cFrom, setCFrom] = useState('BlackBiz <blackbiz@hustleportal.online>')
+  const [cSubject, setCSubject] = useState('')
+  const [cBody, setCBody] = useState('')
+  const [cPerHour, setCPerHour] = useState('45')
+  const [creating, setCreating] = useState(false)
+  const [actingTag, setActingTag] = useState<string | null>(null)
+
   const loadCampaigns = useCallback(async () => {
     if (!isAdmin) return
     try {
-      const res = await api<{ rows: CampaignRow[]; summary: Record<string, CampaignSummary> }>('/api/admin/exec/campaign')
+      const res = await api<{ campaigns: CampaignInfo[]; rows: CampaignRow[] }>('/api/admin/exec/campaigns')
       setCampaignRows(res.rows || [])
+      setCampaigns(res.campaigns || [])
     } catch {
       setCampaignRows([])
+      setCampaigns([])
     }
   }, [isAdmin])
 
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
+
+  // While a queue is ACTIVE the open screen taps the engine every minute.
+  // Closing the tab costs nothing: the cron heartbeat and the database clock
+  // keep the pace, this just makes progress visible while you watch.
+  const anyActive = campaigns.some((c) => c.state?.status === 'ACTIVE')
+  useEffect(() => {
+    if (!anyActive) return
+    const t = setInterval(async () => {
+      try {
+        const r = await api<{ sent: number; failed: number; skipped: number }>('/api/cron/campaign-tick')
+        if (r.sent || r.failed || r.skipped) loadCampaigns()
+      } catch {
+        // session lapse or cooldown — cron still drives the queue
+      }
+    }, 60_000)
+    return () => clearInterval(t)
+  }, [anyActive, loadCampaigns])
 
   function campaignLabel(c: string) {
     return c.split(/[-_]+/).map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ').replace(/^Blackbiz\b/, 'BlackBiz')
@@ -126,6 +160,107 @@ export default function MailView() {
     if (!r.lead?.id) return
     requestOpenLead(r.lead.id)
     setView('leads')
+  }
+
+  // ---- queue composer ----
+  const pastedEmails = paste.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)
+  const pickCount = pickIds.size + pastedEmails.length
+  const audienceLeads = leads
+    .filter((l) => {
+      const q = audienceSearch.trim().toLowerCase()
+      if (!q) return true
+      return l.company.toLowerCase().includes(q) || (l.email || '').toLowerCase().includes(q) || (l.contactName || '').toLowerCase().includes(q)
+    })
+    .slice(0, 300)
+
+  function togglePick(id: string) {
+    setPickIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function resetComposer() {
+    setComposerStep('audience'); setPickIds(new Set()); setPaste(''); setAudienceSearch('')
+    setCName(''); setCSubject(''); setCBody(''); setCPerHour('45')
+    setCFrom('BlackBiz <blackbiz@hustleportal.online>')
+  }
+
+  function finishEstimate(n: number, perHour: number) {
+    if (!n || !perHour) return ''
+    const hours = n / perHour
+    if (hours < 1) return 'under an hour'
+    if (hours < 24) return `about ${Math.ceil(hours)} hour${Math.ceil(hours) === 1 ? '' : 's'}`
+    const days = Math.ceil(hours / 24)
+    return `about ${days} day${days === 1 ? '' : 's'}`
+  }
+
+  async function createQueue() {
+    if (!cSubject.trim()) {
+      toast({ title: 'Add a subject', description: 'One strong line. It is the first thing they see.', variant: 'destructive' })
+      return
+    }
+    if (cBody.trim().length < 20) {
+      toast({ title: 'Write the message', description: 'The draft needs a body before it can queue.', variant: 'destructive' })
+      return
+    }
+    if (pickCount === 0) {
+      toast({ title: 'Pick an audience', description: 'Select contacts or paste addresses first.', variant: 'destructive' })
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await api<{ campaign: string; queued: number; skippedSuppressed: number; skippedDuplicate: number; invalid: string[] }>('/api/admin/exec/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          campaign: cName.trim() || cSubject.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40),
+          subject: cSubject.trim(),
+          body: cBody,
+          from: cFrom.trim(),
+          perHour: Number(cPerHour),
+          leads: [...pickIds],
+          emails: pastedEmails,
+        }),
+      })
+      const bits = [`${res.queued} contacts queued`]
+      if (res.skippedDuplicate) bits.push(`${res.skippedDuplicate} already in this campaign`)
+      if (res.skippedSuppressed) bits.push(`${res.skippedSuppressed} unsubscribed or bounced, refused`)
+      if (res.invalid.length) bits.push(`${res.invalid.length} invalid address${res.invalid.length === 1 ? '' : 'es'} dropped`)
+      toast({ title: 'Queue built, nothing sent yet', description: `${bits.join(' · ')}. You press Start on the card when the draft is approved.` })
+      resetComposer()
+      setComposerOpen(false)
+      setExpanded(res.campaign)
+      loadCampaigns()
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not build the queue', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function control(tag: string, action: 'start' | 'pause' | 'cancel') {
+    if (action === 'cancel' && !window.confirm(`Cancel the ${campaignLabel(tag)} queue? Every unsent email is skipped and the campaign is closed.`)) return
+    setActingTag(tag)
+    try {
+      await api('/api/admin/exec/campaigns', { method: 'PATCH', body: JSON.stringify({ campaign: tag, action }) })
+      toast({
+        title: action === 'start' ? 'Campaign started' : action === 'pause' ? 'Campaign paused' : 'Campaign cancelled',
+        description: action === 'start'
+          ? 'The engine now paces this queue around the clock. Press pause any time.'
+          : action === 'pause'
+            ? 'Sends stop on the spot. Start again whenever you are ready.'
+            : 'The queue is closed. Sent emails and their read receipts stay.',
+      })
+      loadCampaigns()
+      if (action === 'start') api('/api/cron/campaign-tick').catch(() => { /* first turn, best effort */ })
+    } catch (e) {
+      toast({ title: 'Could not update the campaign', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setActingTag(null)
+    }
   }
 
   const load = useCallback(async () => {
@@ -246,72 +381,141 @@ export default function MailView() {
         <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile — sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
       </div>
 
-      {/* Campaigns (exec): every bulk send, who opened it, one tap to follow up */}
+      {/* Campaigns (exec): build a queue, pace it, watch read receipts land */}
       {isAdmin && (
         <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="font-medium text-sm flex items-center gap-2">
-              <Megaphone className="h-4 w-4 text-brand" /> Campaigns
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Bulk sends and who opened them. Follow up with a task or open the contact.</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-medium text-sm flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-brand" /> Campaigns
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Batch sends paced like a human. Build the audience, review the draft, press Start.</p>
+            </div>
+            <Button size="sm" className="gap-1 shrink-0" onClick={() => { resetComposer(); setComposerOpen(true) }}>
+              <Plus className="h-3.5 w-3.5" /> New campaign
+            </Button>
           </div>
           {campaignRows === null ? (
             <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
-          ) : campaignRows.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4 text-center">No campaigns yet. Bulk sends show up here with their read receipts.</p>
-          ) : (
-            (() => {
-              const groups = new Map<string, CampaignRow[]>()
-              for (const r of campaignRows) {
-                const key = r.campaign || 'other'
-                if (!groups.has(key)) groups.set(key, [])
-                groups.get(key)!.push(r)
+          ) : (() => {
+            const groups = new Map<string, CampaignRow[]>()
+            for (const r of campaignRows) {
+              const key = r.campaign || 'other'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key)!.push(r)
+            }
+            const tags = [...new Set([...campaigns.map((c) => c.tag), ...groups.keys()])]
+            if (tags.length === 0) {
+              return <p className="text-xs text-muted-foreground py-4 text-center">No campaigns yet. Press New campaign and build your first queue.</p>
+            }
+            return tags.map((key) => {
+              const rows = groups.get(key) || []
+              const info = campaigns.find((c) => c.tag === key)
+              const state = info?.state || null
+              const sum = info?.summary || {
+                queued: rows.filter((r) => r.status === 'QUEUED').length,
+                sent: rows.filter((r) => r.status === 'SENT').length,
+                failed: rows.filter((r) => r.status === 'FAILED').length,
+                bounced: rows.filter((r) => r.status === 'BOUNCED').length,
+                skipped: rows.filter((r) => r.status === 'SKIPPED').length,
+                opened: rows.filter((r) => r.openedAt).length,
+                total: rows.length,
               }
-              return [...groups.entries()].map(([key, rows]) => {
-                const sent = rows.filter((r) => r.status === 'SENT').length
-                const failed = rows.filter((r) => r.status === 'FAILED').length
-                const opened = rows.filter((r) => r.openedAt).length
-                const rate = rows.length ? Math.round((opened / rows.length) * 100) : 0
-                const isOpen = expanded === key
-                return (
-                  <div key={key} className="rounded-lg border overflow-hidden">
-                    <button onClick={() => setExpanded(isOpen ? null : key)} className="w-full text-left p-3 hover:bg-muted/40">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{campaignLabel(key)}</span>
-                        <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
-                          {sent} sent · {opened} opened{failed ? ` · ${failed} failed` : ''}
-                          {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${rate}%` }} />
-                      </div>
-                      <p className="mt-1 text-[10px] text-muted-foreground">{rate}% opened · green bar grows as they read</p>
-                    </button>
-                    {isOpen && (
+              const done = sum.sent + sum.failed + sum.bounced + sum.skipped
+              const progress = sum.total ? Math.round((done / sum.total) * 100) : 0
+              const rate = sum.total ? Math.round((sum.opened / sum.total) * 100) : 0
+              const isOpen = expanded === key
+              const statusChip = !state ? null
+                : state.status === 'ACTIVE' ? <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />sending</Badge>
+                : state.status === 'PAUSED' ? <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">paused</Badge>
+                : state.status === 'DONE' ? <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">done</Badge>
+                : <Badge variant="outline" className="text-[10px] text-muted-foreground">cancelled</Badge>
+              return (
+                <div key={key} className="rounded-lg border overflow-hidden">
+                  <button onClick={() => setExpanded(isOpen ? null : key)} className="w-full text-left p-3 hover:bg-muted/40">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium flex items-center gap-2 min-w-0">
+                        <span className="truncate">{campaignLabel(key)}</span>
+                        {statusChip}
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                        {sum.queued > 0 && `${sum.queued} queued · `}
+                        {sum.sent} sent · {sum.opened} opened{sum.failed ? ` · ${sum.failed} failed` : ''}{sum.bounced ? ` · ${sum.bounced} bounced` : ''}
+                        {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${state?.status === 'DONE' || !state ? 'bg-emerald-500' : 'bg-brand'}`}
+                        style={{ width: `${Math.max(progress, sum.opened ? rate : progress)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      {sum.queued > 0 && state
+                        ? `${state.perHour} per hour · queue clears in ${finishEstimate(sum.queued, state.perHour)} · ${rate}% read so far`
+                        : `${rate}% opened · green bar grows as they read`}
+                    </p>
+                  </button>
+                  {isOpen && (
+                    <>
+                      {state && sum.queued > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-t">
+                          {state.status !== 'ACTIVE' && (
+                            <Button size="sm" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'start')}>
+                              {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                              Start sending
+                            </Button>
+                          )}
+                          {state.status === 'ACTIVE' && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'pause')}>
+                              {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
+                              Pause
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-rose-500 border-rose-500/40 hover:bg-rose-500/10" disabled={actingTag === key} onClick={() => control(key, 'cancel')}>
+                            {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                            Cancel
+                          </Button>
+                          <span className="text-[11px] text-muted-foreground ml-auto hidden sm:block">
+                            {state.status === 'ACTIVE' ? 'Engine is moving. Check back or keep this page open.' : 'Draft gate: nothing sends until you press Start.'}
+                          </span>
+                        </div>
+                      )}
                       <div className="divide-y border-t max-h-80 overflow-y-auto hp-scroll">
-                        {rows.map((r) => (
+                        {rows.length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-4 text-center">No sends recorded under this label.</p>
+                        ) : rows.map((r) => (
                           <div key={r.id} className="p-2.5 flex items-start gap-2 text-sm">
                             <MailCheck className={`h-4 w-4 mt-0.5 shrink-0 ${r.openedAt ? 'text-emerald-500' : 'text-muted-foreground/50'}`} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-medium">{r.lead?.company || r.toEmail}</p>
                               <p className="truncate text-[11px] text-muted-foreground">
                                 {r.lead?.company && r.toEmail !== r.lead.company ? `${r.toEmail} · ` : ''}
-                                {r.status === 'FAILED'
-                                  ? 'Send failed'
-                                  : r.openedAt
-                                    ? `Opened ${new Date(r.openedAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${r.openCount > 1 ? ` · ${r.openCount} times` : ''}`
-                                    : `Not opened yet · sent ${new Date(r.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}`}
+                                {r.status === 'QUEUED'
+                                  ? 'Waiting in queue'
+                                  : r.status === 'SKIPPED'
+                                    ? `Skipped · ${r.error || 'not sent'}`
+                                    : r.status === 'FAILED'
+                                      ? 'Send failed'
+                                      : r.openedAt
+                                        ? `Opened ${new Date(r.openedAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${r.openCount > 1 ? ` · ${r.openCount} times` : ''}`
+                                        : `Not opened yet · sent ${new Date(r.sentAt || r.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}`}
                               </p>
                             </div>
-                            {r.openedAt ? (
+                            {r.openedAt && r.status === 'SENT' ? (
                               <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] shrink-0">read</Badge>
+                            ) : r.status === 'QUEUED' ? (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground shrink-0">queued</Badge>
+                            ) : r.status === 'BOUNCED' ? (
+                              <Badge variant="outline" className="text-[10px] text-rose-500 border-rose-500/40 shrink-0">bounced</Badge>
+                            ) : r.status === 'SKIPPED' ? (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground shrink-0">skipped</Badge>
                             ) : r.status === 'FAILED' ? (
                               <Badge variant="outline" className="text-[10px] text-rose-500 border-rose-500/40 shrink-0">failed</Badge>
                             ) : (
                               <Badge variant="outline" className="text-[10px] shrink-0">sent</Badge>
                             )}
-                            {r.lead?.id && (
+                            {r.lead?.id && r.status !== 'QUEUED' && r.status !== 'SKIPPED' && (
                               <div className="flex items-center gap-1 shrink-0">
                                 <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openContact(r)} title="Open this contact in Leads" aria-label="Open contact">
                                   <User className="h-3.5 w-3.5" />
@@ -324,12 +528,12 @@ export default function MailView() {
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )
-              })
-            })()
-          )}
+                    </>
+                  )}
+                </div>
+              )
+            })
+          })()}
         </div>
       )}
 
@@ -544,6 +748,122 @@ export default function MailView() {
               Add task
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New campaign composer — audience, message, review. Queues are born
+          paused: nothing sends until Start is pressed on the campaign card. */}
+      <Dialog open={composerOpen} onOpenChange={(o) => { if (!o) setComposerOpen(false) }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hp-scroll">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-brand" /> New campaign</DialogTitle>
+            <DialogDescription>
+              {composerStep === 'audience'
+                ? 'Pick the audience. Contacts come from your pipeline, or paste any list.'
+                : 'Write the message and set the pace. Review the draft before it queues.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {composerStep === 'audience' ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={audienceSearch} onChange={(e) => setAudienceSearch(e.target.value)} placeholder="Search your contacts" className="pl-8 h-9" />
+                </div>
+                <Button size="sm" variant="outline" className="h-9 text-xs shrink-0" onClick={() => setPickIds(new Set(audienceLeads.map((l) => l.id)))}>Select all</Button>
+                <Button size="sm" variant="outline" className="h-9 text-xs shrink-0" onClick={() => setPickIds(new Set())}>Clear</Button>
+              </div>
+              <div className="rounded-lg border divide-y max-h-56 overflow-y-auto hp-scroll">
+                {audienceLeads.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-4 text-center">No unlocked contacts with an email yet. Reveal contacts in Leads, or paste addresses below.</p>
+                ) : audienceLeads.map((l) => (
+                  <label key={l.id} className="flex items-center gap-2.5 p-2.5 cursor-pointer hover:bg-muted/40">
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--brand)] h-4 w-4"
+                      checked={pickIds.has(l.id)}
+                      onChange={() => togglePick(l.id)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium truncate">{l.company}</span>
+                      <span className="block text-[11px] text-muted-foreground truncate">{l.email}{l.contactName ? ` · ${l.contactName}` : ''}</span>
+                    </span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{l.stage}</Badge>
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-paste">Or paste addresses</Label>
+                <Textarea
+                  id="c-paste"
+                  rows={3}
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                  placeholder={'one@business.co.za\ntwo@other.co.za'}
+                />
+                <p className="text-[11px] text-muted-foreground">One per line or separated by commas. Bounced, complained and unsubscribed addresses are refused automatically.</p>
+              </div>
+              <Button className="w-full" disabled={pickCount === 0} onClick={() => setComposerStep('message')}>
+                Continue with {pickCount} recipient{pickCount === 1 ? '' : 's'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="c-name">Campaign name</Label>
+                  <Input id="c-name" value={cName} onChange={(e) => setCName(e.target.value)} placeholder="blackbiz-intro" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="c-pace">Pace</Label>
+                  <Select value={cPerHour} onValueChange={(v) => setCPerHour(v)}>
+                    <SelectTrigger id="c-pace"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 per hour · gentle</SelectItem>
+                      <SelectItem value="45">45 per hour · steady</SelectItem>
+                      <SelectItem value="60">60 per hour · brisk</SelectItem>
+                      <SelectItem value="90">90 per hour · fast</SelectItem>
+                      <SelectItem value="120">120 per hour · ceiling</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-from">From</Label>
+                <Input id="c-from" value={cFrom} onChange={(e) => setCFrom(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-subject">Subject</Label>
+                <Input id="c-subject" value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Your next client is one search away" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-body">Message</Label>
+                <Textarea id="c-body" rows={8} value={cBody} onChange={(e) => setCBody(e.target.value)} placeholder="Write it the way you speak. Short lines win." />
+                <p className="text-[11px] text-muted-foreground">A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
+                <p className="font-medium text-[13px]">Before it queues</p>
+                <p className="text-muted-foreground">{pickCount} recipients · {cPerHour} per hour · finishes in {finishEstimate(pickCount, Number(cPerHour))}</p>
+                <p className="text-muted-foreground">Every email carries a one tap unsubscribe link and open tracking. Bounces and spam complaints remove the address automatically.</p>
+                <p className="text-foreground/80 font-medium">Nothing sends yet. The queue waits paused — you press Start on the card once the draft is approved.</p>
+              </div>
+              {cSubject.trim() && cBody.trim() && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-[11px] text-muted-foreground mb-1">Draft preview</p>
+                  <p className="text-[13px] font-medium">{cSubject}</p>
+                  <p className="text-xs whitespace-pre-wrap mt-1 max-h-36 overflow-y-auto hp-scroll">{cBody}</p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setComposerStep('audience')} disabled={creating}>Back</Button>
+                <Button className="flex-1" onClick={createQueue} disabled={creating || !cSubject.trim() || cBody.trim().length < 20}>
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Megaphone className="h-4 w-4 mr-1" />}
+                  Build queue
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

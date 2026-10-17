@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserId } from '@/lib/auth'
-import { db } from '@/lib/db'
+import { requireExec } from '@/lib/admin'
 import { tickCampaigns } from '@/lib/campaignqueue'
 
 export const maxDuration = 60
@@ -24,12 +23,8 @@ function bearerOk(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!bearerOk(req)) {
-    const userId = await getUserId()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const me = await db.user.findUnique({ where: { id: userId }, select: { role: true, platformAdmin: true } })
-    if (!me || (me.role !== 'ADMIN' && !me.platformAdmin)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const gate = await requireExec()
+    if (!gate.ok) return gate.res
   }
   const r = await tickCampaigns(30)
   return NextResponse.json({ ok: true, ...r })

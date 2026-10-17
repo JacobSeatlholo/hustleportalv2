@@ -134,7 +134,7 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
     // this very campaign still stops the next send to that address.
     const queued = await db.emailLog.findUnique({
       where: { id: row.id },
-      select: { id: true, toEmail: true, subject: true, body: true },
+      select: { id: true, toEmail: true, subject: true, body: true, status: true },
     })
     if (!queued || queued.status !== 'QUEUED') continue // another ticker got it first
 

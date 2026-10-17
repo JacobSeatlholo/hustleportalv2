@@ -1162,3 +1162,25 @@ Stage Summary:
 - Production 5466568: Mail now has a Campaigns desk — every bulk send with its open-rate bar, per-recipient read receipts, and one tap to a follow up task or the contact itself. Campaign workflow lives in Mail; the lead dialog keeps its edit card + email activity for when a contact is open
 - Boss flow after refresh: Mail -> Campaigns -> BlackBiz Intro -> green "read" rows -> Task (or open contact to rename and enrich, then stage forward)
 - blackbiz-intro stands at 66 sent, 0 failed, 12+ opened (pixel floor)
+
+---
+Task ID: 72
+Agent: main (Z.ai)
+Task: "Send at least 1000 emails per day from this platform, as free as possible" — campaign queue engine + Mail Campaigns control room (batch composer, pacing, suppression, unsubscribe, bounce feed)
+
+Work Log:
+- Answer to the boss: NO multiple free accounts (ToS bans, one domain verifies in one Resend account only, new accounts have zero reputation, multi-domain spam fingerprint burns everything incl. transactional mail). Free-first plan: queue engine runs on the existing Resend FREE lane at 100/day ($0) with human pacing; Amazon SES (~R60/month at 30k/mo) is the later lane when >100/day is needed; Resend Pro $20/mo is the zero-effort alternative. Warm-up ramp 20-30/day -> +30% every 2-3 days -> 1000/day in 4-6 weeks.
+- Schema (additive): EmailLog + providerId (resend message id), + sentAt, status now DRAFT|QUEUED|SENT|FAILED|BOUNCED|SKIPPED; new Suppression model (email unique, reason BOUNCE|COMPLAINT|UNSUB|MANUAL)
+- src/lib/campaignqueue.ts: tickCampaigns — DB-clock pacing (perHour minus sends in last 3600s, per-tick cap 30), suppression checked before EVERY send, QUEUED rows sent via sendCampaignMail with pixel + signed unsubscribe link, campaigns flip to DONE when drained; state in platformConfig `campaign_state:<tag>` {status PAUSED|ACTIVE|DONE|CANCELLED, perHour, from}
+- mailer.ts: resendPost returns provider message id; sendCampaignMail accepts unsubscribeUrl -> List-Unsubscribe + List-Unsubscribe-Post one-click headers + plain footer line ("Prefer not to hear from us again? One tap and you are out")
+- POST/GET/PATCH /api/admin/exec/campaigns: create queue (lead access wall OR pasted emails; dedupe within campaign; suppression refused at queue time; invalid addresses reported; born PAUSED — draft gate structural), read-out (summary queued/sent/failed/bounced/skipped/opened per campaign + signed unsubUrl per row), control start/pause/resume/cancel (cancel skips all queued)
+- GET /api/cron/campaign-tick: bearer CRON_SECRET OR requireExec; the UI taps it every 60s while a queue is ACTIVE; external free cron (cron-job.org) drives it with the tab closed
+- POST /api/webhooks/resend: email.bounced/email.complained -> EmailLog BOUNCED + Suppression upsert (match by providerId, fallback toEmail+SENT in 7d); RESEND_WEBHOOK_SECRET gate optional
+- GET/POST /api/unsubscribe: signed link (logId + HMAC-ish sig), RFC 8058 one-click POST + human GET, instant Suppression, plain confirmation page
+- MailView Campaigns control room: New campaign composer (audience picker from unlocked leads with search/select-all + paste box; message step with name/From/subject/body/pace 30-120 per hour; review box + draft preview; "Nothing sends yet — you press Start on the card"), campaign cards show state chip (sending/paused/done/cancelled) + queued count + queue-clear estimate, Start/Pause/Cancel controls, rows get queued/skipped/bounced badges; task + open-contact buttons unchanged
+- scripts/verify_campaign_queue.mjs: 22 checks — dedupe, invalid refuse, born PAUSED, start, tick sends, DONE, perHour=1 ceiling holds 1 back, bounce webhook -> suppression, bad-sig 400, signed unsubscribe 200, suppression law (bounced+unsubbed refused at queue time), cancel, stranger 401, QA row cleanup
+- Cost answer for "as free as possible": current free lane does 100/day at $0 with the engine pacing it; nothing in the code ties to a paid plan
+
+Stage Summary:
+- Production candidate: Campaigns in Mail is now a control room — build a queue, review the draft, press Start, and sends pace around the clock like a human; bounces, complaints and unsubscribes never hear from us again
+- 1000/day path stays free-first: 100/day now on the free lane, SES (~R60/mo) or Resend Pro ($20/mo) when ready to cross 100/day
