@@ -1109,3 +1109,10 @@ Work Log:
 
 Stage Summary:
 - Pipeline live and proven dry; 66 recipients validated; sender BlackBiz <blackbiz@hustleportal.online> on verified domain; subject "Your next client is one search away"; awaiting owner confirmation to run: node scripts/send_blackbiz_campaign.mjs fire --i-confirm-send
+- Draft v2 (owner feedback): problem-first scene from the boss's own launch copy merged with the family lines from draft 1; subject "The pitch is won. The money still leaks out."; live signup count (kpis.realMembers, was 64) stamped at send time; copy lives in scripts/send_blackbiz_campaign.mjs buildBody()
+- Lead import shipped: POST /api/admin/exec/campaign/import -> 66 contacts created as NEW leads (source CSV) under project "Simple Eternity Holdings" (owner ceo@businesshustle.co.za, his existing "Business Hustle" team reused); mapping cached scripts/campaign_lead_map.json; every send passes leadId
+- Read tracking shipped: EmailLog + campaign/openedAt/openCount + lead relation (db push on deploy); GET /api/mail/open/[id] 1x1 gif (public, no-store) stamps first-open + openCount and flips linked lead NEW -> CONTACTED; GET /api/admin/exec/campaign = exec read-out (summary + per-recipient rows with read time + stage); plain-text-only readers never fire the pixel (floor not ceiling)
+- Campaign sends are DRAFT-first: EmailLog row created before send so the pixel binds to log.id, then stamped SENT/FAILED
+- Draft v3 (owner feedback): merged draft 1 family flow + draft 2 problem scene; all owner-quoted lines verbatim; verify 66/66 dry
+- Video thumbnail shipped (deploy 2ed2634): email clients refuse inline <video>, so scripts/build_video_poster.py extracts the brightest frame (4.0s title card) via ffmpeg, PIL-composes brand vignette + yellow play button bottom-right -> public/campaign/blackbiz-intro-video.jpg (45 KB); campaignHtml swaps the marker line "See it in motion: <url>" for a clickable 640px poster opening the mp4 in browser; text version keeps the plain link; poster URL verified 200; verify 66/66 dry, zero sends
+- STILL GATED: owner must approve draft v3 + video block before fire --i-confirm-send
