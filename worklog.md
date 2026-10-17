@@ -1142,3 +1142,23 @@ Stage Summary:
 - Production 3f9c323: the contact dialog is now a working desk — edit the whole card, fire a follow up task without leaving the contact, and see the read receipt (time + count) the moment they open the email; opened contacts carry a green "read" chip on the board and list
 - Campaign read-out stands: blackbiz-intro sent 66, failed 0, opens climbing (12 at verify time); opens only count when the reader loads images (floor not ceiling)
 - QA noise: one EmailLog row campaign='qa-detail-verify' remains under ops user (bounded, clearly labelled)
+
+---
+Task ID: 71
+Agent: main (Z.ai)
+Task: "could these go under a campaigns section in mail dedicated to starting campaigns, and from there the add to task" — Mail Campaigns hub; boss also reported not seeing the new lead dialog (stale bundle)
+
+Work Log:
+- Boss's desktop screenshot showed the OLD dialog after deploy 3f9c323 was already live (verified by pixel timestamp vs screenshot time) — stale tab/PWA bundle; advised one hard refresh. All shipped features confirmed present server side.
+- New src/components/hp/leadBus.ts: tiny cross-view bus — requestOpenLead (pending slot + hp:open-lead CustomEvent) and consumePendingLead; slot covers LeadsView not yet mounted after setView('leads'), event covers already-mounted
+- MailView: exec-only (role ADMIN) Campaigns card at the top of Mail — GET /api/admin/exec/campaign, rows grouped client side by campaign, per-campaign card (sent/failed/opened counts + green open-rate bar), expandable recipient list; each row: contact company + address, read receipt ("Opened 17 Oct, 19:33 · N times" / "Not opened yet · sent 17 Oct" / "Send failed"), read/sent/failed badge, and two actions: Open contact (leadBus jump to Leads + opens the lead dialog via GET /api/leads/[id]) and Task (nested popup: title prefilled "Follow up with <company>", notes prefilled "From campaign X · <email>", due date/time, priority, POST /api/tasks with leadId)
+- LeadsView: openLeadById (list lookup, else detail fetch) + pending consume + hp:open-lead listener; campaign rows without a linked lead show no actions (QA row whose lead was deleted renders clean)
+- Label polish: campaign key prettified ("blackbiz-intro" -> "BlackBiz Intro"), recipient rows carry the address when it differs from the company name (the six "gmail" rows are now distinguishable; boss renames them in the new edit card)
+- Deploys: bcaa234 + 5466568. Visual QA on prod desktop (ops seat, 1440x900): Campaigns card first in Mail, "BlackBiz Intro 66 sent · 12 opened · 18% opened" with green bar, rows show "amslinahholdings@gmail.com · Opened 17 Oct, 19:33" with read badge + actions. Screenshot download/qa_mail_campaigns.png
+- Note: Add task from a campaign row works for the boss (leads are his); the QA ops seat gets an honest "contact does not exist" on those rows (not his pipeline) — by design
+- Regression: e2e_prod_qa 39/39
+
+Stage Summary:
+- Production 5466568: Mail now has a Campaigns desk — every bulk send with its open-rate bar, per-recipient read receipts, and one tap to a follow up task or the contact itself. Campaign workflow lives in Mail; the lead dialog keeps its edit card + email activity for when a contact is open
+- Boss flow after refresh: Mail -> Campaigns -> BlackBiz Intro -> green "read" rows -> Task (or open contact to rename and enrich, then stage forward)
+- blackbiz-intro stands at 66 sent, 0 failed, 12+ opened (pixel floor)
