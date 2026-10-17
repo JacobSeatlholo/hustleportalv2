@@ -21,6 +21,7 @@ import { api, rands, randsPlain, STAGES, type Lead, type LeadEmailLog, type Task
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
+import { consumePendingLead } from './leadBus'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
@@ -155,6 +156,32 @@ export default function LeadsView() {
   }
 
   const openLead = useCallback((l: Lead) => setDetail(l), [])
+
+  // Mail campaigns (and any other view) can ask the pipeline to open one contact.
+  // The pending slot covers "Leads still has to mount after the view switch",
+  // the event covers "Leads is already on screen".
+  const openLeadById = useCallback(async (leadId: string) => {
+    const local = leads.find((l) => l.id === leadId)
+    if (local) { setDetail(local); return }
+    try {
+      const res = await api<{ lead: Lead }>(`/api/leads/${leadId}`)
+      setDetail(res.lead)
+    } catch {
+      toast({ title: 'Could not open that contact', variant: 'destructive' })
+    }
+  }, [leads, toast])
+
+  useEffect(() => {
+    const pending = consumePendingLead()
+    if (pending) openLeadById(pending)
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ leadId?: string }>).detail?.leadId
+      if (id) openLeadById(id)
+    }
+    window.addEventListener('hp:open-lead', handler)
+    return () => window.removeEventListener('hp:open-lead', handler)
+  }, [openLeadById])
+
   const pipelineValue = useMemo(() => leads.filter((l) => !['WON', 'LOST'].includes(l.stage)).reduce((a, l) => a + l.value, 0), [leads])
   const filteredLeads = useMemo(() => (stageFilter === 'ALL' ? leads : leads.filter((l) => l.stage === stageFilter)), [leads, stageFilter])
   const visibleStages = stageFilter === 'ALL' ? STAGES : STAGES.filter((s) => s.key === stageFilter)

@@ -6,11 +6,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { api, type EmailLogRow, type Lead } from './shared'
+import { api, type EmailLogRow, type Lead, type CampaignRow, type CampaignSummary } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X } from 'lucide-react'
+import { requestOpenLead } from './leadBus'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -32,7 +39,7 @@ interface MailStatus {
 }
 
 export default function MailView() {
-  const { activeProjectId, bumpRefresh, setView } = useHp()
+  const { activeProjectId, bumpRefresh, setView, session } = useHp()
   const { toast } = useToast()
   const { paid } = usePlan()
   const [emails, setEmails] = useState<EmailLogRow[]>([])
@@ -51,6 +58,75 @@ export default function MailView() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [draftId, setDraftId] = useState<string | null>(null)
+
+  // Campaigns (exec): bulk sends grouped by campaign with read receipts,
+  // one tap from a recipient row to a follow up task or the contact itself.
+  const isAdmin = session?.user?.role === 'ADMIN'
+  const [campaignRows, setCampaignRows] = useState<CampaignRow[] | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [taskRow, setTaskRow] = useState<CampaignRow | null>(null)
+  const [task, setTask] = useState({ title: '', dueDate: '', dueTime: '', priority: 'MEDIUM', notes: '' })
+  const [taskSaving, setTaskSaving] = useState(false)
+
+  const loadCampaigns = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const res = await api<{ rows: CampaignRow[]; summary: Record<string, CampaignSummary> }>('/api/admin/exec/campaign')
+      setCampaignRows(res.rows || [])
+    } catch {
+      setCampaignRows([])
+    }
+  }, [isAdmin])
+
+  useEffect(() => { loadCampaigns() }, [loadCampaigns])
+
+  function campaignLabel(c: string) {
+    return c.split(/[-_]+/).map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ')
+  }
+
+  function openTaskPopup(r: CampaignRow) {
+    setTaskRow(r)
+    setTask({
+      title: `Follow up with ${r.lead?.company || r.toEmail}`,
+      dueDate: '', dueTime: '', priority: 'MEDIUM',
+      notes: `From campaign ${campaignLabel(r.campaign || '')} · ${r.toEmail}`,
+    })
+  }
+
+  async function saveTask() {
+    if (!taskRow) return
+    setTaskSaving(true)
+    try {
+      const dueIso = task.dueDate
+        ? new Date(task.dueTime ? `${task.dueDate}T${task.dueTime}` : `${task.dueDate}T00:00`).toISOString()
+        : null
+      await api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: task.title.trim(),
+          notes: task.notes.trim() || null,
+          priority: task.priority,
+          dueDate: dueIso,
+          isPrivate: false,
+          assigneeId: session?.user.id,
+          leadId: taskRow.lead?.id || undefined,
+        }),
+      })
+      toast({ title: 'Task added', description: `Linked to ${taskRow.lead?.company || taskRow.toEmail}. It lives under Tasks.` })
+      setTaskRow(null)
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not add task', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setTaskSaving(false)
+    }
+  }
+
+  function openContact(r: CampaignRow) {
+    if (!r.lead?.id) return
+    requestOpenLead(r.lead.id)
+    setView('leads')
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,6 +245,92 @@ export default function MailView() {
         <h2 className="font-display text-2xl">Mail</h2>
         <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile — sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
       </div>
+
+      {/* Campaigns (exec): every bulk send, who opened it, one tap to follow up */}
+      {isAdmin && (
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div>
+            <h3 className="font-medium text-sm flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-brand" /> Campaigns
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Bulk sends and who opened them. Follow up with a task or open the contact.</p>
+          </div>
+          {campaignRows === null ? (
+            <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
+          ) : campaignRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">No campaigns yet. Bulk sends show up here with their read receipts.</p>
+          ) : (
+            (() => {
+              const groups = new Map<string, CampaignRow[]>()
+              for (const r of campaignRows) {
+                const key = r.campaign || 'other'
+                if (!groups.has(key)) groups.set(key, [])
+                groups.get(key)!.push(r)
+              }
+              return [...groups.entries()].map(([key, rows]) => {
+                const sent = rows.filter((r) => r.status === 'SENT').length
+                const failed = rows.filter((r) => r.status === 'FAILED').length
+                const opened = rows.filter((r) => r.openedAt).length
+                const rate = rows.length ? Math.round((opened / rows.length) * 100) : 0
+                const isOpen = expanded === key
+                return (
+                  <div key={key} className="rounded-lg border overflow-hidden">
+                    <button onClick={() => setExpanded(isOpen ? null : key)} className="w-full text-left p-3 hover:bg-muted/40">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{campaignLabel(key)}</span>
+                        <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                          {sent} sent · {opened} opened{failed ? ` · ${failed} failed` : ''}
+                          {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${rate}%` }} />
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{rate}% opened · green bar grows as they read</p>
+                    </button>
+                    {isOpen && (
+                      <div className="divide-y border-t max-h-80 overflow-y-auto hp-scroll">
+                        {rows.map((r) => (
+                          <div key={r.id} className="p-2.5 flex items-start gap-2 text-sm">
+                            <MailCheck className={`h-4 w-4 mt-0.5 shrink-0 ${r.openedAt ? 'text-emerald-500' : 'text-muted-foreground/50'}`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium">{r.lead?.company || r.toEmail}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {r.status === 'FAILED'
+                                  ? 'Send failed'
+                                  : r.openedAt
+                                    ? `Opened ${new Date(r.openedAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${r.openCount > 1 ? ` · ${r.openCount} times` : ''}`
+                                    : `Not opened yet · sent ${new Date(r.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}`}
+                              </p>
+                            </div>
+                            {r.openedAt ? (
+                              <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] shrink-0">read</Badge>
+                            ) : r.status === 'FAILED' ? (
+                              <Badge variant="outline" className="text-[10px] text-rose-500 border-rose-500/40 shrink-0">failed</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] shrink-0">sent</Badge>
+                            )}
+                            {r.lead?.id && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openContact(r)} title="Open this contact in Leads" aria-label="Open contact">
+                                  <User className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" onClick={() => openTaskPopup(r)}>
+                                  <CalendarPlus className="h-3.5 w-3.5 text-brand" /> Task
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            })()
+          )}
+        </div>
+      )}
 
       {/* Free plan email meter — honest count, calm tone, one tap to the plans.
           The server enforces the ceiling; this makes it visible before it bites. */}
@@ -336,6 +498,53 @@ export default function MailView() {
           Prefer your own address on the label? Connect Gmail in Integrations (optional, takes about a minute).
         </span>
       </div>
+
+      {/* quick follow up task from a campaign row */}
+      <Dialog open={Boolean(taskRow)} onOpenChange={(o) => !o && setTaskRow(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Follow up task</DialogTitle>
+            <DialogDescription>
+              {taskRow ? `Linked to ${taskRow.lead?.company || taskRow.toEmail} from ${campaignLabel(taskRow.campaign || '')}.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Task</Label>
+              <Input value={task.title} onChange={(e) => setTask({ ...task, title: e.target.value })} placeholder="Follow up with…" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Due date</Label>
+                <Input type="date" value={task.dueDate} onChange={(e) => setTask({ ...task, dueDate: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Time</Label>
+                <Input type="time" value={task.dueTime} onChange={(e) => setTask({ ...task, dueTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Priority</Label>
+              <Select value={task.priority} onValueChange={(v) => setTask({ ...task, priority: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea rows={2} value={task.notes} onChange={(e) => setTask({ ...task, notes: e.target.value })} />
+            </div>
+            <Button onClick={saveTask} disabled={taskSaving || !task.title.trim()} className="w-full">
+              {taskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarPlus className="h-4 w-4 mr-1" />}
+              Add task
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -149,6 +149,27 @@ export interface LeadEmailLog {
   createdAt: string
 }
 
+// Campaign read-out (exec): one row per send, grouped by campaign client side.
+export interface CampaignRow {
+  id: string
+  campaign: string | null
+  toEmail: string
+  subject: string
+  status: string // SENT | FAILED | DRAFT
+  error: string | null
+  openedAt: string | null
+  openCount: number
+  createdAt: string
+  lead: { id: string; company: string; stage: string } | null
+}
+
+export interface CampaignSummary {
+  sent: number
+  failed: number
+  opened: number
+  total: number
+}
+
 export interface Task {
   id: string
   title: string
