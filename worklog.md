@@ -1069,3 +1069,27 @@ Work Log:
 Stage Summary:
 - Verdict delivered: paper floor is standing, I was wrong to imply bare. Real gaps are narrow and small: (1) IR registration/manual-upload/annual-report claim needs confirmation in eServices portal (cannot verify externally), (2) privacy notice needs one lead-generation paragraph (drafted, house style, no hyphens), (3) terms need one buyer-use clause (drafted), (4) signup needs one agreement line (drafted), (5) delist/suppression request path for listed businesses (offer to build), (6) cookie banner parked low priority, (7) cross border clause align with hosting reality
 - No code shipped this task; three copy drafts + two small builds offered, boss decides
+
+---
+Task ID: 69
+Agent: main (Z.ai)
+Task: Ship POPIA fixes (signup agreement line, remove-listing path, email footer redesign) + Google Cloud Console aesthetic pass per boss request
+
+Work Log:
+- Schema: added ListingSuppression model (nameKey+city unique, osmId index) — additive, deploy ran prisma db push safe
+- New src/lib/suppression.ts: 60s-cached rows, suppressedNameKeys/suppressedOsmIds (broad pool filter), isSuppressed (precise reveal check), createSuppression (P2002 = already honoured)
+- New POST /api/delist: public, no auth (requester is a business owner), 6/hour/IP throttle, contact validation (email or phone), team inbox alerted via sendSystemMail, idempotent
+- New /remove-listing public page (form -> confirmation card), linked from landing footer + app footer + reset-page style shared
+- Enforcement: reveal route refuses suppressed business BEFORE grounded lookup and charge (charged:false, wallet untouched); leadpool rememberScanResults drops suppressed names + map ids at pool write; serveFromPool + serveExpleeBoost filter suppressed nameKeys at serve
+- mailer.ts legalFooter rewritten: six-point disclaimer wall -> 11-line block (company line, one confidentiality line, Terms / Privacy & POPIA / Cookie Policy / PAIA links, copyright); both call sites updated
+- Signup register form: "By creating an account you agree to our Terms and our Privacy & POPIA notice." with links (mode-aware, register only)
+- GCP pass: --radius 0.5rem, cool slate tokens (#0b0c0f bg / #14161b card / #1c1f26 secondary / #262a33 border), hp-gradient-bg flattened, scrollbar neutral; ui/card shadowless rounded-lg, ui/button flat variants (outline = transparent+border), ui/badge rounded-sm, ui/input shadowless, ui/table GCP header band (bg-muted/60) + muted xs headers + px-3 py-2.5 cells; sed sweep across all hp components: border-white/10|15|20 -> border-border, bg-card/70 backdrop-blur -> bg-card, rounded-xl -> rounded-lg, hover:brightness-110 -> hover:bg-brand/90; zero backdrop-blur left in hp
+- Deploy: reinstall paramiko into /home/z/.venv (sandbox reset wiped it), push 4f77e3c..b28b24c
+- Verification: new scripts/verify_popia_ui.mjs — fixed body-consuming call() bug (res.json() before res.text() blanked HTML pages); final 18/18 (page live, landing SSR carries agreement + footer link, delist accepted/idempotent/400-without-contact, reveal refusal names opt-out, wallet 9900 -> 9900, QA lead cleaned, email path healthy)
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11
+
+Stage Summary:
+- Production b28b24c: POPIA removal path is real end to end (page -> endpoint -> suppression -> pool filters -> reveal refusal without charge), signup anchors consent at capture, email footer is elegant with all four legal links, whole UI sits on the flat Google console surface ladder (black & yellow brand intact)
+- QA suppression row "QA Delist Verify Co" left in place (harmless, proves idempotency state)
+- Meeting verify scripts (set_medispa_venue.mjs, prod_meeting_share_verify.mjs) were wiped by the sandbox reset (scripts/ gitignored); meeting surfaces only received cosmetic class swaps this task
+- Boss actions unchanged from Task 68: paste privacy-notice paragraph + ToS clause on WordPress, confirm IR eServices registration + PAIA manual upload + annual report diarised
