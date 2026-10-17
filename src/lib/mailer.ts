@@ -485,6 +485,52 @@ export async function sendTeamMail(
   return { ok: false, error: r.error, to: TEAM_INBOX }
 }
 
+// ------------------------------------------------------------- campaign mail
+
+/**
+ * Ecosystem campaigns: the owner introducing HustlePortal to the member lists
+ * of their OWN other products (BlackBiz etc.). Platform engine only, the
+ * campaign identity the owner picked, NO referral signature, Reply-To the team
+ * inbox, legal footer attached. The From stays on hustleportal.online by
+ * construction — the domain signs the send, anything else gets rejected or
+ * lands in spam.
+ */
+export const CAMPAIGN_FROM_DEFAULT = 'BlackBiz <blackbiz@hustleportal.online>'
+
+/** Accept "local@hustleportal.online" or 'Label <local@hustleportal.online>'; anything else falls back. */
+export function normalizeCampaignFrom(raw?: string): string {
+  const s = raw?.trim()
+  if (!s) return CAMPAIGN_FROM_DEFAULT
+  const m = s.match(/<\s*([\w.+-]+)@hustleportal\.online\s*>/i) || s.match(/^([\w.+-]+)@hustleportal\.online$/i)
+  if (!m) return CAMPAIGN_FROM_DEFAULT
+  const address = `${m[1].toLowerCase()}@hustleportal.online`
+  const label = (s.match(/^"?([^"<]+?)"?\s*</)?.[1] || 'HustlePortal').trim().slice(0, 40)
+  return `${label} <${address}>`
+}
+
+export async function sendCampaignMail(
+  mail: { to: string; subject: string; body: string; from?: string },
+): Promise<{ ok: boolean; via?: string; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) return { ok: false, error: 'Email engine is not configured.' }
+  const from = normalizeCampaignFrom(mail.from)
+  const body = mail.body + legalFooter()
+  const res = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
+  if (res.ok) {
+    const d = sendingDomain()
+    domainCache = {
+      at: Date.now(),
+      rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
+    }
+    await stampDomainProof()
+    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: `campaign:${from}` })
+    return { ok: true, via: from }
+  }
+  console.error('[mail] campaign send failed:', res.raw.slice(0, 200))
+  await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: res.raw.slice(0, 160) })
+  return { ok: false, error: classifyPlatformError(res.raw, await readDomainProof()) }
+}
+
 /**
  * System emails (password resets, receipts, alerts) — platform engine only,
  * branded from, NO referral signature, Reply-To the team inbox.
