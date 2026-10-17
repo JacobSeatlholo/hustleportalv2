@@ -45,7 +45,13 @@ export async function POST(req: NextRequest) {
   if (!subject) return NextResponse.json({ error: 'Subject is required.' }, { status: 400 })
   if (body.trim().length < 20) return NextResponse.json({ error: 'Body is required.' }, { status: 400 })
 
-  const perHour = Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
+  // A second batch joining a running campaign keeps the pace the operator
+  // already chose — omitting perHour in the payload must never reset it.
+  const states0 = await readCampaignStates()
+  const existingState = states0[tag]
+  const perHour = payload.perHour == null
+    ? Math.max(1, Math.min(MAX_HOURLY, existingState?.perHour || DEFAULT_HOURLY))
+    : Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
   const from = normalizeCampaignFrom(payload.from)
 
   // Recipients from pipeline leads — same access wall as every lead action.
@@ -121,8 +127,7 @@ export async function POST(req: NextRequest) {
 
   // Queues are born PAUSED. The draft gate lives in the structure of the thing:
   // nothing can move until Start is pressed by a human who saw the draft.
-  const states = await readCampaignStates()
-  const existing: CampaignState = states[tag] || {
+  const existing: CampaignState = existingState || {
     status: 'PAUSED',
     perHour,
     from,
