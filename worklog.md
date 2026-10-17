@@ -1184,3 +1184,14 @@ Work Log:
 Stage Summary:
 - Production candidate: Campaigns in Mail is now a control room — build a queue, review the draft, press Start, and sends pace around the clock like a human; bounces, complaints and unsubscribes never hear from us again
 - 1000/day path stays free-first: 100/day now on the free lane, SES (~R60/mo) or Resend Pro ($20/mo) when ready to cross 100/day
+- Deploys: 847705d (engine + control room), d748e72 (perHour floor 1 for warm-up crawl), 1724ed8 (pace-preservation: second batch must not reset the operator pace)
+- verify_campaign_queue.mjs 22/22 ALL GREEN on prod: born PAUSED, dedupe, invalid refuse, tick sends, DONE, 1/hour ceiling holds (sent exactly 1), bounce webhook -> BOUNCED + suppression, bad-sig 400, signed unsubscribe 200, suppression law at queue time, cancel, stranger 401, cleanup
+- Bug found by verify + fixed: POST create on an existing campaign reset perHour to default 45 when payload omitted it (Number(undefined)||45) — now preserves the operator pace
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11, verify_lead_detail 19/19
+- Visual QA (prod desktop 1440x900, ops seat): Campaigns card first in Mail with New campaign button; composer audience step (search, select all, paste box, honest empty state), message step (name, pace select, From, subject, body, review box, draft preview), Build queue -> card appears "Visual Qa Campaign Draft paused 1 queued · 45 per hour · queue clears in under an hour" with Start sending/Cancel and "Draft gate: nothing sends until you press Start."; cancel confirm dialog -> card flips to cancelled. Screenshots: download/qa_campaign_composer_audience.png, qa_campaign_composer_message.png, qa_campaign_queue_card.png
+- QA noise: none left in EmailLog (0 qa rows); Suppression keeps the fake QA sink addresses (lawful refusal list); platformConfig keeps tiny campaign_state rows for dead QA tags (invisible in UI — only tags with rows render)
+- blackbiz-intro stands untouched: 66 sent, 0 failed, 12 opened
+
+Stage Summary:
+- Production 1724ed8: Mail Campaigns is a control room — build an audience from pipeline contacts or a pasted list, review the exact draft, press Start, and the engine paces sends around the clock (open screen, cron heartbeat, or both). Bounces, complaints and unsubscribes are suppressed forever, every email carries one-click unsubscribe + open tracking, and nothing sends until Start is pressed
+- 1000/day remains free-first: the engine runs today at $0 on the free lane (100/day); crossing to 1000/day = Amazon SES (~R60/mo) or Resend Pro ($20/mo) with zero UI change, plus a 4-6 week warm-up ramp
