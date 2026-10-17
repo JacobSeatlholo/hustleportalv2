@@ -155,19 +155,38 @@ export interface CampaignRow {
   campaign: string | null
   toEmail: string
   subject: string
-  status: string // SENT | FAILED | DRAFT
+  status: string // QUEUED | SENT | FAILED | BOUNCED | SKIPPED | DRAFT
   error: string | null
   openedAt: string | null
   openCount: number
+  sentAt: string | null
   createdAt: string
   lead: { id: string; company: string; stage: string } | null
 }
 
 export interface CampaignSummary {
+  queued: number
   sent: number
   failed: number
+  bounced: number
+  skipped: number
   opened: number
   total: number
+}
+
+export interface CampaignState {
+  status: 'PAUSED' | 'ACTIVE' | 'DONE' | 'CANCELLED'
+  perHour: number
+  from?: string
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+}
+
+export interface CampaignInfo {
+  tag: string
+  state: CampaignState | null
+  summary: CampaignSummary
 }
 
 export interface Task {

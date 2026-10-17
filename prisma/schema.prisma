@@ -418,20 +418,22 @@ model Invoice {
 // ============ EMAIL (user's own Gmail SMTP) ============
 
 model EmailLog {
-  id        String   @id @default(cuid())
-  userId    String
-  projectId String?
-  leadId    String?
-  toEmail   String
-  subject   String
-  body      String
-  status    String   @default("DRAFT") // DRAFT | SENT | FAILED
-  provider  String   @default("GMAIL")
-  error     String?
-  campaign  String? // bulk send grouping, e.g. blackbiz-intro
-  openedAt  DateTime? // first open of the tracking pixel
-  openCount Int      @default(0)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  projectId  String?
+  leadId     String?
+  toEmail    String
+  subject    String
+  body       String
+  status     String    @default("DRAFT") // DRAFT | QUEUED | SENT | FAILED | BOUNCED | SKIPPED
+  provider   String    @default("GMAIL")
+  error      String?
+  campaign   String? // bulk send grouping, e.g. blackbiz-intro
+  providerId String? // provider message id — matches bounce/complaint webhooks back to this row
+  openedAt   DateTime? // first open of the tracking pixel
+  openCount  Int       @default(0)
+  sentAt     DateTime? // the moment the engine actually sent (queued rows pace over hours)
+  createdAt  DateTime  @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -439,6 +441,20 @@ model EmailLog {
 
   @@index([userId, createdAt])
   @@index([campaign])
+  @@index([providerId])
+}
+
+// ============ SUPPRESSION (do-not-send list) ============
+
+// Anyone who bounced hard, complained, or unsubscribed never gets another
+// campaign email. This list is law for the queue engine — it is checked
+// before every send, no exceptions.
+model Suppression {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  reason    String   // BOUNCE | COMPLAINT | UNSUB | MANUAL
+  note      String? // e.g. the campaign that produced the bounce
+  createdAt DateTime @default(now())
 }
 
 // ============ WHATSAPP (Cloud API log: inbound auto-capture + outbound sends) ============

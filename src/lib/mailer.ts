@@ -345,7 +345,7 @@ async function sendViaUserGmail(
 async function resendPost(
   apiKey: string,
   payload: Record<string, unknown>,
-): Promise<{ ok: true } | { ok: false; raw: string }> {
+): Promise<{ ok: true; id?: string } | { ok: false; raw: string }> {
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -357,7 +357,9 @@ async function resendPost(
       const detail = (await res.text().catch(() => '')).slice(0, 300)
       return { ok: false, raw: `Email service error ${res.status}: ${detail}` }
     }
-    return { ok: true }
+    // The provider id is how bounce and complaint webhooks find their row.
+    const j = (await res.json().catch(() => null)) as { id?: string } | null
+    return { ok: true, id: j?.id }
   } catch (e) {
     return { ok: false, raw: e instanceof Error ? e.message : 'Failed to send email' }
   }
@@ -539,16 +541,20 @@ function campaignHtml(text: string, pixelUrl: string): string {
 }
 
 export async function sendCampaignMail(
-  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string },
-): Promise<{ ok: boolean; via?: string; error?: string }> {
+  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
+): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) return { ok: false, error: 'Email engine is not configured.' }
   const from = normalizeCampaignFrom(mail.from)
-  const body = mail.body + legalFooter()
+  // Bulk sender law (Gmail, Yahoo, Microsoft): every campaign mail carries a
+  // one click unsubscribe header plus a plain link a human can tap.
+  const unsub = mail.unsubscribeUrl?.trim()
+  const body = mail.body + (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
   const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
   const res = await resendPost(apiKey, {
     from, to: [mail.to], subject: mail.subject, text: body,
     ...(html ? { html } : {}),
+    ...(unsub ? { headers: { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
     reply_to: TEAM_INBOX,
   })
   if (res.ok) {
@@ -559,7 +565,7 @@ export async function sendCampaignMail(
     }
     await stampDomainProof()
     await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: `campaign:${from}` })
-    return { ok: true, via: from }
+    return { ok: true, via: from, providerId: res.id }
   }
   console.error('[mail] campaign send failed:', res.raw.slice(0, 200))
   await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: res.raw.slice(0, 160) })
