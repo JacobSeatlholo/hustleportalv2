@@ -28,7 +28,7 @@ export function TouchpointCard({
   footer?: string
 }) {
   return (
-    <div className="relative rounded-xl border border-brand/30 bg-brand/[0.06] p-4 pr-12 space-y-2.5">
+    <div className="relative rounded-lg border border-brand/30 bg-brand/[0.06] p-4 pr-12 space-y-2.5">
       <button
         aria-label="Dismiss for good"
         title="Don't show suggestions like this"

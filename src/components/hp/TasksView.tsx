@@ -235,7 +235,7 @@ export default function TasksView() {
           </div>
 
           {detailsOpen && (
-            <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
               <div className="relative">
                 <Textarea
                   value={notes}
@@ -281,7 +281,7 @@ export default function TasksView() {
 
       {/* Lists */}
       {loading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
       ) : (
         <div className="space-y-2">
           {open.length === 0 && done.length === 0 && (

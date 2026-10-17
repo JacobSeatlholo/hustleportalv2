@@ -219,7 +219,7 @@ export default function LeadsView() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex gap-3 overflow-hidden">{[...Array(4)].map((_, i) => <Skeleton key={i} className="kanban-col h-72 rounded-xl" />)}</div>
+        <div className="flex gap-3 overflow-hidden">{[...Array(4)].map((_, i) => <Skeleton key={i} className="kanban-col h-72 rounded-lg" />)}</div>
       ) : view === 'kanban' ? (
         <div className="flex gap-3 overflow-x-auto hp-scroll pb-3">
           {visibleStages.map((s) => {
@@ -238,7 +238,7 @@ export default function LeadsView() {
                     <LeadCard key={l.id} lead={l} onOpen={openLead} />
                   ))}
                   {items.length === 0 && (
-                    <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
                       {s.key === 'NEW' ? 'Capture or import leads here' : 'Drop leads here'}
                     </div>
                   )}
@@ -284,7 +284,7 @@ const LeadCard = memo(function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: 
   return (
     <button
       onClick={() => onOpen(lead)}
-      className="w-full text-left rounded-xl border bg-card p-3 shadow-sm hover:shadow-md hover:border-brand/60 transition"
+      className="w-full text-left rounded-lg border bg-card p-3 shadow-sm hover:shadow-md hover:border-brand/60 transition"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium leading-snug">{lead.company}</span>
@@ -654,7 +654,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
 
           {/* Engagement while the (honest, up-to-~40s) search runs — never a silent hang */}
           {busy && (
-            <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 space-y-2" aria-live="polite">
+            <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-2" aria-live="polite">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Loader2 className="h-4 w-4 animate-spin text-brand" />
                 {DISCOVER_STEPS[step]}
@@ -816,7 +816,7 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <label className="block rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:border-brand transition">
+          <label className="block rounded-lg border-2 border-dashed p-6 text-center cursor-pointer hover:border-brand transition">
             <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
             <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
             <p className="text-sm mt-2 font-medium">Choose a CSV file</p>
@@ -907,7 +907,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
         <div className="space-y-4">
           {/* the human: a named person and their public profile are free facts, never paid contact detail */}
           {(lead.contactName || lead.role || lead.profileUrl) && (
-            <div className="rounded-xl border bg-card p-3 text-sm flex items-center gap-2">
+            <div className="rounded-lg border bg-card p-3 text-sm flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="min-w-0">
                 <div className="truncate">{lead.contactName || 'Decision maker on file'}{lead.role ? ` · ${lead.role}` : ''}</div>
@@ -917,14 +917,14 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
           )}
           {/* contact block */}
           {lead.unlocked ? (
-            <div className="rounded-xl border bg-card p-3 space-y-2 text-sm">
+            <div className="rounded-lg border bg-card p-3 space-y-2 text-sm">
               <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> {lead.contactName || '—'}</div>
               <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> <a className="text-brand hover:underline" href={`mailto:${lead.email}`}>{lead.email || '—'}</a></div>
               <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> <a className="text-brand hover:underline" href={`tel:${lead.phone}`}>{lead.phone || '—'}</a></div>
               {lead.website && <div className="flex items-center gap-2"><Globe className="h-4 w-4 text-muted-foreground" /> {lead.website}</div>}
             </div>
           ) : (
-            <div className="rounded-xl border-2 border-dashed border-brand/40 bg-brand/5 p-4 text-center space-y-2">
+            <div className="rounded-lg border-2 border-dashed border-brand/40 bg-brand/5 p-4 text-center space-y-2">
               <Lock className="h-5 w-5 mx-auto text-brand" />
               <p className="text-sm font-medium">Contact details locked</p>
               <p className="text-xs text-muted-foreground">Reveal email &amp; phone using wallet credits. CSV/manual leads are always free.</p>

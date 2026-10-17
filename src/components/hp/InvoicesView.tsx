@@ -335,7 +335,7 @@ export default function InvoicesView() {
       </div>
 
       {/* Banking details — printed on every new invoice */}
-      <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-medium text-sm">Your banking details</h3>
@@ -395,7 +395,7 @@ export default function InvoicesView() {
       </div>
 
       {/* Business logo (Operator) — uploaded once, printed on every invoice */}
-      <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="font-medium text-sm">Your business logo</h3>
@@ -440,7 +440,7 @@ export default function InvoicesView() {
       </div>
 
       {showCreate && (
-        <div className="rounded-xl border bg-card p-4 space-y-4">
+        <div className="rounded-lg border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-sm">New invoice</h3>
             <label
@@ -590,7 +590,7 @@ export default function InvoicesView() {
       )}
 
       {/* List */}
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="rounded-lg border bg-card overflow-hidden">
         {loading ? (
           <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
         ) : invoices.length === 0 ? (

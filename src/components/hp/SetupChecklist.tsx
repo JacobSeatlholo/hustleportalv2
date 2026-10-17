@@ -88,7 +88,7 @@ export default function SetupChecklist() {
   const remaining = missingItems.length + (done['YOCO_WEBHOOK'] === false ? 1 : 0)
 
   return (
-    <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 md:p-5 space-y-3">
+    <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 md:p-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="font-display text-lg leading-tight">Unlock even more — {remaining} step{remaining === 1 ? '' : 's'} left</div>
@@ -103,7 +103,7 @@ export default function SetupChecklist() {
 
       <div className="space-y-2">
         {[...missingItems, ...(done['YOCO_WEBHOOK'] === false ? [YOCO_ITEM] : [])].map((i) => (
-          <div key={i.id} className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-card/60 p-3">
+          <div key={i.id} className="flex items-start gap-2.5 rounded-lg border border-border bg-card/60 p-3">
             <Circle className="h-4 w-4 mt-0.5 text-brand shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{i.label}</div>
@@ -124,7 +124,7 @@ export default function SetupChecklist() {
                 <button
                   onClick={registerWebhook}
                   disabled={registering}
-                  className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110 transition disabled:opacity-50"
+                  className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-black hover:bg-brand/90 transition disabled:opacity-50"
                 >
                   {registering ? 'Registering…' : 'Register now'}
                 </button>

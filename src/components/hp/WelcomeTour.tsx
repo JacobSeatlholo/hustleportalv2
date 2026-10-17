@@ -150,7 +150,7 @@ export default function WelcomeTour() {
             <Button
               size="sm"
               onClick={() => (last ? finish() : s.goTo ? finish(s.goTo) : setStep((v) => v + 1))}
-              className="bg-brand text-black hover:brightness-110 font-semibold"
+              className="bg-brand text-black hover:bg-brand/90 font-semibold"
             >
               {s.cta} {!last && <ArrowRight className="h-3.5 w-3.5" />}
               {last && <Zap className="h-3.5 w-3.5" />}

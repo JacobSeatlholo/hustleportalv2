@@ -147,14 +147,14 @@ export default function DashboardView() {
                   setAiBarQuery(''); setView('leads')
                 } else askAi(c.label)
               }}
-              className="text-xs rounded-full border border-white/15 px-3 py-1.5 text-white/80 hover:bg-white/10 transition"
+              className="text-xs rounded-full border border-border px-3 py-1.5 text-white/80 hover:bg-white/10 transition"
             >
               {c.label}
             </button>
           ))}
         </div>
         {aiReply && (
-          <div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-4 text-sm leading-relaxed whitespace-pre-wrap max-w-2xl">
+          <div className="mt-4 rounded-lg bg-white/5 border border-border p-4 text-sm leading-relaxed whitespace-pre-wrap max-w-2xl">
             {aiReply}
           </div>
         )}

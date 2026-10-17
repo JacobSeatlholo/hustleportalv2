@@ -155,7 +155,7 @@ export default function Landing() {
               { icon: Trophy, title: 'Daily challenges', desc: 'Guided daily actions that keep your pipeline moving' },
               { icon: Zap, title: 'You own your data', desc: 'Your account, your pipeline, your numbers. Exportable anytime.' },
             ].map((f) => (
-              <div key={f.title} className="flex gap-3 items-start rounded-xl border border-white/10 bg-card/70 backdrop-blur p-3">
+              <div key={f.title} className="flex gap-3 items-start rounded-lg border bg-card p-3">
                 <div className="rounded-lg bg-brand/15 p-2 shrink-0">
                   <f.icon className="h-4 w-4 text-brand" />
                 </div>
@@ -175,7 +175,7 @@ export default function Landing() {
         </div>
 
         {/* Right: auth card */}
-        <Card className="border-white/10 shadow-2xl shadow-black/60">
+        <Card>
           <CardContent className="p-6 md:p-8">
             <div className="flex gap-2 mb-6 p-1 rounded-lg bg-muted w-fit">
               <button
@@ -306,6 +306,14 @@ export default function Landing() {
                   ? 'Free account · R99 in lead credits to start · no card required'
                   : 'Welcome back.'}
               </p>
+              {mode === 'register' && (
+                <p className="text-[11px] text-center text-muted-foreground">
+                  By creating an account you agree to our{' '}
+                  <a href="https://businesshustle.co.za/terms" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">Terms</a>
+                  {' '}and our{' '}
+                  <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">Privacy &amp; POPIA notice</a>.
+                </p>
+              )}
               {mode === 'login' && (
                 <button
                   type="button"
@@ -338,7 +346,7 @@ export default function Landing() {
             { icon: '💸', title: 'Profit is a guess, not a number', desc: 'No invoice trail and no expense record means you never know which clients actually pay, or where the month went.' },
             { icon: '🧍', title: 'Admin eats the evenings', desc: 'Quotes, scheduling, follow-ups and filing, all on you, all after hours. The busywork crowds out the billable work.' },
           ].map((p) => (
-            <div key={p.title} className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-5">
+            <div key={p.title} className="rounded-lg border border-border bg-card p-5">
               <div className="text-2xl">{p.icon}</div>
               <div className="font-semibold text-sm mt-2">{p.title}</div>
               <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{p.desc}</div>
@@ -366,7 +374,7 @@ export default function Landing() {
             { n: '02', title: 'Load your leads & clients', desc: 'Paste a WhatsApp list, scan a contacts screenshot, or reveal verified contacts with credits.' },
             { n: '03', title: 'Follow up & get paid', desc: 'AI drafts the message, the calendar holds the appointments, invoices track the money.' },
           ].map((s) => (
-            <div key={s.n} className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-5">
+            <div key={s.n} className="rounded-lg border border-border bg-card p-5">
               <div className="font-display text-brand text-2xl">{s.n}</div>
               <div className="font-semibold text-sm mt-2">{s.title}</div>
               <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{s.desc}</div>
@@ -420,7 +428,7 @@ export default function Landing() {
               href={s.url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-4 hover:border-brand/60 transition group"
+              className="rounded-lg border border-border bg-card p-4 hover:border-brand/60 transition group"
             >
               <div className="text-2xl">{s.emoji}</div>
               <div className="font-semibold text-sm mt-2 group-hover:text-brand transition">{s.title}</div>
@@ -448,7 +456,7 @@ export default function Landing() {
               href={`https://wa.me/27744815163?text=${encodeURIComponent(svc.waMsg)}`}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-white/10 bg-card/70 backdrop-blur p-4 hover:border-brand/60 transition group"
+              className="rounded-lg border border-border bg-card p-4 hover:border-brand/60 transition group"
             >
               <div className="rounded-lg p-2 inline-flex" style={{ background: `${svc.color}1f`, color: svc.color }}>
                 {SERVICE_ICONS[svc.icon]}
@@ -523,7 +531,7 @@ export default function Landing() {
                   <li key={perk} className="flex items-start gap-2 text-sm"><Check className="h-4 w-4 text-brand shrink-0 mt-0.5" />{perk}</li>
                 ))}
               </ul>
-              <Button className="w-full bg-brand text-black hover:brightness-110 font-semibold" onClick={() => { document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
+              <Button className="w-full bg-brand text-black hover:bg-brand/90 font-semibold" onClick={() => { document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
                 Start with {p.name}<ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -543,7 +551,7 @@ export default function Landing() {
           A free account with R99 in lead credits to reveal your first real leads, and every tool above included. Upgrade only when the pipeline demands it.
         </p>
         <div className="flex flex-wrap justify-center gap-3 pt-1">
-          <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:brightness-110 transition">
+          <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:bg-brand/90 transition">
             Start free <ArrowRight className="h-4 w-4 ml-1.5" />
           </a>
           <a href="https://wa.me/27744815163" target="_blank" rel="noreferrer" className="rounded-lg border px-6 h-11 inline-flex items-center font-medium hover:border-brand transition">
@@ -553,7 +561,7 @@ export default function Landing() {
       </section>
       </main>
 
-      <footer className="border-t bg-background/60 backdrop-blur">
+      <footer className="border-t bg-background">
         <div className="max-w-6xl mx-auto px-6 py-5 space-y-3">
           <div className="text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
             <span>
@@ -566,6 +574,7 @@ export default function Landing() {
             <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Privacy &amp; POPIA</a>
             <a href="https://businesshustle.co.za/cookies" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Cookie Policy</a>
             <a href="https://app.businesshustle.co.za/wp-content/uploads/2025/12/BHW-PAIA-Manual-Integrated-with-POPIA.pdf" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">PAIA Manual</a>
+            <a href="/remove-listing" className="hover:text-foreground hover:underline">Remove my business</a>
             <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
           </div>
           <p className="text-[11px] text-muted-foreground/80">

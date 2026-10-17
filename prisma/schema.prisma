@@ -777,3 +777,25 @@ model AiUsage {
   @@unique([userId, day])
   @@index([day])
 }
+
+// ============ POPIA LISTING SUPPRESSION ============
+
+// A business that asked to stay out of the lead index ("remove my listing").
+// Suppressed names stop flowing through scan ingestion, the verified pool
+// and the paid reveal. Matching is by normalised name + city, or by the
+// exact map listing id when the request names one. Deliberately broad: an
+// opt-out must never leak through a fingerprint variation.
+model ListingSuppression {
+  id        String   @id @default(cuid())
+  name      String   // business name as submitted
+  nameKey   String   // normalised name — the matching key
+  city      String   @default("") // normalised city, empty = none given
+  osmId     String?  // external map listing id when known
+  contact   String?  // requester email or phone (for confirming the request)
+  reason    String?
+  source    String   @default("WEB") // WEB | EXEC
+  createdAt DateTime @default(now())
+
+  @@unique([nameKey, city])
+  @@index([osmId])
+}

@@ -130,7 +130,7 @@ export default function InstallApp() {
           </div>
 
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setOpen(false)} className="bg-brand text-black hover:brightness-110 font-semibold">
+            <Button size="sm" onClick={() => setOpen(false)} className="bg-brand text-black hover:bg-brand/90 font-semibold">
               Got it
             </Button>
           </div>

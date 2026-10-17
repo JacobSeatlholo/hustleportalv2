@@ -111,7 +111,7 @@ export default function SectionTutorial() {
       {!openView && SECTION_TUTORIALS[view] && (
         <button
           onClick={() => { setStep(0); setOpenView(view) }}
-          className="fixed z-30 right-4 bottom-24 md:bottom-6 flex items-center gap-1.5 rounded-full border bg-card/95 backdrop-blur pl-3 pr-3.5 min-h-[44px] text-xs font-medium shadow-lg hover:border-brand transition"
+          className="fixed z-30 right-4 bottom-24 md:bottom-6 flex items-center gap-1.5 rounded-full border bg-card pl-3 pr-3.5 min-h-[44px] text-xs font-medium shadow-lg hover:border-brand transition"
           style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
           aria-label={`How ${SECTION_TUTORIALS[view].title} works`}
         >
@@ -154,7 +154,7 @@ export default function SectionTutorial() {
                   <Button
                     size="sm"
                     onClick={() => (last ? finish() : setStep((v) => v + 1))}
-                    className="bg-brand text-black hover:brightness-110 font-semibold"
+                    className="bg-brand text-black hover:bg-brand/90 font-semibold"
                   >
                     {last ? 'Let\u2019s go' : 'Next'} {!last && <ArrowRight className="h-3.5 w-3.5" />}
                     {last && <Zap className="h-3.5 w-3.5" />}

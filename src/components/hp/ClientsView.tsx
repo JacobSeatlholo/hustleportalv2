@@ -363,7 +363,7 @@ export default function ClientsView() {
 
       {/* List */}
       {loading ? (
-        <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+        <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}</div>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center space-y-2">
@@ -485,7 +485,7 @@ export default function ClientsView() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-brand text-black hover:brightness-110 font-semibold">
+            <Button onClick={save} disabled={saving} className="bg-brand text-black hover:bg-brand/90 font-semibold">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               {editing ? 'Save changes' : 'Add client'}
             </Button>

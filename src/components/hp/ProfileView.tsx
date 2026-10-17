@@ -489,7 +489,7 @@ export default function ProfileView() {
             <CardHeader className="pb-2"><CardTitle className="text-base">Business profile</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {/* Website-first onboarding: key in the website, Gemini drafts the profile, user verifies & confirms */}
-              <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-2">
+              <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Globe className="h-4 w-4 text-brand" />
                   Have a website? Let AI fill this in
@@ -506,7 +506,7 @@ export default function ProfileView() {
                     type="button"
                     onClick={analyzeUrl}
                     disabled={analyzing}
-                    className="shrink-0 bg-brand text-black hover:brightness-110 font-semibold"
+                    className="shrink-0 bg-brand text-black hover:bg-brand/90 font-semibold"
                   >
                     {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     {analyzing ? 'Reading…' : 'Fill my profile'}
@@ -635,7 +635,7 @@ export default function ProfileView() {
               </Button>
 
               {/* AI sales pitch */}
-              <div className="rounded-xl border border-brand/25 bg-brand/5 p-3 space-y-2">
+              <div className="rounded-lg border border-brand/25 bg-brand/5 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-brand" /> AI sales pitch
@@ -655,7 +655,7 @@ export default function ProfileView() {
               </div>
 
               {/* AI business-URL dissection */}
-              <div className="rounded-xl border border-brand/25 bg-brand/5 p-3 space-y-3">
+              <div className="rounded-lg border border-brand/25 bg-brand/5 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium flex items-center gap-1.5">
                     <ScanSearch className="h-3.5 w-3.5 text-brand" /> AI website analysis — audience, brand &amp; pitches
@@ -774,7 +774,7 @@ export default function ProfileView() {
               {showNewProject && (
                 <form
                   onSubmit={(e) => { e.preventDefault(); createProject() }}
-                  className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-2.5"
+                  className="rounded-lg border border-brand/30 bg-brand/5 p-3 space-y-2.5"
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="new-project-name">Project name</Label>
@@ -812,7 +812,7 @@ export default function ProfileView() {
                   const available = teamPool.filter((t) => !p.members.some((m) => m.userId === t.id))
                   const descValue = descDraft[p.id] ?? p.description ?? ''
                   return (
-                    <div key={p.id} className="rounded-xl border p-3 space-y-2.5">
+                    <div key={p.id} className="rounded-lg border p-3 space-y-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           className="font-medium hover:text-brand transition text-left"
@@ -926,7 +926,7 @@ export default function ProfileView() {
                 </div>
               ) : (
                 teams.map((t) => (
-                  <div key={t.id} className="rounded-xl border p-3 space-y-3">
+                  <div key={t.id} className="rounded-lg border p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{t.name}</span>
                       <Badge variant={t.role === 'OWNER' ? 'default' : 'secondary'}>{t.role.toLowerCase()}</Badge>

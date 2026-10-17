@@ -43,7 +43,7 @@ function ResetForm() {
     }
   }
 
-  const card = 'w-full max-w-md border-white/10 shadow-2xl shadow-black/60'
+  const card = 'w-full max-w-md'
 
   if (!token) {
     return (

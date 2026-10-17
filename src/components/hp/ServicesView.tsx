@@ -65,7 +65,7 @@ export default function ServicesView() {
       {/* Free assessment banner */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-brand/15 p-3"><Sparkles className="h-6 w-6 text-brand" /></div>
+          <div className="rounded-lg bg-brand/15 p-3"><Sparkles className="h-6 w-6 text-brand" /></div>
           <div>
             <div className="font-medium">Not sure what you need?</div>
             <div className="text-sm text-sidebar-foreground/60 max-w-md">
@@ -99,7 +99,7 @@ export default function ServicesView() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div
-                    className="rounded-xl p-2.5 shrink-0"
+                    className="rounded-lg p-2.5 shrink-0"
                     style={{ background: `${svc.color}1f`, color: svc.color }}
                   >
                     {ICONS[svc.icon]}

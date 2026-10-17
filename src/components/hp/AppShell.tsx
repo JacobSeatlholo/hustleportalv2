@@ -208,7 +208,7 @@ export default function AppShell() {
       {/* Main */}
       <div className="flex-1 md:ml-60 min-w-0 flex flex-col">
         {/* Topbar — taller touch targets + safe-area padding so nothing hides under a notch */}
-        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <header className="sticky top-0 z-30 bg-background border-b" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center gap-2 px-3 py-2.5 min-h-[56px]">
             <Button variant="ghost" size="icon" className="md:hidden h-11 w-11" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
@@ -248,7 +248,7 @@ export default function AppShell() {
                 </span>
                 <button
                   onClick={() => setView('wallet')}
-                  className="rounded-full bg-brand text-black px-3 py-1 text-xs font-semibold hover:brightness-110 transition"
+                  className="rounded-full bg-brand text-black px-3 py-1 text-xs font-semibold hover:bg-brand/90 transition"
                 >
                   Link your card
                 </button>
@@ -272,7 +272,7 @@ export default function AppShell() {
         {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons
             being out of comfortable reach on tall screens. */}
         <nav
-          className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           aria-label="Main menu"
         >
@@ -311,7 +311,7 @@ export default function AppShell() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm space-y-1.5">
+              <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm space-y-1.5">
                 <p className="font-medium">Even better: the menu is now at the bottom.</p>
                 <p className="text-muted-foreground text-[13px]">
                   Home, Leads, Tasks and Invoices sit in the bar at the bottom of the screen — thumb distance on any phone.
@@ -328,7 +328,7 @@ export default function AppShell() {
           </DialogContent>
         </Dialog>
 
-        <footer className="mt-auto border-t bg-background/60 backdrop-blur">
+        <footer className="mt-auto border-t bg-background">
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5">
             <div className="flex flex-wrap justify-between gap-2">
               <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
@@ -337,6 +337,7 @@ export default function AppShell() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <a href="https://businesshustle.co.za/terms" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Terms of Service</a>
               <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Privacy &amp; POPIA</a>
+              <a href="/remove-listing" className="hover:text-foreground hover:underline">Remove my business</a>
               <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
             </div>
           </div>
@@ -388,7 +389,7 @@ function ProjectSwitcher() {
         <div
           role="listbox"
           aria-label="Company workspaces"
-          className="absolute left-0 top-full mt-2 w-72 rounded-xl border bg-popover shadow-xl z-50 overflow-hidden"
+          className="absolute left-0 top-full mt-2 w-72 rounded-lg border bg-popover shadow-xl z-50 overflow-hidden"
         >
           <div className="px-3 py-2 text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground border-b">
             Company workspaces
@@ -621,7 +622,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
       </div>
 
       {/* challenges mini-widget */}
-      <div className="mx-3 mb-3 rounded-xl bg-white/5 border border-white/10 p-3">
+      <div className="mx-3 mb-3 rounded-lg bg-white/5 border border-border p-3">
         <div className="flex items-center justify-between text-[11px] text-white/50 mb-1.5">
           <span>Daily challenges</span>
           <span>{doneChallenges}/{totalChallenges}</span>
@@ -634,7 +635,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
         </div>
       </div>
 
-      <div className="border-t border-white/10 p-3">
+      <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 px-1 py-1">
           <div className="h-9 w-9 rounded-full bg-brand text-black flex items-center justify-center text-sm font-bold shrink-0">
             {session.user.name.slice(0, 1).toUpperCase()}

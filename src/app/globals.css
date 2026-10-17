@@ -51,38 +51,40 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  /* HustlePortal black & yellow (matches hustleportal.online: #0a0a0b / #f5c518) */
-  --background: #0a0a0b;
-  --foreground: #e8e8e6;
-  --card: #141416;
-  --card-foreground: #e8e8e6;
-  --popover: #141416;
-  --popover-foreground: #e8e8e6;
+  /* Google console geometry: 8px cards, 6px controls, 4px chips. */
+  --radius: 0.5rem;
+  /* HustlePortal black & yellow on a cool slate surface ladder — the flat,
+     layered calm of a pro console. Solid panels, hairline borders, no glow. */
+  --background: #0b0c0f;
+  --foreground: #e8eaed;
+  --card: #14161b;
+  --card-foreground: #e8eaed;
+  --popover: #14161b;
+  --popover-foreground: #e8eaed;
   --primary: #f5c518;
-  --primary-foreground: #0a0a0b;
-  --secondary: #1d1d20;
-  --secondary-foreground: #e8e8e6;
-  --muted: #1a1a1d;
-  --muted-foreground: #9a9a98;
-  --accent: #232327;
+  --primary-foreground: #0b0c0f;
+  --secondary: #1c1f26;
+  --secondary-foreground: #e8eaed;
+  --muted: #181a20;
+  --muted-foreground: #9aa0a6;
+  --accent: #22262f;
   --accent-foreground: #f5c518;
   --destructive: #ff4444;
-  --border: #26262b;
-  --input: #2c2c31;
+  --border: #262a33;
+  --input: #2b303b;
   --ring: #f5c518;
   --chart-1: #f5c518;
   --chart-2: #34d399;
   --chart-3: #fb923c;
   --chart-4: #a78bfa;
   --chart-5: #44aadd;
-  --sidebar: #0d0d0f;
-  --sidebar-foreground: #e8e8e6;
+  --sidebar: #0e1014;
+  --sidebar-foreground: #e8eaed;
   --sidebar-primary: #f5c518;
-  --sidebar-primary-foreground: #0a0a0b;
-  --sidebar-accent: #1a1a1d;
+  --sidebar-primary-foreground: #0b0c0f;
+  --sidebar-accent: #1c1f26;
   --sidebar-accent-foreground: #f5c518;
-  --sidebar-border: #222227;
+  --sidebar-border: #20242c;
   --sidebar-ring: #f5c518;
 }
 
@@ -136,16 +138,14 @@
   letter-spacing: 0.02em;
 }
 
+/* Flat console ground: no radial glow, just the surface ladder doing the work. */
 .hp-gradient-bg {
-  background:
-    radial-gradient(1200px 500px at 85% -10%, rgb(245 197 24 / 0.09), transparent 60%),
-    radial-gradient(900px 500px at -10% 100%, rgb(245 197 24 / 0.05), transparent 55%),
-    #0a0a0b;
+  background: #0b0c0f;
 }
 
 .hp-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
 .hp-scroll::-webkit-scrollbar-track { background: transparent; }
 .hp-scroll::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.12); border-radius: 8px; }
-.hp-scroll::-webkit-scrollbar-thumb:hover { background: rgb(245 197 24 / 0.35); }
+.hp-scroll::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 0.22); }
 
 .kanban-col { min-width: 17rem; width: 17rem; }

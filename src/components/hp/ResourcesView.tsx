@@ -68,10 +68,10 @@ export default function ResourcesView() {
           {cats.map((cat) => (
             <div
               key={cat.title}
-              className="rounded-xl border border-white/10 bg-card overflow-hidden"
+              className="rounded-lg border border-border bg-card overflow-hidden"
             >
               <div
-                className="px-4 py-3 flex items-center gap-2.5 border-b border-white/10"
+                className="px-4 py-3 flex items-center gap-2.5 border-b border-border"
                 style={{ backgroundColor: `${cat.color}14` }}
               >
                 <span className="text-lg">{cat.icon}</span>

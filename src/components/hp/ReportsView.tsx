@@ -59,7 +59,7 @@ export default function ReportsView() {
   }
 
   if (loading) {
-    return <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
+    return <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-lg bg-white/5 animate-pulse" />)}</div>
   }
   if (!report) return <p className="text-sm text-muted-foreground">No report data yet.</p>
 
@@ -96,7 +96,7 @@ export default function ReportsView() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Funnel */}
-        <div className="rounded-xl border bg-card p-4">
+        <div className="rounded-lg border bg-card p-4">
           <h3 className="font-medium text-sm mb-4">Lead funnel</h3>
           <div className="space-y-2.5">
             {report.funnel.map((f) => (
@@ -122,7 +122,7 @@ export default function ReportsView() {
         </div>
 
         {/* Income vs expense */}
-        <div className="rounded-xl border bg-card p-4">
+        <div className="rounded-lg border bg-card p-4">
           <h3 className="font-medium text-sm mb-4 flex items-center gap-2"><LineChart className="h-4 w-4 text-brand" /> Income vs expenses — 6 months</h3>
           <div className="flex items-end gap-3 h-44">
             {report.months.map((m) => (
@@ -160,7 +160,7 @@ export default function ReportsView() {
 
 function Metric({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{label}</p>
         {icon}

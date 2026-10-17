@@ -27,6 +27,7 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { planState } from '@/lib/limits'
+import { suppressedNameKeys, suppressedOsmIds } from '@/lib/suppression'
 import type { LeadPool as LeadPoolRow } from '@prisma/client'
 
 // ---------- identity helpers ----------
@@ -313,7 +314,9 @@ export async function serveFromPool(opts: {
     ],
     take: 150,
   })
-  const rows = hits.map((h) => h.pool).filter((p) => !opts.excludeKeys.has(normKey(p.company)))
+  // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.
+  const drop = await suppressedNameKeys()
+  const rows = hits.map((h) => h.pool).filter((p) => !opts.excludeKeys.has(normKey(p.company)) && !drop.has(normKey(p.company)))
   rows.sort((a, b) => {
     const sa = a.lastServedAt ? a.lastServedAt.getTime() : 0
     const sb = b.lastServedAt ? b.lastServedAt.getTime() : 0
@@ -520,10 +523,12 @@ export async function serveExpleeBoost(opts: {
   // in when the named ones run short — never ahead of them.
   const named = ordered.filter((r) => r.contactName)
   ordered = [...named, ...ordered.filter((r) => !r.contactName)]
+  // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.
+  const drop = await suppressedNameKeys()
   for (const r of ordered) {
     if (picked.length >= cap) break
     const key = normKey(r.company)
-    if (!key || seen.has(key) || opts.excludeKeys.has(key)) continue
+    if (!key || seen.has(key) || opts.excludeKeys.has(key) || drop.has(key)) continue
     seen.add(key)
     picked.push(r)
   }
@@ -763,7 +768,13 @@ export async function rememberScanResults(opts: {
   budgetUntil?: number
 }): Promise<Map<string, VerifyStamp>> {
   const stamps = new Map<string, VerifyStamp>()
-  const rows = opts.leads.filter((l) => l.company && l.company.trim()).slice(0, 30)
+  // POPIA opt-outs never enter the pool: name matches and exact map ids drop
+  // before a single row is written.
+  const [dropKeys, dropOsm] = await Promise.all([suppressedNameKeys(), suppressedOsmIds()])
+  const rows = opts.leads
+    .filter((l) => l.company && l.company.trim())
+    .filter((l) => !dropKeys.has(normKey(l.company)) && !(l.externalId && dropOsm.has(l.externalId)))
+    .slice(0, 30)
   if (rows.length === 0) return stamps
   const now = new Date()
 

@@ -84,7 +84,7 @@ export default function WalletView() {
       </div>
 
       {returnNote && (
-        <div className="rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm flex items-center gap-2">
+        <div className="rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-brand shrink-0" />
           <span>{returnNote}</span>
           <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setReturnNote(null)}>✕</button>
@@ -94,7 +94,7 @@ export default function WalletView() {
       {/* Balance hero */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="rounded-xl bg-brand/15 p-3"><Wallet className="h-7 w-7 text-brand" /></div>
+          <div className="rounded-lg bg-brand/15 p-3"><Wallet className="h-7 w-7 text-brand" /></div>
           <div>
             <div className="text-sm text-sidebar-foreground/60">Available credits</div>
             <div className="font-display text-4xl">{rands(data?.wallet.balance ?? session?.wallet.balance ?? 0)}</div>

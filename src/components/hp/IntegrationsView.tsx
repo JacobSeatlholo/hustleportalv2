@@ -157,7 +157,7 @@ function WhatsAppCard() {
   const webhookUrl = status ? `${typeof window !== 'undefined' ? window.location.origin : 'https://hustleportal.online'}${status.webhookPath}` : ''
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-3">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <MessageCircle className="h-4 w-4 text-brand" />
@@ -256,7 +256,7 @@ function AIDiagnosticsCard() {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-3">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Stethoscope className="h-4 w-4 text-brand" />
@@ -364,7 +364,7 @@ function SystemStatusCard() {
   void tick // re-render timer
 
   return (
-    <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 space-y-3">
+    <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Activity className="h-4 w-4 text-brand" />
@@ -462,7 +462,7 @@ function MailEngineCard() {
       : <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">VERIFYING · {status.sendingDomain}</Badge>
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-3">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Mail className="h-4 w-4 text-brand" />
@@ -634,7 +634,7 @@ export default function IntegrationsView() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-lg bg-white/5 animate-pulse" />)}</div>
       ) : (
         <div className="space-y-3">
           <SystemStatusCard />
@@ -645,7 +645,7 @@ export default function IntegrationsView() {
             const row = settings.find((s) => s.key === intg.key)
             const configured = row?.configured || false
             return (
-              <div key={intg.key} className="rounded-xl border bg-card p-4 space-y-3">
+              <div key={intg.key} className="rounded-lg border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     {intg.icon}
@@ -726,7 +726,7 @@ export default function IntegrationsView() {
         </div>
       )}
 
-      <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 text-xs text-muted-foreground space-y-1.5">
+      <div className="rounded-lg border border-brand/20 bg-brand/5 p-4 text-xs text-muted-foreground space-y-1.5">
         <p className="font-medium text-foreground">About verified leads</p>
         <p>
           Verified leads are sourced, checked and delivered to your pipeline <b>by the HustlePortal team behind the

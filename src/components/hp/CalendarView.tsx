@@ -193,7 +193,7 @@ export default function CalendarView() {
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Create */}
-        <div className="lg:col-span-2 rounded-xl border bg-card p-4 space-y-4">
+        <div className="lg:col-span-2 rounded-lg border bg-card p-4 space-y-4">
           <h3 className="font-medium text-sm flex items-center gap-2">
             <CalendarPlus className="h-4 w-4 text-brand" /> New appointment
           </h3>
@@ -291,7 +291,7 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
 }) {
   const { toast } = useToast()
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4">
       <h3 className="font-medium text-sm mb-3">{title}</h3>
       {loading ? (
         <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-14 rounded-md bg-white/5 animate-pulse" />)}</div>
@@ -315,7 +315,7 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {a.meetLink && (
                   <>
-                    <a href={a.meetLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-brand text-black px-2.5 py-1 text-[11px] font-semibold hover:brightness-110 transition">
+                    <a href={a.meetLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-brand text-black px-2.5 py-1 text-[11px] font-semibold hover:bg-brand/90 transition">
                       <Video className="h-3 w-3" /> Join meet
                     </a>
                     <button

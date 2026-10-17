@@ -271,8 +271,8 @@ function SubChip({ status }: { status: string }) {
     PAST_DUE: { label: 'Past due', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
     PAUSED: { label: 'Plan paused', cls: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
     CANCELED: { label: 'Canceled', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
-    PENDING: { label: 'Checkout open', cls: 'bg-white/10 text-muted-foreground border-white/15' },
-    NONE: { label: 'Free', cls: 'bg-white/10 text-muted-foreground border-white/15' },
+    PENDING: { label: 'Checkout open', cls: 'bg-white/10 text-muted-foreground border-border' },
+    NONE: { label: 'Free', cls: 'bg-white/10 text-muted-foreground border-border' },
   }
   const s = map[status] || map.NONE
   return <Badge variant="outline" className={`text-[10px] border ${s.cls}`}>{s.label}</Badge>
@@ -715,7 +715,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
       <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto hp-scroll p-0">
         {!c ? (
           <div className="p-6 space-y-3">
-            <Skeleton className="h-16 rounded-xl" /><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-16 rounded-lg" /><Skeleton className="h-24 rounded-lg" /><Skeleton className="h-40 rounded-lg" />
           </div>
         ) : (
           <div className="divide-y">
@@ -824,7 +824,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                   {detail?.payments.topups.map((t) => (
                     <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
                       <Badge variant="outline" className={`text-[9px] ${t.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : t.status === 'FAILED' ? 'bg-rose-500/15 text-rose-400 border-rose-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}>{t.status}</Badge>
-                      <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-white/15 text-muted-foreground'}`}>{t.provider === 'YOCO' ? 'Yoco' : 'Sandbox'}</Badge>
+                      <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-border text-muted-foreground'}`}>{t.provider === 'YOCO' ? 'Yoco' : 'Sandbox'}</Badge>
                       <span className="font-medium w-20">{rands(t.amountCents)}</span>
                       <span className="text-muted-foreground flex-1 truncate">{t.reference}{t.providerRef ? ` · ${t.providerRef}` : ''}</span>
                       <span className="text-muted-foreground">{timeAgo(t.paidAt || t.createdAt)}</span>
@@ -1531,7 +1531,7 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
             )}
             {payments.recent.map((t) => (
               <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-white/15 text-muted-foreground'}`}>
+                <Badge variant="outline" className={`text-[9px] shrink-0 ${t.provider === 'YOCO' ? 'border-brand/40 text-brand' : 'border-border text-muted-foreground'}`}>
                   {t.provider === 'YOCO' ? 'Yoco' : 'Sandbox'}
                 </Badge>
                 <span className="font-medium w-20">{rands(t.amountCents)}</span>
@@ -1786,7 +1786,7 @@ interface AdminData {
 
 function KpiCard({ icon, label, value, sub, hot }: { icon: React.ReactNode; label: string; value: string; sub?: string; hot?: boolean }) {
   return (
-    <div className={`rounded-xl border bg-card p-4 ${hot ? 'border-brand/50' : ''}`}>
+    <div className={`rounded-lg border bg-card p-4 ${hot ? 'border-brand/50' : ''}`}>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{icon}{label}</div>
       <div className={`font-display text-2xl mt-1 ${hot ? 'text-brand' : ''}`}>{value}</div>
       {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
@@ -1903,7 +1903,7 @@ export default function AdminView() {
       {/* KPIs */}
       {!k ? (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-lg" /><Skeleton className="h-24 rounded-lg" /><Skeleton className="h-24 rounded-lg" />
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">

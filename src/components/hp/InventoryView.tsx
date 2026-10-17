@@ -134,7 +134,7 @@ export default function InventoryView() {
       {/* Free plan slot meter — honest countdown, one tap to the plans. The server
           enforces the same number; this just makes the ceiling visible before it bites. */}
       {!paid && (
-        <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium">
               {totals ? `${Math.max(0, 3 - totals.count)} of 3 free stock slots open` : 'Free plan tracks 3 stock items'}
@@ -167,7 +167,7 @@ export default function InventoryView() {
       )}
 
       {loading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : items.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center space-y-2">

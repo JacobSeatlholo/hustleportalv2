@@ -159,7 +159,7 @@ export default function CityField({
             <Button
               type="button"
               size="sm"
-              className="h-7 px-2.5 text-xs bg-brand text-black hover:brightness-110"
+              className="h-7 px-2.5 text-xs bg-brand text-black hover:bg-brand/90"
               onClick={() => {
                 onChange(proposal)
                 setProposal(null)

@@ -208,7 +208,7 @@ export default function GrowView() {
       </div>
 
       {/* Invite engine */}
-      <div className="rounded-xl border border-brand/30 bg-brand/5 p-5 space-y-4">
+      <div className="rounded-lg border border-brand/30 bg-brand/5 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Gift className="h-5 w-5 text-brand" />
           <h3 className="font-display text-lg">Invite business owners — earn as they grow</h3>
@@ -222,7 +222,7 @@ export default function GrowView() {
           <div className="flex-1 rounded-lg border bg-card px-3 py-2.5 text-sm truncate font-mono text-muted-foreground">
             {refs?.link}
           </div>
-          <Button onClick={shareWhatsApp} className="bg-brand text-black hover:brightness-110 font-semibold">
+          <Button onClick={shareWhatsApp} className="bg-brand text-black hover:bg-brand/90 font-semibold">
             <MessageCircle className="h-4 w-4 mr-1" /> WhatsApp it
           </Button>
           <Button variant="outline" onClick={copyLink}>
@@ -304,7 +304,7 @@ export default function GrowView() {
           </div>
         </div>
         {/* Nonprofit rate — organisations of any size keep more of their budget */}
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <HeartHandshake className="h-4 w-4 text-emerald-500" />
             <h4 className="text-sm font-semibold">Registered nonprofit? Pay 30% less.</h4>
@@ -345,7 +345,7 @@ export default function GrowView() {
             return (
               <div
                 key={p.id}
-                className={`rounded-xl border p-5 space-y-4 bg-card ${p.highlight ? 'border-brand/50 shadow-[0_0_40px_-12px] shadow-brand/20' : ''}`}
+                className={`rounded-lg border p-5 space-y-4 bg-card ${p.highlight ? 'border-brand/50 shadow-[0_0_40px_-12px] shadow-brand/20' : ''}`}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -387,7 +387,7 @@ export default function GrowView() {
                   ))}
                 </ul>
                 <Button
-                  className="w-full bg-brand text-black hover:brightness-110 font-semibold"
+                  className="w-full bg-brand text-black hover:bg-brand/90 font-semibold"
                   disabled={subscribing === p.id || (isCurrent && plans?.subscription?.billingCycle === cycle)}
                   onClick={() => subscribe(p.id)}
                 >

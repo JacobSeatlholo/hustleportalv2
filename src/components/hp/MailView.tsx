@@ -173,7 +173,7 @@ export default function MailView() {
       {/* Free plan email meter — honest count, calm tone, one tap to the plans.
           The server enforces the ceiling; this makes it visible before it bites. */}
       {!paid && (
-        <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium">
               {Math.max(0, 6 - sentCount)} of 6 free emails left
@@ -188,7 +188,7 @@ export default function MailView() {
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Compose */}
-        <div className="lg:col-span-3 rounded-xl border bg-card p-4 space-y-4">
+        <div className="lg:col-span-3 rounded-lg border bg-card p-4 space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="m-lead">Personalise from a lead (optional)</Label>
@@ -286,7 +286,7 @@ export default function MailView() {
         </div>
 
         {/* Log */}
-        <div className="lg:col-span-2 rounded-xl border bg-card p-4">
+        <div className="lg:col-span-2 rounded-lg border bg-card p-4">
           <h3 className="font-medium text-sm flex items-center gap-2 mb-3">
             <Inbox className="h-4 w-4 text-brand" /> Email log
           </h3>
@@ -329,7 +329,7 @@ export default function MailView() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
+      <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <Mail className="h-4 w-4 text-brand shrink-0 mt-0.5" />
         <span>
           Sending is included — hit Send and HustlePortal delivers, with replies routed back to your account email.

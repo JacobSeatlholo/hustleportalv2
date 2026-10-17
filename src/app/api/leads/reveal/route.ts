@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
+import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { bumpChallenge } from '@/lib/gamification'
 
@@ -44,6 +45,17 @@ export async function POST(req: NextRequest) {
   if (!lead) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
   if (lead.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (lead.unlocked) return NextResponse.json({ lead })
+
+  // POPIA opt-out: this business asked to leave the lead index. Refuse before
+  // the grounded lookup and before any charge — an opt-out must never cost
+  // the seller a cent and must never surface as a purchasable contact.
+  if (await isSuppressed({ company: lead.company, city: lead.city, externalId: lead.externalId })) {
+    return NextResponse.json({
+      lead,
+      charged: false,
+      message: `${lead.company} asked to stay out of the lead index. We honour that. You were NOT charged.`,
+    })
+  }
 
   const price = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || 1500
 

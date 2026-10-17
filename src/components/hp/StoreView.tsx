@@ -117,7 +117,7 @@ export default function StoreView() {
             <button
               key={item.title}
               onClick={() => setActive(item)}
-              className="text-left rounded-xl border border-white/10 bg-card overflow-hidden hover:border-brand/60 transition group"
+              className="text-left rounded-lg border border-border bg-card overflow-hidden hover:border-brand/60 transition group"
             >
               <div
                 className="h-36 relative overflow-hidden"
@@ -165,7 +165,7 @@ export default function StoreView() {
 
       {/* product detail dialog */}
       <Dialog open={!!active} onOpenChange={(o) => !o && setActive(null)}>
-        <DialogContent className="max-w-md bg-card border-white/10">
+        <DialogContent className="max-w-md bg-card border-border">
           {active && (
             <div className="space-y-4">
               <div
@@ -211,7 +211,7 @@ export default function StoreView() {
                     <MessageCircle className="h-4 w-4 mr-1.5" /> Order on WhatsApp
                   </a>
                 </Button>
-                <Button asChild variant="outline" className="border-white/20">
+                <Button asChild variant="outline" className="border-border">
                   <a href={active.url} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-4 w-4 mr-1.5" /> Product page
                   </a>
