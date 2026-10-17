@@ -275,7 +275,7 @@ export default function LeadsView() {
       <AddLeadDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { load(); bumpRefresh() }} />
       <DiscoverDialog open={showDiscover} onOpenChange={setShowDiscover} onSaved={() => { load(); bumpRefresh() }} />
       <ImportDialog open={showImport} onOpenChange={setShowImport} onSaved={() => { load(); bumpRefresh() }} />
-      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onChanged={() => { load(); bumpRefresh() }} />
+      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onChanged={() => { load(); bumpRefresh() }} projects={session?.projects ?? []} />
     </div>
   )
 }
@@ -844,18 +844,20 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
   )
 }
 
-function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: {
+function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, projects }: {
   lead: Lead | null
   onOpenChange: (o: boolean) => void
   onReveal: () => void
   onMoved: (stage: string) => void
   onChanged: () => void
+  projects: { id: string; name: string; isDefault: boolean }[]
 }) {
   const { toast } = useToast()
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [revealing, setRevealing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [moving, setMoving] = useState(false)
 
   useEffect(() => {
     if (lead) {
@@ -890,6 +892,24 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
       onOpenChange(false)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // Add this contact to another pipeline. The stage and notes travel with it,
+  // so a follow up started in one project continues in the next.
+  async function moveProject(projectId: string) {
+    if (!lead || !projectId || projectId === lead.projectId) return
+    setMoving(true)
+    try {
+      await api(`/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ projectId }) })
+      const target = projects.find((p) => p.id === projectId)
+      toast({ title: `Added to ${target?.name || 'project'}`, description: 'This contact now lives in that pipeline.' })
+      onChanged()
+      onOpenChange(false)
+    } catch (e) {
+      toast({ title: 'Move failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setMoving(false)
     }
   }
 
@@ -952,6 +972,24 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged }: 
               <span>New</span><span>Won</span>
             </div>
           </div>
+
+          {/* add to project: move the contact across pipelines */}
+          {projects.length > 1 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Add to project</Label>
+              <Select value={lead.projectId ?? undefined} onValueChange={moveProject} disabled={moving}>
+                <SelectTrigger className="w-full" aria-label="Add to project">
+                  <SelectValue placeholder={projects.find((p) => p.id === lead.projectId)?.name || 'Choose a pipeline'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.id === lead.projectId ? `${p.name} (current)` : p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Moves this contact into that pipeline. Stage and notes travel with it.</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

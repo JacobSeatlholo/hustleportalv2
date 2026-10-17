@@ -133,6 +133,7 @@ export interface Lead {
   notes: string | null
   unlocked: boolean
   score: number | null
+  projectId: string | null
   createdAt: string
 }
 

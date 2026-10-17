@@ -40,6 +40,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('phone' in body) data.phone = body.phone || null
   if ('score' in body) data.score = typeof body.score === 'number' ? body.score : null
 
+  // Move the contact into another pipeline (project). Owner only — a teammate
+  // viewing a shared lead cannot re-home it. Stage and notes travel with it.
+  if ('projectId' in body) {
+    if (lead.userId !== userId) {
+      return NextResponse.json({ error: 'Only the lead owner can move it between projects.' }, { status: 403 })
+    }
+    const next = body.projectId == null || body.projectId === '' ? null : String(body.projectId)
+    if (next) {
+      const project = await db.project.findFirst({ where: { id: next, userId: lead.userId }, select: { id: true } })
+      if (!project) return NextResponse.json({ error: 'That project does not exist.' }, { status: 400 })
+      if (project.id !== lead.projectId) data.projectId = project.id
+    } else if (lead.projectId) {
+      data.projectId = null
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ lead })
   }
