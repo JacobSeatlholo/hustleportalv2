@@ -511,13 +511,30 @@ export function normalizeCampaignFrom(raw?: string): string {
 /**
  * Campaign HTML: the plain text body rendered as clean readable mail (short
  * lines, clickable links, no images that can break) plus the invisible 1x1
- * open tracker. Reading clients that load images fire the pixel; plain-text
- * only readers do not, so open counts are a floor, never a ceiling.
+ * open tracker. The marker line "See it in motion: <url>" renders as a big
+ * clickable video thumbnail instead of a text line — email clients refuse
+ * inline <video>, so the poster opens the clip in the browser. Reading clients
+ * that load images fire the pixel; plain-text only readers do not, so open
+ * counts are a floor, never a ceiling.
  */
+const CAMPAIGN_VIDEO_POSTER = 'https://www.hustleportal.online/campaign/blackbiz-intro-video.jpg'
+
 function campaignHtml(text: string, pixelUrl: string): string {
-  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const linked = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0b57d0">$1</a>')
-  const brd = linked.replace(/\n/g, '<br>\n')
+  const blocks: string[] = []
+  for (const line of text.split('\n')) {
+    const video = line.match(/^See it in motion: (https:\/\/\S+)$/)
+    if (video) {
+      blocks.push(
+        `<a href="${video[1]}" target="_blank" style="text-decoration:none">` +
+        `<img src="${CAMPAIGN_VIDEO_POSTER}" width="640" alt="Watch: HustlePortal in motion. Tap to play." ` +
+        `style="display:block;width:100%;max-width:640px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;margin:18px 0" /></a>`,
+      )
+      continue
+    }
+    const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    blocks.push(esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0b57d0">$1</a>'))
+  }
+  const brd = blocks.join('<br>\n')
   return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9"><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">${brd}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none" /></div></body></html>`
 }
 
