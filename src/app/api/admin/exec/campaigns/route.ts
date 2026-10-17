@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!subject) return NextResponse.json({ error: 'Subject is required.' }, { status: 400 })
   if (body.trim().length < 20) return NextResponse.json({ error: 'Body is required.' }, { status: 400 })
 
-  const perHour = Math.max(5, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
+  const perHour = Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
   const from = normalizeCampaignFrom(payload.from)
 
   // Recipients from pipeline leads — same access wall as every lead action.
