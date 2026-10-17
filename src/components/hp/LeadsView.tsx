@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { api, rands, randsPlain, STAGES, type Lead, type TopUpPack } from './shared'
+import { api, rands, randsPlain, STAGES, type Lead, type LeadEmailLog, type Task, type TopUpPack } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
-  Search, RefreshCw, X, HandCoins, MapPin,
+  Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
 } from 'lucide-react'
 
 // Where a lead came from, in words a member understands. Internal tooling
@@ -50,6 +50,8 @@ export default function LeadsView() {
   const { session, activeProjectId, loadSession, bumpRefresh } = useHp()
   const { toast } = useToast()
   const [leads, setLeads] = useState<Lead[]>([])
+  // who already opened our email, keyed by lead id (read receipts at a glance)
+  const [opens, setOpens] = useState<Record<string, { openedAt: string; openCount: number }>>({})
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [scope, setScope] = useState<'all' | 'mine' | 'team'>('all')
@@ -79,8 +81,9 @@ export default function LeadsView() {
     if (leads.length === 0) setLoading(true)
     try {
       const pid = effProject && effProject !== 'ALL' ? `&projectId=${encodeURIComponent(effProject)}` : ''
-      const res = await api<{ leads: Lead[] }>(`/api/leads?scope=${scope}${pid}${qDebounced ? `&q=${encodeURIComponent(qDebounced)}` : ''}`)
+      const res = await api<{ leads: Lead[]; opens?: Record<string, { openedAt: string; openCount: number }> }>(`/api/leads?scope=${scope}${pid}${qDebounced ? `&q=${encodeURIComponent(qDebounced)}` : ''}`)
       setLeads(res.leads)
+      setOpens(res.opens || {})
     } catch {
       toast({ title: 'Failed to load leads', variant: 'destructive' })
     } finally {
@@ -235,7 +238,7 @@ export default function LeadsView() {
                 </div>
                 <div className="space-y-2 min-h-[120px] max-h-[62vh] overflow-y-auto hp-scroll pr-1">
                   {items.map((l) => (
-                    <LeadCard key={l.id} lead={l} onOpen={openLead} />
+                    <LeadCard key={l.id} lead={l} onOpen={openLead} read={Boolean(opens[l.id])} />
                   ))}
                   {items.length === 0 && (
                     <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
@@ -261,6 +264,11 @@ export default function LeadsView() {
                     <div className="text-xs text-muted-foreground truncate">{l.city || 'SA'} · {l.industry || 'Business'} · {sourceLabel(l.source)}</div>
                   </div>
                   <Badge variant="outline" className="text-xs hidden sm:inline-flex">{STAGES.find((s) => s.key === l.stage)?.label}</Badge>
+                  {opens[l.id] && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 shrink-0" title={`Email opened ${new Date(opens[l.id].openedAt).toLocaleString('en-ZA')}${opens[l.id].openCount > 1 ? ` · ${opens[l.id].openCount} times` : ''}`}>
+                      <MailCheck className="h-4 w-4" /> read
+                    </span>
+                  )}
                   <span className="text-sm font-medium w-20 text-right">{l.value > 0 ? randsPlain(l.value) : '—'}</span>
                 </button>
               ))}
@@ -280,7 +288,7 @@ export default function LeadsView() {
   )
 }
 
-const LeadCard = memo(function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: (l: Lead) => void }) {
+const LeadCard = memo(function LeadCard({ lead, onOpen, read }: { lead: Lead; onOpen: (l: Lead) => void; read?: boolean }) {
   return (
     <button
       onClick={() => onOpen(lead)}
@@ -296,11 +304,14 @@ const LeadCard = memo(function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: 
       <div className="mt-2 flex items-center gap-1 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{sourceLabel(lead.source)}</Badge>
         {lead.industry && <Badge variant="secondary" className="text-[10px]">{lead.industry}</Badge>}
-        {!lead.unlocked ? (
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Lock className="h-3 w-3" /> locked</span>
-        ) : (
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600"><Eye className="h-3 w-3" /> revealed</span>
+        {read && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><MailCheck className="h-3 w-3" /> read</span>
         )}
+        {!lead.unlocked ? (
+          <span className={read ? 'inline-flex items-center gap-1 text-[10px] text-muted-foreground' : 'ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground'}><Lock className="h-3 w-3" /> locked</span>
+        ) : !read ? (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600"><Eye className="h-3 w-3" /> revealed</span>
+        ) : null}
       </div>
     </button>
   )
@@ -853,33 +864,94 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
   projects: { id: string; name: string; isDefault: boolean }[]
 }) {
   const { toast } = useToast()
-  const [value, setValue] = useState('')
-  const [notes, setNotes] = useState('')
+  const { session, bumpRefresh } = useHp()
+  // One editable contact card: every field saves in a single tap.
+  const [form, setForm] = useState({
+    company: '', contactName: '', email: '', phone: '', website: '',
+    address: '', city: '', industry: '', value: '', notes: '',
+  })
+  // Live extras fetched per open: read receipts + tasks tied to this contact.
+  const [info, setInfo] = useState<{ emails: LeadEmailLog[]; tasks: Task[] } | null>(null)
+  const [saving, setSaving] = useState(false)
   const [revealing, setRevealing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [moving, setMoving] = useState(false)
+  // Quick task popup, pre-filled from this contact.
+  const [taskOpen, setTaskOpen] = useState(false)
+  const [task, setTask] = useState({ title: '', dueDate: '', dueTime: '', priority: 'MEDIUM', notes: '', dest: 'personal' })
+  const [taskSaving, setTaskSaving] = useState(false)
 
+  const leadId = lead?.id || ''
+
+  // Fresh on every open: an email opened two minutes ago must show here now.
   useEffect(() => {
-    if (lead) {
-      setValue(String(lead.value || ''))
-      setNotes(lead.notes || '')
-    }
-  }, [lead])
-
-  if (!lead) return null
-  const stageIdx = STAGES.findIndex((s) => s.key === lead.stage)
+    setInfo(null)
+    setTaskOpen(false)
+    if (!leadId) return
+    setForm({
+      company: lead?.company || '',
+      contactName: lead?.contactName || '',
+      email: lead?.email || '',
+      phone: lead?.phone || '',
+      website: lead?.website || '',
+      address: lead?.address || '',
+      city: lead?.city || '',
+      industry: lead?.industry || '',
+      value: String(lead?.value || ''),
+      notes: lead?.notes || '',
+    })
+    api<{ lead: Lead; emails: LeadEmailLog[]; tasks: Task[] }>(`/api/leads/${leadId}`)
+      .then((res) => {
+        setInfo({ emails: res.emails, tasks: res.tasks })
+        const l = res.lead
+        setForm({
+          company: l.company || '',
+          contactName: l.contactName || '',
+          email: l.email || '',
+          phone: l.phone || '',
+          website: l.website || '',
+          address: l.address || '',
+          city: l.city || '',
+          industry: l.industry || '',
+          value: String(l.value || ''),
+          notes: l.notes || '',
+        })
+      })
+      .catch(() => setInfo({ emails: [], tasks: [] }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId])
 
   async function saveEdits() {
+    if (!lead) return
+    if (!form.company.trim()) {
+      toast({ title: 'Business name is required', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
     try {
-      await api(`/api/leads/${lead!.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value: parseFloat(value) || 0, notes }),
-      })
-      toast({ title: 'Lead updated' })
+      const body: Record<string, unknown> = {
+        company: form.company.trim(),
+        contactName: form.contactName.trim() || null,
+        website: form.website.trim() || null,
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        industry: form.industry.trim() || null,
+        value: parseFloat(form.value) || 0,
+        notes: form.notes,
+      }
+      // locked leads keep their reveal wall: email and phone are not editable here
+      if (lead.unlocked) {
+        body.email = form.email.trim() || null
+        body.phone = form.phone.trim() || null
+      }
+      await api(`/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(body) })
+      toast({ title: 'Contact saved', description: `${form.company.trim()} is up to date.` })
       onChanged()
       onOpenChange(false)
     } catch (e) {
-      toast({ title: 'Update failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      toast({ title: 'Save failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -913,6 +985,74 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
     }
   }
 
+  function openTaskPopup() {
+    if (!lead) return
+    setTask({
+      title: `Follow up with ${lead.company}`,
+      dueDate: '',
+      dueTime: '',
+      priority: 'MEDIUM',
+      notes: lead.unlocked && (lead.email || lead.phone)
+        ? `Contact: ${lead.contactName || lead.company}${lead.email ? ` · ${lead.email}` : ''}${lead.phone ? ` · ${lead.phone}` : ''}`
+        : '',
+      dest: 'personal',
+    })
+    setTaskOpen(true)
+  }
+
+  async function saveTask() {
+    if (!lead || !task.title.trim()) return
+    setTaskSaving(true)
+    try {
+      const isTeam = task.dest !== 'personal' && task.dest !== 'business'
+      // Resolved in THIS browser's timezone, sent as a UTC instant — same rule as Tasks.
+      const dueIso = task.dueDate
+        ? new Date(task.dueTime ? `${task.dueDate}T${task.dueTime}` : `${task.dueDate}T00:00`).toISOString()
+        : null
+      await api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: task.title.trim(),
+          notes: task.notes.trim() || null,
+          priority: task.priority,
+          dueDate: dueIso,
+          isPrivate: false,
+          teamId: isTeam ? task.dest : null,
+          assigneeId: session?.user.id,
+          leadId: lead.id,
+        }),
+      })
+      toast({ title: 'Task added', description: `Linked to ${lead.company}. It lives under Tasks too.` })
+      setTaskOpen(false)
+      bumpRefresh()
+      // pull the fresh task list straight into this dialog
+      const res = await api<{ lead: Lead; emails: LeadEmailLog[]; tasks: Task[] }>(`/api/leads/${lead.id}`)
+      setInfo({ emails: res.emails, tasks: res.tasks })
+    } catch (e) {
+      toast({ title: 'Could not add task', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setTaskSaving(false)
+    }
+  }
+
+  async function toggleTask(t: Task) {
+    const status = t.status === 'DONE' ? 'TODO' : 'DONE'
+    setInfo((prev) => (prev ? { ...prev, tasks: prev.tasks.map((x) => (x.id === t.id ? { ...x, status } : x)) } : prev))
+    try {
+      await api(`/api/tasks/${t.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+      bumpRefresh()
+    } catch {
+      /* leave the optimistic flip; the next open corrects it */
+    }
+  }
+
+  function fmt(iso: string) {
+    return new Date(iso).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  }
+
+  if (!lead) return null
+  const stageIdx = STAGES.findIndex((s) => s.key === lead.stage)
+
   return (
     <Dialog open={Boolean(lead)} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -921,6 +1061,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
           <DialogDescription>
             {lead.industry || 'Business'} · {lead.city || 'South Africa'} · {sourceLabel(lead.source)}
             {lead.score != null && ` · fit ${lead.score}/5`}
+            {' '}&#183; added {new Date(lead.createdAt).toLocaleDateString('en-ZA')}
           </DialogDescription>
         </DialogHeader>
 
@@ -935,7 +1076,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
               </div>
             </div>
           )}
-          {/* contact block */}
+          {/* contact block (locked leads: reveal wall stays) */}
           {lead.unlocked ? (
             <div className="rounded-lg border bg-card p-3 space-y-2 text-sm">
               <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> {lead.contactName || '—'}</div>
@@ -954,6 +1095,40 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
               </Button>
             </div>
           )}
+
+          {/* email activity: read receipts straight from the tracking pixel */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Email activity</Label>
+            {!info ? (
+              <div className="rounded-lg border bg-card p-3 space-y-2">
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+            ) : info.emails.length === 0 ? (
+              <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 shrink-0" /> No emails sent to this contact yet.
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-card p-3 space-y-2.5">
+                {info.emails.map((m) => (
+                  <div key={m.id} className="flex items-start gap-2 text-sm">
+                    <MailCheck className={`h-4 w-4 mt-0.5 shrink-0 ${m.openedAt ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px]">{m.subject || '(no subject)'}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {m.status === 'FAILED'
+                          ? 'Send failed'
+                          : m.openedAt
+                            ? `Opened ${fmt(m.openedAt)}${m.openCount > 1 ? ` · ${m.openCount} times` : ''}`
+                            : `Sent ${fmt(m.createdAt)} · not opened yet`}
+                      </div>
+                    </div>
+                    {m.openedAt && <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] shrink-0">Read</Badge>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* stage stepper */}
           <div>
@@ -991,28 +1166,159 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* tasks tied to this contact */}
+          {info && info.tasks.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Deal value (R)</Label>
-              <Input type="number" value={value} onChange={(e) => setValue(e.target.value)} />
+              <Label className="text-xs text-muted-foreground">Tasks · {info.tasks.length}</Label>
+              <div className="rounded-lg border bg-card p-2 space-y-0.5">
+                {info.tasks.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 px-1 py-1">
+                    <button
+                      onClick={() => toggleTask(t)}
+                      aria-label={t.status === 'DONE' ? 'Mark as to do' : 'Mark as done'}
+                      className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${t.status === 'DONE' ? 'bg-brand border-brand text-black' : 'border-muted-foreground/40'}`}
+                    >
+                      {t.status === 'DONE' && <Check className="h-3 w-3" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-[13px] truncate ${t.status === 'DONE' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</div>
+                      {t.dueDate && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Due {new Date(t.dueDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}{t.priority === 'HIGH' ? ' · high priority' : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* editable contact card: everything in one save */}
+          <div className="space-y-3 rounded-lg border bg-card p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Business name</Label>
+                <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Bay Tech Supply" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact person</Label>
+                <Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="Who answers the phone" />
+              </div>
+            </div>
+            {lead.unlocked && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@business.co.za" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="072 000 0000" />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, suburb, city" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Website</Label>
+                <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="www.business.co.za" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Cape Town" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Industry</Label>
+                <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} placeholder="e.g. Medispa" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Deal value (R)</Label>
+                <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Created</Label>
-              <Input disabled value={new Date(lead.createdAt).toLocaleDateString('en-ZA')} />
+              <Label>Notes</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="What did you discuss? Next step?" />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="What did you discuss? Next step?" />
           </div>
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={remove} disabled={deleting} className="text-red-600 hover:text-red-700">
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Button onClick={saveEdits} className="flex-1">Save changes</Button>
+            <Button variant="outline" onClick={openTaskPopup}>
+              <CalendarPlus className="h-4 w-4 mr-1.5 text-brand" /> Create task
+            </Button>
+            <Button onClick={saveEdits} disabled={saving} className="flex-1">
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Save changes
+            </Button>
           </div>
         </div>
+
+        {/* quick task: pre-filled from this contact, saved straight to Tasks */}
+        <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>New task for {lead.company}</DialogTitle>
+              <DialogDescription>Saved straight to Tasks and linked to this contact.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Task</Label>
+                <Input value={task.title} onChange={(e) => setTask({ ...task, title: e.target.value })} placeholder="Follow up with…" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Due date</Label>
+                  <Input type="date" value={task.dueDate} onChange={(e) => setTask({ ...task, dueDate: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Time</Label>
+                  <Input type="time" value={task.dueTime} onChange={(e) => setTask({ ...task, dueTime: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Priority</Label>
+                  <Select value={task.priority} onValueChange={(v) => setTask({ ...task, priority: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">Low</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>List</Label>
+                  <Select value={task.dest} onValueChange={(v) => setTask({ ...task, dest: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="business">Business</SelectItem>
+                      {session?.team && <SelectItem value={session.team.id}>{session.team.name}</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea rows={2} value={task.notes} onChange={(e) => setTask({ ...task, notes: e.target.value })} placeholder="What is the next step?" />
+              </div>
+              <Button onClick={saveTask} disabled={taskSaving || !task.title.trim()} className="w-full">
+                {taskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarPlus className="h-4 w-4 mr-1" />}
+                Add task
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   )

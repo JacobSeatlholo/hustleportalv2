@@ -16,6 +16,51 @@ async function findLead(userId: string, id: string) {
   })
 }
 
+// GET /api/leads/[id] → full contact record for the detail dialog:
+// the lead, every campaign/system email tied to it (with read time and open
+// count), and the tasks that belong to this contact. Fresh on every open, so
+// an open that happened two minutes ago is already visible here.
+export async function GET(_req: NextRequest, { params }: Params) {
+  const userId = await getUserId()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await params
+  const lead = await findLead(userId, id)
+  if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const [emails, tasks] = await Promise.all([
+    db.emailLog.findMany({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true, subject: true, campaign: true, status: true,
+        openedAt: true, openCount: true, createdAt: true,
+      },
+    }),
+    db.task.findMany({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true, title: true, notes: true, status: true, priority: true,
+        dueDate: true, teamId: true, creatorId: true, assigneeId: true,
+        creator: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true } },
+      },
+    }),
+  ])
+
+  return NextResponse.json({
+    lead,
+    emails: emails.map((e) => ({
+      ...e,
+      openedAt: e.openedAt?.toISOString() || null,
+      createdAt: e.createdAt.toISOString(),
+    })),
+    tasks: tasks.map((t) => ({ ...t, dueDate: t.dueDate?.toISOString() || null })),
+  })
+}
+
 // PATCH /api/leads/[id] → stage moves, value/notes/contact edits
 export async function PATCH(req: NextRequest, { params }: Params) {
   const userId = await getUserId()
@@ -39,6 +84,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('email' in body) data.email = body.email || null
   if ('phone' in body) data.phone = body.phone || null
   if ('score' in body) data.score = typeof body.score === 'number' ? body.score : null
+  // Full contact card editing: business name, physical address, web, trade, town.
+  if ('company' in body) {
+    const company = String(body.company || '').trim()
+    if (!company) return NextResponse.json({ error: 'Business name is required.' }, { status: 400 })
+    data.company = company
+  }
+  if ('address' in body) data.address = body.address == null || body.address === '' ? null : String(body.address)
+  if ('website' in body) data.website = body.website == null || body.website === '' ? null : String(body.website)
+  if ('industry' in body) data.industry = body.industry == null || body.industry === '' ? null : String(body.industry)
+  if ('city' in body) data.city = body.city == null || body.city === '' ? null : String(body.city)
 
   // Move the contact into another pipeline (project). Owner only — a teammate
   // viewing a shared lead cannot re-home it. Stage and notes travel with it.

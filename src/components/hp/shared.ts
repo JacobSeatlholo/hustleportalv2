@@ -124,6 +124,7 @@ export interface Lead {
   email: string | null
   phone: string | null
   website: string | null
+  address: string | null
   industry: string | null
   city: string | null
   country: string | null
@@ -137,6 +138,17 @@ export interface Lead {
   createdAt: string
 }
 
+// One email tied to a contact, as shown on the detail dialog.
+export interface LeadEmailLog {
+  id: string
+  subject: string
+  campaign: string | null
+  status: string // DRAFT | SENT | FAILED
+  openedAt: string | null
+  openCount: number
+  createdAt: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -146,6 +158,7 @@ export interface Task {
   dueDate: string | null
   isPrivate: boolean
   teamId: string | null
+  leadId?: string | null
   creatorId: string
   assigneeId: string | null
   creator: { id: string; name: string }

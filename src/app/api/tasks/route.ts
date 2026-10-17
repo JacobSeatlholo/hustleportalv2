@@ -56,14 +56,27 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// POST /api/tasks — create (personal or team)
+// POST /api/tasks — create (personal or team), optionally tied to a pipeline contact
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId } = body
+  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId } = body
   if (!title || !String(title).trim()) {
     return NextResponse.json({ error: 'Task title is required.' }, { status: 400 })
+  }
+  // A task can belong to a contact. Same access wall as the lead detail:
+  // own lead, or one shared via a team the user belongs to.
+  let linkedLeadId: string | null = null
+  if (leadId) {
+    const memberships = await db.teamMember.findMany({ where: { userId }, select: { teamId: true } })
+    const teamIds = memberships.map((m) => m.teamId)
+    const lead = await db.lead.findFirst({
+      where: { id: String(leadId), OR: [{ userId }, { teamId: { in: teamIds } }] },
+      select: { id: true },
+    })
+    if (!lead) return NextResponse.json({ error: 'That contact does not exist.' }, { status: 404 })
+    linkedLeadId = lead.id
   }
   if (teamId) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
@@ -86,6 +99,7 @@ export async function POST(req: NextRequest) {
       dueDate: dueDate ? new Date(dueDate) : null,
       isPrivate: teamId ? false : Boolean(isPrivate),
       teamId: teamId || null,
+      leadId: linkedLeadId,
       creatorId: userId,
       assigneeId: assigneeId || userId,
     },

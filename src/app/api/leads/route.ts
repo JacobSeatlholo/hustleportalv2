@@ -37,7 +37,23 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     take: 500,
   })
-  return NextResponse.json({ leads })
+  // Who already opened our email? One query for the page, keyed by lead.
+  // Rows without an open never appear here: no badge means not opened yet.
+  const ids = leads.map((l) => l.id)
+  const openRows = ids.length
+    ? await db.emailLog.findMany({
+        where: { leadId: { in: ids }, openedAt: { not: null } },
+        select: { leadId: true, openedAt: true, openCount: true },
+      })
+    : []
+  const opens: Record<string, { openedAt: string; openCount: number }> = {}
+  for (const r of openRows) {
+    const prev = opens[r.leadId as string]
+    if (!prev || (r.openedAt && new Date(r.openedAt) > new Date(prev.openedAt))) {
+      opens[r.leadId as string] = { openedAt: (r.openedAt as Date).toISOString(), openCount: r.openCount }
+    }
+  }
+  return NextResponse.json({ leads, opens })
 }
 
 // POST /api/leads → create (manual / from discover)
