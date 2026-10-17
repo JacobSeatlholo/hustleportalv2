@@ -81,7 +81,7 @@ export default function MailView() {
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
 
   function campaignLabel(c: string) {
-    return c.split(/[-_]+/).map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ')
+    return c.split(/[-_]+/).map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ').replace(/^Blackbiz\b/, 'BlackBiz')
   }
 
   function openTaskPopup(r: CampaignRow) {
@@ -296,6 +296,7 @@ export default function MailView() {
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-medium">{r.lead?.company || r.toEmail}</p>
                               <p className="truncate text-[11px] text-muted-foreground">
+                                {r.lead?.company && r.toEmail !== r.lead.company ? `${r.toEmail} · ` : ''}
                                 {r.status === 'FAILED'
                                   ? 'Send failed'
                                   : r.openedAt
