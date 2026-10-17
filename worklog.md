@@ -1116,3 +1116,7 @@ Stage Summary:
 - Draft v3 (owner feedback): merged draft 1 family flow + draft 2 problem scene; all owner-quoted lines verbatim; verify 66/66 dry
 - Video thumbnail shipped (deploy 2ed2634): email clients refuse inline <video>, so scripts/build_video_poster.py extracts the brightest frame (4.0s title card) via ffmpeg, PIL-composes brand vignette + yellow play button bottom-right -> public/campaign/blackbiz-intro-video.jpg (45 KB); campaignHtml swaps the marker line "See it in motion: <url>" for a clickable 640px poster opening the mp4 in browser; text version keeps the plain link; poster URL verified 200; verify 66/66 dry, zero sends
 - STILL GATED: owner must approve draft v3 + video block before fire --i-confirm-send
+- OWNER CONFIRMED, FIRED: scripts/send_blackbiz_campaign.mjs fire --i-confirm-send -> 66/66 SENT, 0 failed (campaign_results.json)
+- Opens flowing immediately: 9 opens within the first minute, each linked lead auto-flipped NEW -> CONTACTED via /api/mail/open/[id]; read-out endpoint live
+- "Add to project" shipped (deploy 0e49764): PATCH /api/leads/[id] now accepts projectId (owner-only, validates project ownership, same-project no-op); Lead type + LeadsView LeadDetailDialog gained a Select "Add to project" with move semantics (stage+notes travel); scripts/verify_move_project.mjs 11/11; e2e regression 39/39
+- Open tracking caveat holds: pixel fires only when the reader loads images (open counts are a floor)
