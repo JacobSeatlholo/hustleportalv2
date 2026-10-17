@@ -1093,3 +1093,19 @@ Stage Summary:
 - QA suppression row "QA Delist Verify Co" left in place (harmless, proves idempotency state)
 - Meeting verify scripts (set_medispa_venue.mjs, prod_meeting_share_verify.mjs) were wiped by the sandbox reset (scripts/ gitignored); meeting surfaces only received cosmetic class swaps this task
 - Boss actions unchanged from Task 68: paste privacy-notice paragraph + ToS clause on WordPress, confirm IR eServices registration + PAIA manual upload + annual report diarised
+
+---
+Task ID: 69
+Agent: main (Z.ai)
+Task: BlackBiz -> HustlePortal cross-intro campaign (69 Supabase users), send as blackbiz@hustleportal.online
+
+Work Log:
+- Recipients cleaned: 69 rows -> 66 send (excluded team@businesshustle.co.za + seed@blackbiz.co.za own addresses, amslinahholdings@gmails.com typo domain); CSV at download/blackbiz_recipients.csv -> blackbiz_campaign_recipients.csv; all Supabase names are NULL so greeting is "Hi there,"
+- mailer.ts: added CAMPAIGN_FROM_DEFAULT "BlackBiz <blackbiz@hustleportal.online>", normalizeCampaignFrom (domain-locked), sendCampaignMail (Resend, legal footer, NO referral signature, Reply-To team inbox, stamps last system send)
+- New POST /api/admin/exec/campaign (deploy 9b7213a): requireExec gate, ONE recipient per call, EmailLog row per send (SENT/FAILED under exec user), dryRun flag, 120/hour in-memory rate cap
+- scripts/send_blackbiz_campaign.mjs: verify phase (dry, zero sends) + fire phase REFUSES without --i-confirm-send flag; results cached in scripts/campaign_results.json so re-runs skip sent addresses; 400ms between sends
+- Verify phase run: 66/66 DRY-OK against production, zero emails left
+- USER GATE: owner must approve the final draft in chat before fire is ever run — no test send, no partial send, nothing until explicit confirmation
+
+Stage Summary:
+- Pipeline live and proven dry; 66 recipients validated; sender BlackBiz <blackbiz@hustleportal.online> on verified domain; subject "Your next client is one search away"; awaiting owner confirmation to run: node scripts/send_blackbiz_campaign.mjs fire --i-confirm-send
