@@ -508,14 +508,32 @@ export function normalizeCampaignFrom(raw?: string): string {
   return `${label} <${address}>`
 }
 
+/**
+ * Campaign HTML: the plain text body rendered as clean readable mail (short
+ * lines, clickable links, no images that can break) plus the invisible 1x1
+ * open tracker. Reading clients that load images fire the pixel; plain-text
+ * only readers do not, so open counts are a floor, never a ceiling.
+ */
+function campaignHtml(text: string, pixelUrl: string): string {
+  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const linked = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0b57d0">$1</a>')
+  const brd = linked.replace(/\n/g, '<br>\n')
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9"><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">${brd}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none" /></div></body></html>`
+}
+
 export async function sendCampaignMail(
-  mail: { to: string; subject: string; body: string; from?: string },
+  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string },
 ): Promise<{ ok: boolean; via?: string; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) return { ok: false, error: 'Email engine is not configured.' }
   const from = normalizeCampaignFrom(mail.from)
   const body = mail.body + legalFooter()
-  const res = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
+  const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
+  const res = await resendPost(apiKey, {
+    from, to: [mail.to], subject: mail.subject, text: body,
+    ...(html ? { html } : {}),
+    reply_to: TEAM_INBOX,
+  })
   if (res.ok) {
     const d = sendingDomain()
     domainCache = {

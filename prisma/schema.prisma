@@ -245,6 +245,7 @@ model Lead {
   team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
   projectId String?
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  emailLogs EmailLog[]
 
   @@index([userId, stage])
   @@index([projectId])
@@ -422,12 +423,17 @@ model EmailLog {
   status    String   @default("DRAFT") // DRAFT | SENT | FAILED
   provider  String   @default("GMAIL")
   error     String?
+  campaign  String? // bulk send grouping, e.g. blackbiz-intro
+  openedAt  DateTime? // first open of the tracking pixel
+  openCount Int      @default(0)
   createdAt DateTime @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([campaign])
 }
 
 // ============ WHATSAPP (Cloud API log: inbound auto-capture + outbound sends) ============
