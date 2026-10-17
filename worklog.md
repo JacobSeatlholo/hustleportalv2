@@ -1120,3 +1120,25 @@ Stage Summary:
 - Opens flowing immediately: 9 opens within the first minute, each linked lead auto-flipped NEW -> CONTACTED via /api/mail/open/[id]; read-out endpoint live
 - "Add to project" shipped (deploy 0e49764): PATCH /api/leads/[id] now accepts projectId (owner-only, validates project ownership, same-project no-op); Lead type + LeadsView LeadDetailDialog gained a Select "Add to project" with move semantics (stage+notes travel); scripts/verify_move_project.mjs 11/11; e2e regression 39/39
 - Open tracking caveat holds: pixel fires only when the reader loads images (open counts are a floor)
+
+---
+Task ID: 70
+Agent: main (Z.ai)
+Task: Lead detail dialog that works — create task from a contact, full contact editing (business name, contact person, address...), email open status visible in the dialog and on cards
+
+Work Log:
+- Sandbox reset had wiped untracked scripts (send_blackbiz_campaign.mjs etc.); campaign state confirmed intact from worklog + git: fire already ran 66/66 SENT 0 failed, opens flowing, "Add to project" live (0e49764). No rebuild needed — prod DB is the source of truth.
+- Schema (additive, db push on deploy): Lead.address; Task.leadId (+ relation Lead.tasks, onDelete SetNull, @@index([leadId]))
+- API: new GET /api/leads/[id] = detail shape {lead, emails[10] (subject/campaign/status/openedAt/openCount/createdAt), tasks[20]} with the same owner-or-shared-team access wall as PATCH; PATCH now accepts company (blank refused 400), address, website, industry, city (contactName/email/phone/value/notes/stage/projectId already supported)
+- POST /api/tasks accepts leadId (validated against the same access wall, bad lead 404)
+- GET /api/leads list now returns opens map (leadId -> {openedAt, openCount}) built from one emailLog query (openedAt not null); no badge = not opened
+- LeadsView: LeadDetailDialog rebuilt — fetches detail fresh on every open (read receipts live), Email activity section (Read badge green + "Opened 18 Oct 14:32 · 2 times" / "Sent ... not opened yet" / empty state), Tasks section (round toggle rows, due date, high priority tag, live insert after create), full edit card (Business name, Contact person, Email+Phone only when unlocked — reveal wall intact, Address, Website, City, Industry, Deal value, Notes) saved in one PATCH, "Create task" button opens nested popup pre-filled (title "Follow up with <company>", contact line in notes, due date/time, priority, Personal/Business/<team> list) and POSTs with leadId; created date moved into the header line; kanban LeadCard + list rows show green "read" chip (MailCheck) for opened contacts
+- Deploy 3f9c323 (paramiko reinstalled into /home/z/.venv after reset; shim/key from .git/hp-deploy survived)
+- scripts/verify_lead_detail.mjs: 19/19 PASS — QA lead created/edited (company rename + address + contact person persisted), blank company 400, GET detail shape, task linked (leadId round trip, bad leadId 404), one real QA email via campaign engine to ops seat (campaign label 'qa-detail-verify', fake domain, accepted then bounces — established pattern), pixel open -> read receipt on detail (openedAt + count 1) -> lead flipped NEW->CONTACTED, list opens map carries it, blackbiz-intro read-out sent 66 / failed 0 / opened 12; QA lead + tasks deleted after
+- Visual QA on prod mobile viewport (agent-browser, ops seat): board renders, dialog shows Email activity empty state, Tasks section, full edit card; Create task popup pre-filled correctly, save inserted the task into the dialog list live; address edit survived save + reopen. Screenshot download/qa_lead_detail_dialog.png. QA rows cleaned after.
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11
+
+Stage Summary:
+- Production 3f9c323: the contact dialog is now a working desk — edit the whole card, fire a follow up task without leaving the contact, and see the read receipt (time + count) the moment they open the email; opened contacts carry a green "read" chip on the board and list
+- Campaign read-out stands: blackbiz-intro sent 66, failed 0, opens climbing (12 at verify time); opens only count when the reader loads images (floor not ceiling)
+- QA noise: one EmailLog row campaign='qa-detail-verify' remains under ops user (bounded, clearly labelled)
