@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { replayTour } from './WelcomeTour'
+import { openOnboarding } from './Onboarding'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +19,7 @@ import PwaNotifications from './PwaNotifications'
 import ThemeToggle from './ThemeToggle'
 import { MODULES } from '@/lib/modules'
 import { LEVELS } from '@/lib/levels'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X, LayoutGrid, Flame } from 'lucide-react'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X, LayoutGrid, Flame, ClipboardList } from 'lucide-react'
 
 interface TeamInfo {
   id: string
@@ -446,6 +447,9 @@ export default function ProfileView() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => replayTour()}>
             <Compass className="h-4 w-4 mr-1" /> Replay the tour
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => openOnboarding()}>
+            <ClipboardList className="h-4 w-4 mr-1" /> How you work
           </Button>
           <Button variant="outline" size="sm" onClick={logout} className="text-red-600 hover:text-red-700">
             <LogOut className="h-4 w-4 mr-1" /> Sign out

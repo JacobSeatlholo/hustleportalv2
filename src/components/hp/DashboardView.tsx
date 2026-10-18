@@ -13,10 +13,12 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, type Lead, type Task } from './shared'
 import { useHp, type ViewKey } from './store'
+import { personalLine, personaOf, professionLabel } from './tracks'
 import SetupChecklist from './SetupChecklist'
 import {
   ArrowRight, ArrowUpRight, ArrowDownRight, Sparkles, Send, Target, CheckSquare,
   Wallet, TrendingUp, Clock, Flame, Loader2, Trophy, ListTodo, Users, BrainCircuit,
+  CheckCircle2, Compass, Circle,
 } from 'lucide-react'
 
 interface DashData {
@@ -26,6 +28,7 @@ interface DashData {
     openTasks: number; overdueTasks: number; highPriorityTasks: number; totalLeads: number
     creditBalance: number
   }
+  counts: { clients: number; invoices: number }
   byStage: Record<string, number>
   months: { key: string; label: string; income: number; expense: number }[]
   week: { day: string; count: number }[]
@@ -46,6 +49,8 @@ export default function DashboardView() {
   const [data, setData] = useState<DashData | null>(null)
   const [newLeads, setNewLeads] = useState<Lead[]>([])
   const [myTasks, setMyTasks] = useState<Task[]>([])
+  const [doneTasks, setDoneTasks] = useState(0)
+  const [visitDone, setVisitDone] = useState<Record<string, boolean>>({})
   const [aiQuery, setAiQuery] = useState('')
   const [aiReply, setAiReply] = useState<string | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
@@ -62,6 +67,7 @@ export default function DashboardView() {
       setData(d)
       setNewLeads(leads.leads.filter((l) => l.stage === 'NEW').slice(0, 6))
       setMyTasks(tasks.tasks.filter((t) => t.status !== 'DONE').slice(0, 5))
+      setDoneTasks(tasks.tasks.filter((t) => t.status === 'DONE').length)
     } catch {
       toast({ title: 'Could not load dashboard', variant: 'destructive' })
     }
@@ -70,6 +76,50 @@ export default function DashboardView() {
   useEffect(() => {
     load()
   }, [activeProjectId])
+
+  // Personalized mastery track: the survey answers shape this card. Visit
+  // steps mark done on first open; live steps read real workspace work.
+  const persona = personaOf(session?.user.persona)
+  const profLabel = professionLabel(session?.user.profession)
+  const personal = personalLine(session?.user.persona, session?.user.profession)
+  useEffect(() => {
+    if (!persona) return
+    const map: Record<string, boolean> = {}
+    persona.track.forEach((s, i) => {
+      if (s.check === 'visit') map[String(i)] = localStorage.getItem(`hp_track_${persona.key}_${i}`) === '1'
+    })
+    setVisitDone(map)
+  }, [persona])
+
+  function stepDone(signal?: string, idx = -1): boolean {
+    if (!data) return false
+    if (signal) {
+      switch (signal) {
+        case 'profile': return Boolean(session?.user.businessName || session?.user.industry)
+        case 'leads': return data.kpis.totalLeads > 0
+        case 'pipeline_moved':
+          return (data.byStage.CONTACTED || 0) + (data.byStage.QUALIFIED || 0) + (data.byStage.QUOTE_SENT || 0) + (data.byStage.WON || 0) > 0
+        case 'won': return (data.byStage.WON || 0) > 0
+        case 'clients': return data.counts.clients > 0
+        case 'invoices': return data.counts.invoices > 0
+        case 'revenue': return data.kpis.revenue > 0
+        case 'tasks': return data.kpis.openTasks > 0 || doneTasks > 0
+        case 'tasks_done': return doneTasks > 0
+      }
+    }
+    return visitDone[String(idx)] === true
+  }
+
+  function goStep(i: number) {
+    if (!persona) return
+    const s = persona.track[i]
+    if (!s) return
+    if (s.check === 'visit') {
+      try { localStorage.setItem(`hp_track_${persona.key}_${i}`, '1') } catch { /* private mode */ }
+      setVisitDone((v) => ({ ...v, [String(i)]: true }))
+    }
+    setView(s.view as ViewKey)
+  }
 
   async function askAi(text?: string) {
     const q = (text ?? aiQuery).trim()
@@ -112,6 +162,58 @@ export default function DashboardView() {
   return (
     <div className="space-y-4">
       <SetupChecklist />
+      {/* Personalized mastery track: the survey answers run this card */}
+      {persona && (
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-brand/15 p-2"><Compass className="h-5 w-5 text-brand" /></div>
+                <div>
+                  <div className="font-display text-lg leading-tight">Your plan to {persona.label.toLowerCase()}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {profLabel ? `Shaped for a ${profLabel.toLowerCase()}. Change it any time in your profile.` : 'Three moves, in the order that pays.'}
+                  </div>
+                </div>
+              </div>
+              <Badge variant="secondary" className="shrink-0">
+                {persona.track.filter((s, i) => stepDone(s.signal, i)).length} of {persona.track.length} done
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              {persona.track.map((s, i) => {
+                const done = stepDone(s.signal, i)
+                return (
+                  <div
+                    key={s.label}
+                    className={`flex items-center gap-3 rounded-lg border p-3 ${done ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-card/60'}`}
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
+                    ) : (
+                      <span className="h-5 w-5 shrink-0 rounded-full border border-brand/50 text-brand text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-medium leading-tight ${done ? 'text-muted-foreground' : ''}`}>{s.label}</div>
+                      <div className="text-xs text-muted-foreground">{s.why}</div>
+                    </div>
+                    {!done && (
+                      <Button size="sm" variant="outline" className="shrink-0 h-8" onClick={() => goStep(i)}>
+                        Go <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {persona.track.every((s, i) => stepDone(s.signal, i)) && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Track complete. The habit is yours now. Keep the streak alive.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {/* Hero + AI command bar */}
       <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-6 md:p-8 relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-brand/10 blur-2xl" />
@@ -124,6 +226,9 @@ export default function DashboardView() {
         <p className="text-sidebar-foreground/60 text-sm mt-1">
           {session?.user.businessName || 'Your business'} · {session?.user.city || 'South Africa'}
         </p>
+        {personal && (
+          <p className="text-brand text-sm font-medium mt-1">{personal}</p>
+        )}
 
         <div className="mt-5 flex items-center gap-2 bg-white/10 rounded-full p-1.5 pl-4 max-w-2xl">
           <BrainCircuit className="h-4 w-4 text-brand shrink-0" />

@@ -28,6 +28,7 @@ import IntegrationsView from './IntegrationsView'
 import GrowView from './GrowView'
 import InventoryView from './InventoryView'
 import WelcomeTour from './WelcomeTour'
+import Onboarding from './Onboarding'
 import UpgradeListener from './useUpgrade'
 import SectionTutorial from './SectionTutorial'
 import TaskReminders from './TaskReminders'
@@ -298,6 +299,7 @@ export default function AppShell() {
           {content}
         </main>
 
+        <Onboarding />
         <WelcomeTour />
         <SectionTutorial />
         <TaskReminders />

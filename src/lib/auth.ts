@@ -132,6 +132,9 @@ export function publicUser(u: {
   phone?: string | null
   role: string
   xp: number
+  persona?: string | null
+  profession?: string | null
+  onboardedAt?: Date | null
   createdAt: Date
 }) {
   return {
@@ -144,6 +147,9 @@ export function publicUser(u: {
     phone: u.phone || null,
     role: u.role,
     xp: u.xp,
+    persona: u.persona || null,
+    profession: u.profession || null,
+    onboardedAt: u.onboardedAt || null,
     createdAt: u.createdAt,
   }
 }

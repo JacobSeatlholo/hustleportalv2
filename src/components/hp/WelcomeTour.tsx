@@ -35,11 +35,38 @@ export default function WelcomeTour() {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    // Auto-fire once for genuinely new visitors, shortly after boot settles.
+    // ORDERING LAW: the two question onboarding survey owns the first moment.
+    // The tour waits for a settled account (answered, or maybe later) and
+    // only then walks them around. Polls until the session resolves; the
+    // hp:onboard-settle event covers the exact moment onboarding finishes.
     if (typeof window === 'undefined') return
     if (localStorage.getItem(TOUR_KEY) === '1') return
-    const t = setTimeout(() => { setOpen(true) }, 1200)
-    return () => clearTimeout(t)
+    let tries = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const attempt = () => {
+      tries++
+      const u = useHp.getState().session?.user
+      if (!u) {
+        if (tries < 20) timer = setTimeout(attempt, 700)
+        return
+      }
+      const settled = Boolean(u.onboardedAt) || localStorage.getItem('hp_onboard_dismissed') !== null
+      if (!settled) {
+        if (tries < 30) timer = setTimeout(attempt, 900)
+        return
+      }
+      setOpen(true)
+    }
+    timer = setTimeout(attempt, 1200)
+    const onSettle = () => {
+      if (timer) clearTimeout(timer)
+      if (localStorage.getItem(TOUR_KEY) !== '1') attempt()
+    }
+    window.addEventListener('hp:onboard-settle', onSettle)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('hp:onboard-settle', onSettle)
+    }
   }, [])
 
   useEffect(() => {

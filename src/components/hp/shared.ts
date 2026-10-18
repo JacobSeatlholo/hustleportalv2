@@ -8,6 +8,9 @@ export interface SessionUser {
   phone: string | null
   role: string
   xp: number
+  persona: string | null // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
+  profession: string | null // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
+  onboardedAt: string | null
 }
 
 export interface LevelInfo {

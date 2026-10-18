@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     ? { OR: [{ assigneeId: userId }, { creatorId: userId, teamId: null }, { teamId: { in: teamIds } }] }
     : { OR: [{ assigneeId: userId }, { creatorId: userId, teamId: null }] }
 
-  const [leads, tasks, finance, wallet, xpEvents, recentPlans] = await Promise.all([
+  const [leads, tasks, finance, wallet, xpEvents, recentPlans, clientCount, invoiceCount] = await Promise.all([
     db.lead.findMany({ where: leadScope, select: { stage: true, value: true, createdAt: true, company: true, source: true } }),
     db.task.findMany({
       where: taskScope,
@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
     db.wallet.findUnique({ where: { userId } }),
     db.xpEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 8 }),
     db.aiPlan.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } }),
+    db.client.count({ where: { userId } }),
+    db.invoice.count({ where: { userId } }),
   ])
 
   const pipeline = leads.filter((l) => !['WON', 'LOST'].includes(l.stage))
@@ -106,6 +108,9 @@ export async function GET(req: NextRequest) {
       totalLeads: leads.length,
       creditBalance: wallet?.balance ?? 0,
     },
+    // Lifetime "ever did it" counts: the personalized track on the dashboard
+    // checks real work, not taps, so a step is done when the thing exists.
+    counts: { clients: clientCount, invoices: invoiceCount },
     byStage,
     months,
     week,

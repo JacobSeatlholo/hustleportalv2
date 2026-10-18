@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
 import { useHp } from './store'
+import { onboardingStillPending } from './Onboarding'
 import { getPlan, priceWithNpoDiscount } from '@/lib/plans'
 import { useCurrency } from './useCurrency'
 import {
@@ -115,15 +116,27 @@ export default function GrowView() {
 
   // Charge now intent: a plan picked on the landing page rides through signup.
   // The moment this view opens, that plan's checkout fires exactly once — the
-  // stored intent is consumed before anything else can see it.
-  useEffect(() => {
+  // stored intent is consumed before anything else can see it. ONE GATE: a
+  // brand new account answers the two question survey first (the onboarding
+  // survey owns the first moment), then this fires on the settle event, so
+  // the card form is one tap after the last answer instead of a mid survey
+  // ambush.
+  const fireIntent = useCallback(() => {
     if (typeof window === 'undefined') return
+    if (onboardingStillPending()) return
     const intent = window.localStorage.getItem('hp_plan_intent')
     if (!intent) return
     window.localStorage.removeItem('hp_plan_intent')
     if (intent === 'HUSTLER' || intent === 'BOSS') void subscribe(intent)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    fireIntent()
+    const onSettle = () => fireIntent()
+    window.addEventListener('hp:onboard-settle', onSettle)
+    return () => window.removeEventListener('hp:onboard-settle', onSettle)
+  }, [fireIntent])
 
   async function copyLink() {
     if (!refs) return

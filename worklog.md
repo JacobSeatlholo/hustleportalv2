@@ -1381,3 +1381,24 @@ Stage Summary:
 - Both fixes live in production and verified. Charge asap: a visitor who picks a plan meets the card form immediately after signup, no wandering, no lost intent.
 - Region gate: four enforcement layers plus prompt hardening; Italy can not recur; SA place names protected; pool pollution (old foreign rows) filtered on serve.
 - Open candidates for later: competitor suppression in results (Acs971 also got one JHB competitor), day 3 and day 7 volume watch as the Kloof Street batch crosses 3 days.
+
+---
+Task ID: 79
+Agent: main
+Task: Onboarding survey + personalized UX (boss question shipped) + repo privacy answer with code truth.
+
+Work Log:
+- Survey: POST /api/onboard saves two answers (profession: accountant/advisor/lawyer/entrepreneur/solopreneur/other; persona: find customers/get paid/stay on top of work/run everything), whitelist validated, rate limited, idempotent (Profile can re answer; first completion stamps onboardedAt).
+- Schema: User += persona, profession, onboardedAt (additive, nullable, pushed by the Vercel build step).
+- Session: publicUser + SessionUser carry persona/profession/onboardedAt; api/dashboard now returns counts {clients, invoices} so the track reads real work.
+- Onboarding.tsx: 3 step dialog (what do you do / what do you want first / your 3 move plan), progress dots, Maybe later snoozes 7 days (hp_onboard_dismissed), Profile button "How you work" reopens it (hp:onboard-open).
+- ORDERING LAW: the survey owns the first moment. WelcomeTour waits for a settled account (poll + hp:onboard-settle). Charge now intent (hp_plan_intent) waits too: GrowView fireIntent checks onboardingStillPending and re-fires on hp:onboard-settle, so the Yoco card form opens one tap after the last answer instead of a mid survey ambush.
+- tracks.ts: persona mastery tracks, 3 steps each, deep linked views; done checks read REAL work (client exists, invoice sent, lead moved past NEW, revenue recorded, task done) not taps; visit steps mark on first open.
+- DashboardView: "Your plan to <persona>" track card with live progress badge + emerald done states + "Track complete" line; hero whisper line "Today moves your money/pipeline/desk/show. Built for a <profession>."
+- Psychology on purpose and honest: commitment (their words echoed back), anticipation (plan preview before first dashboard), endowed progress (dots, track), Zeigarnik (open steps stay visible), small wins (real work marks done). Copy law held: no hyphens, no emoji, simple English, truthful.
+- Verified: npx tsc clean (only the 2 pre existing skills/ noise), next build OK (local stub env needed inline AUTH_SECRET).
+- Repo privacy scan for the boss question: only .env.example tracked (placeholders); full git history grep found ZERO secret shaped strings (AIza/sk_live/sk_test/whsec/re_/AKIA/postgres URLs) besides the fake placeholder; keys live in Vercel env + PlatformConfig rows. Answer: flip private, nothing breaks.
+
+Stage Summary:
+- Deployed: onboarding survey + personalized dashboard track + ordering law (survey first, checkout one tap later, tour after). Region gate + charge now were already live from Task 78.
+- Next candidates: lifecycle emails can now speak persona (welcome day 3 varies by GET_PAID vs FIND_CLIENTS); exec dashboard can segment signups by profession.

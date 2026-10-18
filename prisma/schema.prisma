@@ -22,6 +22,11 @@ model User {
   accountStatus String  @default("ACTIVE") // ACTIVE | SUSPENDED (exec can pause an account; suspended = locked out everywhere)
   suspendedAt  DateTime?
   suspendReason String?
+  // Onboarding survey answers (post signup): how they work and what they want
+  // first. Drives the personalized dashboard track and future nurture emails.
+  persona     String? // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
+  profession  String? // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
+  onboardedAt DateTime?
   xp           Int      @default(0)
   refCode      String?  @unique // personal invite code (lazy-generated)
   platformAdmin Boolean @default(false)
