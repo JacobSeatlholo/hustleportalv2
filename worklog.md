@@ -1300,3 +1300,24 @@ Stage Summary:
 - Production ff7b83c: the income engine has a FACE (de-crowded infographic landing, honest stat tiles, calm display option) and a BRAIN (missions with progress bars + streaks that pay real wallet credits, level rewards R5→R50, modular workspace with tutorials + pricing tied in)
 - Nobody retypes anything anymore: stock lists come in by CSV, calendars by ICS file or live feed with one-tap sync; leads imports dedupe themselves; bounces stay impossible from imported data (invalid emails refused at the door)
 - The gamification loop is closed: do real work → XP → level → REAL wallet credit → reveals. Boss's "XP must excite neurons strategically" is answered with money on the ladder
+
+---
+Task ID: 76
+Agent: main (Z.ai)
+Task: Funnel audit — why zero paying users. (1) full buying-path check (2) the true human cohort pulled through the data
+
+Work Log:
+- Read worklog first: Task 75 (design/product overhaul) already LIVE at ff7b83c; Task 74 proved Yoco LIVE checkout end to end; plan reality: Operator R199 launch (normal R299 anchor), Boss R499, reveal credit R15, welcome credit R99 (6 reveals)
+- scripts/audit_funnel.mjs: ops seat login -> GET /api/admin/exec + /api/admin/growth; raw saved scripts/out_exec.json + out_growth.json
+- Roster stripped of noise: 374 accounts = 309 QA-domain + 38 probe/internal (probe.local, testmail, hustletest, example.com, hustleportal.co.za, mailinator, demo/team accounts, 1 malformed email row) -> 27 TRUE HUMANS, all joined 10-11..10-17
+- scripts/audit_human_topups.mjs: walked exec client desks for all 27 humans -> YOCO PAID topups on human accounts = R0.00 (the R15,500 "YOCO" 30d figure is test-era key money sitting on QA wallets; wallet float R71,866 is house money)
+- Buying-path code probe: landing R99 tile = welcome credit (truthful); wallet sandbox topup gate solid since 0a1123c (10-14 19:46); subscribe sandbox double-gated; exec client route has no credit grant; welcome email exists at register; NO lifecycle emails day 3/7; NO abandoned-checkout trigger (only PAID fires email); upgrade-copy module solid (free 5 leads/search, Operator 30)
+- LEAK HISTORY FOUND + CLOSED: Michael (Mkptraining, real human) got R3,500 SANDBOX credits 10-14 14:30 through the pre-hardening open sandbox window (3 clicks in 6s); gate hardened same evening; he still has sub NONE
+- Funnel truth: 13/27 never touched anything (11 = Kloof Street batch of 10-16: Arnold's, Body Vision, Hayley Schuter Physio, Dr Geoffreys, Revive Studio, PostNet Gardens, Trudy Christians, Dr Jahn, Dr Dicks, Ubuntu Wellness, On Safari; + Zola); 14 touched, most with the "one discover run" pattern (exactly 5 leads); 1 champion Jacob (Ubuntu Wellness support@) 24 lead touches across 4 days; 1 person reached live Yoco checkout: Jackie Mokgalagadi HUSTLER R199 PENDING since 10-15, abandoned; 0 paid; MRR R0 vs R45,000 target; referrals 5 invited 0 subscribed; meetings KPI polluted (4/5 QA probes, 1 real: Zola <-> Ian 10-22)
+- KPI lens pollution confirmed: exec filter only excludes @hustleqa.example.com; new7=53 is really ~16 humans; members "374" is really 27
+- download/hustle_call_list.csv: all 27 true humans scored warmest-first (Jackie #1 abandoned checkout, Jacob #2 champion)
+
+Stage Summary:
+- The machine is NOT the problem: payments live and proven, laws tight, free tier gives a real taste. Zero payers is a TRAFFIC + ACTIVATION + FOLLOW-UP problem: 27 true humans in 7 days, 13 never opened the tools, 1 reached the till and nobody noticed, no lifecycle follow-up exists, and the exec dashboard lies (300+ probe rows inside every KPI)
+- Highest-probability money this week: phone Jackie (abandoned R199 checkout) + the 11 Kloof Street businesses; call list ready
+- Fix candidates for next code pass: extend exec probe-domain filter, day-3/7 lifecycle nudges on the transactional lane + push, abandoned-checkout signal on the exec dashboard
