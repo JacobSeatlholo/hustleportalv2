@@ -1480,3 +1480,18 @@ Work Log:
 Stage Summary:
 - baeab7e live: the team move of the 29 tasks is possible the moment a team exists and the boss belongs to it. Tasks moved to the team show under the Team(s) tab for the boss (they leave the Business tab).
 - Waiting on boss: her email address, draft approval or edits, team name (proposed Simple Eternity Holdings), send path (platform mail from his account vs his own inbox). Run plan is one login: ensure team, invite (auto-join parked), send welcome, move the 29 tasks onto the team idempotently by title, verify, report. Finance sharing with the team is an offered follow up build. Password rotation still pending on boss side.
+
+---
+Task ID: 82b
+Agent: main
+Task: Boss pivot on the Adelle finance lens — mirror structure instead of the ledger email. "money as she sent it reflect on her account once created as money out and must reflect to me. and money out reflect on my side as money that came in from ubuntu wellness." Email becomes a generic invitation.
+
+Work Log:
+- Read the pivot as a mirror: HER account = the 10 confirmed advances as MONEY OUT (R25,130); HIS account = the same money as MONEY IN (already live from Task 81, untouched); his side should carry the Ubuntu Wellness funding lens. The purchases stay as his money out. Flagged one hard truth: FinanceEntry has NO edit route (GET/POST only), so relabelling his 10 income rows to the Ubuntu Wellness lens needs a small additive PATCH build — asked the boss as the single clarifying question, everything else actioned.
+- scripts/adelle_account_setup.mjs (prepared, env-gated): boss login → find/create team (TEAM_NAME, default Simple Eternity Holdings) → register her account (ADELLE_EMAIL + ADELLE_TEMP; 409 handled) → boss invite (existing account = instant add) → her login → load 10 mirrored EXPENSE rows, category "Advance to Ubuntu Wellness" (the R9,500 = "Payment for work delivered"), tagged "Mirrored from the WhatsApp record.", idempotent by description → verify her out total R25,130 + team membership both sides → welcome email sends ONLY when SEND_WELCOME=1 (temp password goes in the email body, never stored).
+- Password self-service verified in code: auth has action forgot/reset with a real reset link, so the email can truthfully tell her to change the temp password herself. Register requires name/email/password (min 6) and auto-joins pending invites.
+- scripts/move_tasks_to_team.mjs (prepared): finds the team, matches the 29 backfilled titles in scope=mine, PATCHes teamId (skips already-moved; every move witnessed on the sealed record), verifies 29/29 in scope=team. Depends on the baeab7e PATCH build (live).
+- Generic invitation email drafted (subject "Adelle, you are invited to HustlePortal"): account ready, sign in link, temp password line, Forgot password line, three short sections (work record, stock, her own ledger one record both sides), warm close. Copy law held, no ledger table.
+
+Stage Summary:
+- Everything is staged for a one command run the moment the boss sends her email address: ADELLE_EMAIL + ADELLE_TEMP + HP_BOSS_PASSWORD node scripts/adelle_account_setup.mjs, then node scripts/move_tasks_to_team.mjs. Boss keeps his current password until the run completes, then rotates. Open question with him: relabel his 10 money in rows to the Ubuntu Wellness lens (needs the small finance PATCH build) or leave his side as loaded.
