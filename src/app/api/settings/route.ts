@@ -19,6 +19,8 @@ const ALLOWED_KEYS = [
   'WA_DISPLAY_NUMBER',
   'INVOICE_BANK',
   'NAV_ORDER', // JSON ViewKey[] — the user's personal sidebar menu order
+  'MODULES', // JSON string[] — disabled module keys (the tailored workspace)
+  'ICS_FEED_URL', // read-only calendar feed for the Calendar sync button
 ]
 
 const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'ZAI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])

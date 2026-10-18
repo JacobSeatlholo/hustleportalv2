@@ -5,12 +5,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { api, type Appointment } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import ScanDiaryDialog from './ScanDiaryDialog'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off,
 } from 'lucide-react'
 
 type SpeechRecognitionLike = {
@@ -22,6 +27,145 @@ type SpeechRecognitionLike = {
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
   onend: (() => void) | null
   onerror: (() => void) | null
+}
+
+interface IcsReport {
+  imported: number
+  duplicates: number
+  total: number
+  skipped: number
+  message?: string
+  feedSaved?: boolean
+}
+
+/**
+ * IcsImportDialog — bring an existing calendar in: upload an .ics file, paste
+ * its content, or connect a read-only feed link. Connected feeds get a
+ * one-tap Sync now that only ever ADDS new events.
+ */
+function IcsImportDialog({ open, onOpenChange, onImported }: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onImported: () => void
+}) {
+  const { toast } = useToast()
+  const [icsText, setIcsText] = useState('')
+  const [feedUrl, setFeedUrl] = useState('')
+  const [saveFeed, setSaveFeed] = useState(true)
+  const [connected, setConnected] = useState(false)
+  const [connectedUrl, setConnectedUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<IcsReport | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    api<{ connected: boolean; url: string | null }>('/api/appointments/sync-ics')
+      .then((r) => { setConnected(r.connected); setConnectedUrl(r.url) })
+      .catch(() => {})
+  }, [open])
+
+  function readFile(f: File) {
+    const reader = new FileReader()
+    reader.onload = () => setIcsText(String(reader.result || ''))
+    reader.readAsText(f)
+  }
+
+  async function runImport() {
+    const usingUrl = feedUrl.trim() !== ''
+    if (!usingUrl && icsText.trim() === '') {
+      toast({ title: 'Nothing to import yet', description: 'Upload or paste a calendar file, or give the feed link.' })
+      return
+    }
+    setBusy(true)
+    setReport(null)
+    try {
+      const res = await api<IcsReport>('/api/appointments/import-ics', {
+        method: 'POST',
+        body: JSON.stringify(usingUrl ? { url: feedUrl.trim(), saveFeed } : { ics: icsText }),
+      })
+      setReport(res)
+      if (res.feedSaved) { setConnected(true); setConnectedUrl(feedUrl.trim()) }
+      onImported()
+    } catch (e) {
+      toast({ title: 'Import failed', description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function syncNow() {
+    setBusy(true)
+    setReport(null)
+    try {
+      const res = await api<IcsReport>('/api/appointments/sync-ics', { method: 'POST' })
+      setReport(res)
+      onImported()
+    } catch (e) {
+      toast({ title: 'Sync failed', description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    try {
+      await api('/api/appointments/sync-ics', { method: 'DELETE' })
+      setConnected(false); setConnectedUrl(null); setReport(null)
+      toast({ title: 'Feed disconnected', description: 'Imported events stay on your calendar. Sync simply stops.' })
+    } catch { /* non-fatal */ }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Upload className="h-4 w-4 text-brand" /> Import your calendar</DialogTitle>
+          <DialogDescription>
+            Bring your existing diary in without retyping it. Upload the .ics file your calendar app exports, or connect its feed link and sync any time.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="ics-file">Upload an .ics file</Label>
+            <Input id="ics-file" type="file" accept=".ics,text/calendar,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f) }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ics-text">…or paste the calendar file content</Label>
+            <Textarea id="ics-text" rows={4} value={icsText} onChange={(e) => setIcsText(e.target.value)} placeholder="BEGIN:VCALENDAR…" />
+          </div>
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ics-url">…or connect a calendar feed link</Label>
+              <Input id="ics-url" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" inputMode="url" />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox checked={saveFeed} onCheckedChange={(v) => setSaveFeed(v === true)} />
+              Remember this link so Sync now works from the button
+            </label>
+            {connected && (
+              <div className="flex items-center justify-between rounded-md bg-brand/5 border border-brand/25 px-2.5 py-2 text-xs">
+                <span className="flex items-center gap-1.5 min-w-0"><Link2 className="h-3.5 w-3.5 text-brand shrink-0" /><span className="truncate text-muted-foreground">Feed connected</span></span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <Button size="sm" variant="outline" onClick={syncNow} disabled={busy} className="h-7 text-[11px]"><RefreshCw className={`h-3 w-3 mr-1 ${busy ? 'animate-spin' : ''}`} /> Sync now</Button>
+                  <Button size="sm" variant="ghost" onClick={disconnect} className="h-7 text-[11px] text-muted-foreground"><Link2Off className="h-3 w-3" /></Button>
+                </span>
+              </div>
+            )}
+          </div>
+          <Button onClick={runImport} disabled={busy} className="w-full">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import events
+          </Button>
+          {report && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
+              <p className="font-medium">{report.imported} imported · {report.duplicates} already on your calendar</p>
+              {report.message && <p className="text-muted-foreground">{report.message}</p>}
+              {report.feedSaved && <p className="text-brand">Feed saved. Sync now lives on the button whenever you need it.</p>}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function localDT(v: string | null | undefined) {
@@ -178,6 +322,7 @@ export default function CalendarView() {
 
   const voiceSupported = typeof window !== 'undefined' && !!((window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition)
   const [scanOpen, setScanOpen] = useState(false)
+  const [icsOpen, setIcsOpen] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -186,10 +331,17 @@ export default function CalendarView() {
           <h2 className="font-display text-2xl">Calendar</h2>
           <p className="text-sm text-muted-foreground">Appointments with shareable Jitsi meets, Google Calendar sync and voice capture.</p>
         </div>
-        <Button variant="outline" onClick={() => setScanOpen(true)}>
-          <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Snap a diary page
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setIcsOpen(true)}>
+            <Upload className="h-4 w-4 mr-1.5 text-brand" /> Import or sync
+          </Button>
+          <Button variant="outline" onClick={() => setScanOpen(true)}>
+            <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Snap a diary page
+          </Button>
+        </div>
       </div>
+
+      <IcsImportDialog open={icsOpen} onOpenChange={setIcsOpen} onImported={load} />
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Create */}

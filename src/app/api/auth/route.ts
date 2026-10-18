@@ -6,6 +6,7 @@ import { rateLimit, rateLimitClear, clientIp, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, addCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
+import { isEmail } from '@/lib/quality'
 import { attributeSignup } from '@/lib/referral'
 import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 import { ensureExecAdmin } from '@/lib/admin'
@@ -29,6 +30,11 @@ export async function POST(req: NextRequest) {
       if (!regGate.ok) {
         return NextResponse.json(tooMany(regGate.retryAfterSec), { status: 429 })
       }
+      // Honeypot: a hidden field real humans never see or fill. Bots fill
+      // every input they find. One silent refusal, no account, no email.
+      if (typeof body.companyWebsite === 'string' && body.companyWebsite.trim() !== '') {
+        return NextResponse.json({ error: 'Registration could not be completed. Please try again.' }, { status: 400 })
+      }
       if (!email || !password || !name) {
         return NextResponse.json({ error: 'Name, email and password are required.' }, { status: 400 })
       }
@@ -36,6 +42,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 })
       }
       const normalized = String(email).toLowerCase().trim()
+      // Lead-quality law starts at the front door: a malformed address would
+      // never receive the welcome email, the reset link, or a single invoice.
+      if (!isEmail(normalized)) {
+        return NextResponse.json({ error: 'That email address does not look right — check it and try again.' }, { status: 400 })
+      }
       const exists = await db.user.findUnique({ where: { email: normalized } })
       if (exists) {
         return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 })

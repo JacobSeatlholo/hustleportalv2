@@ -37,8 +37,10 @@ import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid,
+  Boxes, LayoutGrid, Flame,
 } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
+import { LEVELS } from '@/lib/levels'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -80,6 +82,32 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cardBannerDismissed, setCardBannerDismissed] = useState(true)
   const [showTiltTip, setShowTiltTip] = useState(false)
+  // The tailored workspace: module keys the user switched off (UserSetting MODULES).
+  const [disabledModules, setDisabledModules] = useState<string[]>([])
+
+  useEffect(() => {
+    let alive = true
+    const loadModules = () => {
+      api<{ settings: { key: string; value: string }[] }>('/api/settings')
+        .then((r) => {
+          const row = r.settings.find((s) => s.key === 'MODULES')
+          let list: string[] = []
+          if (row) {
+            try { list = JSON.parse(row.value).filter((k: unknown) => typeof k === 'string') } catch { list = [] }
+          }
+          if (alive) setDisabledModules(list)
+        })
+        .catch(() => {})
+    }
+    loadModules()
+    window.addEventListener('hp:modules-changed', loadModules)
+    return () => { alive = false; window.removeEventListener('hp:modules-changed', loadModules) }
+  }, [])
+
+  // A module switched off while the user stands inside it → land on the dashboard.
+  useEffect(() => {
+    if (view !== 'dashboard' && disabledModules.includes(view)) setView('dashboard')
+  }, [view, disabledModules, setView])
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -147,6 +175,8 @@ export default function AppShell() {
   }
 
   const content = (() => {
+    // View guard: a hidden module never renders, even via deep links or events.
+    if (view !== 'dashboard' && disabledModules.includes(view)) return <DashboardView />
     switch (view) {
       case 'dashboard': return <DashboardView />
       case 'leads': return <LeadsView />
@@ -182,6 +212,8 @@ export default function AppShell() {
           doneChallenges={doneChallenges}
           totalChallenges={session.challenges.length}
           logout={logout}
+          disabledModules={disabledModules}
+          streak={session.streak ?? 0}
         />
       </aside>
 
@@ -200,6 +232,8 @@ export default function AppShell() {
               doneChallenges={doneChallenges}
               totalChallenges={session.challenges.length}
               logout={async () => { setSidebarOpen(false); await logout() }}
+              disabledModules={disabledModules}
+              streak={session.streak ?? 0}
             />
           </aside>
         </div>
@@ -442,13 +476,15 @@ const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
  * Long-press (hold ~1/3s) any menu item, then drag to sort the menu YOUR priority order.
  * Click still navigates; the order persists per user (UserSetting: NAV_ORDER).
  */
-function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout }: {
+function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout, disabledModules, streak }: {
   view: ViewKey
   setView: (v: ViewKey) => void
-  session: { user: { name: string; businessName: string | null; role: string }; level: { icon: string; name: string } }
+  session: { user: { name: string; businessName: string | null; role: string; xp: number }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null } }
   doneChallenges: number
   totalChallenges: number
   logout: () => Promise<void>
+  disabledModules: string[]
+  streak: number
 }) {
   const isAdmin = session.user.role === 'ADMIN'
 
@@ -479,13 +515,15 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
   }, [])
 
   const nav = useMemo(() => {
-    if (!order || order.length === 0) return NAV
-    const known = NAV.filter((n) => order.includes(n.key)).sort(
+    // Tailored workspace first: hidden modules never show, then personal order.
+    const pool = NAV.filter((n) => !disabledModules.includes(n.key))
+    if (!order || order.length === 0) return pool
+    const known = pool.filter((n) => order.includes(n.key)).sort(
       (a, b) => order.indexOf(a.key) - order.indexOf(b.key)
     )
-    const rest = NAV.filter((n) => !order.includes(n.key))
+    const rest = pool.filter((n) => !order.includes(n.key))
     return [...known, ...rest]
-  }, [order])
+  }, [order, disabledModules])
 
   // While dragging, stop the browser scrolling the menu out from under the finger.
   useEffect(() => {
@@ -621,10 +659,20 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
         <PwaNotifications compact />
       </div>
 
-      {/* challenges mini-widget */}
-      <div className="mx-3 mb-3 rounded-lg bg-white/5 border border-border p-3">
+      {/* Display choice: Console vs Calm (lower contrast) */}
+      <div className="px-3 mt-2">
+        <div className="rounded-lg bg-white/5 border border-border px-3 py-2">
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* challenges mini-widget: streak + progress + the next reward on the ladder */}
+      <div className="mx-3 my-3 rounded-lg bg-white/5 border border-border p-3">
         <div className="flex items-center justify-between text-[11px] text-white/50 mb-1.5">
-          <span>Daily challenges</span>
+          <span className="flex items-center gap-1">
+            <Flame className={`h-3 w-3 ${streak > 0 ? 'text-brand' : ''}`} />
+            {streak > 0 ? `${streak} day streak` : 'Daily missions'}
+          </span>
           <span>{doneChallenges}/{totalChallenges}</span>
         </div>
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -633,6 +681,15 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
             style={{ width: `${totalChallenges ? (doneChallenges / totalChallenges) * 100 : 0}%` }}
           />
         </div>
+        {session.level.next && (() => {
+          const next = LEVELS.find((l) => l.level === session.level.next!.level)
+          const xpAway = next ? Math.max(0, next.min - session.user.xp) : 0
+          return (
+            <p className="text-[10px] text-white/40 mt-2 leading-snug">
+              {xpAway > 0 ? `${xpAway} XP to ${next?.icon} ${next?.name}` : `${next?.icon} ${next?.name} unlocked`} · {next?.reward}
+            </p>
+          )
+        })()}
       </div>
 
       <div className="border-t border-border p-3">

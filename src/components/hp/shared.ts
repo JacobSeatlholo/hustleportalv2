@@ -33,6 +33,7 @@ export interface SessionData {
   wallet: { balance: number }
   level: LevelInfo
   challenges: Challenge[]
+  streak?: number
   team: { id: string; name: string; role: string } | null
   projects: HpProjectRef[]
 }
@@ -69,6 +70,7 @@ export interface Appointment {
   meetLink: string | null
   source: string
   gcalEventId: string | null
+  externalId?: string | null
   createdAt: string
 }
 

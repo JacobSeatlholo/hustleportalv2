@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, type Lead, type Task } from './shared'
-import { useHp } from './store'
+import { useHp, type ViewKey } from './store'
 import SetupChecklist from './SetupChecklist'
 import {
   ArrowRight, ArrowUpRight, ArrowDownRight, Sparkles, Send, Target, CheckSquare,
@@ -269,12 +269,47 @@ export default function DashboardView() {
             <OverviewRow label="Total leads" value={k.totalLeads} pct={Math.min(100, k.totalLeads * 4)} />
             <OverviewRow label="New stage" value={data.byStage.NEW || 0} pct={Math.min(100, (data.byStage.NEW || 0) * 8)} />
             <OverviewRow label="Won this month" value={k.wonCount} pct={Math.min(100, k.wonCount * 12)} />
-            <div className="pt-2 border-t">
+            <div className="pt-2 border-t space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2 text-muted-foreground"><Flame className="h-4 w-4 text-brand" /> Daily challenges</span>
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Flame className={`h-4 w-4 ${(session?.streak ?? 0) > 0 ? 'text-brand' : ''}`} />
+                  {(session?.streak ?? 0) > 0 ? `${session?.streak ?? 0} day streak` : 'Daily missions'}
+                </span>
                 <Badge className="bg-brand/15 text-brand hover:bg-brand/15">{doneChallenges}/{session?.challenges.length} done</Badge>
               </div>
-              <Progress value={(doneChallenges / Math.max(session?.challenges.length || 1, 1)) * 100} className="mt-2 h-2" />
+              <Progress value={(doneChallenges / Math.max(session?.challenges.length || 1, 1)) * 100} className="h-2" />
+              {/* The next moves that pay: tap one, land in the right tool */}
+              {(() => {
+                const MISSION_VIEW: Record<string, ViewKey | null> = {
+                  login: null, add_lead: 'leads', add_task: 'tasks', complete_task: 'tasks',
+                  log_expense: 'finance', ai_chat: 'ai', move_stage: 'leads', reveal_lead: 'leads',
+                  browse_store: 'store', explore_resources: 'resources', add_client: 'clients',
+                  explore_services: 'services',
+                }
+                const pending = (session?.challenges || []).filter((c) => !c.done).slice(0, 4)
+                if (pending.length === 0 && (session?.challenges.length || 0) > 0) {
+                  const next = session?.level.next
+                  return (
+                    <p className="text-xs text-brand font-medium">
+                      All missions done today. {next ? `The ladder pays again at ${next.name}.` : ''}
+                    </p>
+                  )
+                }
+                return (
+                  <div className="flex flex-wrap gap-1.5">
+                    {pending.map((m) => (
+                      <button
+                        key={m.key}
+                        onClick={() => { const v = MISSION_VIEW[m.key]; if (v) setView(v) }}
+                        className="rounded-full border px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-brand/60 transition"
+                        title={`${m.label} — ${m.xp} XP`}
+                      >
+                        {m.target > 1 ? `${Math.min(m.count, m.target)}/${m.target} ` : ''}{m.label.replace(/ — .*$/, '')} <span className="text-brand">+{m.xp}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
           </CardContent>
         </Card>

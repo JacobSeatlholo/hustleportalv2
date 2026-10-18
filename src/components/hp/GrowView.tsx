@@ -406,6 +406,9 @@ export default function GrowView() {
         <p className="text-[11px] text-muted-foreground">
           Secure card payments by Yoco · never auto-charged · pause anytime · unused lead reveals roll over · your data is always exportable. The platform earns your loyalty, it does not lock it.
         </p>
+        <p className="text-[11px] text-muted-foreground">
+          Every plan includes every module. Tailor the workspace in Profile &amp; Team → Workspace modules: show the tools your hustle uses, hide the rest, and each section carries its own tutorial.
+        </p>
         {currency.note && <p className="text-[11px] text-muted-foreground/80">{currency.note}</p>}
       </div>
     </div>

@@ -372,8 +372,10 @@ model Appointment {
   startsAt   DateTime
   endsAt     DateTime?
   meetLink   String? // Jitsi link (meet.ts)
-  source     String    @default("MANUAL") // MANUAL | VOICE
+  source     String    @default("MANUAL") // MANUAL | VOICE | ICS
   gcalEventId String?  // set when synced to Google Calendar
+  externalId String?   // iCalendar UID or feed identity — the import/sync dedupe key
+  icsFeed    Boolean   @default(false) // true when this row came from an ICS feed sync
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

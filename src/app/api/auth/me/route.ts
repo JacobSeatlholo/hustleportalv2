@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, publicUser } from '@/lib/auth'
-import { levelFor, todaysChallenges } from '@/lib/gamification'
+import { levelFor, todaysChallenges, loginStreak } from '@/lib/gamification'
 import { ensureWallet } from '@/lib/wallet'
 import { listProjects, getOrCreateDefaultProject } from '@/lib/workspace'
 
@@ -17,6 +17,7 @@ export async function GET() {
       wallet: { balance: wallet.balance },
       level: levelFor(user.xp),
       challenges,
+      streak: await loginStreak(user.id),
       team: user.memberships?.[0]?.team
         ? { id: user.memberships[0].team.id, name: user.memberships[0].team.name, role: user.memberships[0].role }
         : null,

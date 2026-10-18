@@ -19,7 +19,86 @@ import { useToast } from '@/hooks/use-toast'
 import { api, randsPlain } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
-import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles } from 'lucide-react'
+import { toCSV } from '@/lib/csv'
+import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles, Upload, Download } from 'lucide-react'
+
+interface ImportReport {
+  imported: number
+  duplicates: number
+  invalid: number
+  limitHeld?: number
+  total: number
+  duplicateSamples?: string[]
+  invalidSamples?: string[]
+}
+
+/**
+ * ImportDialog — bring an existing stock list in: upload or paste CSV.
+ * Recognised columns: name/item/product, sku/code, quantity/qty, unit,
+ * cost, sell/price, low stock/reorder, notes. Duplicates are reported, not doubled.
+ */
+function ImportDialog({ open, onOpenChange, onImported }: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onImported: () => void
+}) {
+  const { toast } = useToast()
+  const [csv, setCsv] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<ImportReport | null>(null)
+
+  function readFile(f: File) {
+    const reader = new FileReader()
+    reader.onload = () => setCsv(String(reader.result || ''))
+    reader.readAsText(f)
+  }
+
+  async function run() {
+    if (!csv.trim()) {
+      toast({ title: 'Nothing to import yet', description: 'Upload a file or paste the CSV first.' })
+      return
+    }
+    setBusy(true)
+    setReport(null)
+    try {
+      const res = await api<ImportReport>('/api/inventory/import', { method: 'POST', body: JSON.stringify({ csv }) })
+      setReport(res)
+      onImported()
+    } catch (e) {
+      toast({ title: 'Import failed', description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Upload className="h-4 w-4 text-brand" /> Import your stock list</DialogTitle>
+          <DialogDescription>
+            Upload or paste CSV. Recognised columns: name, sku, quantity, unit, cost, sell price, low stock alert, notes. Duplicates are skipped and reported, never double counted.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f) }} />
+          <Textarea rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Name,Quantity,Unit,Cost,Sell\nParaffin 750ml,12,bottles,12,18'} />
+          <Button onClick={run} disabled={busy} className="w-full">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import stock
+          </Button>
+          {report && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
+              <p className="font-medium">{report.imported} imported · {report.duplicates} duplicates skipped · {report.invalid} invalid rows</p>
+              {!!report.limitHeld && <p className="text-amber-500">{report.limitHeld} rows held back by the free plan ceiling.</p>}
+              {!!report.duplicateSamples?.length && <p className="text-muted-foreground">Duplicates: {report.duplicateSamples.join(', ')}</p>}
+              {!!report.invalidSamples?.length && <p className="text-muted-foreground">Invalid: {report.invalidSamples.join(', ')}</p>}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 interface Item {
   id: string
@@ -118,6 +197,22 @@ export default function InventoryView() {
   }
 
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+  const [showImport, setShowImport] = useState(false)
+
+  function exportCsv() {
+    const csv = toCSV(
+      items.map((i) => ({
+        name: i.name, sku: i.sku || '', quantity: i.quantity, unit: i.unit || '',
+        cost: i.costPrice, sell: i.sellPrice, lowStockAt: i.lowStockAt, notes: i.notes || '',
+      })),
+      ['name', 'sku', 'quantity', 'unit', 'cost', 'sell', 'lowStockAt', 'notes'],
+    )
+    const url = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'hustleportal-inventory.csv'
+    a.click()
+  }
 
   return (
     <div className="space-y-4">
@@ -128,7 +223,13 @@ export default function InventoryView() {
             {totals ? `${totals.count} items${totals.lowCount ? ` · ${totals.lowCount} running low` : ''}` : 'Your stock, counted'}
           </p>
         </div>
-        <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Add item</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)}><Upload className="h-4 w-4 mr-1 text-brand" /> Import CSV</Button>
+          {items.length > 0 && (
+            <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
+          )}
+          <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Add item</Button>
+        </div>
       </div>
 
       {/* Free plan slot meter — honest countdown, one tap to the plans. The server
@@ -217,6 +318,8 @@ export default function InventoryView() {
           })}
         </div>
       )}
+
+      <ImportDialog open={showImport} onOpenChange={setShowImport} onImported={() => { load(); bumpRefresh() }} />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">

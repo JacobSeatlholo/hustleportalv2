@@ -138,10 +138,54 @@
   letter-spacing: 0.02em;
 }
 
-/* Flat console ground: no radial glow, just the surface ladder doing the work. */
+/* Flat console ground follows the theme (console = deep black, calm = soft charcoal). */
 .hp-gradient-bg {
-  background: #0b0c0f;
+  background: var(--background);
 }
+
+/*
+ * CALM MODE — the lower-contrast display option.
+ * Same structure, gentler light: dimmer foreground, muted brass instead of
+ * signal yellow, softer surfaces. For long evenings, bright rooms, sensitive
+ * eyes. Persisted in localStorage 'hp_theme'; applied pre-paint in layout.
+ */
+html.calm {
+  --color-brand: #e3c368;
+  --color-brand-soft: #d9bc70;
+  --color-brand-deep: #b39445;
+  --background: #101113;
+  --foreground: #c4c8cd;
+  --card: #17191d;
+  --card-foreground: #c4c8cd;
+  --popover: #17191d;
+  --popover-foreground: #c4c8cd;
+  --primary: #e3c368;
+  --primary-foreground: #16130a;
+  --secondary: #1e2126;
+  --secondary-foreground: #c4c8cd;
+  --muted: #1a1c21;
+  --muted-foreground: #868d95;
+  --accent: #23272e;
+  --accent-foreground: #e3c368;
+  --destructive: #e07070;
+  --border: #23262c;
+  --input: #292d35;
+  --ring: #e3c368;
+  --sidebar: #131518;
+  --sidebar-foreground: #c4c8cd;
+  --sidebar-primary: #e3c368;
+  --sidebar-primary-foreground: #16130a;
+  --sidebar-accent: #1e2126;
+  --sidebar-accent-foreground: #e3c368;
+  --sidebar-border: #202329;
+  --sidebar-ring: #e3c368;
+}
+
+/* Calm mode dims the sidebar's hardcoded white furniture a touch. */
+html.calm .text-white\/70 { color: rgb(196 200 205 / 0.72); }
+html.calm .text-white\/40 { color: rgb(196 200 205 / 0.45); }
+html.calm .text-white\/50 { color: rgb(196 200 205 / 0.5); }
+html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
 
 .hp-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
 .hp-scroll::-webkit-scrollbar-track { background: transparent; }

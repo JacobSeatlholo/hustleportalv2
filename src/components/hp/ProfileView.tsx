@@ -9,12 +9,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
 import { api, type Challenge, type ProjectFull } from './shared'
 import { useHp, type ViewKey } from './store'
 import CityField from './CityField'
 import PwaNotifications from './PwaNotifications'
-import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
+import { MODULES } from '@/lib/modules'
+import { LEVELS } from '@/lib/levels'
+import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X, LayoutGrid, Flame } from 'lucide-react'
 
 interface TeamInfo {
   id: string
@@ -429,6 +433,8 @@ export default function ProfileView() {
   const level = session.level
   const challenges: Challenge[] = session.challenges
   const doneCount = challenges.filter((c) => c.done).length
+  const streak = session.streak ?? 0
+  const nextLevel = level.next ? LEVELS.find((l) => l.level === level.next!.level) : null
 
   return (
     <div className="space-y-4">
@@ -459,24 +465,44 @@ export default function ProfileView() {
               <p className="text-xs text-muted-foreground">
                 {level.next ? `${level.next.min - session.user.xp} XP to ${level.next.name}` : 'Max level — legend.'}
               </p>
+              {nextLevel && (
+                <p className="text-xs text-brand font-medium">
+                  Next reward: {nextLevel.reward} · {nextLevel.icon} {nextLevel.name} at {nextLevel.min} XP
+                </p>
+              )}
+              {streak > 0 && (
+                <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                  <Flame className="h-3 w-3 text-brand" /> {streak} day streak. Every check-in keeps it alive.
+                </p>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-brand" /> Today&apos;s challenges
+                <Trophy className="h-4 w-4 text-brand" /> Today&apos;s missions
                 <Badge variant="secondary" className="ml-auto">{doneCount}/{challenges.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {challenges.map((c) => (
-                <div key={c.key} className="flex items-center gap-2 text-sm">
-                  {c.done
-                    ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    : <Circle className="h-4 w-4 text-stone-300 shrink-0" />}
-                  <span className={c.done ? 'line-through text-muted-foreground' : ''}>{c.label}</span>
-                  <span className="ml-auto text-xs text-brand">+{c.xp} XP</span>
+                <div key={c.key} className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    {c.done
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />}
+                    <span className={c.done ? 'line-through text-muted-foreground' : ''}>{c.label}</span>
+                    <span className="ml-auto text-xs text-brand shrink-0">+{c.xp} XP</span>
+                  </div>
+                  {c.target > 1 && !c.done && (
+                    <div className="flex items-center gap-2 pl-6">
+                      <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-brand/70 rounded-full transition-all" style={{ width: `${Math.min(100, (c.count / c.target) * 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{Math.min(c.count, c.target)}/{c.target}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -986,9 +1012,116 @@ export default function ProfileView() {
               <PwaNotifications />
             </CardContent>
           </Card>
+
+          {/* Tailored workspace: switch the modules you use, hide the rest */}
+          <WorkspaceModulesCard />
+
+          {/* Display choice: standard console or the calmer, lower-contrast look */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><LayoutGrid className="h-4 w-4" /> Display</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <ThemeToggle />
+              <p className="text-xs text-muted-foreground">
+                Calm display softens the contrast: muted brass, gentler surfaces, easier on the eyes at night. Your choice is remembered on this device.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * WorkspaceModulesCard — the modular workspace control.
+ * Every plan includes every capability; this decides what is VISIBLE on the
+ * menu. Switching a module off removes it from the sidebar and bottom bar,
+ * and its tutorial falls silent until it returns.
+ */
+function WorkspaceModulesCard() {
+  const { toast } = useToast()
+  const [disabled, setDisabled] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api<{ settings: { key: string; value: string }[] }>('/api/settings')
+      .then((r) => {
+        const row = r.settings.find((s) => s.key === 'MODULES')
+        if (row) {
+          try { setDisabled(JSON.parse(row.value).filter((k: unknown) => typeof k === 'string')) } catch { /* corrupt — start clean */ }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function toggle(key: string, on: boolean) {
+    const next = on ? disabled.filter((k) => k !== key) : [...new Set([...disabled, key])]
+    setDisabled(next)
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key: 'MODULES', value: JSON.stringify(next) }) })
+      window.dispatchEvent(new CustomEvent('hp:modules-changed'))
+    } catch (e) {
+      setDisabled(disabled) // roll the switch back
+      toast({ title: 'Could not save that', description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' })
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <LayoutGrid className="h-4 w-4 text-brand" /> Workspace modules
+          {disabled.length > 0 && <Badge variant="secondary" className="ml-auto">{MODULES.length - disabled.length} of {MODULES.length} on</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Your plan includes every module. Switch off what you do not use yet — the menu, the bottom bar and the
+          tutorials follow. Switch it back any time; nothing is ever lost.
+        </p>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading your workspace…</div>
+        ) : (
+          <div className="space-y-1">
+            {MODULES.map((m) => {
+              const on = !disabled.includes(m.key)
+              return (
+                <div key={m.key} className="flex items-start gap-3 rounded-lg border p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">{m.label}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{m.description}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-brand/70 mt-1">Feeds: {m.feeds}</div>
+                  </div>
+                  <Switch
+                    checked={on}
+                    onCheckedChange={(v) => toggle(m.key, v)}
+                    aria-label={`${on ? 'Hide' : 'Show'} ${m.label}`}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {disabled.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              setDisabled([])
+              try {
+                await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key: 'MODULES', value: '[]' }) })
+                window.dispatchEvent(new CustomEvent('hp:modules-changed'))
+              } catch { /* next toggle retries */ }
+            }}
+          >
+            Restore all modules
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

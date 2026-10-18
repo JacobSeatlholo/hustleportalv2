@@ -179,6 +179,10 @@ const JSON_LD = {
   ],
 };
 
+// Theme pre-paint: reads the saved display choice before first render so
+// Calm mode never flashes. Console (default) vs Calm (lower contrast).
+const THEME_BOOT = `(function(){try{var t=localStorage.getItem('hp_theme');if(t==='calm'){document.documentElement.classList.add('calm');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -186,6 +190,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-ZA" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${displayFont.variable} antialiased bg-background text-foreground`}
       >
