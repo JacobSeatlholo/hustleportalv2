@@ -1240,3 +1240,17 @@ Stage Summary:
 - Production bf4c838: the SES lane speaks the v2 API, which is the ONLY door in af-south-1; SMTP lane would never have worked in Cape Town — caught before any real campaign depended on it
 - Full SES chain proven live in sandbox: queue -> start -> tick -> API send -> SENT with null error; bounce/complaint pipe armed (config set -> SNS -> webhook, subscription Confirmed)
 - Boss-side SES setup 100% complete; AWS production access review is the only remaining clock; warm-up law ready (20-30/day, +30% every 2-3 days, pace slider 1-2/hour to start)
+
+---
+Task ID: 73 (heartbeat)
+Agent: main (Z.ai)
+Task: cron-job.org heartbeat for tab-closed campaign ticking
+
+Work Log:
+- CRON_SECRET (openssl rand -hex 24) generated in chat, added to Vercel by boss, redeploy done
+- cron-job.org free job "HustlePortal campaign tick": GET /api/cron/campaign-tick every 5 min with Authorization: Bearer <CRON_SECRET>
+- Verified from outside: no auth -> 401 (gate holds); with bearer -> 200 {"ok":true,"sent":0,...} (engine answers, idles with no active queues)
+- Pacing note stands: extra ticks never speed sends (DB-clock per-hour cap)
+
+Stage Summary:
+- Production now carries: free Resend lane + SES v2 API lane, suppression law, one-click unsubscribe, SNS bounce pipe (Confirmed), 5-minute external heartbeat (verified) — SES setup complete on both sides; AWS production access review (case 179230604800173) is the only remaining clock; warm-up law ready for the first real campaign
