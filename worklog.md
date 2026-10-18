@@ -1254,3 +1254,24 @@ Work Log:
 
 Stage Summary:
 - Production now carries: free Resend lane + SES v2 API lane, suppression law, one-click unsubscribe, SNS bounce pipe (Confirmed), 5-minute external heartbeat (verified) — SES setup complete on both sides; AWS production access review (case 179230604800173) is the only remaining clock; warm-up law ready for the first real campaign
+
+---
+Task ID: 74
+Agent: main (Z.ai)
+Task: Full end to end QA of the income engine (boss request) — all suites against production
+
+Work Log:
+- exec_prod_probe 11/11 (exec walls, QA client, wallet credit)
+- verify_campaign_queue.mjs REBUILT from worklog spec after sandbox reset wiped untracked scripts (22-check spec; rebuilt as 26 checks incl stranger 401s, invalid refuse, dedupe, born PAUSED, pace preservation on join, perHour=1 ceiling holds one back, cancel+skip, Resend bounce webhook -> BOUNCED + suppression law at queue time, bad-sig 400, signed unsub GET 200, RFC 8058 one-click POST 200, unsub law, stray complaint touches nothing, cleanup) — 26/26 PASS
+- verify_ses_lane.mjs rewritten ENVIRONMENT-AWARE (keys now live, webhook gate now armed; optional argv[3] webhook key; honest SKIP when gated) — 13 PASS / 0 FAIL / 1 SKIP (webhook law checks need the SES_WEBHOOK_SECRET value; gate itself proven by 403 + keyed SNS subscription Confirmed)
+- verify_lead_detail.mjs REBUILT compact from Task 70 spec — found: pasted emails NEVER bind leadId by design (binding only via the leads:[id] audience channel); suite fixed to use the leads channel; read-out exposes lead relation object not scalar leadId — 20/20 PASS (create, detail shape, full edit card persist, blank company 400, task link + bad leadId 404, queue via leads channel, tick, row bound, pixel, read receipt openedAt+count, lead flipped NEW->CONTACTED, opens map, cleanup rows+task+lead)
+- e2e_prod_qa 39/39 PASS — headline: YOCO NOW LIVE MODE (sk_live...d29a) with webhook mode matching (launch critical PASS); signup->welcome credit->discover (POOL mode)->reveal honesty->CRM->invoice->task->finance->LIVE subscribe checkout->pause rules->annual R4,990->NPO discount->inventory->push VAPID->teams->invite->auto-join->logout->session cleared
+- Visual QA (agent-browser, prod 1440x900, ops seat, tutorials dismissed): Mail -> Campaigns -> New campaign -> audience step -> message step shows lane picker with "Free lane Resend about 100 a day $0" AND "SES lane Amazon built for volume pays per send" ENABLED (no lock), SES card takes selected styling (brand border) on click. Screenshots download/qa_control_room_ses_lane_unlocked.png + qa_control_room_ses_selected.png. Composer closed without building — zero QA rows
+- Copy fix deployed 3972c32: SES-not-configured error now says API keys (was SMTP — fossil from the af-south-1 discovery)
+- Heartbeat (Task 73 heartbeat) verified this session: no auth 401, bearer 200 ok
+- QA noise: zero rows left in EmailLog (all suites cleaned); Suppression keeps lawful fake-domain rows (hustleqa.example.com sinks); dead campaign_state tags invisible
+- Boss observed using the control room in prod (warmbadge campaign rows seen during visual QA)
+
+Stage Summary:
+- SCOREBOARD: 11/11 + 26/26 + 13/0/1 + 20/20 + 39/39 + visual = 109 PASS, 0 FAIL, 1 honest SKIP (webhook laws behind the gate, separately proven by the keyed subscription) — the income engine is tight: two lanes, laws enforced, live payments, heartbeat ticking
+- Only remaining external clock: AWS production access review (case 179230604800173); warm-up law ready
