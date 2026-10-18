@@ -34,6 +34,7 @@ export interface LifecycleReport {
   day7: string[]
   checkout: string[]
   sent: number
+  wouldSend: number
   skippedThrottle?: boolean
 }
 
@@ -110,7 +111,7 @@ async function sendMilestone(
 
 /** The heartbeat entry point. Dry mode reports the plan without sending or writing throttle state. */
 export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
-  const report: LifecycleReport = { ran: false, checked: 0, day3: [], day7: [], checkout: [], sent: 0 }
+  const report: LifecycleReport = { ran: false, checked: 0, day3: [], day7: [], checkout: [], sent: 0, wouldSend: 0 }
   if (!dry) {
     const last = Number((await getConfig(CONFIG_KEYS.LIFECYCLE_LAST_RUN)) || '0')
     if (last && Date.now() - last < THROTTLE_MS) return { ...report, skippedThrottle: true }
@@ -182,7 +183,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
               { title: 'Still there?', body: 'Reply with your city and trade and we run your first lead search together.', url: `${APP_ORIGIN}/?view=leads` },
             )
         report.day7.push(u.email)
-        if (sent) report.sent++
+        if (sent) dry ? report.wouldSend++ : report.sent++
         continue
       }
       const subject = `Your R${rand} in lead credits is still waiting`
@@ -211,7 +212,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
             { title: 'Your lead credits are waiting', body: `Your R${rand} is untouched. One search finds real businesses around you.`, url: `${APP_ORIGIN}/?view=leads` },
           )
       report.day3.push(u.email)
-      if (sent) report.sent++
+      if (sent) dry ? report.wouldSend++ : report.sent++
     }
   }
 
@@ -252,7 +253,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
           u, subject, body, tag,
           { title: 'One step from live', body: 'Your subscription is waiting. No money has left your card.', url: `${APP_ORIGIN}/?view=grow` },
         )
-    if (sent) report.sent++
+    if (sent) dry ? report.wouldSend++ : report.sent++
   }
 
   if (!dry) await setConfig(CONFIG_KEYS.LIFECYCLE_LAST_RUN, String(Date.now()))
