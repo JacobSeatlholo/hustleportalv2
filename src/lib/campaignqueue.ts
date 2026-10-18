@@ -10,13 +10,15 @@
  *   4. A campaign that runs dry flips itself to DONE.
  *
  * Campaign state lives in platformConfig under `campaign_state:<tag>`:
- *   { status: PAUSED | ACTIVE | DONE | CANCELLED, perHour, from, createdAt, startedAt }
+ *   { status: PAUSED | ACTIVE | DONE | CANCELLED, perHour, from, provider, createdAt, startedAt }
+ * `provider` picks the transport lane: RESEND (the free lane, default) or SES
+ * (the high-volume lane). Pacing and suppression laws are identical on both.
  * Keeping state out of a new table keeps the deploy additive and the queue
  * auditable from the same config store the rest of the platform uses.
  */
 import { db } from '@/lib/db'
 import { setConfig } from '@/lib/config'
-import { sendCampaignMail } from '@/lib/mailer'
+import { sendCampaignMail, sendCampaignMailViaSes } from '@/lib/mailer'
 
 export const APP_BASE = 'https://www.hustleportal.online'
 export const CAMPAIGN_STATE_PREFIX = 'campaign_state:'
@@ -25,6 +27,7 @@ export interface CampaignState {
   status: 'PAUSED' | 'ACTIVE' | 'DONE' | 'CANCELLED'
   perHour: number
   from?: string
+  provider?: 'RESEND' | 'SES'
   createdAt: string
   startedAt?: string
   completedAt?: string
@@ -149,14 +152,18 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       continue
     }
 
-    const r = await sendCampaignMail({
+    const mail = {
       to: queued.toEmail,
       subject: queued.subject,
       body: queued.body,
       from: state.from,
       pixelUrl: `${APP_BASE}/api/mail/open/${queued.id}`,
       unsubscribeUrl: unsubscribeUrl(queued.id),
-    })
+    }
+    // The campaign's lane decides the pipe. Same mail, same laws, either way.
+    const r = state.provider === 'SES'
+      ? await sendCampaignMailViaSes(mail)
+      : await sendCampaignMail(mail)
     if (r.ok) {
       await db.emailLog.update({
         where: { id: queued.id },

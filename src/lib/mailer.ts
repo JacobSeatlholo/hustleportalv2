@@ -572,6 +572,64 @@ export async function sendCampaignMail(
   return { ok: false, error: classifyPlatformError(res.raw, await readDomainProof()) }
 }
 
+// ---- SES lane ----
+// The second transport for campaign queues. Same body, same open pixel, same
+// one-click unsubscribe law — a bigger fuel tank for when the free lane's
+// ~100/day ceiling is behind us. Picked per campaign via the queue state;
+// nothing here changes how the free lane behaves.
+
+/** True once the SES SMTP keys exist in the environment. */
+export function isSesConfigured(): boolean {
+  return Boolean(
+    process.env.SES_SMTP_HOST?.trim() &&
+    process.env.SES_SMTP_USER?.trim() &&
+    process.env.SES_SMTP_PASS?.trim(),
+  )
+}
+
+export async function sendCampaignMailViaSes(
+  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
+): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
+  const host = process.env.SES_SMTP_HOST?.trim()
+  const user = process.env.SES_SMTP_USER?.trim()
+  const pass = process.env.SES_SMTP_PASS?.trim()
+  const port = Number(process.env.SES_SMTP_PORT?.trim() || '587')
+  if (!host || !user || !pass) return { ok: false, error: 'SES lane is not configured.' }
+  const from = normalizeCampaignFrom(mail.from)
+  const unsub = mail.unsubscribeUrl?.trim()
+  const body = mail.body + (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
+  const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
+  try {
+    const nodemailer = await import('nodemailer')
+    const transport = nodemailer.createTransport({
+      host, port, secure: port === 465, requireTLS: true, auth: { user, pass },
+    })
+    const info = await transport.sendMail({
+      from,
+      to: mail.to,
+      subject: mail.subject,
+      text: body,
+      ...(html ? { html } : {}),
+      replyTo: TEAM_INBOX,
+      headers: {
+        ...(unsub ? { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
+        ...(process.env.SES_CONFIG_SET?.trim() ? { 'X-SES-CONFIGURATION-SET': process.env.SES_CONFIG_SET.trim() } : {}),
+      },
+    })
+    // SES's SMTP DATA response carries the provider message id, which the SNS
+    // bounce/complaint webhook matches back to this exact send:
+    // "250 Ok 0100018a1b2c3d4f-01234567-89ab-cdef-0123-456789abcdef-000000"
+    const m = /Ok\s+([0-9a-f]{10,}-[0-9a-f-]{20,})/i.exec(info.response || '')
+    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: `campaign-ses:${from}` })
+    return { ok: true, via: from, providerId: m?.[1] }
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : 'SES send failed'
+    console.error('[mail] SES campaign send failed:', raw.slice(0, 200))
+    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: raw.slice(0, 160) })
+    return { ok: false, error: raw.slice(0, 300) }
+  }
+}
+
 /**
  * System emails (password resets, receipts, alerts) — platform engine only,
  * branded from, NO referral signature, Reply-To the team inbox.

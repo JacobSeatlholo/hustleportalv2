@@ -80,15 +80,18 @@ export default function MailView() {
   const [cSubject, setCSubject] = useState('')
   const [cBody, setCBody] = useState('')
   const [cPerHour, setCPerHour] = useState('45')
+  const [cProvider, setCProvider] = useState<'RESEND' | 'SES'>('RESEND')
+  const [sesOk, setSesOk] = useState(false)
   const [creating, setCreating] = useState(false)
   const [actingTag, setActingTag] = useState<string | null>(null)
 
   const loadCampaigns = useCallback(async () => {
     if (!isAdmin) return
     try {
-      const res = await api<{ campaigns: CampaignInfo[]; rows: CampaignRow[] }>('/api/admin/exec/campaigns')
+      const res = await api<{ campaigns: CampaignInfo[]; rows: CampaignRow[]; sesConfigured?: boolean }>('/api/admin/exec/campaigns')
       setCampaignRows(res.rows || [])
       setCampaigns(res.campaigns || [])
+      if (typeof res.sesConfigured === 'boolean') setSesOk(res.sesConfigured)
     } catch {
       setCampaignRows([])
       setCampaigns([])
@@ -185,7 +188,7 @@ export default function MailView() {
   function resetComposer() {
     setComposerStep('audience'); setPickIds(new Set()); setPaste(''); setAudienceSearch('')
     setCName(''); setCSubject(''); setCBody(''); setCPerHour('45')
-    setCFrom('BlackBiz <blackbiz@hustleportal.online>')
+    setCFrom('BlackBiz <blackbiz@hustleportal.online>'); setCProvider('RESEND')
   }
 
   function finishEstimate(n: number, perHour: number) {
@@ -220,6 +223,7 @@ export default function MailView() {
           body: cBody,
           from: cFrom.trim(),
           perHour: Number(cPerHour),
+          provider: cProvider,
           leads: [...pickIds],
           emails: pastedEmails,
         }),
@@ -437,6 +441,7 @@ export default function MailView() {
                       <span className="text-sm font-medium flex items-center gap-2 min-w-0">
                         <span className="truncate">{campaignLabel(key)}</span>
                         {statusChip}
+                        {state?.provider === 'SES' && <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-500 shrink-0">SES lane</Badge>}
                       </span>
                       <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
                         {sum.queued > 0 && `${sum.queued} queued · `}
@@ -834,6 +839,31 @@ export default function MailView() {
                 <Input id="c-from" value={cFrom} onChange={(e) => setCFrom(e.target.value)} />
               </div>
               <div className="space-y-1.5">
+                <Label>Lane</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCProvider('RESEND')}
+                    className={`rounded-lg border p-2.5 text-left transition ${cProvider === 'RESEND' ? 'border-[var(--brand)] bg-[var(--brand)]/5' : 'hover:bg-muted/40'}`}
+                  >
+                    <span className="block text-[12px] font-medium">Free lane</span>
+                    <span className="block text-[10px] text-muted-foreground">Resend · about 100 a day · $0</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!sesOk}
+                    onClick={() => setCProvider('SES')}
+                    className={`rounded-lg border p-2.5 text-left transition disabled:opacity-50 ${cProvider === 'SES' ? 'border-[var(--brand)] bg-[var(--brand)]/5' : 'hover:bg-muted/40'}`}
+                  >
+                    <span className="block text-[12px] font-medium">SES lane</span>
+                    <span className="block text-[10px] text-muted-foreground">{sesOk ? 'Amazon · built for volume · pays per send' : 'Paste the SES keys in Vercel to unlock'}</span>
+                  </button>
+                </div>
+                {cProvider === 'SES' && (
+                  <p className="text-[10px] text-amber-500">SES lane bills per send. Keep the pace gentle while the domain warms up.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="c-subject">Subject</Label>
                 <Input id="c-subject" value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Your next client is one search away" />
               </div>
@@ -844,7 +874,7 @@ export default function MailView() {
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
                 <p className="font-medium text-[13px]">Before it queues</p>
-                <p className="text-muted-foreground">{pickCount} recipients · {cPerHour} per hour · finishes in {finishEstimate(pickCount, Number(cPerHour))}</p>
+                <p className="text-muted-foreground">{pickCount} recipients · {cPerHour} per hour · {cProvider === 'SES' ? 'SES lane' : 'free lane'} · finishes in {finishEstimate(pickCount, Number(cPerHour))}</p>
                 <p className="text-muted-foreground">Every email carries a one tap unsubscribe link and open tracking. Bounces and spam complaints remove the address automatically.</p>
                 <p className="text-foreground/80 font-medium">Nothing sends yet. The queue waits paused — you press Start on the card once the draft is approved.</p>
               </div>

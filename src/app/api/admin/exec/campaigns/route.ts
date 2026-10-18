@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
-import { normalizeCampaignFrom } from '@/lib/mailer'
+import { normalizeCampaignFrom, isSesConfigured } from '@/lib/mailer'
 import {
   readCampaignStates, writeCampaignState, unsubscribeUrl, type CampaignState,
 } from '@/lib/campaignqueue'
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  let payload: { campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; leads?: string[]; emails?: string[] }
+  let payload: { campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string; leads?: string[]; emails?: string[] }
   try {
     payload = await req.json()
   } catch {
@@ -53,6 +53,16 @@ export async function POST(req: NextRequest) {
     ? Math.max(1, Math.min(MAX_HOURLY, existingState?.perHour || DEFAULT_HOURLY))
     : Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
   const from = normalizeCampaignFrom(payload.from)
+
+  // The transport lane. Omitted provider keeps the pace-preservation promise:
+  // a second batch joining a live campaign never switches its pipe silently.
+  const provider: 'RESEND' | 'SES' =
+    payload.provider === 'SES' ? 'SES'
+    : payload.provider === 'RESEND' ? 'RESEND'
+    : existingState?.provider || 'RESEND'
+  if (provider === 'SES' && !isSesConfigured()) {
+    return NextResponse.json({ error: 'SES lane is not configured yet. Add the SES SMTP keys to the environment first, or use the free lane.' }, { status: 400 })
+  }
 
   // Recipients from pipeline leads — same access wall as every lead action.
   const leadIds = Array.isArray(payload.leads) ? payload.leads.filter((x) => typeof x === 'string' && x.length > 5) : []
@@ -133,7 +143,7 @@ export async function POST(req: NextRequest) {
     from,
     createdAt: new Date().toISOString(),
   }
-  await writeCampaignState(tag, { ...existing, perHour, from })
+  await writeCampaignState(tag, { ...existing, perHour, from, provider })
 
   return NextResponse.json({
     ok: true,
@@ -142,7 +152,7 @@ export async function POST(req: NextRequest) {
     skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
     skippedDuplicate: existingRows.length,
     invalid,
-    state: { ...existing, perHour, from },
+    state: { ...existing, perHour, from, provider },
   })
 }
 
@@ -183,6 +193,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    sesConfigured: isSesConfigured(),
     campaigns: Object.keys(campaigns).map((tag) => ({ tag, state: states[tag] || null, summary: campaigns[tag] })),
     rows: rowsOut,
   })

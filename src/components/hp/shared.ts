@@ -178,6 +178,7 @@ export interface CampaignState {
   status: 'PAUSED' | 'ACTIVE' | 'DONE' | 'CANCELLED'
   perHour: number
   from?: string
+  provider?: 'RESEND' | 'SES' // the transport lane — free lane by default, SES when its keys are in
   createdAt: string
   startedAt?: string
   completedAt?: string
