@@ -10,6 +10,7 @@
  *      Replies go to the user's account email via Reply-To.
  * HustlePortal never forces users to create app passwords or OAuth grants.
  */
+import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
 import { ensureRefCode } from '@/lib/referral'
 
@@ -577,57 +578,121 @@ export async function sendCampaignMail(
 // one-click unsubscribe law — a bigger fuel tank for when the free lane's
 // ~100/day ceiling is behind us. Picked per campaign via the queue state;
 // nothing here changes how the free lane behaves.
+//
+// TRANSPORT: SES v2 HTTPS API, NOT SMTP. AWS does not offer an SMTP endpoint
+// in Africa (Cape Town) af-south-1 — email-smtp.af-south-1.amazonaws.com has
+// no DNS record and Node dies on it with "getaddrinfo EBUSY". The API
+// endpoint (email.af-south-1.amazonaws.com) is alive in the region and is
+// signed with plain IAM keys via SigV4. Bounce/complaint events still flow
+// through the same config set -> SNS -> /api/webhooks/ses pipe, and the API
+// returns the MessageId directly, which is what the webhook matches.
 
-/** True once the SES SMTP keys exist in the environment. */
+/** True once the SES API keys exist in the environment. */
 export function isSesConfigured(): boolean {
   return Boolean(
-    process.env.SES_SMTP_HOST?.trim() &&
-    process.env.SES_SMTP_USER?.trim() &&
-    process.env.SES_SMTP_PASS?.trim(),
+    process.env.SES_AWS_KEY?.trim() &&
+    process.env.SES_AWS_SECRET?.trim(),
   )
+}
+
+function sha256hex(data: string): string {
+  return createHash('sha256').update(data).digest('hex')
+}
+
+/** SigV4 for a JSON POST — enough of AWS Signature v4 for one SES call, no SDK. */
+function sesSigV4Headers(key: string, secret: string, region: string, host: string, path: string, body: string, amzDate: string): Record<string, string> {
+  const dateStamp = amzDate.slice(0, 8)
+  const scope = `${dateStamp}/${region}/ses/aws4_request`
+  const signedHeaders = 'content-type;host;x-amz-date'
+  const canonicalRequest = [
+    'POST',
+    path,
+    '',
+    `content-type:application/json\nhost:${host}\nx-amz-date:${amzDate}\n`,
+    signedHeaders,
+    sha256hex(body),
+  ].join('\n')
+  const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${scope}\n${sha256hex(canonicalRequest)}`
+  let k = createHmac('sha256', `AWS4${secret}`).update(dateStamp).digest()
+  k = createHmac('sha256', k).update(region).digest()
+  k = createHmac('sha256', k).update('ses').digest()
+  k = createHmac('sha256', k).update('aws4_request').digest()
+  const signature = createHmac('sha256', k).update(stringToSign).digest('hex')
+  return {
+    'Content-Type': 'application/json',
+    'X-Amz-Date': amzDate,
+    Authorization: `AWS4-HMAC-SHA256 Credential=${key}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  }
 }
 
 export async function sendCampaignMailViaSes(
   mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
 ): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
-  const host = process.env.SES_SMTP_HOST?.trim()
-  const user = process.env.SES_SMTP_USER?.trim()
-  const pass = process.env.SES_SMTP_PASS?.trim()
-  const port = Number(process.env.SES_SMTP_PORT?.trim() || '587')
-  if (!host || !user || !pass) return { ok: false, error: 'SES lane is not configured.' }
+  const key = process.env.SES_AWS_KEY?.trim()
+  const secret = process.env.SES_AWS_SECRET?.trim()
+  const region = process.env.SES_AWS_REGION?.trim() || 'af-south-1'
+  if (!key || !secret) return { ok: false, error: 'SES lane is not configured.' }
   const from = normalizeCampaignFrom(mail.from)
   const unsub = mail.unsubscribeUrl?.trim()
   const body = mail.body + (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
   const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
-  try {
-    const nodemailer = await import('nodemailer')
-    const transport = nodemailer.createTransport({
-      host, port, secure: port === 465, requireTLS: true, auth: { user, pass },
-    })
-    const info = await transport.sendMail({
-      from,
-      to: mail.to,
-      subject: mail.subject,
-      text: body,
-      ...(html ? { html } : {}),
-      replyTo: TEAM_INBOX,
-      headers: {
-        ...(unsub ? { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
-        ...(process.env.SES_CONFIG_SET?.trim() ? { 'X-SES-CONFIGURATION-SET': process.env.SES_CONFIG_SET.trim() } : {}),
+  const configSet = process.env.SES_CONFIG_SET?.trim()
+  const payload = {
+    FromEmailAddress: from,
+    ReplyToAddresses: [TEAM_INBOX],
+    Destination: { ToAddresses: [mail.to] },
+    ...(configSet ? { ConfigurationSetName: configSet } : {}),
+    Content: {
+      Simple: {
+        Subject: { Data: mail.subject, Charset: 'UTF-8' },
+        Body: {
+          Text: { Data: body, Charset: 'UTF-8' },
+          ...(html ? { Html: { Data: html, Charset: 'UTF-8' } } : {}),
+        },
+        ...(unsub ? {
+          Headers: [
+            { Name: 'List-Unsubscribe', Value: `<${unsub}>` },
+            { Name: 'List-Unsubscribe-Post', Value: 'List-Unsubscribe=One-Click' },
+          ],
+        } : {}),
       },
-    })
-    // SES's SMTP DATA response carries the provider message id, which the SNS
-    // bounce/complaint webhook matches back to this exact send:
-    // "250 Ok 0100018a1b2c3d4f-01234567-89ab-cdef-0123-456789abcdef-000000"
-    const m = /Ok\s+([0-9a-f]{10,}-[0-9a-f-]{20,})/i.exec(info.response || '')
-    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: `campaign-ses:${from}` })
-    return { ok: true, via: from, providerId: m?.[1] }
-  } catch (e) {
-    const raw = e instanceof Error ? e.message : 'SES send failed'
-    console.error('[mail] SES campaign send failed:', raw.slice(0, 200))
-    await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: raw.slice(0, 160) })
-    return { ok: false, error: raw.slice(0, 300) }
+    },
   }
+  const payloadStr = JSON.stringify(payload)
+  const host = `email.${region}.amazonaws.com`
+  const path = '/v2/email/outbound-emails'
+  // One quiet retry for transient network/DNS hiccups; API errors (auth,
+  // sandbox, unverified identity) are NOT retried — they answer honestly.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+      const res = await fetch(`https://${host}${path}`, {
+        method: 'POST',
+        headers: sesSigV4Headers(key, secret, region, host, path, payloadStr, amzDate),
+        body: payloadStr,
+      })
+      const json = await res.json().catch(() => null) as { MessageId?: string; message?: string; Type?: string } | null
+      if (!res.ok || !json?.MessageId) {
+        const msg = json?.message || json?.Type || `SES API answered ${res.status}`
+        console.error('[mail] SES campaign send refused:', msg.slice(0, 200))
+        await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: msg.slice(0, 160) })
+        return { ok: false, error: msg.slice(0, 300) }
+      }
+      await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: `campaign-ses:${from}` })
+      return { ok: true, via: from, providerId: json.MessageId }
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : 'SES send failed'
+      if (attempt === 1) {
+        console.error('[mail] SES network hiccup, one retry:', raw.slice(0, 160))
+        await new Promise((r) => setTimeout(r, 600))
+        continue
+      }
+      console.error('[mail] SES campaign send failed:', raw.slice(0, 200))
+      await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: false, error: raw.slice(0, 160) })
+      return { ok: false, error: raw.slice(0, 300) }
+    }
+  }
+  return { ok: false, error: 'SES send failed' }
 }
 
 /**
