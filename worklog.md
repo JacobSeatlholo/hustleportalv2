@@ -1360,3 +1360,24 @@ Stage Summary:
 - Call list artifact restored at download/hustle_call_list.csv (25 humans, warmest first).
 - Reddit copy delivered for Acs971 (owns Italy failure, vetted claim gap, AI advisor quality) and snakeboyslim (owns LLM brain, points value at the plumbing). No hyphens, no emoji, truthful.
 - Open: landing plan intent carry through (charge asap for anonymous visitors) offered as next small fix; smoke test cosmetic row lookup still unfixed.
+
+---
+Task ID: 78
+Agent: main
+Task: Ship the two approved fixes: landing plan intent carry through to checkout (charge asap) and the South Africa region gate on the AI lead finder (the Italy bug).
+
+Work Log:
+- Fix A: Landing plan buttons now store hp_plan_intent (HUSTLER or BOSS) before scrolling to the signup form; after register or login success the app lands on /?view=grow; GrowView mount consumes the intent exactly once and auto fires subscribe, which redirects to Yoco hosted checkout.
+- Fix B: new pure region gate in src/lib/leadpool.ts (isSouthAfricanLead): foreign phone prefix (+27 exception, 00xx), foreign TLD list, foreign city blocklist. Applied at four layers: parseLeadList (answer), rememberScanResults (pool capture), serveFromPool (pool serve), OSM and Explee lanes (answer side). Prompts hardened: South Africa ONLY on the live search system and area rule, plus the OSM qualifier. City fill now happens AFTER the gate so a stamped city can never mask a foreign face.
+- SA place name collision audit: removed Berlin, Hamburg, Frankfurt, London, Wellington, Adelaide, Auckland, Boston, Denver, Valencia, Athens from the blocklist (real SA places: East London, Berlin EC, Hamburg EC, Frankfurt FS, Wellington WC, Adelaide EC, Auckland Park JHB, Boston KZN, Denver JHB). Country words and TLDs still catch the real thing.
+- Gate unit check via tsx: 24/24 PASS (Italy city, +39 phone, .it/.de/.co.uk TLDs dropped; East London, Berlin EC, Hamburg EC, Wellington WC, Auckland Park, Denver JHB, Boston KZN, Adelaide EC preserved).
+- Typecheck: npx tsc --noEmit clean in src (two pre existing skill script errors unrelated).
+- Environment note: the venv loses paramiko on recycle; reinstall with /home/z/.venv/bin/python -m pip install paramiko before GIT_SSH pushes.
+- Deploy: commit 9fe1e92 pushed, Vercel live.
+- Fix B verified live: fresh QA probe ran the Acs971 scenario (JHB, taverns/security/stock angle). 5 leads, all Johannesburg suburbs (Jeppestown, Melville, Malvern East, Aeroton, Alberante), zero foreign signals. Output: scripts/out_region_scan.json.
+- Fix A verified live end to end with a browser: landing Start with Boss -> intent BOSS stored -> login -> /?view=grow -> checkout auto fired -> landed on c.yoco.com checkout ch_ZgnM91DjnOquAnpTqmMclw1E titled Make a R499.00 payment to Business Hustle Ltd. QA account so the till, bell and lifecycle correctly stay silent.
+
+Stage Summary:
+- Both fixes live in production and verified. Charge asap: a visitor who picks a plan meets the card form immediately after signup, no wandering, no lost intent.
+- Region gate: four enforcement layers plus prompt hardening; Italy can not recur; SA place names protected; pool pollution (old foreign rows) filtered on serve.
+- Open candidates for later: competitor suppression in results (Acs971 also got one JHB competitor), day 3 and day 7 volume watch as the Kloof Street batch crosses 3 days.
