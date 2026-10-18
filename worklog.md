@@ -1513,3 +1513,21 @@ Work Log:
 Stage Summary:
 - Production 2602c4c. Adelle Nugent (info@medispa.co.za) exists, sits in the Ubuntu Wellness team, her ledger mirrors R25,130 as money out, the boss side reads Ubuntu Wellness funding lens on money in, 29 sealed work records show in team scope, and her invitation email is out.
 - Boss must now rotate the master password (run complete). Remaining offers: shared team finance view (so she sees his side in app), workspace-scoped inventory, per-unit prices for stock value KPIs.
+
+---
+Task ID: 83
+Agent: main
+Task: Routine end to end production QA; boss flipped the repo to private.
+
+Work Log:
+- CRITICAL CATCH + FIX: the deploy path was broken — workspace recycle had wiped paramiko from /home/z/.venv (the known quirk). git ls-remote/push died with ModuleNotFoundError. Reinstalled paramiko into the venv, chmod 600 .git/hp-deploy/hp_deploy, push dry-run clean. Deploys work on the private repo via the deploy key.
+- Repo flip verified: origin fetch is HTTPS, push is SSH (git@github.com:JacobSeatlholo/hustleportalv2.git) — the private flip does not affect deploys (deploy key path). Cosmetic only: fetch-by-HTTPS needs a credential, so always push with the GIT_SSH shim.
+- Manifest probe: /manifest.json 404 is EXPECTED (file is /manifest.webmanifest, layout references it, serves 200). No regression.
+- E2E suite (scripts/e2e_prod_qa.mjs) on a fresh QA seat: 39 PASS / 0 FAIL — register, session, Yoco LIVE mode + webhook ready, exec walls, mail diagnostics, R99 wallet, profile, lead discover (5 results, POOL engine), reveal honesty contract + no double charge, clients CRUD, invoice, task, finance, subscribe checkout (Boss R4,990 annual + NPO discount), inventory add/adjust/totals/delete, push VAPID, team create → invite parks → invitee registers → AUTO-JOIN (re-proving the exact Adelle flow), logout, session cleared.
+- NEW regression suite (scripts/qa_task82_regression.mjs) for this session's ships: 24 PASS / 0 FAIL after one fix in my own script (onboard whitelist is UPPERCASE; app was right, payload was wrong). Covers: task teamId move + isPrivate force-false + 403 for non-member teams + sealed record "moved onto the team" event + chain verified + null escape + stranger edit 403; finance PATCH category relabel + amount IMMUTABLE + empty description 400 + stranger 404; invite invalid email 400 + instant add + duplicate 409; fail gate shape (wrong 401, correct password still accepted); onboard save + session reflection.
+- Public surface: health 200, root 200 (hero copy renders server side), manifest.webmanifest 200, robots 200, llms.txt 200.
+- Master account: ZERO logins this run (state verified from the run logs of 82c). 5 fresh hustleqa.example.com QA rows created, all on the fake domain.
+
+Stage Summary:
+- Production is healthy end to end: 63 checks green across two suites, deploy path restored on the private repo, no open issues. QA scripts committed locally (scripts/ is gitignored, stays out of the repo by design).
+- Reminder standing: boss to rotate the master password (overdue since the 82c run).
