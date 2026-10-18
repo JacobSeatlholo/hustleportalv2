@@ -1450,3 +1450,18 @@ Work Log:
 
 Stage Summary:
 - Ubuntu Wellness is populated and the last inventory check is live on the owner's account. Cost and sell prices left 0 (not in the source document). Inventory is account scoped in the current design; a workspace scoped inventory is an offered follow up build.
+
+---
+Task ID: 81
+Agent: main
+Task: Backdate the Adelle Nugent April to October 2026 record onto the platform: completed tasks, purchases from the topups, and the cash advances as money in and spent on the default workspace. Source: WhatsApp Chat - Adelle Nugent.zip (3103 lines, Jan 2024 to Oct 2026).
+
+Work Log:
+- Read the full April to October 2026 chat. Cast resolved: the WhatsApp account www.businesshustle.co.za is the boss (Jacob), Adelle Nugent is the funder who advances cash (top ups), Malcolm is the funder behind her, Ian is IT, Theresa at Go2Pharma, Zintle at Imvelo, Pearl and Lydia staff, Wendy Dicks a practitioner who once borrowed the machine to text (explains the Hi Jacob line). The business is the Ubuntu Wellness float center plus the Imvelo product line, and the giant parallel workstream is the RAF evidence pack.
+- Built the ledger strictly from CONFIRMED receipts: 10 money in rows (R180, R750, R750, R4,000 Malcolm rent advance, R9,500 payment with R1,500 outstanding, R5,000 loan, R350 mistaken amount kept on account, R3,500 advance, R800 courier and Lydia list, R300 October supplies) and 10 money out rows matching the advance purposes plus the two company payments Adelle made directly (Courier Guy R1,048.71 on 15 May, Telkom and Vodacom R1,205 on 9 Sep). 29 completed tasks with real dates from 10 Apr to 16 Oct, sealed records stamped "logged it as already complete".
+- API build (edb796e): POST /api/finance now accepts an ownership validated projectId; POST /api/tasks accepts status (TODO|IN_PROGRESS|DONE) and createdAt (past only) so backdated completed work is possible while the TaskEvent seal keeps the true logging time. Probe on prod via ops seat confirmed the fields live before any real data loaded (first deploy did not propagate, empty commit e0b97a3 forced the rebuild).
+- Loaded via scripts/adelle_backfill_apr2026.mjs (idempotent by description and title): 20 finance rows + 29 tasks, zero failures. Finance totals now R28,130 in / R20,533.71 out (includes 2 pre existing rows), oldest entry 2026-04-10. All finance rows linked to the default workspace Business Hustle Ltd and tagged "Backfilled from the WhatsApp record".
+- Deliberately NOT loaded (unconfirmed in chat, ~R10.4k): the requested but never explicitly confirmed topups (Apr 1 R1,191, Apr 17 R700 personal, May 4 R988, May 14 R470, May 16 R320, Jun 11 R270, Jun 18 R650 plus R600 Pearl, Jun 22 R450, Jul 1 R791, Jul 18 R150, Jul 30 R300 rolled into Aug 4 R1,196, Aug 18 R180, Aug 28 R120, Sep 2 R750, Sep 22 R650, Oct 8 R550 settled partly by the Oct 12 R300, Oct 17 R380).
+
+Stage Summary:
+- Default workspace now carries the real April to October money story (R25,130 loaded in, R17,533.71 loaded out) and 29 backdated completed tasks for the Adelle era at Ubuntu Wellness. Adelle onboarding path: invite her, then move the 29 tasks onto the team so they show in her scope, and the finance rows are already visible account wide.
