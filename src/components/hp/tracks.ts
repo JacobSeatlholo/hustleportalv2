@@ -185,11 +185,17 @@ export function professionLabel(key: string | null | undefined): string | null {
   return PROFESSIONS.find((p) => p.key === key)?.label || null
 }
 
+/** Lowercase plural that reads right in a sentence: "built for accountants". */
+export function professionPlural(key: string | null | undefined): string | null {
+  const label = professionLabel(key)
+  if (!label || label === 'Something else') return null
+  return `${label.toLowerCase()}s`
+}
+
 /** The one line the dashboard hero whispers back at them. */
 export function personalLine(persona: string | null | undefined, profession: string | null | undefined): string | null {
   const p = personaOf(persona)
-  const f = professionLabel(profession)
-  if (p && f) return `${p.today} Built for a ${f.toLowerCase()}.`
-  if (p) return p.today
-  return null
+  if (!p) return null
+  const f = professionPlural(profession)
+  return f ? `${p.today} Built for ${f}.` : p.today
 }

@@ -23,6 +23,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
 import { api } from './shared'
@@ -172,8 +173,8 @@ export default function Onboarding() {
             <>
               <DialogTitle className="font-display text-2xl">You are set, {first}.</DialogTitle>
               <DialogDescription className="text-sm">
-                {pDef && fLabel
-                  ? <>You came here to <b className="text-foreground">{pDef.verb}</b> as a {fLabel.toLowerCase()}. Here is how you master it.</>
+                {pDef
+                  ? <>You want to <b className="text-foreground">{pDef.verb}</b>. Here is how you master it.</>
                   : 'Here is how you master it.'}
               </DialogDescription>
             </>
@@ -212,6 +213,10 @@ export default function Onboarding() {
 
         {step === 2 && pDef && (
           <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {fLabel && <Badge variant="secondary">{fLabel}</Badge>}
+              <Badge className="bg-brand text-black hover:bg-brand">{pDef.label}</Badge>
+            </div>
             <div className="rounded-xl border border-border p-4 space-y-2.5">
               {pDef.track.map((s, i) => (
                 <div key={s.label} className="flex items-center gap-3">

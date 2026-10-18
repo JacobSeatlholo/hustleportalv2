@@ -13,7 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, type Lead, type Task } from './shared'
 import { useHp, type ViewKey } from './store'
-import { personalLine, personaOf, professionLabel } from './tracks'
+import { personalLine, personaOf, professionPlural } from './tracks'
 import SetupChecklist from './SetupChecklist'
 import {
   ArrowRight, ArrowUpRight, ArrowDownRight, Sparkles, Send, Target, CheckSquare,
@@ -80,7 +80,7 @@ export default function DashboardView() {
   // Personalized mastery track: the survey answers shape this card. Visit
   // steps mark done on first open; live steps read real workspace work.
   const persona = personaOf(session?.user.persona)
-  const profLabel = professionLabel(session?.user.profession)
+  const profPlural = professionPlural(session?.user.profession)
   const personal = personalLine(session?.user.persona, session?.user.profession)
   useEffect(() => {
     if (!persona) return
@@ -172,7 +172,7 @@ export default function DashboardView() {
                 <div>
                   <div className="font-display text-lg leading-tight">Your plan to {persona.label.toLowerCase()}</div>
                   <div className="text-xs text-muted-foreground">
-                    {profLabel ? `Shaped for a ${profLabel.toLowerCase()}. Change it any time in your profile.` : 'Three moves, in the order that pays.'}
+                    {profPlural ? `Built for ${profPlural}. Change it any time in your profile.` : 'Three moves, in the order that pays.'}
                   </div>
                 </div>
               </div>
