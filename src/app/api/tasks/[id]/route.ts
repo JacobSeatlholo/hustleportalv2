@@ -26,11 +26,25 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const allowed = ['title', 'notes', 'status', 'priority', 'isPrivate', 'assigneeId']
+  const allowed = ['title', 'notes', 'status', 'priority', 'isPrivate', 'assigneeId', 'teamId']
   const data: Record<string, unknown> = {}
   for (const k of allowed) if (k in body) data[k] = body[k]
   if ('dueDate' in body) data.dueDate = body.dueDate ? new Date(body.dueDate) : null
   if (data.assigneeId === '') data.assigneeId = null
+  // Moving a task onto a team follows the same law as creating it there:
+  // the mover must belong to the target team, and team tasks are never private.
+  if ('teamId' in body) {
+    if (body.teamId) {
+      const member = await db.teamMember.findUnique({
+        where: { teamId_userId: { teamId: String(body.teamId), userId } },
+      })
+      if (!member) return NextResponse.json({ error: 'You are not a member of that team.' }, { status: 403 })
+      data.teamId = String(body.teamId)
+      data.isPrivate = false
+    } else {
+      data.teamId = null
+    }
+  }
 
   const updated = await db.task.update({
     where: { id },
@@ -51,6 +65,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       const u = await db.user.findUnique({ where: { id: newAssignee }, select: { name: true } })
       await recordTaskEvent(id, 'SENT', userId, `sent to ${u?.name || 'a teammate'}`)
     }
+  }
+  if ('teamId' in data && data.teamId !== task.teamId) {
+    await recordTaskEvent(
+      id,
+      'EDIT',
+      userId,
+      data.teamId ? `moved onto the team ${updated.team?.name || ''}`.trim() : 'moved back to personal tasks',
+    )
   }
   const detailEdits = ['title', 'notes', 'priority', 'dueDate', 'isPrivate'].filter((k) => k in data)
   if (detailEdits.length > 0) {
