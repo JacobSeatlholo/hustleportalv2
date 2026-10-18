@@ -1321,3 +1321,22 @@ Stage Summary:
 - The machine is NOT the problem: payments live and proven, laws tight, free tier gives a real taste. Zero payers is a TRAFFIC + ACTIVATION + FOLLOW-UP problem: 27 true humans in 7 days, 13 never opened the tools, 1 reached the till and nobody noticed, no lifecycle follow-up exists, and the exec dashboard lies (300+ probe rows inside every KPI)
 - Highest-probability money this week: phone Jackie (abandoned R199 checkout) + the 11 Kloof Street businesses; call list ready
 - Fix candidates for next code pass: extend exec probe-domain filter, day-3/7 lifecycle nudges on the transactional lane + push, abandoned-checkout signal on the exec dashboard
+
+---
+Task ID: 77
+Agent: main (Z.ai)
+Task: Fix 2 and 3 from the funnel audit (truth lens + lifecycle machine) + Reddit thread response
+
+Work Log:
+- FIX 2 (truth lens): new pure module src/lib/probe.ts (isProbeEmail = QA domain + 10 throwaway domains + malformed rows; isInternalEmail = house domains hustleportal.co.za/.online); exec route reworked — new7/new30/mrr/topups30d/wallet float/meetings KPIs all count humans only (probes + house + exec excluded), roster rows carry isQa + isInternal, added kpis.subsPending + payments.pending (the till), AdminView KPI cards renamed truthfully (Humans, real card money, human wallet float vs test bench), client desk flag now uses the shared lens; growth route same lens (members.total = humans, topups = human YOCO only)
+- FIX 3 (lifecycle machine): src/lib/lifecycle.ts — hourly sweep on the existing 5 min heartbeat (/api/cron/campaign-tick, bearer gated, ?dry=1 reports without sending): day 3 nudge (joined 3d+, zero activity, no plan), day 7 offer (7d+, includes a personal "reply and we run your first search together"), checkout nudge (PENDING > 20 min, one per attempt via campaign tag checkout-nudge-<ref>); laws: EmailLog campaign-tag dedupe (one per milestone EVER), suppression table checked before every send, probes/house/exec never touched, suspended accounts skipped, push via VAPID best effort, EmailLog PLATFORM rows record every decision; execnotify.onCheckoutStarted = the till bell (owner email within seconds of a real human opening a Yoco checkout, probes/exec silent); subscribe route rings it via after()
+- Deep links: /?view=leads (nudges) and /?view=grow (checkout finish)
+- DEPLOY: d167493 (lens + machine) then 3c50093 (dry reports wouldSend honestly); deploy note: sandbox reset had wiped paramiko from the venv python — /home/z/.venv/bin/python is the shim's interpreter, reinstalled paramiko, push worked
+- VERIFY (production): exec now says members=374 qa=337 house=12 REAL HUMANS=25, new7=25, topups30d real card money R0.00 (was R15,500 of test era money), meetings 1/1/0 (was 5/4/1), till names Jackie Mokgalagadi Operator R199, roster 349 rows flagged, 25 spotlight eligible; growth lens consistent (25 humans, R0)
+- LIFECYCLE LIVE: cron-job.org heartbeat fired the first real sweep before manual verify — Jackie's checkout nudge SENT for real (the throttle proves it: manual real tick answered skippedThrottle, second tick too); dry run reports checked=9, checkout=[Jackie], wouldSend=1, sent=0; Zola enters the day 3 window within a day, the 11 Kloof Street accounts the day after; dry does not write throttle state
+- REDDIT: www and old.reddit both hard blocked from this network (security block page) — thread state worked from the boss's paste; paste-ready replies drafted for Kynaras (main), Acs971 (personal rerun offer woven into the main reply), snakeboyslim (honest tech answer), plus a repair edit for the downvoted "Quick tip" comment; copy follows house rules (no hyphens, no emoji, truthful), the reply publicly commits to a hard South Africa only map fence on the lead finder (build offered as next task)
+
+Stage Summary:
+- Production 3c50093: the boss flies on true instruments (25 humans, R0 real money, 1 real meeting, Jackie named at the till) and the follow up machine is live (day 3 / day 7 / checkout nudges + till bell), already proven by one real send
+- Highest-probability money unchanged: phone Jackie and the 11 Kloof Street businesses (download/hustle_call_list.csv), the machine now works the same list in parallel
+- Next candidate build: the hard SA only map fence on the lead finder (publicly promised in the Reddit reply)
