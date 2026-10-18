@@ -1465,3 +1465,18 @@ Work Log:
 
 Stage Summary:
 - Default workspace now carries the real April to October money story (R25,130 loaded in, R17,533.71 loaded out) and 29 backdated completed tasks for the Adelle era at Ubuntu Wellness. Adelle onboarding path: invite her, then move the 29 tasks onto the team so they show in her scope, and the finance rows are already visible account wide.
+
+---
+Task ID: 82
+Agent: main
+Task: Add Adelle to the team and draft her warm welcome email (draft first, address to follow from the boss).
+
+Work Log:
+- Verified the invite mechanics: POST /api/teams {action:'invite', teamId, email} parks a TeamInvite for a person with no account and mails the register link; the moment she registers with THAT same email she lands in the team automatically (register auto-join). Existing accounts are added instantly.
+- Found and closed one gap: tasks PATCH did not accept teamId (POST did), so the 29 backdated tasks could not be moved onto a team. Additive patch (baeab7e, pushed): PATCH now accepts teamId with the same membership law as POST (mover must belong to the target team, team tasks forced isPrivate false), and the move is witnessed on the sealed TaskEvent record ("moved onto the team X"). tsc clean (2 pre existing skills noise only).
+- Truth established for the draft: FinanceEntry is strictly per account (GET filters userId only), so team membership will NOT show Adelle the ledger. The welcome email itself therefore carries the full money record, verbatim from scripts/adelle_backfill_apr2026.mjs: 10 money in rows (R180 10 Apr, R750 18 Apr, R750 22 May, R4,000 4 Jun via Malcolm, R9,500 29 Jun with R1,500 outstanding, R5,000 loan 13 Aug, R350 11 Sep kept on account, R3,500 18 Sep, R800 18 Sep Lydia list, R300 12 Oct = R25,130 in) and 10 money out rows (R180 10 Apr, R750 14 Apr, R1,048.71 Courier Guy 15 May paid directly by Adelle, R750 22 May, R4,000 rent 4 Jun repaid from salary, R5,000 rent 13 Aug, R1,205 Telkom+Vodacom 9 Sep paid directly, R3,500 18 Sep, R800 18 Sep, R300 12 Oct = R17,533.71 out). No netting, no invented rows, unconfirmed small top ups excluded by design.
+- Welcome email drafted in the boss voice (Jacob), copy law held: no hyphens, no emoji, simple English, power words, truthful totals only.
+
+Stage Summary:
+- baeab7e live: the team move of the 29 tasks is possible the moment a team exists and the boss belongs to it. Tasks moved to the team show under the Team(s) tab for the boss (they leave the Business tab).
+- Waiting on boss: her email address, draft approval or edits, team name (proposed Simple Eternity Holdings), send path (platform mail from his account vs his own inbox). Run plan is one login: ensure team, invite (auto-join parked), send welcome, move the 29 tasks onto the team idempotently by title, verify, report. Finance sharing with the team is an offered follow up build. Password rotation still pending on boss side.
