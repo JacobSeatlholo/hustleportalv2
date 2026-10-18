@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { requireExec } from '@/lib/admin'
+import { requireExec, isExecEmail } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { getYocoKeyMode, getYocoWebhookSecret } from '@/lib/yoco'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
+import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 
 // GET /api/admin/exec — the Executive Dashboard feed: platform KPIs + the full
 // client roster (plan, account status, wallet, activity). Exec only.
 //
-// QA probe accounts (@hustleqa.example.com) are automated test registrations
-// from this build pipeline, never real sign ups. They are excluded from the
-// growth KPIs and the newest members spotlight, and flagged on roster rows so
-// the owner's lens always shows the real business first.
-const QA_DOMAIN = 'hustleqa.example.com'
+// The lens shows the REAL business. Every automated probe address, house owned
+// account (staff, demo, e2e) and the owner's own seat is excluded from the KPIs
+// and the newest members spotlight, and flagged on roster rows, so the numbers
+// the owner acts on are humans only. Test bench rows stay visible on the roster.
+const isNoiseEmail = (email: string) => isProbeEmail(email) || isInternalEmail(email) || isExecEmail(email)
+
 export async function GET() {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
@@ -21,18 +23,20 @@ export async function GET() {
   const d7 = new Date(now - 7 * 86_400_000)
   const d30 = new Date(now - 30 * 86_400_000)
 
-  const [userCount, new7, new30, qaAccounts, subs, topupsByProvider, walletAgg, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow, meetings, meetingsAll] = await Promise.all([
+  const [userCount, new7rows, new30rows, subs, topups30, wallets, leadCount, poolNew, poolArrivals24h, poolByUser, recentPaid, webhookSecret, webhookModeRow, meetings, meetingTallyRows] = await Promise.all([
     db.user.count(),
-    db.user.count({ where: { createdAt: { gte: d7 }, email: { not: { endsWith: QA_DOMAIN } } } }),
-    db.user.count({ where: { createdAt: { gte: d30 }, email: { not: { endsWith: QA_DOMAIN } } } }),
-    db.user.count({ where: { email: { endsWith: QA_DOMAIN } } }),
+    db.user.findMany({ where: { createdAt: { gte: d7 } }, select: { email: true } }),
+    db.user.findMany({ where: { createdAt: { gte: d30 } }, select: { email: true } }),
     db.subscription.findMany({
-      select: { userId: true, plan: true, status: true, billingCycle: true, amountCents: true, renewsAt: true, npoNumber: true, provider: true },
+      include: { user: { select: { email: true, name: true, businessName: true } } },
     }),
-    // Revenue splits by provider: YOCO rows are real card money; SANDBOX rows
-    // are QA top ups from probe runs. Launch numbers count live money only.
-    db.topUp.groupBy({ by: ['provider'], where: { status: 'PAID', paidAt: { gte: d30 } }, _sum: { amountCents: true } }),
-    db.wallet.aggregate({ _sum: { balance: true } }),
+    // The money lens counts HUMANS only: every test bench top up (sandbox rows
+    // and test era card rows on probe wallets) is noise, never revenue.
+    db.topUp.findMany({
+      where: { status: 'PAID', paidAt: { gte: d30 } },
+      select: { amountCents: true, provider: true, user: { select: { email: true } } },
+    }),
+    db.wallet.findMany({ select: { balance: true, user: { select: { email: true } } } }),
     db.lead.count(),
     db.clientPoolLead.count({ where: { status: 'NEW' } }),
     db.clientPoolLead.count({ where: { createdAt: { gte: new Date(now - 86_400_000) } } }),
@@ -46,8 +50,7 @@ export async function GET() {
     }),
     getYocoWebhookSecret(),
     getConfig(CONFIG_KEYS.YOCO_WEBHOOK_MODE),
-    // Facilitated meetings: the newest 20 for the Meetings card, plus a cheap
-    // status tally so the "Meetings set" KPI counts the whole book, not the page.
+    // Facilitated meetings: the newest 20 for the Meetings card.
     db.meeting.findMany({
       orderBy: { createdAt: 'desc' },
       take: 20,
@@ -60,18 +63,36 @@ export async function GET() {
         _count: { select: { comments: true } },
       },
     }),
-    db.meeting.groupBy({ by: ['status'], _count: { _all: true } }),
+    // The whole book for the KPI tally (tiny table), so "Meetings set" counts
+    // real humans only, not the QA suite practicing on itself.
+    db.meeting.findMany({ select: { status: true, memberEmail: true, guestEmail: true } }),
   ])
 
+  const new7 = new7rows.filter((u) => !isNoiseEmail(u.email)).length
+  const new30 = new30rows.filter((u) => !isNoiseEmail(u.email)).length
+
   // Lazy subscription truth: ACTIVE only while renewsAt stands; PAUSED, PAST_DUE, CANCELED as-is.
-  // MRR counts live Yoco plans only, so QA sandbox activations never dress up
-  // the revenue number. Non-live plans stay visible in the roster as always.
+  // MRR counts live Yoco plans on human accounts only, so QA activations never
+  // dress up the revenue number. Non-live plans stay visible in the roster.
   const activeSubs = subs.filter((s) => s.status === 'ACTIVE' && (!s.renewsAt || s.renewsAt.getTime() >= now))
-  const liveSubs = activeSubs.filter((s) => s.provider === 'YOCO')
+  const liveSubs = activeSubs.filter((s) => s.provider === 'YOCO' && !isNoiseEmail(s.user.email))
   const testSubs = activeSubs.filter((s) => s.provider !== 'YOCO')
   const mrrCents = liveSubs.reduce((a, s) => a + s.amountCents, 0)
   const testMrrCents = testSubs.reduce((a, s) => a + s.amountCents, 0)
-  const topupSum = (p: string) => topupsByProvider.find((t) => t.provider === p)?._sum.amountCents || 0
+  const humanTopupSum = (p: string) => topups30.filter((t) => t.provider === p && !isNoiseEmail(t.user.email)).reduce((a, t) => a + t.amountCents, 0)
+  const topups30dCents = humanTopupSum('YOCO')
+  const sandboxTopups30dCents = topups30
+    .filter((t) => t.provider === 'SANDBOX' || isNoiseEmail(t.user.email))
+    .reduce((a, t) => a + t.amountCents, 0)
+  const walletFloatCents = wallets.reduce((a, w) => a + w.balance, 0)
+  const humanWalletFloatCents = wallets.filter((w) => !isNoiseEmail(w.user.email)).reduce((a, w) => a + w.balance, 0)
+
+  // The till: humans sitting on a PENDING checkout right now. This is the most
+  // expensive silence on the platform, so the desk names them while they wait.
+  const pendingSubs = subs
+    .filter((s) => s.status === 'PENDING' && !isNoiseEmail(s.user.email))
+    .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+    .slice(0, 10)
 
   // Name the money pulse rows (one small query for the distinct payers).
   const payerIds = [...new Set(recentPaid.map((t) => t.userId))]
@@ -118,7 +139,8 @@ export async function GET() {
       accountStatus: u.accountStatus,
       suspendedAt: u.suspendedAt,
       isAdmin: u.role === 'ADMIN' || u.platformAdmin,
-      isQa: u.email.toLowerCase().endsWith(QA_DOMAIN),
+      isQa: isNoiseEmail(u.email),
+      isInternal: isInternalEmail(u.email) && !isProbeEmail(u.email),
       walletCents: u.wallet?.balance ?? 0,
       plan: sub ? sub.plan : null,
       subStatus: sub ? (subLive ? 'ACTIVE' : sub.status === 'ACTIVE' ? 'PAST_DUE' : sub.status) : 'NONE',
@@ -132,7 +154,8 @@ export async function GET() {
     }
   })
 
-  const statusCount = (s: string) => meetingsAll.find((r) => r.status === s)?._count._all || 0
+  const humanMeetings = meetingTallyRows.filter((m) => !isNoiseEmail(m.memberEmail) && !isNoiseEmail(m.guestEmail))
+  const statusCount = (s: string) => humanMeetings.filter((m) => m.status === s).length
   const meetingsKpi = {
     total: statusCount('PROPOSED') + statusCount('CONFIRMED'),
     confirmed: statusCount('CONFIRMED'),
@@ -154,11 +177,15 @@ export async function GET() {
     }),
   )
 
+  const qaAccounts = rosterRows.filter((u) => isProbeEmail(u.email)).length
+  const internalAccounts = rosterRows.filter((u) => !isProbeEmail(u.email) && (isInternalEmail(u.email) || isExecEmail(u.email))).length
+
   return NextResponse.json({
     kpis: {
       members: userCount,
       qaAccounts,
-      realMembers: userCount - qaAccounts,
+      internalAccounts,
+      realMembers: Math.max(0, userCount - qaAccounts - internalAccounts),
       new7,
       new30,
       subscribers: liveSubs.length,
@@ -166,10 +193,12 @@ export async function GET() {
       subsPastDue: subs.filter((s) => s.status === 'PAST_DUE' || (s.status === 'ACTIVE' && s.renewsAt && s.renewsAt.getTime() < now)).length,
       subsPaused: subs.filter((s) => s.status === 'PAUSED').length,
       subsCanceled: subs.filter((s) => s.status === 'CANCELED').length,
-      topups30dCents: topupSum('YOCO'),
-      sandboxTopups30dCents: topupSum('SANDBOX'),
+      subsPending: pendingSubs.length,
+      topups30dCents,
+      sandboxTopups30dCents,
       testMrrCents,
-      walletFloatCents: walletAgg._sum.balance || 0,
+      walletFloatCents,
+      humanWalletFloatCents,
       leadsPlatform: leadCount,
       poolNew,
       poolArrivals24h,
@@ -190,6 +219,18 @@ export async function GET() {
       webhookConfigured: Boolean(webhookSecret),
       webhookSource: process.env.YOCO_WEBHOOK_SECRET ? 'env' : webhookSecret ? 'config' : 'none',
       webhookMode: webhookModeRow || null,
+      // The till: humans with a checkout open right now.
+      pending: pendingSubs.map((s) => ({
+        id: s.id,
+        name: s.user?.name || 'Client',
+        businessName: s.user?.businessName ?? null,
+        email: s.user?.email ?? '',
+        plan: s.plan,
+        amountCents: s.amountCents,
+        billingCycle: s.billingCycle,
+        npoNumber: s.npoNumber,
+        createdAt: s.createdAt,
+      })),
       recent: recentPaid.map((t) => ({
         id: t.id,
         amountCents: t.amountCents,

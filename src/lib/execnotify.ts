@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { sendSystemMail } from '@/lib/mailer'
 import { isExecEmail } from '@/lib/admin'
+import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 import { formatRands } from '@/lib/wallet'
 import { clientCampaignBrief, runClientCampaign } from '@/lib/campaign'
 
@@ -170,5 +171,43 @@ async function notifyExecCampaignResult(info: {
     if (!r.ok) console.error('[execnotify] campaign email failed:', r.error)
   } catch (e) {
     console.error('[execnotify] campaign email threw:', e)
+  }
+}
+
+/**
+ * The till bell: a real human just started a subscription checkout. The owner
+ * hears within seconds, because a checkout that goes cold in the next hour is
+ * the most expensive silence on the platform. One email per checkout attempt;
+ * probes, house accounts and the owner's own tests never ring the bell.
+ */
+export async function onCheckoutStarted(subscriptionId: string): Promise<void> {
+  try {
+    const sub = await db.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { user: { select: { id: true, name: true, businessName: true, email: true } } },
+    })
+    if (!sub || sub.status !== 'PENDING') return
+    const u = sub.user
+    if (!u || isExecEmail(u.email) || isProbeEmail(u.email) || isInternalEmail(u.email)) return
+
+    const planName = sub.plan === 'BOSS' ? 'Boss' : 'Operator'
+    const to = execInbox()
+    if (!to) return
+    const subject = `Someone is at the till: ${u.name} started ${planName} checkout`
+    const body = lines([
+      `${u.name}${u.businessName ? ` (${u.businessName})` : ''} just opened a ${planName} checkout.`,
+      ``,
+      `Plan: ${planName} · R${(sub.amountCents / 100).toFixed(0)} · ${sub.billingCycle === 'ANNUAL' ? 'annual' : 'monthly'}${sub.npoNumber ? ` · NPO ${sub.npoNumber}` : ''}`,
+      `Reference: ${sub.reference}`,
+      ``,
+      `The clock is the leak: most checkouts that never finish go cold within the hour.`,
+      `If the payment lands, Yoco confirms it on its own. If it does not land soon, one human message now is worth a week of ads.`,
+      ``,
+      `Open their desk: ${execLink(u.id)}`,
+    ])
+    const r = await sendSystemMail({ to, subject, body })
+    if (!r.ok) console.error('[execnotify] checkout bell failed:', r.error)
+  } catch (e) {
+    console.error('[execnotify] checkout bell threw:', e)
   }
 }

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
+import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
@@ -38,6 +39,7 @@ import {
 interface Kpis {
   members: number
   qaAccounts: number
+  internalAccounts: number
   realMembers: number
   new7: number
   new30: number
@@ -46,10 +48,12 @@ interface Kpis {
   subsPastDue: number
   subsPaused: number
   subsCanceled: number
+  subsPending: number
   topups30dCents: number
   sandboxTopups30dCents: number
   testMrrCents: number
   walletFloatCents: number
+  humanWalletFloatCents?: number
   leadsPlatform: number
   poolNew: number
   poolArrivals24h: number
@@ -93,6 +97,17 @@ interface ExecData {
     webhookConfigured: boolean
     webhookSource: string
     webhookMode: 'live' | 'test' | null
+    pending: {
+      id: string
+      name: string
+      businessName: string | null
+      email: string
+      plan: string | null
+      amountCents: number
+      billingCycle: string
+      npoNumber: string | null
+      createdAt: string
+    }[]
     recent: {
       id: string
       amountCents: number
@@ -766,7 +781,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                       onClick={() => onPauseRequest({
                         id: c.id, name: c.name, email: c.email, businessName: c.businessName, city: c.city,
                         industry: c.industry, joinedAt: c.createdAt, accountStatus: c.accountStatus,
-                        suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, isQa: Boolean(c.email?.toLowerCase().endsWith('@hustleqa.example.com')), walletCents: c.wallet?.balance ?? 0,
+                        suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, isQa: isProbeEmail(c.email) || isInternalEmail(c.email), walletCents: c.wallet?.balance ?? 0,
                         plan: c.subscription?.plan ?? null, subStatus: c.subStatus, subCycle: c.subscription?.billingCycle ?? null,
                         subAmountCents: c.subscription?.amountCents ?? 0, renewsAt: c.subscription?.renewsAt ?? null,
                         npoNumber: c.subscription?.npoNumber ?? null,
@@ -1524,6 +1539,25 @@ function PaymentsCard({ payments, onChanged }: { payments: NonNullable<ExecData[
         )}
 
         <div>
+          <div className="text-xs text-muted-foreground mb-1.5">At the till right now</div>
+          <div className="rounded-lg border divide-y max-h-40 overflow-y-auto hp-scroll">
+            {(payments.pending || []).length === 0 && (
+              <div className="px-3 py-2.5 text-xs text-muted-foreground">No open checkouts. The moment a human opens one, their name lands here and the bell rings in your inbox.</div>
+            )}
+            {(payments.pending || []).map((p) => (
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                <Badge variant="outline" className="text-[9px] shrink-0 border-amber-500/40 text-amber-400">Open</Badge>
+                <span className="font-medium w-20">{rands(p.amountCents)}</span>
+                <span className="flex-1 truncate">
+                  {p.name}{p.businessName ? <span className="text-muted-foreground"> · {p.businessName}</span> : ''}
+                  <span className="text-muted-foreground"> · {p.plan === 'BOSS' ? 'Boss' : 'Operator'} · opened {new Date(p.createdAt).toLocaleString('en-Za', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <div className="text-xs text-muted-foreground mb-1.5">Latest payments</div>
           <div className="rounded-lg border divide-y max-h-56 overflow-y-auto hp-scroll">
             {payments.recent.length === 0 && (
@@ -1908,10 +1942,10 @@ export default function AdminView() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
           <KpiCard hot icon={<UserPlus className="h-3 w-3" />} label="New signups 7d" value={String(k.new7)} sub={`+${k.new30} in 30 days`} />
-          <KpiCard icon={<Users className="h-3 w-3" />} label="Clients" value={String(k.realMembers)} sub={`${k.suspended > 0 ? `${k.suspended} paused` : 'all active'}${k.qaAccounts > 0 ? ` · ${k.qaAccounts} QA` : ''}`} />
-          <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due${k.testMrrCents > 0 ? ` · ${rands(k.testMrrCents)} in test plans` : ''}`} />
-          <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub={`live card money${k.sandboxTopups30dCents > 0 ? ` · ${rands(k.sandboxTopups30dCents)} in tests` : ''}`} />
-          <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.walletFloatCents)} sub="client credit on hand" />
+          <KpiCard icon={<Users className="h-3 w-3" />} label="Humans" value={String(k.realMembers)} sub={`${k.new7 > 0 ? `+${k.new7} this week · ` : ''}${k.suspended > 0 ? `${k.suspended} paused · ` : ''}${k.qaAccounts > 0 ? `${k.qaAccounts} test · ` : ''}${k.internalAccounts > 0 ? `${k.internalAccounts} house` : 'none internal'}`} />
+          <KpiCard icon={<Crown className="h-3 w-3" />} label="MRR" value={rands(k.mrrCents)} sub={`${k.subscribers} paying · ${k.subsPastDue} past due${k.subsPending > 0 ? ` · ${k.subsPending} at the till` : ''}${k.testMrrCents > 0 ? ` · ${rands(k.testMrrCents)} in test plans` : ''}`} />
+          <KpiCard icon={<Coins className="h-3 w-3" />} label="Top ups 30d" value={rands(k.topups30dCents)} sub={`real card money${k.sandboxTopups30dCents > 0 ? ` · ${rands(k.sandboxTopups30dCents)} test bench` : ''}`} />
+          <KpiCard icon={<Wallet className="h-3 w-3" />} label="Wallet float" value={rands(k.humanWalletFloatCents ?? k.walletFloatCents)} sub={`${k.humanWalletFloatCents != null && k.walletFloatCents > k.humanWalletFloatCents ? `client credit on hand · ${rands(k.walletFloatCents - k.humanWalletFloatCents)} on test wallets` : 'client credit on hand'}`} />
           <KpiCard icon={<Target className="h-3 w-3" />} label="Leads" value={String(k.leadsPlatform)} sub={`across all pipelines · ${k.poolNew} in pools${k.poolArrivals24h > 0 ? ` · +${k.poolArrivals24h} today` : ''}`} />
           <KpiCard icon={<CalendarClock className="h-3 w-3" />} label="Meetings set" value={String(k.meetingsSet ?? 0)} sub={`${k.meetingsConfirmed ?? 0} confirmed · ${k.meetingsAwaiting ?? 0} awaiting`} />
         </div>

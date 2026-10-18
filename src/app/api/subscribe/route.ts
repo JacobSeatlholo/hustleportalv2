@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { getPlan, grantPlanRevealCredits, isValidNpoNumber, normalizeNpoNumber, priceWithNpoDiscount } from '@/lib/plans'
@@ -73,6 +73,12 @@ export async function POST(req: NextRequest) {
         name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
       })
       await db.subscription.update({ where: { id: sub.id }, data: { providerRef: checkout.id } })
+      // Ring the till bell: the owner hears the moment a real human opens a
+      // checkout, because abandoned checkouts are the most expensive silence.
+      after(async () => {
+        const { onCheckoutStarted } = await import('@/lib/execnotify')
+        await onCheckoutStarted(sub.id).catch(() => {})
+      })
       // Yoco's create checkout response carries no mode field: the key text
       // decides (sk_live_ = live). Only a missing key falls back to test.
       return NextResponse.json({ ok: true, mode: checkout.mode ?? getYocoKeyMode() ?? 'test', redirectUrl: checkout.redirectUrl, subscription: sub })
