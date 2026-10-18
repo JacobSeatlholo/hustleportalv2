@@ -1195,3 +1195,25 @@ Stage Summary:
 Stage Summary:
 - Production 1724ed8: Mail Campaigns is a control room — build an audience from pipeline contacts or a pasted list, review the exact draft, press Start, and the engine paces sends around the clock (open screen, cron heartbeat, or both). Bounces, complaints and unsubscribes are suppressed forever, every email carries one-click unsubscribe + open tracking, and nothing sends until Start is pressed
 - 1000/day remains free-first: the engine runs today at $0 on the free lane (100/day); crossing to 1000/day = Amazon SES (~R60/mo) or Resend Pro ($20/mo) with zero UI change, plus a 4-6 week warm-up ramp
+
+---
+Task ID: 73
+Agent: main (Z.ai)
+Task: Boss opened an AWS account and is mid SES setup (domain verifying, production access pending review) — build the SES transport lane into the campaign queue engine so the platform is wired the day AWS approval lands; free-first law intact
+
+Work Log:
+- Walked the boss through AWS signup live (chat, screenshots): Free plan has a 6-month auto-close fuse -> advised Paid plan ($200 credits, no monthly fee, SES credits-eligible per aws.amazon.com/ses/pricing); MFA + zero-spend budget alarm; region Africa (af-south-1) confirmed (SES available there); caught a domain typo (hustlportal) on the wizard review screen BEFORE Get started; wizard: email identity verified, sending domain hustleportal.online + Easy DKIM + custom MAIL FROM bounce.hustleportal.online, Essentials plan ($0.16/1k, no fixed fee — ~$4.80/mo at 1000/day, credits cover years), VDM on, dedicated IP REFUSED (the $24.95/mo warm-up trap), 5 DNS records pasted and pending verification
+- mailer.ts: sendCampaignMailViaSes — nodemailer -> SES SMTP (SES_SMTP_HOST/USER/PASS/PORT env, requireTLS, port 465=secure else STARTTLS), same body + open pixel + signed one-click unsubscribe headers + legal footer + Reply-To; providerId parsed from the SES SMTP DATA response; optional SES_CONFIG_SET -> X-SES-CONFIGURATION-SET header; isSesConfigured() gate; stamps last-system-send like the Resend lane
+- campaignqueue.ts: CampaignState.provider ('RESEND' default | 'SES'); tickCampaigns routes per campaign — pacing (DB clock) and suppression laws identical on both lanes; EmailLog.provider stays 'PLATFORM' (row ownership), lane lives in state
+- campaigns API: POST accepts provider (omitted = preserve existing lane, same promise as perHour), honest 400 'SES lane is not configured yet...' while keys absent; GET now returns sesConfigured
+- /api/webhooks/ses: optional SES_WEBHOOK_SECRET gate (?key= or header); SNS SubscriptionConfirmation auto-answered (SubscribeURL must be https://sns.<region>.amazonaws.com/); Bounce/Complaint events -> match by providerId then toEmail+SENT-in-7d -> row BOUNCED + Suppression upsert; TRANSIENT bounces never suppress (they deliver on retry)
+- Consistency fix found by verify: SES webhook first draft suppressed unconditionally; Resend webhook is match-required ('no matching send' -> touch nothing). Aligned SES to match-required — junk events can never poison the suppression list; every genuine engine bounce lands in minutes so the 7d window is generous
+- MailView: lane picker in the composer (Free lane: Resend · about 100 a day · $0 / SES lane: Amazon · built for volume · pays per send — disabled with 'paste the SES keys in Vercel to unlock' until sesConfigured), amber warning when SES picked, review line names the lane, sky 'SES lane' badge on campaign cards
+- scripts/verify_ses_lane.mjs (recreated fresh — sandbox reset had wiped untracked scripts/): 22/22 PASS on prod — sesConfigured honest false, SES 400 without keys, provider round-trip + preserved on join, free lane still sends (2/2 SENT), SNS confirmation answered, permanent bounce -> BOUNCED + suppression -> refused at queue time, transient ignored + address still accepted, stray complaint touches nothing (no poisoning), cancel, 4/4 QA rows cleaned
+- Regression: e2e_prod_qa 39/39, exec_prod_probe 11/11. Deploys: ad3a029 (lane) + ded8a69 (match-required fix). note: scripts/ is gitignored — verify scripts must be recreated from worklog notes after sandbox resets
+- Still pending on boss side: DNS records verifying at the DNS host, AWS production access review (up to 96h), then: SES SMTP creds into Vercel (SES_SMTP_HOST=email-smtp.af-south-1.amazonaws.com, SES_SMTP_PORT=587, SES_SMTP_USER/PASS, optional SES_WEBHOOK_SECRET + SES_CONFIG_SET), SNS topic -> HTTPS subscription to /api/webhooks/ses?key=<secret>, warm-up ramp 20-30/day +30% every 2-3 days
+
+Stage Summary:
+- Production ded8a69: campaign queues have two lanes — free Resend lane (today, $0) and SES lane (high volume) — same draft gate, same pacing, same suppression law, same one-click unsubscribe on both; the SES lane lights up the moment the boss's keys land in Vercel env, zero further code changes
+- SES setup itself is on the boss's side and going well: email verified, domain records in, production request submitted — AWS review is the only clock left
+- 1000/day path: engine + lanes ready; free lane carries warm-up start; SES lane carries the scale
