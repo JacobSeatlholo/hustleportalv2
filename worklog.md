@@ -1217,3 +1217,26 @@ Stage Summary:
 - Production ded8a69: campaign queues have two lanes — free Resend lane (today, $0) and SES lane (high volume) — same draft gate, same pacing, same suppression law, same one-click unsubscribe on both; the SES lane lights up the moment the boss's keys land in Vercel env, zero further code changes
 - SES setup itself is on the boss's side and going well: email verified, domain records in, production request submitted — AWS review is the only clock left
 - 1000/day path: engine + lanes ready; free lane carries warm-up start; SES lane carries the scale
+
+---
+Task ID: 73 (continued)
+Agent: main (Z.ai)
+Task: SES setup live hand-holding (production access case, SNS wiring) + smoke test; SMTP dead-end found and lane rebuilt on the SES v2 API
+
+Work Log:
+- Boss set Vercel env vars (SES_SMTP_* trio first); sesConfigured true on prod (gate reads SES_SMTP_HOST/USER/PASS at that point)
+- DNS checked from agent side: SPF TXT for bounce.hustleportal.online correct; MX was MANGLED (panel appended zone -> feedback-smtp...amazonses.com.hustleportal.online resolving to Vercel web edge, no SMTP there); boss fixed in Vercel DNS; re-dig confirmed 10 feedback-smtp.af-south-1.amazonses.com. DMARC already exists (v=DMARC1; p=none)
+- Boss requested production access; AWS created support case 179230604800173 ("More information needed"); gave paste-ready truthful case reply (use case, address acquisition, warm-up volume, SNS bounce handling, RFC 8058 opt out, domain setup)
+- Walked boss through SES console: configuration set hustle-events (reputation metrics + archiving toggled OFF to stay free), event destination Amazon SNS (Hard bounces + Complaints only), SNS topic hustle-ses-events, HTTPS subscription to /api/webhooks/ses?key=<SES_WEBHOOK_SECRET> -> Confirmed (gate was ON: probes without key answered 403)
+- SES_CONFIG_SET=hustle-events + SES_WEBHOOK_SECRET confirmed in Vercel; empty-commit redeploy 2c7a9dd
+- scripts/ses_smoke_test.mjs created (one-recipient SES queue, born PAUSED, start, tick, read-out)
+- SMOKE FAILURES: two consecutive FAILED rows, error "getaddrinfo EBUSY email-smtp.af-south-1.amazonaws.com" — root cause discovered: AWS docs confirm SMTP endpoints are NOT available in af-south-1 (dig: NOERROR, no A record; control us-east-1 resolves; IAM/SES console pages also show "Region Unsupported" for Cape Town)
+- FIX: sendCampaignMailViaSes rewritten from nodemailer SMTP to SES v2 HTTPS API (POST email.af-south-1.amazonaws.com/v2/email/outbound-emails, hand-rolled SigV4 with node:crypto, no SDK dep), ConfigurationSetName param, Simple.Headers carries List-Unsubscribe + List-Unsubscribe-Post, ReplyToAddresses TEAM_INBOX, MessageId returned directly as providerId, one quiet retry for network hiccups only (API refusals answer honestly, never retried); isSesConfigured now gates on SES_AWS_KEY + SES_AWS_SECRET (SES_AWS_REGION optional, default af-south-1)
+- IAM user hustleportal-ses + AmazonSESFullAccess + access key created by boss (IAM console needed region switch to N. Virginia — af-south-1 console refuses some pages); SES_AWS_KEY/SES_AWS_SECRET into Vercel; boss redeployed
+- sesConfigured true on new gate; SMOKE RETRY: status SENT, error null — first real email through Amazon SES af-south-1 from the queue engine (tag qa-ses-smoke-1792312916074, to ceo@businesshustle.co.za)
+- Pending: boss confirms inbox arrival + pixel open; QA EmailLog rows (2 FAILED EBUSY + 1 SENT) cleaned via DELETE /api/emails after; production access review still the only clock for >200/day; then warm-up ramp on the pace slider
+
+Stage Summary:
+- Production bf4c838: the SES lane speaks the v2 API, which is the ONLY door in af-south-1; SMTP lane would never have worked in Cape Town — caught before any real campaign depended on it
+- Full SES chain proven live in sandbox: queue -> start -> tick -> API send -> SENT with null error; bounce/complaint pipe armed (config set -> SNS -> webhook, subscription Confirmed)
+- Boss-side SES setup 100% complete; AWS production access review is the only remaining clock; warm-up law ready (20-30/day, +30% every 2-3 days, pace slider 1-2/hour to start)
