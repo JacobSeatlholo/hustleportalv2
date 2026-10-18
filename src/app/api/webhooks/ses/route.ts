@@ -79,7 +79,10 @@ export async function POST(req: NextRequest) {
     if (!permanent) continue
 
     // Match the exact send by provider id first, then the same fallback the
-    // Resend webhook uses: this address, sent recently, newest wins.
+    // Resend webhook uses: this address, sent recently, newest wins. An event
+    // that matches nothing touches nothing — junk events can never poison the
+    // suppression list, and every genuine engine bounce lands within minutes
+    // so the 7 day window is generous.
     let log = providerId
       ? await db.emailLog.findFirst({ where: { providerId }, orderBy: { createdAt: 'desc' } })
       : null
@@ -89,16 +92,15 @@ export async function POST(req: NextRequest) {
         orderBy: { sentAt: 'desc' },
       })
     }
-    if (log) {
-      await db.emailLog.update({
-        where: { id: log.id },
-        data: { status: 'BOUNCED', error: errorLine.slice(0, 500) },
-      })
-    }
+    if (!log) continue
+    await db.emailLog.update({
+      where: { id: log.id },
+      data: { status: 'BOUNCED', error: errorLine.slice(0, 500) },
+    })
     await db.suppression.upsert({
       where: { email },
       update: {},
-      create: { email, reason: isComplaint ? 'COMPLAINT' : 'BOUNCE', note: log?.campaign || 'SES lane' },
+      create: { email, reason: isComplaint ? 'COMPLAINT' : 'BOUNCE', note: log.campaign || 'SES lane' },
     })
     handled++
   }
