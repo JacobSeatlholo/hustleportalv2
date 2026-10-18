@@ -1435,3 +1435,18 @@ Work Log:
 Stage Summary:
 - Load is fully prepared and safe but BLOCKED on authentication: the stored master password no longer works. Two clean paths: (a) boss pastes download/ubuntu_wellness_inventory.csv in Inventory import and pastes the project description I supplied, or (b) boss hands the current master password (or a temporary one) and one command runs the whole load: HP_BOSS_PASSWORD='...' node scripts/ubuntu_wellness_load.mjs.
 - One failed login attempt recorded, no lockout risk, nothing on the master account was changed.
+
+---
+Task ID: 80b
+Agent: main
+Task: Run the Ubuntu Wellness load with the owner provided password.
+
+Work Log:
+- Owner handed the current master password in chat for a one time use (will rotate). Supplied via HP_BOSS_PASSWORD env only; never written to any file or script.
+- scripts/ubuntu_wellness_load.mjs ran clean end to end: login ok, 5 projects on the account. Ubuntu Wellness workspace ALREADY EXISTED (owner created it; description carries the wellness center services: float therapy, infrared saunas, holistic bodywork, spa treatments, homeopathy). Idempotency law held: only the EMPTY fields were filled (industry=Health and Wellness, offerings=product lines); owner description untouched.
+- Inventory loaded: Immune Booster x504, Shield Detox x201, Blood Sugar Reduce x462 (units, low stock at 50, fulfilment notes from the inventory check). Account had 0 items before, free ceiling of 3 fit exactly. Verified via GET after: 3 items, totals count 3.
+- scripts/ubuntu_wellness_merge_offerings.mjs: merged offerings to the whole business (3 products + 5 services from the owner's own description), patch 200, description untouched.
+- Nothing else on the account was touched: Business Hustle Ltd, Simple Eternity Holdings, Honest Travel Experience workspaces untouched, no billing, no settings, no password changes.
+
+Stage Summary:
+- Ubuntu Wellness is populated and the last inventory check is live on the owner's account. Cost and sell prices left 0 (not in the source document). Inventory is account scoped in the current design; a workspace scoped inventory is an offered follow up build.
