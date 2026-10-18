@@ -56,14 +56,24 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// POST /api/tasks — create (personal or team), optionally tied to a pipeline contact
+// POST /api/tasks — create (personal or team), optionally tied to a pipeline contact.
+// Backfill support: status and createdAt let a record of ALREADY completed work be
+// logged with its real date. createdAt can never be in the future, and the sealed
+// TaskEvent still stamps the true moment the record was logged.
+const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'DONE']
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId } = body
+  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId, status, createdAt } = body
   if (!title || !String(title).trim()) {
     return NextResponse.json({ error: 'Task title is required.' }, { status: 400 })
+  }
+  const taskStatus = TASK_STATUSES.includes(String(status)) ? String(status) : 'TODO'
+  let backCreatedAt: Date | undefined
+  if (createdAt) {
+    const d = new Date(String(createdAt))
+    if (!Number.isNaN(d.getTime()) && d.getTime() <= Date.now()) backCreatedAt = d
   }
   // A task can belong to a contact. Same access wall as the lead detail:
   // own lead, or one shared via a team the user belongs to.
@@ -96,12 +106,14 @@ export async function POST(req: NextRequest) {
       title: String(title).trim(),
       notes: notes || null,
       priority: priority || 'MEDIUM',
+      status: taskStatus,
       dueDate: dueDate ? new Date(dueDate) : null,
       isPrivate: teamId ? false : Boolean(isPrivate),
       teamId: teamId || null,
       leadId: linkedLeadId,
       creatorId: userId,
       assigneeId: assigneeId || userId,
+      ...(backCreatedAt ? { createdAt: backCreatedAt } : {}),
     },
     include: {
       creator: { select: { id: true, name: true } },
@@ -116,7 +128,12 @@ export async function POST(req: NextRequest) {
   if (task.assignee && task.assignee.id !== userId) {
     await recordTaskEvent(task.id, 'SENT', userId, `sent to ${task.assignee.name}`)
   } else {
-    await recordTaskEvent(task.id, 'CREATED', userId, 'created it')
+    await recordTaskEvent(
+      task.id,
+      'CREATED',
+      userId,
+      taskStatus === 'DONE' ? 'logged it as already complete (backdated record)' : 'created it',
+    )
   }
   return NextResponse.json({ task: { ...task, _openedAt: null } })
 }
