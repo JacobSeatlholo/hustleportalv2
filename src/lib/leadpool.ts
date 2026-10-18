@@ -289,6 +289,77 @@ function poolToLead(p: LeadPoolRow, local = false): PoolLead {
  * window, none of them already in the seller's pipeline, least recently
  * served first. Marks everything it serves so rotation keeps working.
  */
+// ---------- the region gate (hyperlocal is a promise, not a vibe) ----------
+
+/**
+ * The finder sells South African sellers their own neighbourhood, so a lead
+ * carrying a foreign footprint never reaches an answer and never enters the
+ * shared pool. Pure and cheap: the phone prefix, the website TLD and the city
+ * line are the only honest geography a scan result carries. A face with none
+ * of those passes and leans on the search prompt's South Africa only rule.
+ * (Born the day a Johannesburg search returned four Italian businesses.)
+ */
+const FOREIGN_TLDS = [
+  'it', 'de', 'fr', 'es', 'pt', 'nl', 'be', 'ie', 'pl', 'cz', 'at', 'ch', 'se',
+  'no', 'dk', 'fi', 'ru', 'ua', 'tr', 'gr', 'cn', 'jp', 'kr', 'in', 'pk', 'id',
+  'th', 'vn', 'my', 'sg', 'au', 'nz', 'uk', 'gb', 'us', 'ca', 'mx', 'br', 'ar',
+  'cl', 'pe', 'ke', 'ng', 'gh', 'eg', 'ma', 'tz', 'ug', 'zm', 'mz', 'ao',
+  'bw', 'na', 'zw', 'ls', 'sz', 'mu', 'mg',
+]
+
+// Overseas countries and cities that cannot collide with a South African
+// place name. SA towns wearing foreign names stay OUT of this list on
+// purpose: Berlin (EC), Hamburg (EC), Frankfurt (FS), East London,
+// Wellington (WC), Adelaide (EC), Auckland Park, Boston (KZN), Denver (JHB).
+// Their countries and TLDs still catch the real thing.
+const FOREIGN_PLACES =
+  /\b(italy|italia|milan|milano|rome|roma|naples|napoli|florence|firenze|turin|torino|genoa|genova|bologna|venice|venezia|germany|deutschland|munich|munchen|france|paris|lyon|marseille|spain|espana|madrid|barcelona|seville|portugal|lisbon|lisboa|porto|netherlands|holland|amsterdam|rotterdam|belgium|brussels|antwerp|austria|vienna|switzerland|zurich|geneva|sweden|stockholm|norway|oslo|denmark|copenhagen|finland|helsinki|poland|warsaw|krakow|prague|czech|hungary|budapest|romania|bucharest|greece|turkey|istanbul|ireland|dublin|cork|scotland|edinburgh|glasgow|wales|cardiff|england|manchester|birmingham|liverpool|leeds|britain|united kingdom|usa|united states|america|new york|los angeles|chicago|houston|miami|dallas|seattle|atlanta|canada|toronto|vancouver|montreal|ottawa|mexico|brazil|sao paulo|rio de janeiro|argentina|buenos aires|chile|santiago|colombia|bogota|peru|lima|china|beijing|shanghai|shenzhen|japan|tokyo|osaka|korea|seoul|india|mumbai|delhi|bangalore|indonesia|jakarta|malaysia|kuala lumpur|singapore|philippines|manila|vietnam|hanoi|thailand|bangkok|australia|sydney|melbourne|brisbane|perth|new zealand|kenya|nairobi|nigeria|lagos|abuja|ghana|accra|egypt|cairo|morocco|casablanca|tanzania|dar es salaam|uganda|kampala|zambia|lusaka|mozambique|maputo|botswana|gaborone|namibia|windhoek|angola|luanda)\b/i
+
+function foreignPhoneSignal(phone?: string | null): boolean {
+  const raw = String(phone || '').trim()
+  if (!raw) return false
+  const compact = raw.replace(/[\s()-]/g, '')
+  if (compact.startsWith('+')) return !/^\+27\d{7,12}$/.test(compact)
+  if (compact.startsWith('00')) return !/^0027\d{7,12}$/.test(compact)
+  return false // 0XX and short local shapes are domestic by form
+}
+
+function foreignWebsiteSignal(website?: string | null): boolean {
+  const raw = String(website || '').trim()
+  if (!raw) return false
+  let host = ''
+  try {
+    host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).hostname.toLowerCase()
+  } catch {
+    host = raw.toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split(/[/?#]/)[0]
+  }
+  if (!host) return false
+  // co.za, org.za, co.uk style second levels collapse to their country TLD
+  const bare = host.replace(/\.(co|org|net|gov|ac|edu|web)\.(?=[a-z]{2,3}$)/, '.')
+  const tld = bare.slice(bare.lastIndexOf('.') + 1)
+  return FOREIGN_TLDS.includes(tld)
+}
+
+function foreignCitySignal(city?: string | null): boolean {
+  const c = String(city || '').trim()
+  if (!c) return false
+  return FOREIGN_PLACES.test(c)
+}
+
+/** True when the lead may face a South African seller. No signals means pass. */
+export function isSouthAfricanLead(l: {
+  company?: string | null
+  city?: string | null
+  phone?: string | null
+  website?: string | null
+}): boolean {
+  if (!l.company || !l.company.trim()) return false
+  if (foreignPhoneSignal(l.phone)) return false
+  if (foreignWebsiteSignal(l.website)) return false
+  if (foreignCitySignal(l.city)) return false
+  return true
+}
+
 export async function serveFromPool(opts: {
   topicFp: string
   cap: number
@@ -331,7 +402,11 @@ export async function serveFromPool(opts: {
     if (!key || seenCompanies.has(key)) return false
     seenCompanies.add(key)
     return true
-  }).slice(0, cap)
+  })
+    // Region gate: a foreign face captured before the gate existed never
+    // serves again. The pool wears the same lens the scan answers do.
+    .filter((p) => isSouthAfricanLead(p))
+    .slice(0, cap)
   if (serve.length === 0) return []
   try {
     await db.leadPool.updateMany({
@@ -773,6 +848,9 @@ export async function rememberScanResults(opts: {
   const [dropKeys, dropOsm] = await Promise.all([suppressedNameKeys(), suppressedOsmIds()])
   const rows = opts.leads
     .filter((l) => l.company && l.company.trim())
+    // Region gate: foreign faces never enter the shared pool. A foreign row
+    // captured once would resurface for every seller after that.
+    .filter((l) => isSouthAfricanLead(l))
     .filter((l) => !dropKeys.has(normKey(l.company)) && !(l.externalId && dropOsm.has(l.externalId)))
     .slice(0, 30)
   if (rows.length === 0) return stamps

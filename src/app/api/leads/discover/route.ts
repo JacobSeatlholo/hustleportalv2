@@ -11,6 +11,7 @@ import { resolveProject } from '@/lib/workspace'
 import {
   checkScanAllowance,
   cityMatches,
+  isSouthAfricanLead,
   logScanRun,
   recentTopicScan,
   rememberScanResults,
@@ -161,12 +162,17 @@ function parseLeadList(text: string, cap: number, city: string) {
       phone: sanePhone(l.phone),
       website: saneWebsite(l.website),
       industry: clean(l.industry),
-      city: clean(l.city) || (city || undefined),
+      // the engine's own words only: the seller's city is stamped AFTER the
+      // region gate, so a filled city can never disguise a foreign face
+      city: clean(l.city),
       why: clean(l.why),
       score: typeof l.score === 'number' ? Math.max(1, Math.min(5, Math.round(l.score))) : undefined,
     }))
     // a lead without a company name is unusable — drop it (no fabrication)
     .filter((l): l is typeof l & { company: string } => Boolean(l.company))
+    // REGION GATE: a foreign footprint never reaches an answer (the Italy lesson)
+    .filter((l) => isSouthAfricanLead(l))
+    .map((l) => ({ ...l, city: l.city || (city || undefined) }))
     .filter((l) => {
       const key = l.company.toLowerCase().replace(/[^a-z0-9]/g, '')
       if (!key || seen.has(key)) return false
@@ -191,7 +197,7 @@ function rankingPrompt(definition: string, raw: AiLead[], cap: number) {
     .join('\n')
   return {
     system:
-      'You are a meticulous lead qualifier for South African small businesses. You receive a numbered list of REAL businesses from the OpenStreetMap directory and a seller description. You pick which of those real businesses are worth the seller contacting. You NEVER invent a company, phone number, website or email: every field you output must come from the list. If nothing fits, return fewer leads.',
+      'You are a meticulous lead qualifier for South African small businesses. You receive a numbered list of REAL businesses from the OpenStreetMap directory and a seller description. You pick which of those real businesses are worth the seller contacting. You NEVER invent a company, phone number, website or email: every field you output must come from the list. Only businesses physically located in South Africa qualify. If nothing fits, return fewer leads.',
     prompt:
       `The seller offers:\n"""${definition.slice(0, 900)}"""\n\n` +
       `Real businesses from the map directory:\n${source}\n\n` +
@@ -619,11 +625,11 @@ export async function POST(req: NextRequest) {
     search: true,
     json: true,
     system:
-      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South African context first (townships, suburbs, metros).',
+      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South Africa ONLY: every business you report must be physically located in South Africa. If a candidate sits outside South Africa, drop it, even when its website looks relevant. Townships, suburbs and metros all count.',
     prompt:
       `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
       `Rules:\n` +
-      `- AREA IS THE PROMISE: every business must sit inside ${pinArea || area} or its immediate surroundings. Finding fewer real ones there beats padding the list with businesses from other cities.\n` +
+      `- AREA IS THE PROMISE: every business must sit inside ${pinArea || area} or its immediate surroundings. Finding fewer real ones there beats padding the list with businesses from other cities. Never report a business outside South Africa.\n` +
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
       `- PEOPLE ARE THE PRIZE: a named human beats a switchboard. When the results publicly name the owner, founder or decision maker of a business, include contactName (their real name as written), role (Owner, Manager, Buyer and so on) and profileUrl ONLY when the results show a public profile page for them (LinkedIn, Facebook, the company team page, a directory). Copy every field exactly as you saw it. NEVER construct or guess a name or a link.\n` +
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
@@ -794,6 +800,9 @@ export async function POST(req: NextRequest) {
       enrichWithPeople(userId, osm.leads as unknown as (AiLead & { company: string })[], t0, geminiTrace),
     ])
     const leadsWithPeople = mergePeople(osm.leads as unknown as OutLead[], people)
+    // Region gate on the answer side: the directory is area bounded, but a
+    // people merge or stale record must never drag a foreign face through.
+    const saLeads = leadsWithPeople.filter((l) => isSouthAfricanLead(l))
     // Capture + verify: map records (with the humans just named) land in the
     // shared pool (deduped, phones normalized, websites pinged while budget
     // allows), then the answer keeps its ranking order and tops up with fresh
@@ -802,10 +811,10 @@ export async function POST(req: NextRequest) {
       topicFp,
       area: areaLabel,
       source: 'OSM',
-      leads: leadsWithPeople as unknown as RememberLead[],
+      leads: saLeads as unknown as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(leadsWithPeople, stamps, city || undefined)
+    let final: OutLead[] = decorateLeads(saLeads, stamps, city || undefined)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
@@ -851,16 +860,23 @@ export async function POST(req: NextRequest) {
   // 4) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
   const ex = Date.now() - t0 < 50_000 ? await searchLeads(definition, city || undefined, cap) : { leads: [] }
   if (ex.leads.length > 0) {
-    const stamps = await rememberScanResults({
-      topicFp,
-      area: areaLabel,
-      source: 'EXPLEE',
-      leads: ex.leads as unknown as RememberLead[],
-      budgetUntil: t0 + 54_000,
-    })
-    const final = decorateLeads(ex.leads as unknown as OutLead[], stamps, city || undefined)
-    await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
-    return NextResponse.json({ ...ex, leads: final, source: 'TEAM' })
+    // Region gate: even the verified feed wears the same lens before an
+    // answer ships or a row is captured.
+    const saEx = (ex.leads as unknown as OutLead[]).filter((l) => isSouthAfricanLead(l))
+    if (saEx.length === 0) {
+      await logScanRun(userId, topicFp, 'EXPLEE', 0, false)
+    } else {
+      const stamps = await rememberScanResults({
+        topicFp,
+        area: areaLabel,
+        source: 'EXPLEE',
+        leads: saEx as unknown as RememberLead[],
+        budgetUntil: t0 + 54_000,
+      })
+      const final = decorateLeads(saEx, stamps, city || undefined)
+      await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
+      return NextResponse.json({ ...ex, leads: final, source: 'TEAM' })
+    }
   }
 
   // One clean, honest message. No clause pile ups: name what happened, give the next move.

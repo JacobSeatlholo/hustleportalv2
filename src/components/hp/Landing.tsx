@@ -97,7 +97,7 @@ const STORE_HIGHLIGHTS = [
 ]
 
 export default function Landing() {
-  const { loadSession } = useHp()
+  const { loadSession, setView } = useHp()
   const { toast } = useToast()
   const currency = useCurrency()
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register')
@@ -142,6 +142,13 @@ export default function Landing() {
         })
       }
       await loadSession(true)
+      // Charge now: a plan chosen on the landing page rides through signup.
+      // The app opens straight on the Grow view, where its checkout fires.
+      const intent = localStorage.getItem('hp_plan_intent')
+      if (intent === 'HUSTLER' || intent === 'BOSS') {
+        try { window.history.replaceState({}, '', '/?view=grow') } catch { /* private mode */ }
+        setView('grow')
+      }
     } catch (e) {
       toast({ title: 'Couldn’t sign you in', description: e instanceof Error ? e.message : 'Please check your details and try again.', variant: 'destructive' })
     } finally {
@@ -567,7 +574,7 @@ export default function Landing() {
                   <li key={perk} className="flex items-start gap-2 text-sm"><Check className="h-4 w-4 text-brand shrink-0 mt-0.5" />{perk}</li>
                 ))}
               </ul>
-              <Button className="w-full bg-brand text-black hover:bg-brand/90 font-semibold" onClick={() => { document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
+              <Button className="w-full bg-brand text-black hover:bg-brand/90 font-semibold" onClick={() => { try { localStorage.setItem('hp_plan_intent', p.name === 'Operator' ? 'HUSTLER' : 'BOSS') } catch { /* private mode */ } document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
                 Start with {p.name}<ArrowRight className="h-4 w-4" />
               </Button>
             </div>

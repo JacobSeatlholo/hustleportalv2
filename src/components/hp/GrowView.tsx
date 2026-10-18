@@ -113,6 +113,18 @@ export default function GrowView() {
 
   useEffect(() => { load() }, [load])
 
+  // Charge now intent: a plan picked on the landing page rides through signup.
+  // The moment this view opens, that plan's checkout fires exactly once — the
+  // stored intent is consumed before anything else can see it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const intent = window.localStorage.getItem('hp_plan_intent')
+    if (!intent) return
+    window.localStorage.removeItem('hp_plan_intent')
+    if (intent === 'HUSTLER' || intent === 'BOSS') void subscribe(intent)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function copyLink() {
     if (!refs) return
     try {
