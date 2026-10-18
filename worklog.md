@@ -1340,3 +1340,23 @@ Stage Summary:
 - Production 3c50093: the boss flies on true instruments (25 humans, R0 real money, 1 real meeting, Jackie named at the till) and the follow up machine is live (day 3 / day 7 / checkout nudges + till bell), already proven by one real send
 - Highest-probability money unchanged: phone Jackie and the 11 Kloof Street businesses (download/hustle_call_list.csv), the machine now works the same list in parallel
 - Next candidate build: the hard SA only map fence on the lead finder (publicly promised in the Reddit reply)
+
+---
+Task ID: 77
+Agent: main
+Task: Verify fixes 2 and 3 live in production, rebuild call list artifact, check Reddit thread 1x86wef, draft developer response copy for the hostile subthread (Acs971 / snakeboyslim / Kynaras), answer boss payment flow question.
+
+Work Log:
+- Discovered the truth lens (src/lib/probe.ts shared lens + exec route isNoiseEmail) and the lifecycle machine (src/lib/lifecycle.ts, day 3 / day 7 / checkout lanes) were already implemented and committed this morning (d167493, 3c50093) and deployed via push; campaign-tick heartbeat wires the sweep hourly with 55 min throttle, dry mode supported.
+- Wrote scripts/verify_fix23.mjs: ops login, exec feed, till list, call list rebuild, lifecycle dry sweep.
+- Production verified: members raw 374, qa 337, internal 12, realMembers 25 humans; new7 25; meetingsSet 1; MRR R0.00; human topups 30d R0.00; sandbox noise R29,000 labeled. Till shows Jackie Mokgalagadi HUSTLER R199 PENDING since 10-15. Lifecycle dry: checked 10, checkout lane queues Jackie.
+- Fired one live heartbeat: sent 0 because dedupe law found checkout-nudge-HPSUB-MV9MLN44 already SENT to Jackie at 11:40 UTC (first heartbeat after deploy). Machine confirmed working end to end.
+- Workspace recycle had wiped download/hustle_call_list.csv and audit scripts (untracked). Rebuilt call list from live exec API: 25 humans, Jackie #1 (score 110), Jacob #2 (score 29). Saved download/hustle_call_list.csv + scripts/out_exec.json + out_reddit_comments.json.
+- Reddit: site + old.reddit + .json + headless browser + pullpush all blocked from this IP. Arctic Shift archive worked: 36 comments through 10-17 23:11 UTC incl. full Acs971 comment (score 1) and OP tutorial tip downvoted to -1. snakeboyslim and Kynaras comments NOT in archive (posted later or uncrawled); boss quotes used as source of truth.
+- Delivered: charge ASAP answer (in app one click already fires Yoco checkout; landing plan buttons only scroll to signup and lose plan intent, flagged as fix candidate), plus paste ready replies for Acs971 thread and snakeboyslim jab per copy rules.
+
+Stage Summary:
+- Fixes 2 and 3 VERIFIED LIVE in production with hard numbers. Lifecycle machine already messaged its first abandoned checkout.
+- Call list artifact restored at download/hustle_call_list.csv (25 humans, warmest first).
+- Reddit copy delivered for Acs971 (owns Italy failure, vetted claim gap, AI advisor quality) and snakeboyslim (owns LLM brain, points value at the plumbing). No hyphens, no emoji, truthful.
+- Open: landing plan intent carry through (charge asap for anonymous visitors) offered as next small fix; smoke test cosmetic row lookup still unfixed.
