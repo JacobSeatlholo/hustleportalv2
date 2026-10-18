@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     : payload.provider === 'RESEND' ? 'RESEND'
     : existingState?.provider || 'RESEND'
   if (provider === 'SES' && !isSesConfigured()) {
-    return NextResponse.json({ error: 'SES lane is not configured yet. Add the SES SMTP keys to the environment first, or use the free lane.' }, { status: 400 })
+    return NextResponse.json({ error: 'SES lane is not configured yet. Add the SES API keys to the environment first, or use the free lane.' }, { status: 400 })
   }
 
   // Recipients from pipeline leads — same access wall as every lead action.
