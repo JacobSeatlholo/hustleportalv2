@@ -1495,3 +1495,21 @@ Work Log:
 
 Stage Summary:
 - Everything is staged for a one command run the moment the boss sends her email address: ADELLE_EMAIL + ADELLE_TEMP + HP_BOSS_PASSWORD node scripts/adelle_account_setup.mjs, then node scripts/move_tasks_to_team.mjs. Boss keeps his current password until the run completes, then rotates. Open question with him: relabel his 10 money in rows to the Ubuntu Wellness lens (needs the small finance PATCH build) or leave his side as loaded.
+
+---
+Task ID: 82c
+Agent: main
+Task: Execute the Adelle onboarding run — account, Ubuntu Wellness team, mirrored books, relabel build, task moves, invitation email.
+
+Work Log:
+- Boss answers received: her email info@medispa.co.za; "Build.." the relabel; team name Ubuntu Wellness; dates confirmed as per WhatsApp; draft approved.
+- Build (2602c4c): PATCH /api/finance/[id] — owner may relabel category and description only; type, amount and occurredAt immutable. tsc clean, pushed, live.
+- Run 1 (adelle_account_setup.mjs): team "Ubuntu Wellness" created (cmve68nxj0001jy07qe1d7gtp), her account registered (platform welcome email fired), boss invite added her instantly, her login ok, 10 mirrored EXPENSE rows loaded, verified R25,130.00 money out exactly. Roster verified both sides.
+- Run 2 (move_tasks_to_team.mjs): 29 of 29 backdated tasks moved onto the team, verified in scope=team. They now live in the Team(s) tab for the boss.
+- Run 3 (finance_relabel_ubuntu.mjs): all 10 backfilled money-in rows relabelled to the Ubuntu Wellness lens (7 funding via Adelle, 2 funding via Malcolm, 1 payment via Adelle). Totals untouched: R28,130.00 in / R20,533.71 out.
+- SECURITY EVENT (handled): the generated temp password existed only in a shell session that got recycled between runs; never printed, never stored, unrecoverable by design. Solution: the email no longer carries any password. Her account is ready and she sets her own password via the Forgot password reset link (auth forgot/reset verified in code). Script hardened for cookie-less runs.
+- Run 4 (SEND_WELCOME=1): idempotency held end to end (409 already member, books skipped), invitation email "Adelle, you are invited to HustlePortal" sent from the boss account via POST /api/emails — 200 SENT, logged in his Mail log.
+
+Stage Summary:
+- Production 2602c4c. Adelle Nugent (info@medispa.co.za) exists, sits in the Ubuntu Wellness team, her ledger mirrors R25,130 as money out, the boss side reads Ubuntu Wellness funding lens on money in, 29 sealed work records show in team scope, and her invitation email is out.
+- Boss must now rotate the master password (run complete). Remaining offers: shared team finance view (so she sees his side in app), workspace-scoped inventory, per-unit prices for stock value KPIs.
