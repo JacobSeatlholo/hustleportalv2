@@ -1402,3 +1402,20 @@ Work Log:
 Stage Summary:
 - Deployed: onboarding survey + personalized dashboard track + ordering law (survey first, checkout one tap later, tour after). Region gate + charge now were already live from Task 78.
 - Next candidates: lifecycle emails can now speak persona (welcome day 3 varies by GET_PAID vs FIND_CLIENTS); exec dashboard can segment signups by profession.
+
+---
+Task ID: 79b
+Agent: main
+Task: Production verification of the onboarding survey + personalized UX (14 API checks + full browser journeys).
+
+Work Log:
+- API suite (scripts/verify_task79.mjs): 14 PASS / 0 FAIL — stranger 401, bad persona/profession 400, save + onboardedAt stamped once, re-answer idempotent (stamp stable), session reflects answers, dashboard counts {clients,invoices} present, fresh QA account registers unanswered then answers RUN_EVERYTHING/ENTREPRENEUR.
+- Browser journey 1 (new user): register Naledi -> survey owns the first moment (6 professions) -> Accountant -> Get paid -> plan step -> Open my plan -> lands in app, guidance + welcome tour fire in order after settle, dashboard shows "Your plan to get paid" / "Built for accountants..." / "0 of 3 done" / whisper line "Today moves your money. Built for accountants."
+- Browser journey 2 (charge now ordering): fresh session -> Start with Boss stores intent BOSS -> register Thabo -> SURVEY shows (no ambush) -> Entrepreneur -> Run everything -> final step reads "Your Boss plan is waiting" with CTA "Continue to secure checkout" -> one tap -> c.yoco.com/checkout/ch_kg9YaeQkXZ3tbbVU1GbuJwng, R499.00 HustlePortal Boss monthly. Returning to the app: no survey nag, no checkout re-fire, track card "Your plan to run everything" + "0 of 3 done".
+- Copy law self catch: "a entrepreneur" article bug caught before wide exposure; fixed to plurals ("Built for accountants") + profession chips; deployed 7773d0e.
+- Screenshots: download/qa79_survey_step1.png, qa79_survey_step3.png, qa79_charge_now_step3.png, qa79_yoco_after_survey.png, qa79_track_entrepreneur.png, qa79_personalized_dashboard.png.
+- QA rows: 3 hustleqa.example.com accounts (lensed by the truth lens) + 1 QA PENDING Boss sub (till stays silent for QA, proven Task 78). Zero real-user impact.
+
+Stage Summary:
+- Production 7773d0e: the survey owns the first moment, the tour and the checkout wait their turn, the dashboard talks back in the user's own words, and progress reads real work. Charge asap is now charge primed: the card form opens one tap after the last survey answer.
+- Repo privacy answer delivered with code truth: full git history has ZERO secret shaped strings, only .env.example placeholders; recommendation flip private (deploy keeps working via deploy key).
