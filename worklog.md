@@ -1590,3 +1590,21 @@ Work Log:
 Stage Summary:
 - Arnold's now holds 16 contactable leads: 6 trade suppliers, 2 events and media channels, 2 tour operators, the Labia and 4 hospitality referral rows. 11 of 12 wave-2 leads carry a published email plus phone. Boss quality call answered.
 - Ops seat only, master ZERO logins this run. Master password rotation STILL outstanding. PostNet and Zola top ups queued.
+
+---
+Task ID: 86
+Agent: main
+Task: Boss: "on safari's email for nigel is njw.cpt@gmail.com. Lets connect that email to the on-safari account and also send him an invitation email from the system to get him to login."
+
+Work Log:
+- No exec capability existed to change a member login email or send an invitation, so built one: POST /api/admin/exec/client/[id]/invite { email? } (additive new route, commit 40a72ac). Moves the login email (uniqueness checked, old email stops working), mints a 24 hour single use set password link into the existing reset machinery (sha256 stored, reset endpoint signs the member straight in) and sends a branded system mail via sendSystemMail with the lead count line only when true. Guard rails: exec gate, exec and admin accounts can never be re pointed, invalid email 400, clash 409.
+- Deploy quirks hit again after recycle: paramiko gone from the venv and key perms loosened; reinstalled and chmod 600 per recipe, pushes green (40a72ac, ada834d, b4f18dc). Build stamp verified each deploy via /api/health.
+- First invite call against the managed shell (cmvatsmx10000jm07t6ybcgdr, onsafari@kloofstreet.online) returned 409: njw.cpt@gmail.com already belongs to ANOTHER account. Probe found Nigel self registered THIS MORNING (07:56 UTC): account cmveynp9a0001l50845xnh6o7, name N J Whitehead, business on safari, Gardens Cape Town, ACTIVE, wallet R104, 5 leads from his own scan, 2 projects, active at 08:05. He is on the platform right now under his real inbox.
+- Decision: do NOT hijack his live account. Honest consolidation instead: assigned the 8 On Safari campaign pool rows into his LIVE pipeline (added 7, skipped 1 — one company was already in his own scan results, platform dedupe) and sent the system invitation to njw.cpt@gmail.com on HIS account. Managed shell untouched, keeps its 8 copies and the membership identity.
+- Copy truth fix (commit b4f18dc): the hand picked line counted ALL pipeline leads (said 12 when only 7 are team hand picked). Route now counts source TEAM leads only and the corrected invitation was re-sent (inviteSent true, teamLeads 7). Disclosed: Nigel received two invitation mails, the second corrects the count.
+- Scripts: scripts/onsafari_invite.mjs (literal ask attempt + verify), scripts/email_clash_probe.mjs (roster clash probe), scripts/onsafari_connect.mjs (assign to live account + resend invite + roster verify, idempotent).
+
+Stage Summary:
+- Nigel's real account njw.cpt@gmail.com now carries 12 pipeline leads (5 own scan + 7 team hand picked) and holds the system invitation with a 24 hour single use sign in link. The managed shell On Safari (onsafari@kloofstreet.online) still holds its 8 copies and the kloofstreet.online membership identity — boss to decide: retire the shell, or keep it as the membership record and treat the self signup as the member face.
+- New standing exec tool shipped: client invite route works for ALL Kloof Street members (move login email + invitation email), ready for the rest of the roster.
+- Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet and Zola wave 2 top ups still queued.
