@@ -104,6 +104,10 @@ function pastedToContact(raw: Record<string, unknown>): RememberLead | null {
     ...(clean(raw.city) ? { city: clean(raw.city)!.slice(0, 120) } : {}),
     ...(saneUrl(raw.profileUrl) ? { profileUrl: saneUrl(raw.profileUrl) } : {}),
     ...(clean(raw.poolTag) ? { poolTag: clean(raw.poolTag)!.slice(0, 120) } : {}),
+    // The curated lists deserve their fit line too: why this business suits the
+    // outreach project, exactly like the scan results carry one.
+    ...(clean(raw.why) ? { why: clean(raw.why)!.slice(0, 300) } : {}),
+    ...(Number.isFinite(Number(raw.score)) ? { score: Math.max(1, Math.min(5, Math.round(Number(raw.score)))) } : {}),
   }
 }
 
