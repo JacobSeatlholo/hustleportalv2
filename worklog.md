@@ -1704,3 +1704,22 @@ Stage Summary:
 - PostNet Gardens, the last member without a real campaign, now holds 9 contactable leads: 4 shared hospitality rows plus 5 hyperlocal shipping and printing users (2 online boutiques on his own street, the City Bowl estate agency, a photographer studio, a school). Every Kloof Street member now has a real pipeline: Kim 16, Arnold's 16, Nigel 12, Zola 10, Kabir 11, PostNet 9, Dr Wendy 4, Mpho 6.
 - Pool facets: Kloof Street Members 37, Honest travel experience 52, Body Vision Online 16, Kabir SANLAM PMB 10, Tees & Gees Long Street 5.
 - Ops seat only, master ZERO logins. Master password rotation STILL outstanding.
+
+---
+Task ID: 92
+Agent: main
+Task: Boss: "my notification system is not working on my iphone and android, lets debug to make notifications possible from the pwa."
+
+Work Log:
+- Mapped the whole push stack: public/sw.js (push + click handlers), public/manifest.webmanifest (standalone, 192/512 icons, iOS qualified), src/lib/push.ts (VAPID keys stored in PlatformConfig, zero env), /api/push (key, subscribe, unsubscribe, test), PwaNotifications.tsx (client flow), AppShell registers the worker once per session, cron daily-reminders at 05:00 UTC in vercel.json. Feature shipped in task 31.
+- Production probes all green: health ok, sw.js served 200 with the push handler, manifest 200 with the right content type, icons 200, GET /api/push returns the VAPID public key (87 char P 256), POST test for the ops seat honestly says no devices. The server side was never the problem.
+- THE ROOT CAUSE, proven with the one sanctioned master login this run: POST test as the master account returned subscriptions=0. The boss's iPhone and Android never completed the subscribe handshake, so there was nothing to push to. Both devices were dark from day one.
+- Why it felt broken and stayed invisible: 1) Android Chrome refuses to DISPLAY an OS notification while the site is foreground visible, so the welcome push after enabling fired invisibly while the user stared at the open app. 2) The old test action answered the same vague message for never subscribed, dead device and refused send alike. 3) iOS web push only works inside the installed Home Screen app (iOS 16.4+), in the Safari tab it is impossible and the UI never said so. 4) No pushsubscriptionchange handler, so iOS endpoint rotation would silently kill devices anyway.
+- Fixes shipped (commit a0c6be2, 5 files): sw.js v2 checks for a visible app window first and relays the payload as a message (PushInAppRelay in AppShell shows an in app toast) and only fires a real OS notification when the app is background or closed; sw.js v2 handles pushsubscriptionchange by re-subscribing with the server key and re-storing, previousEndpoint retires the dead row; /api/push test returns the honest per device truth (subscriptions, sent, pruned, error status) and the toast repeats exactly that; push.ts prunes 403 alongside 404/410 (VAPID mismatch rows can never receive again) and reports endpoint tails only; PwaNotifications shows the Add to Home Screen guidance card on iPhone browser tabs and replaces the post enable page reload with a state refresh so the welcome toast is not killed.
+- tsc clean (src zero errors), deployed a0c6be2, stamp verified, sw.js v2 confirmed live (pushsubscriptionchange and hp:push markers present).
+- What remains for the boss, 30 seconds per device, the one step nobody can do remotely: grant the permission and complete the subscription on each phone. iPhone: Safari, share, Add to Home Screen, open from the icon, menu, Get notifications, Allow. Android: open the app, menu, Get notifications, Allow, then Send test from the profile screen. The system now tells the truth at every step if anything is still off.
+
+Stage Summary:
+- Diagnosis: the notification system was never firing because the devices never subscribed, hidden behind foreground suppression and one vague error message. The server pipe (keys, routes, cron) is healthy and needs no change.
+- The PWA now surfaces the truth: in app banner for foreground pushes, OS notification for background ones, honest test diagnostics, iPhone install guidance, self healing subscriptions on iOS rotation.
+- Deployed a0c6be2 and verified. Ops seat plus the one sanctioned master login, additive test push only. Master password rotation STILL outstanding.
