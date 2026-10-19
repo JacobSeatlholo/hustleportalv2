@@ -1684,3 +1684,23 @@ Stage Summary:
 - The newest member woke up to a real pipeline: 5 hyperlocal Long Street buyers, every one a bulk or repeat order fit (2 hostels within 350 metres, the Gardens lodge with a travel centre, the Roeland Street creative college, the First Thursdays art walk). Every row carries a published contact and a truthful Serves Mpho why line.
 - Pool facets now: Kloof Street Members 32, Body Vision Online 16, Kabir SANLAM PMB 10, Tees & Gees Long Street 5. Roster leads: Kim 16, Arnold's 16, Nigel 12, Zola 10, Kabir 11, Mpho 6, PostNet 4, Dr Wendy 4.
 - Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet wave 2 remains the last Kloof Street top up queued.
+
+---
+Task ID: 91
+Agent: main
+Task: Boss: "continue?" — continue meant the two queued next steps: send Mpho his invitation so he signs in to a loaded pipeline, then PostNet wave 2, the last queued Kloof Street top up.
+
+Work Log:
+- 91a INVITATION: re read the invite route before firing a real mail. Plain POST with no email arg re-sends to the address already on the account, which for Mpho is his real inbox ottimo80@hotmail.com, so no email move. Sent (scripts/mpho_invite.mjs): inviteSent=true, the truthful line reads hand picked 5 verified leads, 24 hour single use link rides along. He can set a password and land straight on his pipeline.
+- 91b PROBE: PostNet Gardens shell cmvatsnck000fjm074vhjajiz, postnetgardens@kloofstreet.online, 4 shared leads, ACTIVE. Facet "Kloof Street Members" stood at 32.
+- Thesis for a PostNet at Lifestyle on Kloof: heavy shipping and printing users in walking distance, exactly the boss queued list, estate agents, boutiques, photographers, schools.
+- Research with the quality law (web budget capped the session, every contact from a published source recorded in profileUrl): Boetiek (79 Kloof Street, info@boetiek.shop, 076 480 7037, own contact page, online boutique two doors from the store), AKJP Studio (73 Kloof Street, info@akjpstudio.com, 079 490 9492, published on the shopping guide listing, designer collective with an online store), Greeff Christie's Kloof Street office (96 Kloof Street, 021 180 4712 on their own contact page, no email published anywhere, phone only and scored honestly 4), DL Photo (79 Roeland Street, dave@dlphoto.co.za, 079 777 2772, own site, studio rental and training), Gardens Commercial High School (5 Paddock Avenue, 021 465 1236 on the public record, phone only, score 4).
+- QUALITY DISCIPLINE: dropped Purr Clothing (their site publishes no email and no phone at all, address only). Greeff and the school kept phone only with honest scores. No invented contacts.
+- Load (scripts/postnet_wave2_load.mjs, env gated, "Kloof Street Members" tag riding from the start): DRY 5 would create 0 merges, 5 sites pinged. LIVE created=5 merged=0, facet 32 to 37, matched 5/5, ASSIGN added=5 skipped=0. PostNet 4 to 9 leads.
+- Verify: facet "Kloof Street Members" = 37 rows, why 37/37, phone 36/37, email 29/37. All 5 new rows carry Serves PostNet why lines. Idempotency proven: rerun created=0 merged=5, assign added=0 skipped=5. Zero doubles possible.
+
+Stage Summary:
+- Mpho (Tees & Gees) holds the platform's invitation with his 5 hand picked hyperlocal leads waiting, 24 hour sign in link live.
+- PostNet Gardens, the last member without a real campaign, now holds 9 contactable leads: 4 shared hospitality rows plus 5 hyperlocal shipping and printing users (2 online boutiques on his own street, the City Bowl estate agency, a photographer studio, a school). Every Kloof Street member now has a real pipeline: Kim 16, Arnold's 16, Nigel 12, Zola 10, Kabir 11, PostNet 9, Dr Wendy 4, Mpho 6.
+- Pool facets: Kloof Street Members 37, Honest travel experience 52, Body Vision Online 16, Kabir SANLAM PMB 10, Tees & Gees Long Street 5.
+- Ops seat only, master ZERO logins. Master password rotation STILL outstanding.
