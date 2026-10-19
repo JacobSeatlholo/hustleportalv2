@@ -1572,3 +1572,21 @@ Stage Summary:
 - 6 of 12 Kloof Street members now hold real pipelines: Kim 16, Nigel 8, Arnold's 4, PostNet 4, Dr Wendy 4, Zola 3. Pool facets: "Body Vision Online" 16, "Kloof Street Members" 13, 212 active total.
 - Deploy verification is now self serve: curl /api/health shows build.sha. Production at 8e23830 with the ingest why and score patch live.
 - Ops seat only again this run, master ZERO logins. Master password rotation STILL outstanding.
+
+---
+Task ID: 85
+Agent: main
+Task: Boss: "also improve the quality for Arnold's leads." Arnold's held only 4 shared hospitality rows (Grand Daddy, Four Rosmead, The Silo, Cape Town Tourism) after the 84b research budget capped. Deliver a real restaurant ecosystem campaign.
+
+Work Log:
+- Deploy state verified first: /api/health build stamp shows sha 26fab49 branch main (local HEAD matches, db089d3 ancestor). Paramiko 5.1.0 present, deploy key 600. No deploy work needed this run.
+- Probe (scripts/arnolds_probe.mjs, read only): pool facet "Kloof Street Members" = 13 rows, Arnold's leads=4, all shared rows. Confirmed the quality gap.
+- Research with the quality bar raised: every lead verified this session against a published source recorded in profileUrl, email plus phone wherever the business publishes them. Suppliers: Ryan Boon Meats (orders@ryanboon.co.za, 021 872 1975, ryanboon.co.za), Truth Coffee Roasting wholesale (needbeans@truthcoffee.com, 021 201 7500, truth.coffee), Knead Bakery wholesale (orders@thebakingcompany.co.za, 021 462 2768, kneadbakery.co.za), Vinimark Trading wine wholesale (info@vinimark.co.za, 021 883 8043, wine.co.za listing), Dalewood Fromage (cheesery@dalewood.co.za, 021 200 2580, franschhoek.org.za listing), Devil's Peak Beer Company (080 006 0066, devilspeak.beer, phone only and scored honestly 3). Booking and referral partners: The Labia Theatre (labiatheatre@telkomsa.net, 021 424 5927, thelabia.co.za/contact), Event Affairs corporate events (info@eventaffairs.co.za, 082 339 3349, capetowneventplanner.co.za), Cape Town ETC (capetownetc@hsm.co.za, 021 530 3300, capetownetc.com/contact), CapeTownMagazine (content@capetownmagazine.com, 072 350 2062), Cape Town Day Tours (info@capetowndaytours.co.za, 021 713 0809), Wanderer private tours (team@wanderer.africa, 064 503 0905).
+- QUALITY DISCIPLINE: dropped The Event Planners (Cape Town base not provable from published pages), dropped a Jack Black's trade email hunt (unverifiable in budget), Devil's Peak kept phone only with score 3 and an honest why. No hyphens in any why line, no invented contacts.
+- Load (scripts/arnolds_wave2_load.mjs, env gated, dry run first): DRY 11 would create, 1 merge. LIVE: pulled=12 created=11 merged=1 pinged=11. The merge was Cape Town Day Tours (row cmv9jbipp from an earlier scan) — merge law moved it under the "Kloof Street Members" tag and it took the Arnold's why line because the scan row had none. Assignment step hardened to resolve wave-2 companies outside the tag facet via the q search before assigning.
+- Assign: 12 added, 0 skipped to Arnold's pipeline (stage NEW, source TEAM). Roster verify: Arnold's Restaurant leads=16 (4 + 12). Pool facet "Kloof Street Members" = 25 rows, why 25/25, phone 24/25, email 21/25.
+- Web budget capped mid session (search limit hit twice), so the queued PostNet and Zola wave 2 top ups (estate agents, boutiques, photographers, schools; ENTs, retirement villages, music venues, swim schools) stay queued for the next run.
+
+Stage Summary:
+- Arnold's now holds 16 contactable leads: 6 trade suppliers, 2 events and media channels, 2 tour operators, the Labia and 4 hospitality referral rows. 11 of 12 wave-2 leads carry a published email plus phone. Boss quality call answered.
+- Ops seat only, master ZERO logins this run. Master password rotation STILL outstanding. PostNet and Zola top ups queued.
