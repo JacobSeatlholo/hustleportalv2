@@ -4,12 +4,24 @@
  * PwaNotifications — opt-in web push for the installed app.
  * States: unsupported → default (can ask) → granted (subscribed / enable / test) → denied.
  * The VAPID public key comes from the server (stored in PlatformConfig, zero env setup).
+ *
+ * Task 92 debugging notes baked in:
+ *  - iPhone Safari only allows web push inside the installed Home Screen app
+ *    (iOS 16.4+). In the regular browser tab we now SAY that instead of a
+ *    generic failure, so the user knows the one step that unlocks it.
+ *  - The test action returns the honest per-device truth (stored / sent /
+ *    pruned / refused) and the toast repeats exactly that — the old version
+ *    answered the same "turn notifications on first" for every failure.
+ *  - A push that arrives while the app is open and visible is relayed by the
+ *    service worker as a message; PushInAppRelay (mount once in AppShell)
+ *    shows it as a toast, because Android Chrome drops OS notifications in
+ *    the foreground and the user otherwise never sees a live push.
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { api } from './shared'
-import { Bell, BellRing, Loader2, Send } from 'lucide-react'
+import { Bell, BellRing, Loader2, Send, Smartphone } from 'lucide-react'
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -38,7 +50,25 @@ export function usePushState() {
       .catch(() => {})
   }, [])
 
-  return { supported, permission, subscribed }
+  const refresh = useCallback(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    setPermission(Notification.permission)
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setSubscribed(Boolean(sub)))
+      .catch(() => {})
+  }, [])
+
+  return { supported, permission, subscribed, refresh }
+}
+
+/** iPhone or iPad Safari running as a normal browser tab (not the installed app). */
+function isIOSBrowserTab(): boolean {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && ((navigator as { maxTouchPoints?: number }).maxTouchPoints ?? 0) > 1)
+  const standalone = (navigator as { standalone?: boolean }).standalone === true || window.matchMedia('(display-mode: standalone)').matches
+  return ios && !standalone
 }
 
 export async function enablePush(): Promise<'granted' | 'denied' | 'error'> {
@@ -60,24 +90,59 @@ export async function enablePush(): Promise<'granted' | 'denied' | 'error'> {
       body: JSON.stringify({ action: 'subscribe', subscription: sub.toJSON() }),
     })
     return 'granted'
-  } catch {
+  } catch (e) {
+    // keep the reason in the console — the toast stays human
+    console.error('[push] enable failed', e)
     return 'error'
   }
 }
 
-export async function sendTestPush(): Promise<boolean> {
+export interface TestPushResult {
+  ok: boolean
+  sent?: number
+  subscriptions?: number
+  pruned?: number
+  error?: string
+}
+
+export async function sendTestPush(): Promise<TestPushResult> {
   try {
-    await api('/api/push', { method: 'POST', body: JSON.stringify({ action: 'test' }) })
-    return true
-  } catch {
-    return false
+    return await api<TestPushResult>('/api/push', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'test' }),
+    })
+  } catch (e) {
+    const err = e as { data?: { error?: string; subscriptions?: number; pruned?: number } }
+    // the api helper throws with .data on non 200 — the diagnostics ride along
+    return { ok: false, error: err?.data?.error || 'The test could not be sent.', subscriptions: err?.data?.subscriptions, pruned: err?.data?.pruned }
   }
+}
+
+/** Mount ONCE in the app shell — shows in app toasts for pushes that arrive
+ *  while the app is open (the service worker relays those as messages). */
+export function PushInAppRelay() {
+  const { toast } = useToast()
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      const d = event.data as { type?: string; payload?: { title?: string; body?: string; url?: string } } | null
+      if (d?.type !== 'hp:push' || !d.payload) return
+      toast({
+        title: d.payload.title || 'HustlePortal',
+        description: d.payload.body || 'Open HustlePortal for the latest.',
+      })
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [toast])
+  return null
 }
 
 export default function PwaNotifications({ compact = false }: { compact?: boolean }) {
   const { toast } = useToast()
-  const { supported, permission, subscribed } = usePushState()
+  const { supported, permission, subscribed, refresh } = usePushState()
   const [busy, setBusy] = useState(false)
+  const iosTab = isIOSBrowserTab() && !subscribed
 
   if (!supported || permission === 'denied') {
     return compact ? null : (
@@ -94,12 +159,20 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
     try {
       const r = await enablePush()
       if (r === 'granted') {
-        toast({ title: 'Notifications on', description: 'Check your device — a welcome push just arrived.' })
-        setTimeout(() => window.location.reload(), 800) // pick up subscribed state
+        // The welcome push arrives while this app is open — the in app relay
+        // shows it, so no reload is needed to prove the pipe works.
+        refresh()
+        toast({ title: 'Notifications on', description: 'Your device is subscribed. Reminders now reach you even when the app is closed.' })
       } else if (r === 'denied') {
         toast({ title: 'Permission declined', description: 'You can turn notifications on later from your browser settings.', variant: 'destructive' })
       } else {
-        toast({ title: 'Could not enable notifications', description: 'Open the installed app and try again.', variant: 'destructive' })
+        toast({
+          title: 'Could not enable notifications',
+          description: iosTab
+            ? 'On iPhone, notifications need the installed app — add HustlePortal to your Home Screen, open it from the icon, then try here again.'
+            : 'Open the installed app and try again.',
+          variant: 'destructive',
+        })
       }
     } finally {
       setBusy(false)
@@ -109,12 +182,12 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
   async function onTest() {
     setBusy(true)
     try {
-      const ok = await sendTestPush()
-      toast(
-        ok
-          ? { title: 'Test sent', description: 'Look at your device — it should appear in a second or two.' }
-          : { title: 'Test failed', description: 'Turn notifications on first, then send a test.', variant: 'destructive' }
-      )
+      const r = await sendTestPush()
+      if (r.ok) {
+        toast({ title: 'Test sent', description: `Delivered to ${r.sent} device${r.sent === 1 ? '' : 's'}. Look at your phone — it should be there within seconds.` })
+      } else {
+        toast({ title: 'Test did not go through', description: r.error || 'Turn notifications on first, then send a test.', variant: 'destructive' })
+      }
     } finally {
       setBusy(false)
     }
@@ -134,22 +207,33 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
   }
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {subscribed ? (
-        <>
-          <span className="text-sm text-emerald-600 flex items-center gap-1.5"><BellRing className="h-4 w-4" /> Notifications are on for this device</span>
-          <Button variant="outline" size="sm" onClick={onTest} disabled={busy}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-1" />} Send test
-          </Button>
-        </>
-      ) : (
-        <>
-          <span className="text-sm text-muted-foreground">Get reminders on this device — tasks due, pipeline nudges.</span>
-          <Button size="sm" onClick={onEnable} disabled={busy}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4 mr-1" />} Turn on
-          </Button>
-        </>
+    <div className="space-y-2">
+      {iosTab && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            On iPhone, push notifications only work inside the installed app. Tap the share button on this page and choose Add to Home Screen, then open
+            HustlePortal from the icon and turn notifications on there.
+          </span>
+        </div>
       )}
+      <div className="flex items-center gap-2 flex-wrap">
+        {subscribed ? (
+          <>
+            <span className="text-sm text-emerald-600 flex items-center gap-1.5"><BellRing className="h-4 w-4" /> Notifications are on for this device</span>
+            <Button variant="outline" size="sm" onClick={onTest} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-1" />} Send test
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="text-sm text-muted-foreground">Get reminders on this device — tasks due, pipeline nudges.</span>
+            <Button size="sm" onClick={onEnable} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4 mr-1" />} Turn on
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

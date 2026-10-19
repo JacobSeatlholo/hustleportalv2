@@ -33,7 +33,7 @@ import UpgradeListener from './useUpgrade'
 import SectionTutorial from './SectionTutorial'
 import TaskReminders from './TaskReminders'
 import InstallApp from './InstallApp'
-import PwaNotifications from './PwaNotifications'
+import PwaNotifications, { PushInAppRelay } from './PwaNotifications'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
@@ -303,6 +303,7 @@ export default function AppShell() {
         <WelcomeTour />
         <SectionTutorial />
         <TaskReminders />
+        <PushInAppRelay />
         <UpgradeListener />
 
         {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons

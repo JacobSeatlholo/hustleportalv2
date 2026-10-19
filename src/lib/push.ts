@@ -57,16 +57,30 @@ export interface PushPayload {
   tag?: string
 }
 
+export interface PushSendReport {
+  subscriptions: number
+  sent: number
+  pruned: number
+  /** One line per dead or failing device, endpoint tail only — enough to
+   *  diagnose "notifications are broken" without ever storing a full endpoint
+   *  in a response. A 403 is the VAPID key mismatch signature: the stored
+   *  subscription can never receive again, so it gets pruned like 404/410. */
+  errors: { status: number; tail: string }[]
+}
+
 /** Send to every device of a user. Prunes dead subscriptions. Never throws. */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<{ sent: number; pruned: number }> {
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushSendReport> {
   let sent = 0
   let pruned = 0
+  let deviceCount = 0
+  const errors: { status: number; tail: string }[] = []
   try {
     const [keys, subs] = await Promise.all([
       ensureVapidKeys(),
       db.pushSubscription.findMany({ where: { userId } }),
     ])
-    if (subs.length === 0) return { sent, pruned }
+    deviceCount = subs.length
+    if (subs.length === 0) return { subscriptions: 0, sent, pruned, errors }
     const webpush = (await import('web-push')).default
     webpush.setVapidDetails('mailto:team@businesshustle.co.za', keys.publicKey, keys.privateKey)
     await Promise.all(
@@ -80,15 +94,22 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
           sent++
         } catch (e) {
           const err = e as { statusCode?: number }
-          if (err.statusCode === 404 || err.statusCode === 410) {
+          const status = err.statusCode || 0
+          // 404/410: the push service retired the endpoint. 403: the VAPID
+          // keys no longer match (key rotation or a pre-migration row) — that
+          // device can never receive again either. All three prune. 0 means
+          // the request died before a status (network) — keep the row and
+          // record it so the test action can tell the truth.
+          if (status === 404 || status === 410 || status === 403) {
             await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {})
             pruned++
           }
+          errors.push({ status, tail: sub.endpoint.slice(-14) })
         }
       })
     )
   } catch {
     // push is best-effort — never break a request over it
   }
-  return { sent, pruned }
+  return { subscriptions: deviceCount, sent, pruned, errors }
 }
