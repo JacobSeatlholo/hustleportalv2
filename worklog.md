@@ -1553,3 +1553,22 @@ Stage Summary:
 - BLOCKER for code changes only: Vercel build trigger dead since the private flip. Production serves the pre flip code (stable, QA green in task 83). Boss must reconnect Vercel Git. Verification after fix: curl /api/health shows build.sha.
 - Roadmap offered: campaign 2 candidate Dr Dale Geoffreys or Arnold's (boss picks), a briefed email from HIS account to Kim, unclaimed Kloof businesses as a separate directory campaign (their own "Get Listed" pipeline, not member lead pools).
 - Standing: master password rotation STILL not done. Ops seat password unchanged.
+
+---
+Task ID: 84b
+Agent: main
+Task: Boss flipped the repo back to PUBLIC. "Same campaign and leads loaded in the pool specifically for On Safari, Arnold's, PostNet and Dr Wendy and Zola. Label the leads for kloofstreet.online members or something. Quality of the leads has to be on point."
+
+Work Log:
+- DEPLOY PIPELINE RESTORED: the public flip re armed the Vercel GitHub trigger, but missed push events do not retro build. One fresh push (8e23830) built and the new /api/health build stamp returned sha + branch on production. The stamp is now the permanent deploy verifier. Body Vision rerun after that: why lines enriched 16/16 via merge law, zero doubles.
+- Label chosen: poolTag "Kloof Street Members" (one shared tag as the boss suggested; the per member fit lives in the why line, which now leads with the member name it serves). A lead that honestly serves two members lands ONCE and is ASSIGNED to both.
+- Research this session, quality law held (every phone, email, website from a published source recorded in profileUrl): Salon91 Contemporary Art (91 Kloof St, enquiries@salon91.co.za, 021 424 6930, also 082 679 3906), The Framing Gallery (060 705 0075, framingcapetown@gmail.com, Gardens), Studio A Projects (tristan@studioaprojects.com, 021 421 6803), ARRCC (021 468 4400), Four Rosmead Boutique Guesthouse (021 480 3810, info@fourrosmead.com, Oranjezicht), The Grand Daddy Boutique Hotel (info@granddaddy.co.za, 38 Kloof St), Barnard Gallery (021 671 1553, gallery@barnardgallery.com), The Silo Hotel Royal Portfolio (021 671 5502), Cape Town Tourism (info@capetown.travel.co.za, 086 132 2223), Carey Seady Dietitian (083 604 3145, careydiet@gmail.com, Foreshore), Clicks Pharmacy Lifestyle on Kloof (021 488 8300, CLK2212MGR@clicks.co.za, 50 Kloof St), Clicks Gardens Centre (021 461 7845), Candice Wakelin Psychology (069 133 5031, candice.wakelin@gmail.com, 28 Kamp St Gardens).
+- Scripts/kloof_members_pool_load.mjs (env gated, dry run first, serve map drives assignment). DRY: 13 would create, 0 collisions. LIVE: 13 created, 0 merged, 11 websites pinged, why 13/13, phone 12, email 10.
+- Assigned + verified on the roster: On Safari 8 (Nigel Whitehead), Arnold's 4, PostNet Gardens 4, Dr Wendy Dicks 4, Zola 3. Total 13 unique pool rows, 23 assignments, zero doubles possible (pool dedupes by fingerprint and company, assign dedupes per member).
+- HONEST COUNTS: On Safari got the full campaign (galleries, framers, interior studios, art hotels). Arnold's, PostNet and Zola lean on shared rows (hotels, tourism body, pharmacies) because the web research budget capped mid run (search flaked twice, fetches 404'd on Workshop17, Never@Home, CTICC, Lifestyle on Kloof directory, CTPO, Bothner). Wave 2 queued: Zola (retirement villages, music venues for custom earmoulds, ENT surgeons, swim schools), PostNet (estate agents, boutiques Boetik and Paris Cape Town, photographers), Arnold's (Workshop17, food media, CTICC, tour operators).
+- QUALITY DISCIPLINE: dropped Ampath (map data showed a Randburg address labelled Cape Town), dropped Picturesque Framing (listing conflated with On Safari's own address), dropped Iziko (museum, not a buyer), no unverified phone or email landed anywhere.
+
+Stage Summary:
+- 6 of 12 Kloof Street members now hold real pipelines: Kim 16, Nigel 8, Arnold's 4, PostNet 4, Dr Wendy 4, Zola 3. Pool facets: "Body Vision Online" 16, "Kloof Street Members" 13, 212 active total.
+- Deploy verification is now self serve: curl /api/health shows build.sha. Production at 8e23830 with the ingest why and score patch live.
+- Ops seat only again this run, master ZERO logins. Master password rotation STILL outstanding.
