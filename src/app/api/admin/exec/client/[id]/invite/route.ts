@@ -102,7 +102,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       '',
       leadsLine,
       '',
-      'Set your password and sign in with this link. It works for 24 hours and can be used once:',
+      'Set your password and sign in with this link if it is your first time, or use it to get back in. It works for 24 hours and can be used once:',
       inviteUrl,
       '',
       `Your login email is ${email}. Keep it handy for every sign in.`,
