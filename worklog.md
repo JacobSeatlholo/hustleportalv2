@@ -1627,3 +1627,21 @@ Stage Summary:
 - The managed shell keeps the kloofstreet.online address and 8 duplicate leads as the membership record; retirement stays a boss decision (a one call status PATCH when wanted).
 - New exec tool for the whole roster: the profile PATCH lets the desk align any member's identity to their membership record without touching logins.
 - Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet and Zola wave 2 top ups still queued.
+
+---
+Task ID: 88
+Agent: main
+Task: Boss: "and Zola's clients. Refine the leads and make them truly high quality hyper localised etc." Zola (Just Hearing, audiology) held only 3 shared rows after the 84b budget cap. Deliver the hearing health ecosystem, hyper local to 99B Kloof Street, Gardens.
+
+Work Log:
+- Probe (scripts/zola_probe.mjs, read only): Zola = Just Hearing, industry Audiology, 3 leads, active. Hyper local anchor fetched from kloofstreet.online: 99B Kloof Street, Gardens, at Cape Town Medi Spa. His services confirmed the queued thesis: assessments, hearing aids, tinnitus management and custom earmoulds and earplugs.
+- Research with the quality law (every phone and email from a published source recorded in profileUrl, hyper local first): Mediclinic Cape Town (21 Hof Street, Oranjezicht, a short walk down the hill, four ENT specialists plus maternity for newborn hearing screening, 021 464 5500, phone only, score 4), Rosebank House retirement home (42 Alma Road, Rosebank, beside the Huis Luckhoff senior campus, sales@rosebankhouse.co.za, 021 689 3612), Nazareth House Cape Town senior care campus (1 Derry Street, Vredehoek, above Gardens, capetown@nazarethcare.co.za, 021 461 1635), Swimmable swim school (Gardens Centre, two blocks from the practice, info@swimmable.net, 079 591 4471), Artscape Theatre Centre (artscape@artscape.co.za, 021 410 9800), Cape Town Philharmonic Orchestra at City Hall (info@cpo.org.za, 021 001 0093), Mary Kihn School for deaf and hearing impaired learners (34 Low Street, Observatory, 021 447 0310, phone only, score 4).
+- QUALITY DISCIPLINE: dropped The Crypt Jazz Club (conflicting published data, one source says closed), AquaCrazy and Trevor's (outside the City Bowl), Drs Samson, Kroukamp, Molyneaux and van Straten (rooms in Pinelands, Claremont and the northern suburbs, not hyper local), Groote Schuur (no publishable contact). No invented emails, no unverified phones.
+- Web budget capped at 15 calls mid session (tool limit), so research stopped there per budget law. 7 of 7 leads landed with verified contacts: 5 email plus phone, 2 phone only and scored honestly.
+- Load (scripts/zola_wave2_load.mjs, env gated, dry run first): DRY 7 would create, 0 collisions. LIVE: created=7 merged=0 pinged=6. DEFECT CAUGHT AND FIXED: the first live payload forgot the poolTag, so the 7 rows landed untagged (the q search straggler resolution still found and assigned all 7, Zola 3 to 10). Added poolTag injection to the payload and reran: created=0 merged=7, which relabelled all 7 under "Kloof Street Members" through the merge law, assign added=0 skipped=7, zero doubles. The pattern is now proven twice: a rerun with the tag merges and relabels without duplicating.
+- Verify (scripts/zola_verify.mjs): facet "Kloof Street Members" = 32 rows, why 32/32, phone 31/32, email 26/32. All 7 new rows carry the Serves Zola why line, suburb level cities, verify scores 100 on six and 75 on Mary Kihn (no published email or website, honest). Roster: Just Hearing leads=10 ACTIVE.
+
+Stage Summary:
+- Zola now holds 10 contactable leads: 2 senior care campuses, the Mediclinic ENT and maternity referral engine, a Gardens swim school for custom earplugs, two music institutions for performer earmoulds and the deaf school in Observatory. Every row proven against a published source.
+- Pool facets: "Kloof Street Members" 32, "Body Vision Online" 16. Roster: Kim 16, Arnold's 16, Nigel live 12 (member face), Zola 10, PostNet 4, Dr Wendy 4. PostNet wave 2 (estate agents, boutiques, photographers, schools) is the last queued top up.
+- Ops seat only, master ZERO logins. Master password rotation STILL outstanding.
