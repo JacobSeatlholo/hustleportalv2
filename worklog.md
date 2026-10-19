@@ -1531,3 +1531,25 @@ Work Log:
 Stage Summary:
 - Production is healthy end to end: 63 checks green across two suites, deploy path restored on the private repo, no open issues. QA scripts committed locally (scripts/ is gitignored, stays out of the repo by design).
 - Reminder standing: boss to rotate the master password (overdue since the 82c run).
+
+---
+Task ID: 84
+Agent: main
+Task: "lets have a look at all of the kloofstreet members, and start unique campaigns for them, one by one. Start by generating leads for Bodyvision Online, load them to the pool labelled for Bodyvision, real findable leads she can contact today, hyper localised in Cape Town."
+
+Work Log:
+- Roster read from prod (exec seat, read only): 12 Kloof Street members, all ACTIVE, ALL with zero pipeline leads. On Safari, Ubuntu Wellness, Dr Wendy Dicks, Just Hearing, Dr Thomas Jahn, Trudy Christians, PostNet Gardens, Revive Studio, Dr Dale Geoffreys, Hayley Schuter Physio, Body Vision Studio (Kim Tucker, admin@bodyvision.co.za, id cmvatsnoe000rjm07yqxhdvuy), Arnold's Restaurant. Live kloofstreet.online fetched for the member detail.
+- Campaign 1 = Body Vision Online (Kim Tucker, GYROTONIC and Pilates, Lifestyle Centre, 50 Kloof Street). Lead thesis: her pool is referral partners + audience adjacencies, hyper local (Gardens, City Bowl, Tamboerskloof): physios, biokineticists, chiropractors, yoga studios, same building businesses.
+- 16 leads researched on the live web (searches + contact page fetches; every phone, email and website comes from a published source recorded in profileUrl/why). Same building: Yoga Loft (info@yogaloft.co.za, 064 839 1309, 1st floor), Robyn Page Physiotherapy (079 686 2765, 2nd floor), Sorbet Kloof (ground floor). Physios: WP Physiotherapists Gardens (Wimpie van der Meijden, 021 424 5268, gardens@wpphysio.capetown), Marguerite Jay Physiotherapy (084 499 6200, admin@capetownphysio.co.za), PS Physio (082 550 8862), Cape Town Physiotherapy (021 418 2808). Biokineticists: Safwaan Ahmed (083 786 2375, saf.bio99@gmail.com), Neil Hopkins (Wembley Sq). Chiropractors: Impulse (021 423 0739), the practice Tamboerskloof (021 422 2962), Dr Hilton Lazar (071 690 7375 WhatsApp), Cape Town Chiro Care (083 400 8153). Yoga: Yoga Life (Maya, 021 418 2884, two venues), The Yoga Room (072 559 4165), The Shala (076 909 3514).
+- Build db089d3: pasted contacts now carry the why fit line and 1..5 fit score through pastedToContact (additive, tsc clean).
+- Load: scripts/bodyvision_pool_load.mjs (env gated, dry run first). Dry run 16/16 would create, 0 collisions. LIVE: 16 created, 0 merged, 14 websites pinged, poolTag "Body Vision Online". verifyScores 60 to 85 on landing, then 60 to 100 after the confirm pass. 14 phones, 10 emails, every row contactable.
+- Assign: 16 pool rows handed into Kim's pipeline via POST /api/admin/exec/pool/assign (stage NEW, source TEAM, note "Hand picked for you by the Business Hustle team from our verified contact pool"). Roster verify: Body Vision Studio leads=16.
+- Idempotency proven: rerun created=0, merged=16, assign skipped=16 (no doubles anywhere). Pool readback facet "Body Vision Online" = 16.
+- DEPLOY INCIDENT (critical, boss action needed): db089d3 and two follow up commits never went live. Health probe showed no build stamp, proving zero deployments since the repo flip to PRIVATE. Pushes reach GitHub fine (deploy key works); the Vercel GitHub build trigger is dead. Fix needs the boss in the Vercel dashboard: Deployments tab to see what built, then Settings, Git, reconnect the repo for private access. Added a permanent deploy verification stamp in 74f23d9: GET /api/health now returns build.sha + branch from VERCEL_GIT_COMMIT_SHA (live once builds resume).
+- why fit lines did not land on the 16 pool rows (they ride on db089d3 which is not live). Merge law fills them: one rerun of the loader after the deploy resumes enriches all 16, no doubles. Scores and contact data are unaffected (they ride on the pre flip code).
+
+Stage Summary:
+- Campaign 1 of 12 delivered: the pool has a "Body Vision Online" tag of 16 verified hyper local Cape Town leads and Kim's pipeline holds all 16, contactable today by phone, WhatsApp or email. Ops seat only, master account ZERO logins.
+- BLOCKER for code changes only: Vercel build trigger dead since the private flip. Production serves the pre flip code (stable, QA green in task 83). Boss must reconnect Vercel Git. Verification after fix: curl /api/health shows build.sha.
+- Roadmap offered: campaign 2 candidate Dr Dale Geoffreys or Arnold's (boss picks), a briefed email from HIS account to Kim, unclaimed Kloof businesses as a separate directory campaign (their own "Get Listed" pipeline, not member lead pools).
+- Standing: master password rotation STILL not done. Ops seat password unchanged.
