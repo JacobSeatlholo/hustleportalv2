@@ -90,6 +90,12 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
+    // Deploy verification: Vercel injects these per build. A missing sha means
+    // the running deployment predates this stamp (or runs outside Vercel).
+    build: {
+      sha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      branch: process.env.VERCEL_GIT_COMMIT_REF || null,
+    },
     db: { ping: dbPing, ...detail },
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
