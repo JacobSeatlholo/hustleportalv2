@@ -41,13 +41,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     where: { id },
     select: {
       id: true, email: true, name: true, businessName: true, role: true,
-      platformAdmin: true, accountStatus: true, _count: { select: { leads: true } },
+      platformAdmin: true, accountStatus: true,
     },
   })
   if (!target) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
   if (isExecUser(target)) {
     return NextResponse.json({ error: 'Admin and executive accounts cannot be re pointed or invited this way.' }, { status: 400 })
   }
+  // Only the leads the team actually handed over count for the invitation line:
+  // a member's own scan results are theirs, not hand picked, and the copy must
+  // stay truthful to the number.
+  const teamLeadCount = await db.lead.count({ where: { userId: id, source: 'TEAM' } })
 
   const body = await req.json().catch(() => ({}))
   let emailChanged = false
@@ -86,10 +90,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const first = (target.name || '').trim().split(' ')[0] || 'there'
   const business = target.businessName || 'your business'
-  const leadCount = target._count.leads
   const leadsLine =
-    leadCount > 0
-      ? `The Business Hustle team has hand picked ${leadCount} verified ${leadCount === 1 ? 'lead' : 'leads'} for you. They are waiting in your pipeline right now.`
+    teamLeadCount > 0
+      ? `The Business Hustle team has hand picked ${teamLeadCount} verified ${teamLeadCount === 1 ? 'lead' : 'leads'} for you. They are waiting in your pipeline right now.`
       : 'Sign in to meet your dashboard, your pipeline and every tool inside.'
 
   const sent = await sendSystemMail({
@@ -120,7 +123,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     inviteSent: sent.ok,
     ...(sent.ok ? {} : { inviteError: sent.error || 'The invitation email failed to send.' }),
     inviteWindowHours: 24,
-    leads: leadCount,
+    teamLeads: teamLeadCount,
     message: emailChanged
       ? `Login email moved to ${email}. ${sent.ok ? `Invitation email sent — ${first} can set a password and sign in.` : 'The invitation email failed to send — check the mail engine.'}`
       : `Email unchanged. ${sent.ok ? 'Invitation email sent again.' : 'The invitation email failed to send — check the mail engine.'}`,
