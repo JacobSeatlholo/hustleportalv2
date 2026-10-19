@@ -1608,3 +1608,22 @@ Stage Summary:
 - Nigel's real account njw.cpt@gmail.com now carries 12 pipeline leads (5 own scan + 7 team hand picked) and holds the system invitation with a 24 hour single use sign in link. The managed shell On Safari (onsafari@kloofstreet.online) still holds its 8 copies and the kloofstreet.online membership identity — boss to decide: retire the shell, or keep it as the membership record and treat the self signup as the member face.
 - New standing exec tool shipped: client invite route works for ALL Kloof Street members (move login email + invitation email), ready for the rest of the roster.
 - Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet and Zola wave 2 top ups still queued.
+
+---
+Task ID: 87
+Agent: main
+Task: Boss: "load the 8 leads + membership identity on nigels self-made account as the member face". This settles the open question from task 86: the self signup IS the member face.
+
+Work Log:
+- Probe (scripts/nigel_face_probe.mjs, read only) captured both accounts: the self-made account (cmveynp9a0001l50845xnh6o7, njw.cpt@gmail.com) carried loose self reg details (name "N J Whitehead", business "on safari", industry null, city Gardens Cape Town) and 12 pipeline leads; the managed shell (cmvatsmx10000jm07t6ybcgdr, onsafari@kloofstreet.online) carries the proper identity (Nigel Whitehead, On Safari, Fine Art Photography) and 8 lead copies.
+- Built the missing exec capability (commit 3454f1b): PATCH /api/admin/exec/client/[id]/profile sets member identity fields only (name, businessName, industry, city, phone). Email, role, status and credentials deliberately not settable here: email moves live on the invite route, pause on the status PATCH, credentials belong to the member. Guards: exec gate, exec and admin accounts can never be reprofiled, trim plus length caps, empty optional fields clear, idempotent with a before/after change list. tsc clean (src zero errors), pushed, build stamp verified via /api/health.
+- The 8 leads: idempotent re hand over of the 8 On Safari pool rows onto his live pipeline returned added=0 skipped=8, which proves every one of the 8 campaign companies is already in his pipeline (7 as TEAM hand picked from task 86, the 8th arrived through his own scan and the company dedupe correctly blocked the double). The play also tops up any that ever go missing.
+- Membership identity patched onto the member face: name N J Whitehead to Nigel Whitehead, business on safari to On Safari, industry null to Fine Art Photography. His city Gardens, Cape Town kept (his own input, more precise than the shell's Cape Town). Login email untouched: njw.cpt@gmail.com. Idempotency proven: same patch rerun changed=0.
+- Roster verify: member face reads Nigel Whitehead | On Safari | Fine Art Photography | Gardens, Cape Town, email njw.cpt@gmail.com, 12 leads, ACTIVE, last active today 08:29 UTC. Shell untouched: 8 copies, dormant since 06:54.
+- Scripts: scripts/nigel_face_probe.mjs (read only probe), scripts/nigel_member_face.mjs (build wait + assign proof + identity patch + rerun proof + roster verify).
+
+Stage Summary:
+- Nigel's self-made account is now the On Safari member face: proper identity, all 8 campaign companies in the pipeline (12 leads total: 5 own scan + 7 team hand picked, the 8th campaign company rides as his own scan lead), real inbox connected, invitation from task 86 still standing with its 24 hour sign in link.
+- The managed shell keeps the kloofstreet.online address and 8 duplicate leads as the membership record; retirement stays a boss decision (a one call status PATCH when wanted).
+- New exec tool for the whole roster: the profile PATCH lets the desk align any member's identity to their membership record without touching logins.
+- Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet and Zola wave 2 top ups still queued.
