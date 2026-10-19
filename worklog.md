@@ -1665,3 +1665,22 @@ Stage Summary:
 - The first paying member now has the first paying campaign: 10 highly credible Pietermaritzburg leads in his pipeline (11 total), each with a published contact and a truthful why line naming the financial planning angle: referral doors from accountants and attorneys, commission earners at two agencies, owner led medical practices, dealership owners.
 - Pool facet "Kabir SANLAM PMB" = 10. Program facets now: Kloof Street Members 32, Body Vision Online 16, Kabir SANLAM PMB 10.
 - Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet wave 2 remains the last Kloof Street top up queued.
+
+---
+Task ID: 90
+Agent: main
+Task: Boss: "Lets do a lead run for Tees & Gees Clothing store, 139 Long St, 079 079 9974. Load 5 hyperlocal leads for him that can easily be converted to sales and load it into his pipeline."
+
+Work Log:
+- Probe (scripts/teesgees_probe.mjs, read only): Mpho Ronald Mopai, ottimo80@hotmail.com, business Tees & Gees, industry Retail, city Cape Town, account cmvf70gyu0000jt07u7pxl375, ACTIVE, joined 11:50 UTC today — a minutes old self signup, the latest member to walk in and register himself (Nigel and Kabir pattern). 1 own scan lead, store phone missing from his profile. Clean slate: the store was not in the pool and no tag facet existed.
+- Campaign thesis for a tee and clothing shop on the Long Street strip: bulk and repeat buyers beat walk bys. Hostel front desks selling guest tees, staff tees for the bar strip, the creative college production merch cycle, and the monthly art walk crowd for collab drops.
+- Research with the quality law (every contact from a published source recorded in profileUrl, web budget 8 calls): Long Street Backpackers 209 Long Street, 300 metres from the store (reservations@longstreetbackpackers.co.za, 021 423 0615, own site, under new management), The Backpack 74 New Church Street (backpack@backpackers.co.za, 021 423 4530, owner Toni Shina named in the published CapeTownMagazine feature, email confirmed on the official tourism board listing), Ashanti Lodge Gardens 11 Hof Street (info@ashanti.co.za, 021 423 8721 plus WhatsApp on their own contact page), CityVarsity 18 Roeland Street (info@cityvarsity.co.za, 086 181 9229, own contact page), First Thursdays Cape Town (contact@first-thursdays.co.za published on their official page, email only).
+- QUALITY DISCIPLINE: dropped Beerhouse on Long (a published farewell announcement says it closed after 11 years, same call as The Crypt in task 88), La Parada (no published contact captured in budget), Pan African Market (sells the same product, not a buyer). No invented contacts, no unverified numbers.
+- Load (scripts/teesgees_load.mjs, env gated, poolTag "Tees & Gees Long Street" riding on every row from the start, task 88 lesson baked in): DRY 5 would create 0 merges, 5 sites pinged. LIVE created=5 merged=0 pinged=5. ASSIGN added=5 skipped=0, message reads 5 verified contacts now waiting in Mpho Ronald Mopai's pipeline. Membership face upgraded too: PATCH profile phone 079 079 9974 changed=1, rerun changed=0 proves stored (the roster projection omits phone, the route idempotency contract is the proof).
+- Verify (scripts/teesgees_verify.mjs): facet "Tees & Gees Long Street" = 5 rows, why 5/5, email 5/5, phone 4/5 (First Thursdays email only). Scores honest: the three hostel rows 5, the college and the email only event row 4. Mpho roster: leads=6 (1 own scan + 5 team hand picked), ACTIVE, last active 12:26 UTC — he was live on the platform minutes after his leads landed.
+- Idempotency proven: rerun created=0 merged=5, assign added=0 skipped=5, patch changed=0. Zero doubles possible.
+
+Stage Summary:
+- The newest member woke up to a real pipeline: 5 hyperlocal Long Street buyers, every one a bulk or repeat order fit (2 hostels within 350 metres, the Gardens lodge with a travel centre, the Roeland Street creative college, the First Thursdays art walk). Every row carries a published contact and a truthful Serves Mpho why line.
+- Pool facets now: Kloof Street Members 32, Body Vision Online 16, Kabir SANLAM PMB 10, Tees & Gees Long Street 5. Roster leads: Kim 16, Arnold's 16, Nigel 12, Zola 10, Kabir 11, Mpho 6, PostNet 4, Dr Wendy 4.
+- Ops seat only, master ZERO logins. Master password rotation STILL outstanding. PostNet wave 2 remains the last Kloof Street top up queued.
