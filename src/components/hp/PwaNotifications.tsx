@@ -9,6 +9,10 @@
  *  - iPhone Safari only allows web push inside the installed Home Screen app
  *    (iOS 16.4+). In the regular browser tab we now SAY that instead of a
  *    generic failure, so the user knows the one step that unlocks it.
+ *  - Task 96 fix: in the Safari tab Apple never exposes the Notification API
+ *    at all, so supported goes false and the old early return showed the dead
+ *    end message and never reached the amber guidance card. iPhone tabs now
+ *    get the Add to Home Screen steps in both the menu and the profile screen.
  *  - The test action returns the honest per-device truth (stored / sent /
  *    pruned / refused) and the toast repeats exactly that — the old version
  *    answered the same "turn notifications on first" for every failure.
@@ -145,12 +149,35 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
   const iosTab = isIOSBrowserTab() && !subscribed
 
   if (!supported || permission === 'denied') {
+    if (permission === 'denied') {
+      return compact ? null : (
+        <p className="text-xs text-muted-foreground">
+          Notifications are blocked in your browser settings — unblock them for hustleportal.online to get reminders.
+        </p>
+      )
+    }
+    if (iosTab) {
+      return compact ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Add HustlePortal to your Home Screen first. Tap Share, Add to Home Screen, open from the icon, then turn notifications on there.</span>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span className="space-y-1">
+            <span className="block font-medium">On iPhone, notifications live in the installed app, not in this Safari tab.</span>
+            <span className="block">1. Tap the Share button at the bottom of Safari.</span>
+            <span className="block">2. Choose Add to Home Screen.</span>
+            <span className="block">3. Open HustlePortal from the new icon.</span>
+            <span className="block">4. Open the menu, tap Get notifications, then Allow.</span>
+            <span className="block">iOS 16.4 or newer is required. If the option fails, update iOS in Settings and try again.</span>
+          </span>
+        </div>
+      )
+    }
     return compact ? null : (
-      <p className="text-xs text-muted-foreground">
-        {permission === 'denied'
-          ? 'Notifications are blocked in your browser settings — unblock them for hustleportal.online to get reminders.'
-          : 'This browser does not support push notifications.'}
-      </p>
+      <p className="text-xs text-muted-foreground">This browser does not support push notifications.</p>
     )
   }
 
