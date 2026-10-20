@@ -1762,3 +1762,18 @@ Stage Summary:
 - The boss's 5 lead ask is now met with 5 verified buyers, zero padding: Daddy Long Legs Art Hotel across the road (score 5), Legends Barbershop Long Street (score 4, phone only), Deluxe Coffeeworks with cafes on Kloof and Buitenkant (score 5), Upper Union Restaurant (score 4, group line), Cape Cadogan Boutique Hotel (score 4, group line). Every contact from a published source, profileUrl on every row.
 - Four tempting names were protected, not hijacked: Truth Coffee and Grand Daddy (Arnold's), Long Street Backpackers and The Backpack (Mpho). Other members' campaigns kept every row.
 - HUCHi's profile carries his own published store phone and street. Invite still NOT sent, boss has not queued the word. Ops seat only, master ZERO logins both runs. Master password rotation STILL outstanding.
+
+---
+Task ID: 95
+Agent: main
+Task: Boss: "Lets goo." The word for HUCHi's invitation, queued since Task 93 and held twice.
+
+Work Log:
+- Recreated the invite walk (scripts/huchi_invite.mjs, recycle wiped the Task 91 script): plain POST with empty body to /api/admin/exec/client/HUCHI/invite, which re-sends to the email already on the account.
+- Result: inviteSent=true, emailChanged=false, no email move, account email huchihive@gmail.com keeps receiving, 24 hour single use link live, teamLeads=5 so the truthful line hand picked 5 verified leads rides the mail. Script fails hard if inviteSent is not true, nothing claimed silently.
+- State ride along: pipeline stages NEW 5 total 5 waiting for him, profile city Long Street, Cape Town CBD and phone 078 653 8698 intact. He sets a password and lands straight on his loaded pipeline.
+- Idempotent resend by design, so a rerun can never double send a claim, only refresh the 24 hour window.
+
+Stage Summary:
+- HUCHi has the full kit: 5 verified hyperlocal buyers on his own block, his real store phone and street on his profile, and the invitation in his inbox with a 24 hour sign in link.
+- Every Kloof Street era member plus HUCHi and Mpho now holds a real pipeline and a working sign in path. Ops seat only, master ZERO logins. Master password rotation STILL outstanding.
