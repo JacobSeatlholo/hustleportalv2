@@ -1777,3 +1777,17 @@ Work Log:
 Stage Summary:
 - HUCHi has the full kit: 5 verified hyperlocal buyers on his own block, his real store phone and street on his profile, and the invitation in his inbox with a 24 hour sign in link.
 - Every Kloof Street era member plus HUCHi and Mpho now holds a real pipeline and a working sign in path. Ops seat only, master ZERO logins. Master password rotation STILL outstanding.
+
+---
+Task ID: 96
+Agent: main
+Task: Boss on his iPhone: "This browser does not support push notifications" — diagnose and fix the UI miss.
+
+Work Log:
+- ROOT CAUSE found in PwaNotifications.tsx: in an iPhone Safari tab Apple never exposes the Notification API at all, so supported goes false. The old state machine returned the dead end line "This browser does not support push notifications" on the unsupported path and never reached the amber Add to Home Screen guidance card, which only rendered on the supported path. The Task 92 guidance card existed but was unreachable exactly where iPhone users need it. The boss hit precisely that trap.
+- FIX shipped: the unsupported branch now checks isIOSBrowserTab first. iPhone tabs get the real steps instead of a dead end, in BOTH mount points: the profile screen card now carries the four numbered steps (Share, Add to Home Screen, open from the icon, menu Get notifications Allow) plus the honest iOS 16.4 line, and the compact menu button is replaced by a one line install nudge instead of a button that could only error. Desktop oddities keep the old unsupported line, denied keeps the blocked message.
+- tsc clean for src (only pre existing skill tooling errors outside src, same baseline as Task 92).
+- NOTE for the boss: the install flow itself always worked, only the messaging was broken, so he can do the steps right now without waiting for anything: Safari, Share, Add to Home Screen, open from the icon, menu, Get notifications, Allow.
+
+Stage Summary:
+- iPhone users in a Safari tab now see the way out instead of a wall. Deployed with the commit, stamp verified. Ops seat only, master ZERO logins. Master password rotation reported as in progress by the boss, new secret to ride env vars only when handed over.
