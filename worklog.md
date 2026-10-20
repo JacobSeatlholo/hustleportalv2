@@ -1744,3 +1744,21 @@ Stage Summary:
 - HUCHi holds 2 verified hyperlocal buyers on his own street: the art hotel across the road (email and phone) and the Long Street branch of the top rated barbershop chain (phone, honest score 4). His profile now carries his real store phone and street.
 - Truth Coffee stayed in Arnold's campaign, protected by the relabel guard. Wave 2 can top up 3 more once the web budget resets, Grand Daddy and Upper Union are the first candidates.
 - Ops seat only, master ZERO logins this run. Master password rotation STILL outstanding.
+
+---
+Task ID: 94
+Agent: main
+Task: Boss: "continue whats left off to ensure everything is accurate and loaded properly." Wave 2 for HUCHi plus a full accuracy sweep of Task 93.
+
+Work Log:
+- ACCURACY SWEEP first: Task 93 state intact before anything moved. HUCHi pipeline stages NEW 2 total 2, profile phone 078 653 8698 and city Long Street, Cape Town CBD stored, account ACTIVE, facet "HUCHi Long Street" = 2. Everything the run reported is what production holds.
+- HIJACK GUARD did its job three more times: Grand Daddy Boutique Hotel already in the pool under Kloof Street Members (Arnold's row, email only), Long Street Backpackers and The Backpack already under Tees and Gees Long Street (Mpho's rows from Task 90). Re-ingesting would relabel those rows away from their members, so all three stayed untouched and no double landed anywhere.
+- RESEARCH (7 web calls): Deluxe Coffeeworks verified from their own contact page, info@deluxecoffeeworks.co.za plus 072 569 9579, cafes at 8 Kloof Street and 171a Buitenkant Street, and they already sell their own merch line. MORE Collection contact page verified, concierge@more.co.za plus 010 109 4900, covering Upper Union Restaurant on Kloof Street and Cape Cadogan Boutique Hotel (hotel line 013 735 5000 published on the same page). ProfileUrls recorded for all three.
+- LOAD (scripts/huchi_wave2_load.mjs, env gated, same tag "HUCHi Long Street"): DRY 3 would create 0 merges. LIVE created=3 merged=0 pinged 3, ASSIGN added=3 skipped=2, the 2 skips being HUCHi's own Task 93 rows correctly deduped.
+- VERIFY: pipeline stages NEW 5, total 5, project HUCHi leads 5. Facet "HUCHi Long Street" = 5. Idempotency proven: PATCH rerun changed=0, ASSIGN rerun added=0 skipped=5. Zero doubles possible.
+- FACET GUARD after load: Kloof Street Members still 37, Tees and Gees still 5, Kabir 10, Body Vision 16, Honest travel 52. Nothing moved anywhere.
+
+Stage Summary:
+- The boss's 5 lead ask is now met with 5 verified buyers, zero padding: Daddy Long Legs Art Hotel across the road (score 5), Legends Barbershop Long Street (score 4, phone only), Deluxe Coffeeworks with cafes on Kloof and Buitenkant (score 5), Upper Union Restaurant (score 4, group line), Cape Cadogan Boutique Hotel (score 4, group line). Every contact from a published source, profileUrl on every row.
+- Four tempting names were protected, not hijacked: Truth Coffee and Grand Daddy (Arnold's), Long Street Backpackers and The Backpack (Mpho). Other members' campaigns kept every row.
+- HUCHi's profile carries his own published store phone and street. Invite still NOT sent, boss has not queued the word. Ops seat only, master ZERO logins both runs. Master password rotation STILL outstanding.
