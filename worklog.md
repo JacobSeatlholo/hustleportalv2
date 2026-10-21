@@ -1814,3 +1814,20 @@ Stage Summary:
 - Deployed 9d889dd + 981d716, stamp verified, probe ALL PASS, webhook waiting only on the boss's Meta credentials (token, phone number id, optional app secret) which he can paste inline any time; the verify token for his Meta dashboard is ready and served by the exec route.
 - Side effect the boss will feel: WhatsApp notifications on his iPhone are native and reliable, so the bot doubles as the notification channel the PWA push could not be on his device.
 - Ops seat only, master ZERO logins, zero data writes this run. Master password rotation reported in progress by the boss, still to be confirmed complete in the next report.
+
+---
+Task ID: 97b
+Agent: main
+Task: Unblock the boss at the Meta app creation wizard Business step (No businesses available, Next greyed out) and hand him the exact webhook values so the Hustle Bot go live needs zero extra rounds.
+
+Work Log:
+- Confirmed Task 97 bot backend is intact in the repo and live: /api/whatsapp/bot handshake and inbound processing, exec gated credential store, self generating verify token.
+- Recycle recovery: paramiko reinstalled, hp_deploy key back to 600.
+- Recreated scripts/wa_bot_report.mjs (ops seat inline, READ ONLY) after the recycle wiped the old probe.
+- Probed GET /api/admin/exec/whatsapp-bot: 200, webhookUrl https://www.hustleportal.online/api/whatsapp/bot, verifyToken d69138578c54416c885c6c32f790bdab236f4f99119df607, enabled true, waiting on token, phoneNumberId, appSecret.
+- Wrote the boss a plain walkthrough: create the business portfolio at business.facebook.com (free, no documents today), then refresh the wizard and select it; verification is only needed later to go live, dev mode with the free test number is R0.
+
+Stage Summary:
+- Bot stays Meta ready. The boss has the callback URL and verify token in hand plus the three values to send back inline: app secret, phone number id, access token.
+- Permanent token path explained: a system user token is minted inside the portfolio, so the Business step detour is required regardless.
+- Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed complete.
