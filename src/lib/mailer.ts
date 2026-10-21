@@ -318,9 +318,34 @@ export async function getUserMailCreds(userId: string): Promise<MailCreds | null
   return { user: map.GMAIL_USER, appPassword: map.GMAIL_APP_PASSWORD }
 }
 
+/** A mail attachment rides as base64; decoded size is capped in sendMail. */
+export interface MailAttachment {
+  filename: string
+  content: string // base64
+}
+
+const MAX_ATTACHMENTS_TOTAL = 8 * 1024 * 1024 // decoded bytes across all files
+
+/** Keep honest, small, decodable attachments only. Invalid entries are dropped, never fatal. */
+function sanitizeAttachments(list?: MailAttachment[]): MailAttachment[] | undefined {
+  if (!Array.isArray(list)) return undefined
+  const clean: MailAttachment[] = []
+  let total = 0
+  for (const a of list) {
+    const filename = String(a?.filename || 'attachment').slice(0, 120).replace(/[\r\n]/g, '')
+    const content = typeof a?.content === 'string' ? a.content.replace(/\s/g, '') : ''
+    if (!content || !/^[A-Za-z0-9+/=]+$/.test(content)) continue
+    const bytes = Math.floor(content.length * 0.75)
+    total += bytes
+    if (total > MAX_ATTACHMENTS_TOTAL) break
+    clean.push({ filename: filename || 'attachment', content })
+  }
+  return clean.length ? clean.slice(0, 3) : undefined
+}
+
 async function sendViaUserGmail(
   creds: MailCreds,
-  mail: { to: string; subject: string; body: string },
+  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
 ): Promise<{ ok: true; provider: 'GMAIL' } | { ok: false; error: string }> {
   try {
     const nodemailer = await import('nodemailer')
@@ -335,6 +360,9 @@ async function sendViaUserGmail(
       to: mail.to,
       subject: mail.subject,
       text: mail.body,
+      ...(mail.attachments?.length
+        ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content, 'base64') })) }
+        : {}),
     })
     return { ok: true, provider: 'GMAIL' }
   } catch (e) {
@@ -370,7 +398,7 @@ async function resendSend(
   apiKey: string,
   from: string,
   userId: string,
-  mail: { to: string; subject: string; body: string },
+  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
 ): Promise<{ ok: true } | { ok: false; raw: string }> {
   // Reply-To the sender's real account so client responses reach THEM
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
@@ -379,6 +407,7 @@ async function resendSend(
     to: [mail.to],
     subject: mail.subject,
     text: mail.body,
+    ...(mail.attachments?.length ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content })) } : {}),
     ...(user?.email ? { reply_to: user.email } : {}),
   })
 }
@@ -391,7 +420,7 @@ async function resendSend(
  */
 async function sendViaPlatform(
   userId: string,
-  mail: { to: string; subject: string; body: string },
+  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
 ): Promise<{ ok: true; provider: 'PLATFORM'; viaFallback?: boolean } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
@@ -436,10 +465,12 @@ async function sendViaPlatform(
  */
 export async function sendMail(
   userId: string,
-  mail: { to: string; subject: string; body: string },
+  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
 ): Promise<MailSendResult> {
+  const attachments = sanitizeAttachments(mail.attachments)
+  const payloadMail = { ...mail, attachments }
   const signature = await buildSignature(userId)
-  const payload = { ...mail, body: mail.body + signature }
+  const payload = { ...payloadMail, body: mail.body + signature }
   const creds = await getUserMailCreds(userId)
   if (creds && !gmailOnCooldown(userId)) {
     const r = await sendViaUserGmail(creds, payload)

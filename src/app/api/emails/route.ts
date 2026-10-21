@@ -47,7 +47,16 @@ export async function POST(req: NextRequest) {
     freeRemaining = FREE_LIMITS.emailSends - sent - 1
   }
 
-  const result = await sendMail(userId, { to, subject, body: mailBody })
+  // Attachments (the Video Studio pitch video rides here): base64 strings,
+  // sanitized and size capped inside sendMail — invalid entries drop quietly.
+  const attachments = Array.isArray(body.attachments)
+    ? body.attachments.map((a: { filename?: unknown; content?: unknown }) => ({
+        filename: String(a?.filename || 'attachment'),
+        content: String(a?.content || ''),
+      }))
+    : undefined
+
+  const result = await sendMail(userId, { to, subject, body: mailBody, attachments })
   const provider = result.ok ? result.provider : 'NONE'
 
   // If this send belongs to a logged draft, update it; otherwise log the send

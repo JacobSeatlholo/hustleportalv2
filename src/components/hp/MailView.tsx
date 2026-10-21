@@ -11,13 +11,19 @@ import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
 import { requestOpenLead } from './leadBus'
+import dynamic from 'next/dynamic'
+import type { VideoAttach } from './video/VideoStudioDialog'
+
+// The Video Studio (Remotion Player + web renderer) is browser only machinery,
+// so it loads on demand in the client and never touches server rendering.
+const VideoStudioDialog = dynamic(() => import('./video/VideoStudioDialog'), { ssr: false })
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -47,6 +53,8 @@ export default function MailView() {
   const [loading, setLoading] = useState(true)
   const [drafting, setDrafting] = useState(false)
   const [sending, setSending] = useState(false)
+  const [videoOpen, setVideoOpen] = useState(false)
+  const [videoAttach, setVideoAttach] = useState<VideoAttach | null>(null)
   const [mailStatus, setMailStatus] = useState<MailStatus | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
 
@@ -325,7 +333,14 @@ export default function MailView() {
     try {
       const res = await api<{ email: EmailLogRow; notice?: string | null; freeRemaining?: number | null }>('/api/emails', {
         method: 'POST',
-        body: JSON.stringify({ draftId, to, subject, body, projectId: activeProjectId }),
+        body: JSON.stringify({
+          draftId,
+          to,
+          subject,
+          body,
+          projectId: activeProjectId,
+          attachments: videoAttach ? [{ filename: videoAttach.filename, content: videoAttach.base64 }] : undefined,
+        }),
       })
       toast({
         title: 'Sent ✓',
@@ -335,7 +350,7 @@ export default function MailView() {
             ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. Operator sends unlimited.`
             : `${subject} → ${to}`),
       })
-      setSubject(''); setBody(''); setTo(''); setDraftId(null)
+      setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null)
       load()
     } catch (e) {
       // Calm inline card instead of a toast wall — details stay under the composer
@@ -625,6 +640,33 @@ export default function MailView() {
               <Label htmlFor="m-body">Message</Label>
               <Textarea id="m-body" rows={10} placeholder="Write it yourself, or let Gemini draft it from your business profile…" value={body} onChange={(e) => setBody(e.target.value)} />
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setVideoOpen(true)} type="button">
+                <Clapperboard className="h-4 w-4 mr-1" /> Create a pitch video
+              </Button>
+              {videoAttach && (
+                <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+                  <Film className="h-3.5 w-3.5 text-brand" />
+                  {videoAttach.filename} · {(videoAttach.sizeBytes / (1024 * 1024)).toFixed(1)} MB
+                  <button onClick={() => setVideoAttach(null)} aria-label="Remove video" className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
+            </div>
+            {session?.user && (
+              <VideoStudioDialog
+                open={videoOpen}
+                onOpenChange={setVideoOpen}
+                onAttach={setVideoAttach}
+                defaults={{
+                  businessName: session.user.businessName || session.user.name || '',
+                  city: session.user.city || '',
+                  phone: session.user.phone || '',
+                  industry: session.user.industry || '',
+                }}
+              />
+            )}
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
                 <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
