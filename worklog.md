@@ -1925,3 +1925,23 @@ Work Log:
 Stage Summary:
 - Answer to the boss: not the same, this one is on the official side of the fence, and it proves Plan B has many flavors when and if it is ever needed. Plan A unchanged.
 - Master account: ZERO logins, ZERO writes this run.
+
+---
+Task ID: 99
+Agent: main
+Task: Boss idea — members create their own marketing videos from Remotion and send them in pitch mails to leads through HustlePortal.
+
+Work Log:
+- Researched remotion.dev end to end: license free for teams of 3 or fewer INCLUDING SaaS use on the record (license FAQ), company license only past that, client side rendering exists as renderMediaOnWeb in @remotion/web-renderer so the member's own browser renders the MP4 and the platform pays zero render cost, no AWS Lambda, no video servers, no storage.
+- Installed remotion, @remotion/player, @remotion/web-renderer at 4.0.537 exact pins. Deliberately NOT @remotion/renderer — no Chrome headless shell anywhere near the bundle.
+- Built PitchVideo.tsx: 12 second 1280x720 30fps template, three scenes (business name slam, tagline, underline sweep; what we do with three services sliding in; call to action button with pulse holding the last four seconds), six accent colour presets, smart tagline from industry and city, deterministic spring and interpolate only, system fonts so no webfont can fail mid render.
+- Built VideoStudioDialog.tsx: fields prefilled from the member profile (businessName, industry, city, phone), Player live preview, canRenderMediaOnWeb gate with honest browser guidance (Chrome or Edge best, Safari 16.4+, Firefox may refuse), render with progress, result video, attach to email or save, 9.5MB cap. Loose Record type bridge for Remotion's loose component typings, Player uses compositionWidth and compositionHeight.
+- MailView: Create a pitch video button in the composer, attachment chip with remove, attachments ride the send body, dialog loaded via next/dynamic ssr false so the web renderer never touches server rendering.
+- mailer.ts: MailAttachment type, sanitizeAttachments (base64 only, 8MB decoded total across max 3 files, invalid entries dropped quietly), attachments threaded through the Gmail nodemailer lane (Buffer) and the Resend lane (attachments array), sendMail signature extended. /api/emails passes body.attachments through.
+- DEPLOY FIRE FIGHT: first two Vercel builds failed silently while the old deployment kept serving. Root cause found by bisect: this repo builds on Vercel with BUN (bun.lock), and the package-lock.json my npm install created made the install step ambiguous/broken. Removed package-lock.json, kept the bun.lock synced with bun install, stamp 360f333 verified. Lesson on record: this repo gets dependencies through bun only.
+- Verified: full local production build green, tsc clean for app code, live stamp 360f333 with all integrations true and db ping ok.
+
+Stage Summary:
+- Video Studio is live: mail composer → Create a pitch video → preview → render in the member's own browser → attach → send. Zero new servers, zero new env vars, zero marginal render cost, license free for our team size.
+- NOT yet verified: a real end to end render needs a WebCodecs browser click through (ops seat QA with the browser tool next session). The build, types, size caps and send plumbing are verified.
+- Master account: ZERO logins, ZERO writes this run.
