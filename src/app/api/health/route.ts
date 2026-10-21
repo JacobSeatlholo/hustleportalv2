@@ -100,7 +100,11 @@ export async function GET() {
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
       emailPlatformKey: Boolean(process.env.RESEND_API_KEY?.trim()),
-      emailFrom: Boolean(process.env.RESEND_FROM?.trim()),
+      // Truthful by design: RESEND_FROM is an optional operator override. The
+      // mailer always resolves a from address (branded per user identity or
+      // the platform fallback), so a from strategy exists whenever the email
+      // platform itself is configured.
+      emailFrom: Boolean(process.env.RESEND_FROM?.trim()) || Boolean(process.env.RESEND_API_KEY?.trim()),
       authSecret: Boolean(process.env.AUTH_SECRET?.trim()),
       yoco: Boolean(process.env.YOCO_SECRET_KEY?.trim()),
       verifiedFeed: Boolean(process.env.EXPLEE_API_KEY?.trim()),

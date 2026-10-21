@@ -314,7 +314,8 @@ export default function AppShell() {
           aria-label="Main menu"
         >
           <div className="grid grid-cols-5">
-            {BOTTOM_NAV.map((n) => (
+            {/* disabled modules must not sit in the bar as silent dead taps */}
+            {BOTTOM_NAV.filter((n) => !disabledModules.includes(n.key)).map((n) => (
               <button
                 key={n.key}
                 onClick={() => setView(n.key)}

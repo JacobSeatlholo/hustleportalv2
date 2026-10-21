@@ -66,6 +66,39 @@ export function usePushState() {
   return { supported, permission, subscribed, refresh }
 }
 
+/** Another app's built in browser (Facebook, Instagram, WhatsApp, LinkedIn...).
+ *  Web push never works inside those, and Add to Home Screen is missing too,
+ *  so the honest answer is: open this page in the real browser first. */
+function inAppBrowserName(): string | null {
+  if (typeof window === 'undefined') return null
+  const ua = navigator.userAgent || ''
+  const apps: [RegExp, string][] = [
+    [/FBAV|FBIOS|FB_IAB/, 'Facebook'],
+    [/Instagram/, 'Instagram'],
+    [/LinkedIn/, 'LinkedIn'],
+    [/WhatsApp/, 'WhatsApp'],
+    [/Pinterest/, 'Pinterest'],
+    [/Snapchat/, 'Snapchat'],
+    [/TikTok|musical_ly/, 'TikTok'],
+    [/Line\//, 'Line'],
+  ]
+  for (const [re, name] of apps) if (re.test(ua)) return name
+  return null
+}
+
+/** Installed Home Screen app on an iPhone or iPad that runs iOS older than 16.4:
+ *  standalone is true but Apple still hides PushManager, so push looks broken
+ *  even though the app is installed correctly. The fix is an iOS update. */
+function isOldIOSStandalone(): boolean {
+  if (typeof window === 'undefined') return false
+  const hasPush = 'PushManager' in window
+  if (hasPush) return false
+  const ua = navigator.userAgent || ''
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && ((navigator as { maxTouchPoints?: number }).maxTouchPoints ?? 0) > 1)
+  const standalone = (navigator as { standalone?: boolean }).standalone === true || window.matchMedia('(display-mode: standalone)').matches
+  return ios && standalone
+}
+
 /** iPhone or iPad Safari running as a normal browser tab (not the installed app). */
 function isIOSBrowserTab(): boolean {
   if (typeof window === 'undefined') return false
@@ -154,6 +187,43 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
         <p className="text-xs text-muted-foreground">
           Notifications are blocked in your browser settings — unblock them for hustleportal.online to get reminders.
         </p>
+      )
+    }
+    const cav = inAppBrowserName()
+    if (cav) {
+      return compact ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Push does not work inside {cav}. Open this page in Safari or Chrome, then turn notifications on there.</span>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span className="space-y-1">
+            <span className="block font-medium">This is {cav}'s built in browser — it never allows notifications.</span>
+            <span className="block">1. Tap the ••• or share menu at the top.</span>
+            <span className="block">2. Choose Open in Safari (or Open in browser).</span>
+            <span className="block">3. Turn notifications on from there.</span>
+          </span>
+        </div>
+      )
+    }
+    if (isOldIOSStandalone()) {
+      return compact ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Your iPhone needs iOS 16.4 or newer. Update in Settings, General, Software Update, then try again.</span>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
+          <span className="space-y-1">
+            <span className="block font-medium">The app is installed correctly — your iPhone just needs a newer iOS.</span>
+            <span className="block">1. Open Settings, General, Software Update.</span>
+            <span className="block">2. Update to iOS 16.4 or newer.</span>
+            <span className="block">3. Come back here and turn notifications on.</span>
+          </span>
+        </div>
       )
     }
     if (iosTab) {
