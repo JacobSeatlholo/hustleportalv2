@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
+import { ensureVerifyToken } from '@/lib/whatsapp-bot'
 
 export const maxDuration = 30
 
@@ -29,11 +30,14 @@ async function readConfig(): Promise<Record<string, string | undefined>> {
 export async function GET() {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
+  // The verify token self-generates here, so the exec report always shows the
+  // value the Meta dashboard needs before a single webhook call has happened.
+  const verifyToken = await ensureVerifyToken()
   const c = await readConfig()
   const token = c.WA_BOT_TOKEN || ''
   return NextResponse.json({
     webhookUrl: `${SITE}/api/whatsapp/bot`,
-    verifyToken: c.WA_BOT_VERIFY_TOKEN || null,
+    verifyToken,
     enabled: c.WA_BOT_ENABLED !== '0',
     configured: {
       token: Boolean(token),
