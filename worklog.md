@@ -1897,3 +1897,17 @@ Work Log:
 Stage Summary:
 - Parked Meta path stands, no code changed. The loader, webhook and exec store remain ready for the boss's three values.
 - Master account: ZERO logins, ZERO writes this run.
+
+---
+Task ID: 97f
+Agent: main
+Task: Boss asked about opensms.africa as another angle on the parked Meta problem.
+
+Work Log:
+- Researched OpenSMS.africa: multi channel bulk marketing platform, bulk SMS over 10 gateways, email via SMTP, WhatsApp connected by QR code device link, campaign and contact management, pay per usage.
+- Verdict: the WhatsApp piece is the same unofficial linked device route just ruled out with WAHA and ChatPay, so same ban and ToS problem, and it is a one way campaign blaster, not a two way bot, so it cannot carry the meeting to task and client creation loop anyway.
+- One legitimate takeaway recorded: compliant bulk SMS is a workable Plan C notification channel for task reminders if the official WhatsApp path ever failed permanently, at per SMS cost and under POPIA opt in plus WASPA rules. Plan B stays the BSP route, Plan A stays the parked official onboarding.
+
+Stage Summary:
+- No code changed. The three value handover for the official bot remains the whole go live.
+- Master account: ZERO logins, ZERO writes this run.
