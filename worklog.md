@@ -1880,3 +1880,20 @@ Stage Summary:
 - Every browser and device state on notifications now answers with the exact one step that unlocks it, no generic dead ends left.
 - The boss iPhone question stays a device check: if he is on the installed app with iOS 16.4+ and subscribed, Send test in profile gives the per device truth.
 - Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed. WhatsApp bot parked, waiting on the Meta block to lift, loader staged.
+
+---
+Task ID: 97e
+Agent: main
+Task: Boss asked how chatpay.digital works, whether its patterns apply to our parked Meta problem, and to review github.com/devlikeapro/waha as an open source way around the Meta onboarding block.
+
+Work Log:
+- Researched ChatPay.digital: hosted WhatsApp assistant builder, three step setup, free tier 1 assistant, R499 to R1199 monthly tiers, connection method undisclosed with no Meta verification flow shown, pattern consistent with QR linked unofficial sessions or a resold pipe.
+- Researched WAHA: Apache 2.0 open core plus paid Plus tier, engines WEBJS, NOWEB, GOWS, all unofficial reverse engineered clients in the Baileys family, session setup is scan a QR with your phone so the number runs as a linked device, needs a docker host which Vercel cannot provide.
+- Ban evidence confirmed current: whatsapp-web.js issue 2701 reports mass bans of tool users, Baileys issue 935 reports a fresh number banned within hours.
+- Pricing truth pinned for the official path: Meta charges per message since July 2025 for templates, and from 1 October 2026 service replies within the 24 hour window carry 1000 free per number per month before charges. Pilot scale stays R0.
+- Verdict recorded: unofficial routes stay rejected on the record for a business tool serving paying members. Ban risk on a live member channel, a paid VPS requirement, and ToS violation make the workaround strictly worse than the 24 to 72 hour cooldown it avoids.
+- What we keep: ChatPay pricing is commercial intel, R499 a month for what Hustle Bot does built in, and their three step onboarding is a UX pattern for our bot welcome flow. Legitimate fallback ladder unchanged: Meta support ticket after 72 hours, then a BSP such as Twilio or 360dialog whose onboarding rails bypass the boss's blocked developer account at small per message cost.
+
+Stage Summary:
+- Parked Meta path stands, no code changed. The loader, webhook and exec store remain ready for the boss's three values.
+- Master account: ZERO logins, ZERO writes this run.
