@@ -63,6 +63,7 @@ model User {
   referralsMade      Referral[]    @relation("Referrer")
   referralsReceived  Referral[]    @relation("Invitee")
   waMessages         WaMessage[]
+  waBotLinks         WaBotLink[]
   inventoryItems     InventoryItem[]
   pushSubs           PushSubscription[]
   taskComments       TaskComment[]
@@ -275,6 +276,7 @@ model Client {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String?
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tasks Task[]
 
   @@index([projectId])
 }
@@ -291,6 +293,7 @@ model Task {
   isPrivate  Boolean   @default(false)
   teamId     String? // null = personal task
   leadId     String? // optional link: this task belongs to a pipeline contact
+  clientId   String? // optional link: this task belongs to a client (Clients module, e.g. saved from WhatsApp)
   creatorId  String
   assigneeId String?
 
@@ -298,6 +301,7 @@ model Task {
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
   lead     Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
   comments TaskComment[]
   events   TaskEvent[]
 
@@ -482,6 +486,28 @@ model WaMessage {
 
   @@index([userId, createdAt])
   @@index([userId, phone])
+}
+
+// ============ HUSTLE BOT (one shared WhatsApp number for the whole platform) ============
+
+// Links a WhatsApp phone to a Hustle Portal account so a member can run the
+// platform from chat: save tasks against clients, add clients, read the day.
+// A phone proves nothing on its own — first contact must reply with the email
+// on the account before a single action is allowed (status ACTIVE). One member
+// can link two phones (work plus private), each row stands alone.
+model WaBotLink {
+  id        String   @id @default(cuid())
+  phone     String   @unique // E.164 without +, e.g. 27821234567 (the Meta wa_id)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("PENDING") // PENDING | ACTIVE | OPTED_OUT
+  pending   String?  // JSON context for multi-turn flows (contact disambiguation)
+  attempts  Int      @default(0) // failed link attempts on this phone
+  lastMsgAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ============ USER INTEGRATION SETTINGS ============
