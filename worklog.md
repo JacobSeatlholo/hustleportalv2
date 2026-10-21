@@ -1862,3 +1862,21 @@ Work Log:
 Stage Summary:
 - Go live is now one message away: boss pastes three values inline, loader goes LIVE, readiness report flips, he links his phone and runs the meeting test.
 - Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed.
+
+---
+Task ID: 98
+Agent: main
+Task: Deadend sweep of the live app before the next idea. Find every trap a user can fall into and close them.
+
+Work Log:
+- Swept src for unfinished markers: zero TODO, FIXME, coming soon or under construction dead ends. The 18 view keys in the nav all map to real components, footer links all resolve, the href anchor in the project switcher is a proper preventDefault navigate.
+- Fixed the push guidance tree in PwaNotifications: new inAppBrowserName detector gives Facebook, Instagram, WhatsApp, LinkedIn, Pinterest, Snapchat, TikTok and Line webviews an open it in Safari or Chrome card instead of wrong Add to Home Screen steps or a generic failure; new isOldIOSStandalone detector catches the installed app on iOS older than 16.4 and now says update your iOS instead of this browser does not support push. Both get short compact variants in the menu. Kept the existing iOS Safari tab card.
+- TypeScript trap handled: PushManager in window narrows window to never in the negative branch, so the detector captures the check in a boolean first.
+- Fixed bottom nav in AppShell: BOTTOM_NAV now filters disabled modules exactly like the sidebar, so a switched off module can never sit in the thumb bar as a silent dead tap.
+- Fixed the health report lie: emailFrom was reporting the optional RESEND_FROM override, which is unset, so the stamp said false while every invite and mail actually sends. It now reports the real send strategy: override or branded per user fallback whenever the email platform key exists. Live stamp shows emailFrom true.
+- Typechecked clean for app code, deployed, health stamp 1ad32e1 verified with all integrations true.
+
+Stage Summary:
+- Every browser and device state on notifications now answers with the exact one step that unlocks it, no generic dead ends left.
+- The boss iPhone question stays a device check: if he is on the installed app with iOS 16.4+ and subscribed, Send test in profile gives the per device truth.
+- Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed. WhatsApp bot parked, waiting on the Meta block to lift, loader staged.
