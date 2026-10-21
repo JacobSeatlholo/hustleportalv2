@@ -1847,3 +1847,18 @@ Stage Summary:
 - Zero cost path stays intact: dev mode, free test number, replies inside the free window, existing Vercel webhook.
 - Waiting on three inline values from the boss, then credential store, then his first linked chat.
 - Master account: ZERO logins, ZERO writes this run.
+
+---
+Task ID: 97d
+Agent: main
+Task: Boss hit Onboarding failure, You have been temporarily blocked from performing this action, while adding the WhatsApp product to the KloofStreet Agent app. Meta risk system, likely triggered by today's burst of setup actions (app creation attempt, portfolio attempts, product add).
+
+Work Log:
+- Diagnosis: temporary risk block, not a verdict. Repeated retries during a block can extend it, so the instruction is stop, secure, wait, then one clean attempt.
+- Recreated scripts/wa_bot_config.mjs after recycle (DRY default, LIVE=1 stores, reads WA_TOKEN / WA_PHONE_ID / WA_SECRET inline, masks tails in output). DRY test passed.
+- Staged recovery plan: check account quality and developer support inbox for the block reason and expiry, confirm 2FA and email, retry once tomorrow, escalate to Meta support only after 72 hours.
+- Zero cost path unchanged; the webhook and credential store wait on the same three values.
+
+Stage Summary:
+- Go live is now one message away: boss pastes three values inline, loader goes LIVE, readiness report flips, he links his phone and runs the meeting test.
+- Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed.
