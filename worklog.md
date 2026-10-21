@@ -1831,3 +1831,19 @@ Stage Summary:
 - Bot stays Meta ready. The boss has the callback URL and verify token in hand plus the three values to send back inline: app secret, phone number id, access token.
 - Permanent token path explained: a system user token is minted inside the portfolio, so the Business step detour is required regardless.
 - Master account: ZERO logins, ZERO writes this run. Password rotation still to be confirmed complete.
+
+---
+Task ID: 97c
+Agent: main
+Task: Boss could not create a business portfolio (likely one per login or a Meta side restriction). He already owns a Meta app, KloofStreet Agent, App ID 4188574067942568, Business type, In development, Administrator role. Decision: reuse that app for Hustle Bot instead of fighting the portfolio wall.
+
+Work Log:
+- Confirmed reuse changes nothing on our side: webhook URL and verify token are app agnostic, the three stored values stay app secret, phone number id, access token.
+- Wrote the reuse walkthrough: open the app, add the WhatsApp product, create a WABA if asked, collect the free test number, phone number id and temporary token, add his cell to the dev mode recipient list, paste the webhook values already handed over, subscribe to messages, send the three values inline.
+- Flagged the honest caveat: the temporary token dies in 24 hours, the permanent system user token needs a portfolio, so the portfolio mystery gets sorted right after the first live chat.
+- Guard rail stated: if that app already carries a WhatsApp product with a number serving KloofStreet, register a fresh number on the same WABA rather than reuse, one number can live on one WABA only.
+
+Stage Summary:
+- Zero cost path stays intact: dev mode, free test number, replies inside the free window, existing Vercel webhook.
+- Waiting on three inline values from the boss, then credential store, then his first linked chat.
+- Master account: ZERO logins, ZERO writes this run.
