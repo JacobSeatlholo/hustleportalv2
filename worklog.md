@@ -1911,3 +1911,17 @@ Work Log:
 Stage Summary:
 - No code changed. The three value handover for the official bot remains the whole go live.
 - Master account: ZERO logins, ZERO writes this run.
+
+---
+Task ID: 97g
+Agent: main
+Task: Boss asked whether mobilesasa.com is the same category as the previous workaround candidates.
+
+Work Log:
+- Researched Mobile Sasa: Kenyan platform by Bitwise Digital Solutions since 2015, bulk SMS at KES 0.25 to 0.60 by volume, USSD, shortcodes, surveys, reminders.
+- Key difference confirmed: their WhatsApp piece runs on approved templates via the OFFICIAL Business API from the customer's own number, KES 4.00 marketing, KES 0.80 utility or auth, KES 0.10 platform fee when you bring your own Meta app. This is the BSP reseller category, the Plan B flavor, not the unofficial QR route.
+- Fit notes recorded: Kenya centric billing and sender IDs, template centric marketing messaging, not needed for our two way service window bot. Any BSP route still requires a Meta login moment and business verification, so a risk flagged account can still trip there; Support Inbox first either way.
+
+Stage Summary:
+- Answer to the boss: not the same, this one is on the official side of the fence, and it proves Plan B has many flavors when and if it is ever needed. Plan A unchanged.
+- Master account: ZERO logins, ZERO writes this run.
