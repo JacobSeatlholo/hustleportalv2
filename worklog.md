@@ -2018,3 +2018,4 @@ Stage Summary:
 - Member email is now 100% the member's voice: no referral code, no advert, one quiet delivery line when the platform engine sends.
 - VAT is correct in both directions and invoices print again.
 - Master account: ZERO logins, ZERO writes this run.
+- LIVE PROBE (scripts/review_probe.mjs, ops seat inline, one login, all rows deleted after): deployed stamp 2833d36 verified via /api/health (db ping true, integrations green). Landing HTML carries ZERO em/en dashes. Invoice create with pricesIncludeVat true returned subtotal 86.96 / total 100.00 for a 100 rand line at 15 percent (VAT pulled out, not stacked). Inventory create stored supplier and location, exact quantity PATCH flipped 5 to 12, deletes cleaned up. One probe script expectation fixed (inventory POST returns 200, it always did). PROBE PASS 12/12.
