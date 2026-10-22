@@ -7,6 +7,12 @@
  * @remotion/web-renderer, so the platform pays zero render cost and runs no
  * video servers. The only server side piece is the mail attachment itself.
  *
+ * v2: logo upload (downscaled client side, transparency detected so JPG logos
+ * get the hero plate treatment and never an ugly floating white box), and a
+ * quality selector — Maximum is 1080p at a controlled 5.5 Mbps bitrate with
+ * hardware acceleration preferred, Sharp is 720p. Both are honest about file
+ * size against the email attachment cap.
+ *
  * Browser support: WebCodecs. Chrome and Edge are solid, Safari 16.4+
  * carries it, Firefox may refuse. canRenderMediaOnWeb() decides, and the
  * dialog says exactly that instead of failing silently.
@@ -18,15 +24,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { Clapperboard, Download, Film, Loader2, Paperclip } from 'lucide-react'
+import { Clapperboard, Download, Film, ImagePlus, Loader2, Paperclip, X } from 'lucide-react'
 import {
   ACCENT_PRESETS,
   PITCH_DURATION,
   PITCH_FPS,
-  PITCH_HEIGHT,
-  PITCH_WIDTH,
+  QUALITY_PRESETS,
   PitchVideo,
   type PitchProps,
 } from './PitchVideo'
@@ -38,12 +42,66 @@ export interface VideoAttach {
 }
 
 const MAX_ATTACH_BYTES = 9.5 * 1024 * 1024
+const MAX_LOGO_BYTES = 4 * 1024 * 1024
 
 interface VideoStudioDialogProps {
   open: boolean
   onOpenChange: (o: boolean) => void
   onAttach: (a: VideoAttach) => void
   defaults: { businessName: string; city: string; phone: string; industry: string }
+}
+
+/** Draw the uploaded image to a max 512px canvas and detect real transparency. */
+async function processLogo(file: File): Promise<{ dataUrl: string; hasAlpha: boolean }> {
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error('The logo is bigger than 4 megabytes')
+  }
+  if (file.type === 'image/svg+xml') {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(String(fr.result || ''))
+      fr.onerror = () => reject(new Error('read failed'))
+      fr.readAsDataURL(file)
+    })
+    return { dataUrl, hasAlpha: true }
+  }
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image()
+      im.onload = () => resolve(im)
+      im.onerror = () => reject(new Error('decode failed'))
+      im.src = objectUrl
+    })
+    const longEdge = Math.max(img.naturalWidth, img.naturalHeight)
+    const scale = longEdge > 512 ? 512 / longEdge : 1
+    const w = Math.max(2, Math.round(img.naturalWidth * scale))
+    const h = Math.max(2, Math.round(img.naturalHeight * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('canvas unavailable')
+    ctx.drawImage(img, 0, 0, w, h)
+    // Corner probe: a logo with transparent corners sits clean on the dark stage,
+    // an opaque one (JPG) gets the hero plate instead of a white box.
+    let hasAlpha = false
+    try {
+      const d = ctx.getImageData(0, 0, w, h).data
+      const corners = [
+        [0, 0],
+        [w - 1, 0],
+        [0, h - 1],
+        [w - 1, h - 1],
+      ]
+      hasAlpha = corners.some(([x, y]) => d[(y * w + x) * 4 + 3] < 250)
+    } catch {
+      hasAlpha = false
+    }
+    return { dataUrl: canvas.toDataURL('image/png'), hasAlpha }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaults }: VideoStudioDialogProps) {
@@ -55,12 +113,16 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   const [city, setCity] = useState(defaults.city || '')
   const [phone, setPhone] = useState(defaults.phone || '')
   const [accentKey, setAccentKey] = useState('ember')
+  const [qualityKey, setQualityKey] = useState('max')
+  const [logo, setLogo] = useState<{ dataUrl: string; hasAlpha: boolean; name: string } | null>(null)
   const [rendering, setRendering] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<{ url: string; blob: Blob; filename: string } | null>(null)
   const resultRef = useRef<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const accent = ACCENT_PRESETS.find((a) => a.key === accentKey)?.color || '#f97316'
+  const preset = QUALITY_PRESETS.find((q) => q.key === qualityKey) || QUALITY_PRESETS[0]
 
   const smartTagline = useMemo(() => {
     if (tagline.trim()) return tagline.trim()
@@ -76,21 +138,25 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
       businessName: businessName.trim() || 'My Business',
       tagline: smartTagline,
       services,
+      kicker: defaults.industry?.trim() || undefined,
       city: city.trim() || undefined,
       phone: phone.trim() || undefined,
       accent,
+      logoSrc: logo?.dataUrl,
+      logoHasAlpha: logo?.hasAlpha,
     }),
-    [businessName, smartTagline, services, city, phone, accent]
+    [businessName, smartTagline, services, city, phone, accent, logo, defaults.industry]
   )
 
   useEffect(() => {
     if (!open) return
     let alive = true
-    canRenderMediaOnWeb({ width: PITCH_WIDTH, height: PITCH_HEIGHT, container: 'mp4', videoCodec: 'h264' })
+    setSupported(null)
+    canRenderMediaOnWeb({ width: preset.width, height: preset.height, container: 'mp4', videoCodec: 'h264' })
       .then((r) => { if (alive) setSupported(Boolean(r.canRender)) })
       .catch(() => { if (alive) setSupported(false) })
     return () => { alive = false }
-  }, [open])
+  }, [open, preset.width, preset.height])
 
   useEffect(() => {
     // revoke the previous result object URL when it changes or on close
@@ -104,6 +170,21 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
 
   const cleanName = (businessName.trim() || 'my-business').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'my-business'
 
+  const onLogoFile = useCallback(async (file: File | undefined | null) => {
+    if (!file) return
+    try {
+      const processed = await processLogo(file)
+      setLogo({ ...processed, name: file.name })
+      toast({ title: 'Logo added', description: 'It rides through the whole video.' })
+    } catch (e) {
+      toast({
+        title: 'That logo did not make it in',
+        description: e instanceof Error && /megabyte/.test(e.message) ? 'Keep it under 4 megabytes.' : 'Use a PNG, JPG or SVG image.',
+        variant: 'destructive',
+      })
+    }
+  }, [toast])
+
   const onExport = useCallback(async () => {
     if (supported === false || rendering) return
     setRendering(true)
@@ -112,21 +193,27 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
     try {
       const { getBlob } = await renderMediaOnWeb({
         composition: {
-          id: pitchCompositionMeta.id,
+          id: 'pitch',
           component: LooseVideo,
           durationInFrames: PITCH_DURATION,
           fps: PITCH_FPS,
-          width: PITCH_WIDTH,
-          height: PITCH_HEIGHT,
+          width: preset.width,
+          height: preset.height,
         },
         inputProps: inputProps as unknown as Record<string, unknown>,
         container: 'mp4',
         videoCodec: 'h264',
+        videoBitrate: preset.bitrate,
+        hardwareAcceleration: 'prefer-hardware',
         onProgress: ({ progress: p }) => setProgress(Math.round((p || 0) * 100)),
       })
       const blob = await getBlob()
       if (blob.size > MAX_ATTACH_BYTES) {
-        toast({ title: 'The video came out too big to email', description: 'Shorten a service line or try again. The honest cap is about 9 megabytes.', variant: 'destructive' })
+        toast({
+          title: 'The video came out too big to email',
+          description: qualityKey === 'max' ? 'Switch quality to Sharp 720p and render again. Same video, smaller file.' : 'Shorten a service line or try again. The honest cap is about 9 megabytes.',
+          variant: 'destructive',
+        })
         return
       }
       const filename = `pitch-${cleanName}.mp4`
@@ -139,7 +226,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
     } finally {
       setRendering(false)
     }
-  }, [supported, rendering, inputProps, cleanName, toast])
+  }, [supported, rendering, inputProps, cleanName, toast, preset, qualityKey])
 
   const toBase64 = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -169,7 +256,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Clapperboard className="h-4 w-4 text-brand" /> Video Studio</DialogTitle>
           <DialogDescription>
-            Build a 12 second pitch video from your business details, watch it live, then attach it to this email. Your own browser renders it, so it costs you nothing.
+            Build a 12 second pitch video from your business details, watch it live, then attach it to this email. Add your logo, pick the quality, and your own browser renders it at no cost.
           </DialogDescription>
         </DialogHeader>
 
@@ -200,6 +287,34 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label>Your logo</Label>
+              {logo ? (
+                <div className="flex items-center gap-2.5 rounded-lg border p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logo.dataUrl} alt="Logo preview" className="h-9 w-9 rounded object-contain bg-muted" />
+                  <span className="text-xs text-muted-foreground flex-1 truncate">{logo.name}</span>
+                  <button type="button" onClick={() => setLogo(null)} aria-label="Remove logo" className="text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="w-full flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground hover:border-brand/60 hover:text-foreground transition"
+                >
+                  <ImagePlus className="h-4 w-4" /> Add your logo. PNG or JPG, it lands in every scene.
+                </button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                className="hidden"
+                onChange={(e) => { onLogoFile(e.target.files?.[0]); e.target.value = '' }}
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label>Colour</Label>
               <div className="flex gap-2">
                 {ACCENT_PRESETS.map((a) => (
@@ -223,17 +338,37 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
                 inputProps={inputProps as unknown as Record<string, unknown>}
                 durationInFrames={PITCH_DURATION}
                 fps={PITCH_FPS}
-                compositionWidth={PITCH_WIDTH}
-                compositionHeight={PITCH_HEIGHT}
+                compositionWidth={preset.width}
+                compositionHeight={preset.height}
                 style={{ width: '100%' }}
                 controls
                 loop
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Quality</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {QUALITY_PRESETS.map((q) => (
+                  <button
+                    key={q.key}
+                    type="button"
+                    onClick={() => setQualityKey(q.key)}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${qualityKey === q.key ? 'border-brand bg-brand/10' : 'hover:border-muted-foreground/40'}`}
+                  >
+                    <span className="block text-sm font-medium">{q.label}</span>
+                    <span className="block text-[11px] text-muted-foreground">{q.note}</span>
+                  </button>
+                ))}
+              </div>
+              {qualityKey === 'max' && (
+                <p className="text-[11px] text-muted-foreground">Full HD at a high bitrate. The render takes a moment longer, the result is worth it.</p>
+              )}
+            </div>
+
             {supported === false ? (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                This browser cannot render video. Open HustlePortal in Chrome or Edge on a computer, or Safari on iPhone with iOS 16.4 or newer, and export from there.
+                This browser cannot render video at this quality. Open HustlePortal in Chrome or Edge on a computer, or Safari on iPhone with iOS 16.4 or newer, and export from there. Sharp 720p has the widest support.
               </div>
             ) : (
               <Button className="w-full" onClick={onExport} disabled={rendering || supported !== true}>
@@ -272,9 +407,6 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
     </Dialog>
   )
 }
-
-// kept in sync with PitchVideo.tsx — renderMediaOnWeb takes the metadata inline
-const pitchCompositionMeta = { id: 'pitch' }
 
 // Remotion's loose Record types vs our strict PitchProps — one bridge, used twice
 const LooseVideo = PitchVideo as unknown as React.FC<Record<string, unknown>>

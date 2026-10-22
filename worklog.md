@@ -1965,3 +1965,21 @@ Stage Summary:
 - Direct Google publishing stays parked until the platform ever qualifies for Business Profile API access (about 14 day review); the kit flow needs nothing from Google.
 - Master account: ZERO logins, ZERO writes this run. Master password rotation still to be confirmed.
 - LIVE PROBE (scripts/gbp_probe.mjs, ops seat inline, one AI budget unit): deployed stamp a7d96c0 verified. POST /api/ai/google-profile returned 200 with a complete kit: description 370/750 chars overLimit false, real GBP categories (Business management consultant + 3 extras), 5 services, 3 posts, review replies 40 and 37 words, 6 photo shots, 7 city keywords, 8 paste steps. Copy law held: zero hyphens or dashes, zero emoji. Unknown facts correctly became bracket placeholders instead of inventions. PROBE PASS.
+
+---
+Task ID: 101
+Agent: main
+Task: Boss: "Back to remotion.. How can we improve the video quality? also allow me to add my logo to the video? It must produce truly exceptional quality videos."
+
+Work Log:
+- Verified against the installed @remotion/web-renderer 4.0.537 typings first: renderMediaOnWeb accepts videoBitrate (number or a named quality tier) and hardwareAcceleration, and canRenderMediaOnWeb validates per resolution. So quality is now engineered, not hoped for.
+- QUALITY UPGRADE, real controls: new quality selector in the dialog. Maximum = 1920x1080 at a controlled 5.5 Mbps h264 bitrate with hardwareAcceleration prefer-hardware (flat motion graphics at that rate come out pristine, and a 12 second file lands under the 9.5 MB email cap). Sharp = 1280x720 at 5 Mbps for the smallest reliable email file. Default is Maximum. The honest oversize message now tells the member to flip to Sharp 720p instead of generic failure.
+- LOGO SUPPORT: file picker accepts PNG, JPG, WebP and SVG (4 MB cap). The image is downscaled client side to max 512px on a canvas and the four corner pixels are probed for real transparency: transparent logos ride as clean watermarks and hero art, opaque logos (JPG) get a frosted hero plate in the opener and closer instead of an ugly floating white box, and the scene 2 watermark is skipped for them. Logo appears three ways: pop in with the opener above the business name, subtle bottom right watermark during services (alpha logos only), floating hero above the call to action. Zero server storage, the logo never leaves the member's browser.
+- TEMPLATE REDESIGN for the exceptional bar: resolution independent design grid (every value scales from 720p so 1080p is truly full HD, not a stretched 720p). Blur in text entrances, industry kicker chip in accent caps, light sweep along the accent underline, animated accent ring depth layer in the services scene, bullet marks that rotate and spring in, staggered contact chips with inline SVG phone and pin icons in the closer, cinematic vignette, second drifting accent glow, skewed light wipe bars that sweep across both scene cuts, and a clean fade to black at the end. Long business names auto step down through three font sizes. Still deterministic (spring, interpolate, Math.sin only) and still system fonts only, so the member's browser render cannot fail on a missing webfont.
+- Dialog copy updated per copy law (no hyphens, no emoji): logo zone, quality selector with honest size notes, Full HD takes a moment longer line.
+- tsc clean for src. Local production build green with bun. No server code touched, no schema changes, no new dependencies, the whole upgrade lives in the two video files.
+
+Stage Summary:
+- Video Studio v2: 1080p controlled bitrate renders with logo support, a redesigned cinematic template, and the same zero cost in browser render. Boss can render one for businesshustle.co.za and attach it to a real pitch email.
+- Still true: no video servers, no storage, no render bill, license free at our team size.
+- Master account: ZERO logins, ZERO writes this run.
