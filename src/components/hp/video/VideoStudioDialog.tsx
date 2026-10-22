@@ -197,12 +197,15 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   }, [supportKnown, qualityKey])
 
   useEffect(() => {
-    // revoke the previous result object URL when it changes or on close
+    // Revoke the PREVIOUS result URL when a new one replaces it or on unmount.
+    // The closure must capture its own url: reading the ref at cleanup time
+    // revoked the FRESH url every single time, so the preview video and the
+    // Save link pointed at a dead blob right after every successful render.
+    if (!result) return
+    const url = result.url
     return () => {
-      if (resultRef.current) {
-        URL.revokeObjectURL(resultRef.current)
-        resultRef.current = null
-      }
+      URL.revokeObjectURL(url)
+      if (resultRef.current === url) resultRef.current = null
     }
   }, [result])
 
