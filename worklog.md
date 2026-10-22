@@ -1945,3 +1945,22 @@ Stage Summary:
 - Video Studio is live: mail composer → Create a pitch video → preview → render in the member's own browser → attach → send. Zero new servers, zero new env vars, zero marginal render cost, license free for our team size.
 - NOT yet verified: a real end to end render needs a WebCodecs browser click through (ops seat QA with the browser tool next session). The build, types, size caps and send plumbing are verified.
 - Master account: ZERO logins, ZERO writes this run.
+
+---
+Task ID: 100
+Agent: main
+Task: Boss: "Optimise your google profile through the AI co founder feature as well?" — add Google Business Profile optimisation to the AI Co-Founder.
+
+Work Log:
+- RESEARCH VERDICT first: Google's Business Profile API is gated behind an access request form (about 14 day review, aimed at agencies and tools at scale, community reports of zero quotas and stuck cases), so direct auto publishing is off the table for a zero cost v1. What Google allows freely: the owner pastes content into their own profile. So the honest shape is the AI Co-Founder writes the complete kit and the member applies it in about ten minutes. No new env vars, no Google Cloud project, no API fees.
+- Grounded the kit in verified Google rules: description hard limit 750 characters with only about 250 visible before the fold (front load business type, services, city, differentiator), no prices or links in the description, real GBP categories, local ranking is relevance, distance, prominence. Q&A API discontinued by Google (Sep to Nov 2025) so the kit does not rely on it.
+- New POST /api/ai/google-profile: auth, daily AI budget guard (same consumeAiBudget wall as every AI route), profile grounding (businessName, industry, city, phone plus optional differentiator, offer, current description), one Gemini call in JSON mode (maxOutputTokens 3000), server side normalisation and clamping of every array, description char count with overLimit flag against 750, bumpChallenge google_profile. Copy law enforced in the system prompt: simple English, short sentences, no emoji, no hyphens or dashes, no ALL CAPS, never invent awards or years or ratings, placeholders in brackets where a fact is missing.
+- New GoogleProfilePanel component, wired as the third AI Co-Founder tab (Business plan, Advisor chat, Google profile): prefilled from the session profile, three optional inputs, structured result cards with per section copy buttons (description with 750 character counter badge, categories, services, three posts, good and bad review reply templates, photo shot list, local search words, the exact paste steps), Copy the whole kit, Write it again, and an Open Google Business Profile link to business.google.com. Honest line on screen: Google does not let tools publish directly, the kit lands here and you paste it in.
+- Advisor chat now knows the feature exists: one added line in the system prompt pointing Google profile questions to the new tab.
+- Gamification: additive challenge key google_profile, "Polish your Google profile", 25 XP, target 1. No schema changes anywhere in this task, zero data risk.
+- tsc clean for src (same two pre existing skill tooling errors outside src). Local production build green with bun (AUTH_SECRET needed inline locally after the recycle; production env unaffected). dbPush=SOFT-FAILED locally is the known workspace pattern, no DB writes of any kind.
+
+Stage Summary:
+- Members can now generate their full Google profile kit in one tap and paste it into Google, at zero marginal cost inside the existing AI budget. Boss can dogfood it on the businesshustle.co.za profile first.
+- Direct Google publishing stays parked until the platform ever qualifies for Business Profile API access (about 14 day review); the kit flow needs nothing from Google.
+- Master account: ZERO logins, ZERO writes this run. Master password rotation still to be confirmed.

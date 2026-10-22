@@ -11,7 +11,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { api } from './shared'
 import { useHp } from './store'
-import { Loader2, Send, BrainCircuit, Sparkles, CheckCircle2, FileText } from 'lucide-react'
+import GoogleProfilePanel from './GoogleProfilePanel'
+import { Loader2, Send, BrainCircuit, Sparkles, CheckCircle2, FileText, MapPin } from 'lucide-react'
 
 interface PlanRecord {
   id: string
@@ -74,7 +75,7 @@ function inline(text: string): React.ReactNode {
 export default function AiView() {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
-  const [tab, setTab] = useState<'plan' | 'advisor'>('plan')
+  const [tab, setTab] = useState<'plan' | 'advisor' | 'google'>('plan')
 
   // Plan wizard
   const [step, setStep] = useState(0)
@@ -162,10 +163,11 @@ export default function AiView() {
         <p className="text-sm text-muted-foreground">Plans and advice grounded in your real business data.</p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'plan' | 'advisor')}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'plan' | 'advisor' | 'google')}>
         <TabsList>
           <TabsTrigger value="plan" className="gap-1"><FileText className="h-3.5 w-3.5" /> Business plan</TabsTrigger>
           <TabsTrigger value="advisor" className="gap-1"><BrainCircuit className="h-3.5 w-3.5" /> Advisor chat</TabsTrigger>
+          <TabsTrigger value="google" className="gap-1"><MapPin className="h-3.5 w-3.5" /> Google profile</TabsTrigger>
         </TabsList>
 
         {/* PLAN TAB */}
@@ -323,6 +325,10 @@ export default function AiView() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* GOOGLE PROFILE TAB */}
+        <TabsContent value="google">
+          <GoogleProfilePanel />
         </TabsContent>
       </Tabs>
     </div>

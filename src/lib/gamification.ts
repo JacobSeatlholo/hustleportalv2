@@ -61,6 +61,7 @@ export const CHALLENGES = [
   { key: 'explore_resources', label: 'Explore the Resource Hub', xp: 20, target: 1 },
   { key: 'add_client', label: 'Add a client to your CRM', xp: 25, target: 1 },
   { key: 'explore_services', label: 'Explore Our Services', xp: 15, target: 1 },
+  { key: 'google_profile', label: 'Polish your Google profile', xp: 25, target: 1 },
 ]
 
 /** Streak milestones that pay bonus XP — consistency compounds, visibly. */
