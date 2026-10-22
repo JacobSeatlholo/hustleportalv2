@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { resolveProject } from '@/lib/workspace'
 
-// GET /api/dashboard?projectId= — aggregated real user data
+// GET /api/dashboard?projectId=, aggregated real user data
 // projectId narrows the hustle numbers (pipeline, finance) to one workspace;
 // projectId=ALL (or omitted) keeps the whole-business view. Tasks stay personal/team.
 export async function GET(req: NextRequest) {

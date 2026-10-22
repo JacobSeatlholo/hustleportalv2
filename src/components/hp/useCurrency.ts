@@ -1,6 +1,6 @@
 'use client'
 /**
- * useCurrency — fetches the visitor's proven country once per page load and
+ * useCurrency, fetches the visitor's proven country once per page load and
  * returns a price formatter. Defaults to ZAR while unknown, so a South African
  * can never even momentarily see a dollar figure.
  */

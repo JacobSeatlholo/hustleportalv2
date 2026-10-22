@@ -10,7 +10,7 @@ const PAUSE_DAYS = 30
  * Pause freezes the plan for 30 days instead of losing the member to a cancel:
  *  - status flips to PAUSED, pausedUntil = +30 days.
  *  - The plan auto-resumes after pausedUntil (GET /api/subscribe) and renewsAt
- *    shifts by the frozen duration — every paid day is preserved.
+ *    shifts by the frozen duration, every paid day is preserved.
  *  - Early resume shifts renewsAt by exactly the frozen time so far.
  * PAUSED members keep app access (plan reads as active in GET).
  */
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       where: { id: sub.id },
       data: { status: 'PAUSED', pausedUntil },
     })
-    return NextResponse.json({ ok: true, subscription: updated, note: `Plan paused until ${pausedUntil.toDateString()} — your days are frozen, not lost.` })
+    return NextResponse.json({ ok: true, subscription: updated, note: `Plan paused until ${pausedUntil.toDateString()}, your days are frozen, not lost.` })
   }
 
   if (String(action).toLowerCase() === 'resume') {
@@ -51,5 +51,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, subscription: updated })
   }
 
-  return NextResponse.json({ error: 'Unknown action — use pause or resume.' }, { status: 400 })
+  return NextResponse.json({ error: 'Unknown action, use pause or resume.' }, { status: 400 })
 }

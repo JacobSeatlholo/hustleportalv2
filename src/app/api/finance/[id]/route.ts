@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth'
 
 type Params = { params: Promise<{ id: string }> }
 
-// PATCH /api/finance/[id] — the owner may relabel an entry (category, description).
+// PATCH /api/finance/[id], the owner may relabel an entry (category, description).
 // Money never changes by accident: type, amount and occurredAt are immutable here.
 export async function PATCH(req: NextRequest, ctx: Params) {
   const userId = await getUserId()

@@ -5,7 +5,7 @@ import { verifyUnsubscribe } from '@/lib/campaignqueue'
 /**
  * One tap out of campaign mail. RFC 8058 one click (the mail client POSTs)
  * and a plain human link (GET) land here. The address joins the suppression
- * list — the queue engine refuses it from every future send, no exceptions.
+ * list, the queue engine refuses it from every future send, no exceptions.
  * POPIA manners: the exit is instant, permanent and explained in plain words.
  */
 async function handler(req: NextRequest, method: 'GET' | 'POST') {
@@ -15,7 +15,7 @@ async function handler(req: NextRequest, method: 'GET' | 'POST') {
   if (!logId || !sig || !(await verifyUnsubscribe(logId, sig))) {
     if (method === 'POST') return NextResponse.json({ ok: false, error: 'Invalid link.' }, { status: 400 })
     return new NextResponse(
-      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link not valid</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#f6f7f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937"><div style="max-width:420px;text-align:center;padding:32px"><h1 style="font-size:20px">This link is not valid</h1><p style="font-size:14px;line-height:1.6;color:#5f6b7a">The unsubscribe link looks broken or expired. Reply to the email instead and say the word unsubscribe — a human will take you off the list.</p></div></body></html>`,
+      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link not valid</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#f6f7f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937"><div style="max-width:420px;text-align:center;padding:32px"><h1 style="font-size:20px">This link is not valid</h1><p style="font-size:14px;line-height:1.6;color:#5f6b7a">The unsubscribe link looks broken or expired. Reply to the email instead and say the word unsubscribe, a human will take you off the list.</p></div></body></html>`,
       { status: 400, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
     )
   }

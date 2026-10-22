@@ -1,13 +1,13 @@
 /**
- * Subscription plans — the predictable-MRR engine.
+ * Subscription plans, the predictable-MRR engine.
  * Target: R45,000/month. e.g. 151 Operator at the normal R299, or
  * 100 Operator + 50 Boss = R54,850 at normal prices.
- * ZAR only. Plans sold via Yoco Checkout (manual renewal — the user is never
+ * ZAR only. Plans sold via Yoco Checkout (manual renewal, the user is never
  * auto-charged); renewal nudged in-app + by email 5 days out.
  *
  * Lead-reveal delivery: each successful plan activation/renewal grants the
  * month's reveal quota as wallet credits (revealCredits, priced at the lead
- * reveal price). Credits NEVER expire — unused reveals roll over for as long
+ * reveal price). Credits NEVER expire, unused reveals roll over for as long
  * as the plan stays active. That makes the subscription an asset, not a rental.
  */
 
@@ -42,14 +42,14 @@ export const PLANS: PlanDef[] = [
     id: 'HUSTLER',
     name: 'Operator',
     tagline: 'For owner-operators building steady momentum.',
-    priceCents: 19900, // R199 launch special — what clients pay today
-    annualCents: annualOf(19900), // R1,990/yr — 2 months free at the launch price
-    normalCents: 29900, // R299 — the everyday price, shown subtly on cards
-    normalAnnualCents: annualOf(29900), // R2,990/yr — the everyday annual
+    priceCents: 19900, // R199 launch special, what clients pay today
+    annualCents: annualOf(19900), // R1,990/yr, 2 months free at the launch price
+    normalCents: 29900, // R299, the everyday price, shown subtly on cards
+    normalAnnualCents: annualOf(29900), // R2,990/yr, the everyday annual
     revealCredits: 5 * LEAD_REVEAL_PRICE_CENTS, // 5 verified reveals
     perks: [
       'Unlimited AI Co-Founder & email drafts',
-      '5 verified lead reveals every month — unused ones roll over',
+      '5 verified lead reveals every month, unused ones roll over',
       'Invoices, calendar, reports, exports',
       'Invite & earn R50 per paying member',
       'Your business listed in the public business directory',
@@ -60,11 +60,11 @@ export const PLANS: PlanDef[] = [
     name: 'Boss',
     tagline: 'For teams ready to outscale the competition.',
     priceCents: 49900, // R499
-    annualCents: annualOf(49900), // R4,990/yr — 2 months free
-    revealCredits: 12 * LEAD_REVEAL_PRICE_CENTS, // 12 verified reveals — the better per-lead deal
+    annualCents: annualOf(49900), // R4,990/yr, 2 months free
+    revealCredits: 12 * LEAD_REVEAL_PRICE_CENTS, // 12 verified reveals, the better per-lead deal
     perks: [
       'Everything in Operator',
-      '12 verified lead reveals every month — the best per-lead price, unused ones roll over',
+      '12 verified lead reveals every month, the best per-lead price, unused ones roll over',
       'Up to 5 team seats, shared pipeline',
       'Priority AI (longer context, faster replies)',
       'Founding Member badge on your profile',
@@ -78,7 +78,7 @@ export function getPlan(id: string): PlanDef | undefined {
 }
 
 /**
- * Nonprofit rate — registered NPOs (and NGOs) run their organisation on
+ * Nonprofit rate, registered NPOs (and NGOs) run their organisation on
  * HustlePortal at 30% off every plan, monthly or annual. The number is taken
  * on honour, stored on the subscription, and may be re-checked before renewal.
  */
@@ -110,7 +110,7 @@ export async function grantPlanRevealCredits(userId: string, plan: PlanDef): Pro
     userId,
     plan.revealCredits,
     'BONUS',
-    `${plan.name} plan — ${reveals} verified lead reveals${reveals >= 12 ? ' (best per-lead price)' : ''}`,
+    `${plan.name} plan, ${reveals} verified lead reveals${reveals >= 12 ? ' (best per-lead price)' : ''}`,
   )
 }
 

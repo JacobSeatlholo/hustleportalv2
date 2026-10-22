@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
     notes?: string | null
   }>(result.text)
   if (!parsed?.title || !parsed.dateISO) {
-    return NextResponse.json({ error: 'Could not read a date & time from that — try mentioning when it happens.' }, { status: 400 })
+    return NextResponse.json({ error: 'Could not read a date & time from that, try mentioning when it happens.' }, { status: 400 })
   }
   const startsAt = new Date(parsed.dateISO)
   if (Number.isNaN(startsAt.getTime())) {
-    return NextResponse.json({ error: 'The date parsed was invalid — try again.' }, { status: 400 })
+    return NextResponse.json({ error: 'The date parsed was invalid, try again.' }, { status: 400 })
   }
   const durationMins = Number(parsed.durationMins) > 0 ? Number(parsed.durationMins) : 60
   return NextResponse.json({

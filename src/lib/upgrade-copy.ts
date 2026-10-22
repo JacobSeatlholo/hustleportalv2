@@ -1,5 +1,5 @@
 /**
- * Upgrade moments — one voice for every free-plan ceiling.
+ * Upgrade moments, one voice for every free-plan ceiling.
  * Brand rules: simple english, high level power words, outcome phrasing with
  * empathy, legally sound, zero elaborative nonsense claims, no dashes.
  *

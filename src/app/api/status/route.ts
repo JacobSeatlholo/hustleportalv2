@@ -8,7 +8,7 @@ import { geminiFetchTarget } from '@/lib/gemini'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/status — live platform status for the Integrations trust panel.
+ * GET /api/status, live platform status for the Integrations trust panel.
  * Presence plus the last honest outcome only: never secret values, never hosts.
  * Cached 45s in the instance so the panel can poll freely without cost.
  *
@@ -58,7 +58,7 @@ async function aiService(): Promise<Svc> {
   }
   // Probe a REAL generation, not ListModels: a key whose daily free-tier bucket is
   // drained still passes ListModels, which would show "Live" while every scan fails.
-  // One 8-token call per 45s cache window — honest status at negligible cost.
+  // One 8-token call per 45s cache window, honest status at negligible cost.
   try {
     // Probe on a LITE model: the full flash alias is a thinking model whose latency
     // can outlive a 6s probe and read as an outage that is not there. Lite answers
@@ -150,7 +150,7 @@ async function emailService(): Promise<Svc> {
 }
 
 /**
- * DeepSeek engine — the pay-as-you-go lead ranker. Platform-level view: the
+ * DeepSeek engine, the pay-as-you-go lead ranker. Platform-level view: the
  * operator's env key and its real credit balance. A user's own key (the common
  * case) gets its verdict at save time under Integrations; this row answers for
  * the platform pool only.

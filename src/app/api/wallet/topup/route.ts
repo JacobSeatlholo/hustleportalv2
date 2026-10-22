@@ -17,7 +17,7 @@ function requestOrigin(req: NextRequest) {
 // connected: they get an honest message instead of free credit.
 const QA_SANDBOX_DOMAIN = '@hustleqa.example.com'
 
-// POST /api/wallet/topup — start a wallet top-up.
+// POST /api/wallet/topup, start a wallet top-up.
 //  - YOCO_SECRET_KEY set  -> creates a PENDING TopUp + real Yoco Checkout, returns redirectUrl.
 //  - No key configured    -> sandbox mode: confirms instantly (demo environments).
 export async function POST(req: NextRequest) {
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Sandbox mode (no YOCO_SECRET_KEY configured) — instant confirmation, QA
+  // Sandbox mode (no YOCO_SECRET_KEY configured), instant confirmation, QA
   // probe accounts only. Anyone else gets an honest answer, never free credit.
   if (!isQaAccount) {
     return NextResponse.json(

@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       gcalEventId = inserted.eventId
     }
   } catch {
-    // sync is optional — the ICS/template link fallbacks always work
+    // sync is optional, the ICS/template link fallbacks always work
   }
   return NextResponse.json({ appointment: { ...appointment, gcalEventId }, gcalSynced: !!gcalEventId }, { status: 201 })
 }

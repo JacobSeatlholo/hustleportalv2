@@ -2,7 +2,7 @@ import dns from 'node:dns/promises'
 import net from 'node:net'
 
 /**
- * SSRF guard — every server-side fetch of a user-supplied host goes through
+ * SSRF guard, every server-side fetch of a user-supplied host goes through
  * here first. Two layers:
  *
  *  1. Syntactic: only http(s), a real hostname with a dot, no credentials,
@@ -14,8 +14,8 @@ import net from 'node:net'
  *
  * DNS rebinding (resolve public, re-resolve private at fetch time) remains
  * theoretically possible but is out of scope for this threat model; the
- * practical attack class — "make the server talk to its own localhost,
- * private network or cloud metadata" — is fully closed.
+ * practical attack class, "make the server talk to its own localhost,
+ * private network or cloud metadata", is fully closed.
  */
 
 const BLOCKED_HOSTNAMES = /^(localhost|metadata\.google\.internal|instance-data)$/i
@@ -41,7 +41,7 @@ function isPrivateIp(ip: string): boolean {
     if (mapped) return isPrivateIp(mapped[1])
     return false
   }
-  return true // unparseable — treat as hostile
+  return true // unparseable, treat as hostile
 }
 
 export interface SafeUrlVerdict {

@@ -6,7 +6,7 @@ import { ensureVerifyToken } from '@/lib/whatsapp-bot'
 export const maxDuration = 30
 
 /**
- * Hustle Bot credentials — the exec desk's window into the shared WhatsApp bot.
+ * Hustle Bot credentials, the exec desk's window into the shared WhatsApp bot.
  *
  * GET  = readiness report: the webhook URL, the verify token (self-generated,
  *        paste it into the Meta app dashboard), what is configured, and only

@@ -1,9 +1,9 @@
 /**
- * modules.ts — the modular workspace registry.
+ * modules.ts, the modular workspace registry.
  *
  * The user tailors HustlePortal to their hustle: modules they do not use yet
  * come OFF the menu, so the app always feels like it was built for exactly
- * their business. This is a menu law, not a paywall law — every plan includes
+ * their business. This is a menu law, not a paywall law, every plan includes
  * every capability; tailoring decides what is VISIBLE, never what is POSSIBLE.
  *
  * Tutorials ride the same rails: a hidden module cannot be visited, so its
@@ -22,7 +22,7 @@ export interface ModuleDef {
   icon: string // lucide icon name, resolved client-side
   /** One honest line: what this module does for the business. */
   description: string
-  /** Which hustle it feeds — shown as a chip so tailoring feels concrete. */
+  /** Which hustle it feeds, shown as a chip so tailoring feels concrete. */
   feeds: string
 }
 
@@ -39,7 +39,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'mail', label: 'Mail & Campaigns', icon: 'Mail', description: 'AI drafts, the sending engine, bulk campaigns with read receipts and one-click unsubscribe.', feeds: 'Follow-up that closes' },
   { key: 'ai', label: 'AI Co-Founder', icon: 'BrainCircuit', description: 'Plans, pricing advice and answers grounded in your live pipeline and numbers.', feeds: 'Decisions' },
   { key: 'store', label: 'Store', icon: 'ShoppingCart', description: 'Packages and toolkits for your hustle, ordered in-app and delivered by the team.', feeds: 'Growth services' },
-  { key: 'services', label: 'Services', icon: 'Briefcase', description: 'Your public service menu with prices — customers order while you sleep.', feeds: 'Taking bookings' },
+  { key: 'services', label: 'Services', icon: 'Briefcase', description: 'Your public service menu with prices, customers order while you sleep.', feeds: 'Taking bookings' },
   { key: 'resources', label: 'Resource Hub', icon: 'BookOpen', description: 'Playbooks and free tools written for South African small business.', feeds: 'Learning' },
   { key: 'integrations', label: 'Integrations', icon: 'PlugZap', description: 'Bring your own AI keys, Gmail sending, WhatsApp and calendar connections.', feeds: 'Power users' },
 ]
@@ -62,7 +62,7 @@ export function parseDisabledModules(raw: string | null | undefined): string[] {
   }
 }
 
-/** The nav order may name hidden modules — filter an ordered list to enabled keys. */
+/** The nav order may name hidden modules, filter an ordered list to enabled keys. */
 export function filterEnabled(ordered: { key: ViewKey }[], disabled: string[]): { key: ViewKey }[] {
   if (disabled.length === 0) return ordered
   return ordered.filter((n) => !disabled.includes(n.key))

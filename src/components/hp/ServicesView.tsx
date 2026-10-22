@@ -58,7 +58,7 @@ export default function ServicesView() {
         <p className="text-[11px] tracking-[0.18em] text-brand font-semibold">SERVICES</p>
         <h1 className="font-display text-3xl">Professional services for your business</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Request a service in under a minute — it lands with the team as an email and stays tracked on your dashboard.
+          Request a service in under a minute, it lands with the team as an email and stays tracked on your dashboard.
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export default function ServicesView() {
           <div>
             <div className="font-medium">Not sure what you need?</div>
             <div className="text-sm text-sidebar-foreground/60 max-w-md">
-              Our team assesses your business and recommends the right solution — free, no strings.
+              Our team assesses your business and recommends the right solution, free, no strings.
             </div>
           </div>
         </div>
@@ -141,11 +141,11 @@ export default function ServicesView() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Every request is confirmed on your Tasks with an urgency level, and emailed straight to the Business Hustle team —
+        Every request is confirmed on your Tasks with an urgency level, and emailed straight to the Business Hustle team,
         you always have a paper trail. Services are quoted per project before any work starts.
       </p>
 
-      {/* Service request dialog — shared with conversion touchpoints app-wide */}
+      {/* Service request dialog, shared with conversion touchpoints app-wide */}
       <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} presetMessage={reqPreset} />
     </div>
   )

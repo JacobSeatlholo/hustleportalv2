@@ -1,5 +1,5 @@
 /**
- * The probe zoo — one shared lens for every KPI on the platform.
+ * The probe zoo, one shared lens for every KPI on the platform.
  *
  * The QA suites create hundreds of test accounts across a known set of throwaway
  * domains, plus a few house owned addresses (staff, demo, e2e). Without a shared

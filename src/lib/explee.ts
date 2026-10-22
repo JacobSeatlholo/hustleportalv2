@@ -112,7 +112,7 @@ export async function expleeSearchCompanies(opts: {
       return {
         leads: [],
         mode: 'NONE',
-        note: `Explee responded with HTTP ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''} — no verified results to show.`,
+        note: `Explee responded with HTTP ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}, no verified results to show.`,
       }
     }
     const data = (await res.json()) as {
@@ -138,7 +138,7 @@ export async function expleeSearchCompanies(opts: {
         : {}),
     }
   } catch {
-    return { leads: [], mode: 'NONE', note: 'Could not reach Explee — try again shortly.' }
+    return { leads: [], mode: 'NONE', note: 'Could not reach Explee, try again shortly.' }
   }
 }
 
@@ -264,7 +264,7 @@ export async function expleeHotLeads(opts?: { limit?: number; campaignId?: numbe
         ? 'Explee rejected the API key. Paste a fresh one in settings.'
         : firstRes.status
           ? `Explee responded with HTTP ${firstRes.status}.`
-          : 'Could not reach Explee — try again shortly.'
+          : 'Could not reach Explee, try again shortly.'
     return { ...empty, note: why }
   }
 

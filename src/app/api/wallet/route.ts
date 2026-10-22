@@ -3,7 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { ensureWallet } from '@/lib/wallet'
 import { db } from '@/lib/db'
 
-// GET /api/wallet — balance + transactions + topup packages
+// GET /api/wallet, balance + transactions + topup packages
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

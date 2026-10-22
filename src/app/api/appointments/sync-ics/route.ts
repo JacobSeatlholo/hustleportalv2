@@ -5,7 +5,7 @@ import { safeUrl } from '@/lib/ssrf'
 import { ingestIcsForUser, ICS_FEED_SETTING_KEY } from '@/lib/icsSync'
 
 /**
- * POST /api/appointments/sync-ics — re-pull the saved calendar feed and add
+ * POST /api/appointments/sync-ics, re-pull the saved calendar feed and add
  * anything new. The saved URL lives in UserSetting 'ICS_FEED_URL' (written by
  * import-ics when saveFeed was set). New events are added; events already
  * imported (matched by UID or title+time) are never duplicated.
@@ -42,7 +42,7 @@ export async function POST() {
     }
     const result = await ingestIcsForUser(userId, text)
     if (result.imported === 0) {
-      return NextResponse.json({ ...result, message: 'Already up to date — nothing new on the feed.' })
+      return NextResponse.json({ ...result, message: 'Already up to date, nothing new on the feed.' })
     }
     return NextResponse.json(result)
   } catch {
@@ -61,7 +61,7 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  // Disconnect the feed — imported events stay; sync simply stops.
+  // Disconnect the feed, imported events stay; sync simply stops.
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await db.userSetting.deleteMany({ where: { userId, key: ICS_FEED_SETTING_KEY } })

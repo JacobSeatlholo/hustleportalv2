@@ -18,8 +18,8 @@ const ALLOWED_KEYS = [
   'WA_VERIFY_TOKEN',
   'WA_DISPLAY_NUMBER',
   'INVOICE_BANK',
-  'NAV_ORDER', // JSON ViewKey[] — the user's personal sidebar menu order
-  'MODULES', // JSON string[] — disabled module keys (the tailored workspace)
+  'NAV_ORDER', // JSON ViewKey[], the user's personal sidebar menu order
+  'MODULES', // JSON string[], disabled module keys (the tailored workspace)
   'ICS_FEED_URL', // read-only calendar feed for the Calendar sync button
 ]
 
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest) {
     create: { userId, key, value },
   })
 
-  // A pasted Gemini key is probed against Google the moment it's saved — a
+  // A pasted Gemini key is probed against Google the moment it's saved, a
   // 403-blocked key is flagged HERE, not three screens later when a scan fails.
   // The key is still stored: the user may enable the API on Google's side and the
   // SAME key starts working, and the platform chain covers the gap meanwhile.

@@ -115,7 +115,7 @@ export default function Landing() {
   const [hpField, setHpField] = useState('') // honeypot: real humans never see or fill this
   const [refApplied, setRefApplied] = useState<string | null>(null)
 
-  // Referral capture: ?ref=CODE — store it, greet the invitee, attach at register.
+  // Referral capture: ?ref=CODE, store it, greet the invitee, attach at register.
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('ref')
     if (code && code.trim()) {
@@ -248,7 +248,7 @@ export default function Landing() {
                   <MailCheck className="h-9 w-9 text-brand mx-auto" />
                   <p className="text-sm text-muted-foreground">
                     If an account exists for <b className="text-foreground">{email}</b>, a reset link is on its way.
-                    Check your inbox — and spam, just in case. The link works for 30 minutes.
+                    Check your inbox, and spam, just in case. The link works for 30 minutes.
                   </p>
                   <Button
                     variant="outline"
@@ -326,7 +326,7 @@ export default function Landing() {
                         />
                       )}
                     </div>
-                    <CityField value={city} onChange={setCity} label="City" hint="Pick a shortcut or type any city, township or suburb — or tag your location." />
+                    <CityField value={city} onChange={setCity} label="City" hint="Pick a shortcut or type any city, township or suburb, or tag your location." />
                   </div>
                 </>
               )}
@@ -343,7 +343,7 @@ export default function Landing() {
                 />
               </div>
 
-              {/* Honeypot — visually hidden, keyboard unreachable, bots fill it and get refused */}
+              {/* Honeypot, visually hidden, keyboard unreachable, bots fill it and get refused */}
               <div className="hidden" aria-hidden="true">
                 <label htmlFor="a-site">Company website</label>
                 <Input

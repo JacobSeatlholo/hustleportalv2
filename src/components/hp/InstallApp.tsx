@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * InstallApp — "Take HustlePortal home" helper.
+ * InstallApp, "Take HustlePortal home" helper.
  * iOS Safari hides install prompts, so we teach it (Share → Add to Home Screen)
  * in a precise, visual dialog. Android/desktop Chrome gets the native prompt via
  * beforeinstallprompt, with an instruction fallback.
@@ -36,7 +36,7 @@ export default function InstallApp() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
-    if (isStandalone()) return // already installed — nothing to teach
+    if (isStandalone()) return // already installed, nothing to teach
     setHidden(false)
 
     const onPrompt = (e: Event) => {
@@ -88,7 +88,7 @@ export default function InstallApp() {
               <Smartphone className="h-6 w-6 text-brand" /> Add HustlePortal to your home screen
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed pt-1">
-              Put your Business OS one tap away — full screen, no browser bars, opens like any other app.
+              Put your Business OS one tap away, full screen, no browser bars, opens like any other app.
             </DialogDescription>
           </DialogHeader>
 
@@ -104,7 +104,7 @@ export default function InstallApp() {
               </li>
               <li className="flex gap-3">
                 <span className="shrink-0 h-6 w-6 rounded-full bg-brand/15 text-brand flex items-center justify-center text-xs font-bold">3</span>
-                <span>Tap <b>Add</b> — HustlePortal appears on your home screen like a native app.</span>
+                <span>Tap <b>Add</b>, HustlePortal appears on your home screen like a native app.</span>
               </li>
             </ol>
           ) : (
@@ -119,14 +119,14 @@ export default function InstallApp() {
               </li>
               <li className="flex gap-3">
                 <span className="shrink-0 h-6 w-6 rounded-full bg-brand/15 text-brand flex items-center justify-center text-xs font-bold">3</span>
-                <span>Confirm — HustlePortal opens full screen from your home screen or desktop.</span>
+                <span>Confirm, HustlePortal opens full screen from your home screen or desktop.</span>
               </li>
             </ol>
           )}
 
           <div className="rounded-lg border border-brand/20 bg-brand/5 p-2.5 text-xs text-muted-foreground flex items-start gap-2">
             <CheckCircle2 className="h-3.5 w-3.5 text-brand mt-0.5 shrink-0" />
-            Works offline for your layout and caches your last screen — your data stays safe on HustlePortal servers either way.
+            Works offline for your layout and caches your last screen, your data stays safe on HustlePortal servers either way.
           </div>
 
           <div className="flex justify-end">

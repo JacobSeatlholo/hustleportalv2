@@ -4,11 +4,11 @@ import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { geminiVision, parseJsonLoose } from '@/lib/gemini'
 
 /**
- * POST /api/ai/ocr-contacts — "Scan my WhatsApp": upload a screenshot of the
+ * POST /api/ai/ocr-contacts, "Scan my WhatsApp": upload a screenshot of the
  * user's WhatsApp chats list / contact info pages / phone contact book and AI
  * reads the contacts out of it.
  *
- * Returns structured contacts ONLY — the client feeds them into the existing
+ * Returns structured contacts ONLY, the client feeds them into the existing
  * 1-click import preview (/api/whatsapp/import commit path), so the user
  * reviews everything before anything touches the CRM.
  *
@@ -16,7 +16,7 @@ import { geminiVision, parseJsonLoose } from '@/lib/gemini'
  * Resp: { ok: true, contacts: [{ name, phone, email?, note? }] } | { error }
  */
 
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024 // 8MB — generous for phone screenshots
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024 // 8MB, generous for phone screenshots
 const MAX_CONTACTS = 200
 
 export async function POST(req: NextRequest) {
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     mimeType,
     json: true,
     system:
-      'You are a precise data-capture assistant for a South African small-business owner. You read phone screenshots and extract contact entries EXACTLY as shown — never invent names or numbers. South African numbers look like 0821234567, +27 82 123 4567 or 27821234567.',
+      'You are a precise data-capture assistant for a South African small-business owner. You read phone screenshots and extract contact entries EXACTLY as shown, never invent names or numbers. South African numbers look like 0821234567, +27 82 123 4567 or 27821234567.',
     prompt: `Read this screenshot (WhatsApp chat list, contact info page, call log or address book). Extract every visible contact entry that has a phone number.
 
 Rules:

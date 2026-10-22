@@ -949,7 +949,7 @@ function GrowthSection() {
     <Card className="border-brand/40">
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-brand" /> Revenue &amp; Growth — R45,000/mo mission
+          <TrendingUp className="h-4 w-4 text-brand" /> Revenue &amp; Growth, R45,000/mo mission
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -976,7 +976,7 @@ function GrowthSection() {
 
         {data.leaderboard.length > 0 && (
           <div>
-            <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-brand" /> Top recruiters — the growth engine</div>
+            <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-brand" /> Top recruiters, the growth engine</div>
             <div className="rounded-lg border divide-y">
               {data.leaderboard.map((r, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
@@ -991,7 +991,7 @@ function GrowthSection() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          {data.referrals.viaReferralActive} of {data.subscriptions.active} active subscribers arrived via referral —
+          {data.referrals.viaReferralActive} of {data.subscriptions.active} active subscribers arrived via referral,
           referred members are your stickiest. Keep the invite loop warm.
         </p>
       </CardContent>
@@ -1236,7 +1236,7 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
     const url = `${window.location.origin}/m/${m.shareToken}`
     try {
       await navigator.clipboard.writeText(url)
-      toast({ title: 'Link copied — paste it on', description: url })
+      toast({ title: 'Link copied, paste it on', description: url })
     } catch {
       toast({ title: 'Your meeting link', description: url })
     }
@@ -2132,8 +2132,8 @@ export default function AdminView() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {data.config.expleeKeySet
-                  ? 'Key configured — lead discovery and client campaigns search live Explee data.'
-                  : 'No key yet — client campaigns serve fresh faces from your own verified pool instead. Get yours at explee.com (API Keys in account settings).'}
+                  ? 'Key configured, lead discovery and client campaigns search live Explee data.'
+                  : 'No key yet, client campaigns serve fresh faces from your own verified pool instead. Get yours at explee.com (API Keys in account settings).'}
               </p>
             </div>
 

@@ -26,11 +26,11 @@ import {
 export const maxDuration = 60
 
 /**
- * POST /api/leads/discover — source REAL leads.
+ * POST /api/leads/discover, source REAL leads.
  *
  * ENGINE CHAIN (first one with real results wins):
  *  1. A PERSONAL z.ai key (the seller's own, under Integrations) puts GLM in
- *     front — their credits, their control, about two cents per scan. The
+ *     front, their credits, their control, about two cents per scan. The
  *     PLATFORM GLM pool never fronts a grounded scan: its web search tool
  *     draws on a separate cash balance, and while that is unfunded a platform
  *     led scan always dies on the same refusal and drags a billing note the
@@ -51,7 +51,7 @@ export const maxDuration = 60
  *
  * TEASER: with no definition supplied, the AI builds the search from the seller's saved
  * profile (website, offerings, value proposition) and finds a few real businesses in the
- * seller's area that likely need what they sell — the taste that sells the R199 plan.
+ * seller's area that likely need what they sell, the taste that sells the R199 plan.
  */
 
 interface AiLead {
@@ -84,7 +84,7 @@ function sanePhone(v?: string): string | undefined {
   const s = clean(v)
   if (!s) return undefined
   const digits = s.replace(/[^\d+]/g, '')
-  // ZA numbers: +27XXXXXXXXX (12 chars incl +) or 0XXXXXXXXX (10) — allow a little slack
+  // ZA numbers: +27XXXXXXXXX (12 chars incl +) or 0XXXXXXXXX (10), allow a little slack
   if (digits.replace(/\D/g, '').length < 9) return undefined
   return s
 }
@@ -95,7 +95,7 @@ function saneWebsite(v?: string): string | undefined {
   return s.replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
 }
 
-/** A public profile page (LinkedIn, Facebook, team page, directory) — copied verbatim from search results, never constructed. */
+/** A public profile page (LinkedIn, Facebook, team page, directory), copied verbatim from search results, never constructed. */
 function saneProfileUrl(v?: string): string | undefined {
   const s = clean(v)
   if (!s) return undefined
@@ -116,7 +116,7 @@ function sanePersonName(v?: string): string | undefined {
 
 /**
  * Read the seller's own website so the hunt is grounded in what they actually
- * sell. Best effort, 8s cap: title, description and visible text — enough for
+ * sell. Best effort, 8s cap: title, description and visible text, enough for
  * the AI to reason about the offering. Never blocks the search on failure.
  */
 async function readSellerSite(raw: string): Promise<{ url: string; text: string } | null> {
@@ -168,7 +168,7 @@ function parseLeadList(text: string, cap: number, city: string) {
       why: clean(l.why),
       score: typeof l.score === 'number' ? Math.max(1, Math.min(5, Math.round(l.score))) : undefined,
     }))
-    // a lead without a company name is unusable — drop it (no fabrication)
+    // a lead without a company name is unusable, drop it (no fabrication)
     .filter((l): l is typeof l & { company: string } => Boolean(l.company))
     // REGION GATE: a foreign footprint never reaches an answer (the Italy lesson)
     .filter((l) => isSouthAfricanLead(l))
@@ -342,7 +342,7 @@ function normKey(s: string): string {
 }
 
 /**
- * THE PEOPLE PASS — one grounded AI call that names the humans behind the
+ * THE PEOPLE PASS, one grounded AI call that names the humans behind the
  * businesses the scan just found. Directory records (the OSM path) carry
  * phones but rarely owner names, yet owner names are publicly listed all over
  * the web: the business's own site, LinkedIn and Facebook pages, directories,
@@ -352,7 +352,7 @@ function normKey(s: string): string {
  *
  * Budget rules: it runs ONLY when the scan clock has runway left, and in
  * PARALLEL with the map ranking call so it never adds wall time. A refusal,
- * a timeout or an empty answer simply means the leads flow without names —
+ * a timeout or an empty answer simply means the leads flow without names,
  * the scan itself never waits on this pass to succeed.
  */
 async function enrichWithPeople(
@@ -466,7 +466,7 @@ function decorateLeads<T extends OutLead>(
  * already on the answer or in the seller's pipeline. Each topped lead wears
  * its own honest badge on the card. LOCATION IS VITAL: with a named city the
  * boost serves in area faces only, and a GPS pin without a city name reads
- * the pool's own mind — no coordinates to compare against — so the boost
+ * the pool's own mind, no coordinates to compare against, so the boost
  * steps aside and the pin grounded engines carry the answer instead.
  */
 async function topUpWithTeamVerified(
@@ -536,7 +536,7 @@ export async function POST(req: NextRequest) {
   }
   if (!definition) {
     return NextResponse.json(
-      { error: 'Describe who you want to sell to — or save your website in Profile so the AI can scout for you.' },
+      { error: 'Describe who you want to sell to, or save your website in Profile so the AI can scout for you.' },
       { status: 400 }
     )
   }
@@ -613,19 +613,19 @@ export async function POST(req: NextRequest) {
   if (sellerSite) {
     const siteContext = sellerSite.text
       ? `The seller's website is ${sellerSite.url}. What their site says about them: """${sellerSite.text}"""`
-      : `The seller's website is ${sellerSite.url} (the page could not be read — judge only from the web address).`
+      : `The seller's website is ${sellerSite.url} (the page could not be read, judge only from the web address).`
     definition = `${definition}\n\nSeller context: ${siteContext}`
   }
   const area = city && !/^anywhere/i.test(city) ? city : 'South Africa'
   const pinArea = hasPin
-    ? `within a 5 km radius of GPS pin ${lat!.toFixed(4)},${lng!.toFixed(4)}${city ? ` (${city}, South Africa)` : ' (South Africa)'} — use the coordinates to reason about the neighbourhood, suburb and surrounding streets`
+    ? `within a 5 km radius of GPS pin ${lat!.toFixed(4)},${lng!.toFixed(4)}${city ? ` (${city}, South Africa)` : ' (South Africa)'}, use the coordinates to reason about the neighbourhood, suburb and surrounding streets`
     : null
 
   const buildSearch = () => ({
     search: true,
     json: true,
     system:
-      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable — you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South Africa ONLY: every business you report must be physically located in South Africa. If a candidate sits outside South Africa, drop it, even when its website looks relevant. Townships, suburbs and metros all count.',
+      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable, you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South Africa ONLY: every business you report must be physically located in South Africa. If a candidate sits outside South Africa, drop it, even when its website looks relevant. Townships, suburbs and metros all count.',
     prompt:
       `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
       `Rules:\n` +
@@ -633,7 +633,7 @@ export async function POST(req: NextRequest) {
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
       `- PEOPLE ARE THE PRIZE: a named human beats a switchboard. When the results publicly name the owner, founder or decision maker of a business, include contactName (their real name as written), role (Owner, Manager, Buyer and so on) and profileUrl ONLY when the results show a public profile page for them (LinkedIn, Facebook, the company team page, a directory). Copy every field exactly as you saw it. NEVER construct or guess a name or a link.\n` +
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
-      `- NEVER construct an address from a pattern — if the phone/email is not in the results, omit the field.\n` +
+      `- NEVER construct an address from a pattern, if the phone/email is not in the results, omit the field.\n` +
       `- "why" = one line on why THIS business likely needs the seller (reference what you saw).\n` +
       `- score = 1-5 fit for the seller.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
@@ -704,7 +704,7 @@ export async function POST(req: NextRequest) {
     // plumbing. Both grounded engines share one neutral wording.
     const baseNote = teaser
       ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search.`
-      : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''} — real, publicly findable businesses.`
+      : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, real, publicly findable businesses.`
     return NextResponse.json({
       leads: final,
       mode: 'AI_SEARCH',
@@ -728,7 +728,7 @@ export async function POST(req: NextRequest) {
     // The platform GLM pool's balance is the operator's business, never the
     // seller's noise: only a PERSONAL key's refusal names a fix the reader
     // can actually act on. Platform refusals stay silent. Engine names stay
-    // internal either way — the note explains the fallback, not the plumbing.
+    // internal either way, the note explains the fallback, not the plumbing.
     if (!personalZai || !zai || zai.ok) return undefined
     if (zai.reason === 'BALANCE')
       return `Heads up: the extra search engine behind this account was refused for balance this run, so ${who} carried the scan.`
@@ -740,14 +740,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (zaiFirst) {
-    // 1) PRIMARY — z.ai GLM with live Web Search grounding. A personal key
+    // 1) PRIMARY, z.ai GLM with live Web Search grounding. A personal key
     //    spends the seller's own credits; the platform key spends the
     //    operator's pool. Either way a grounded scan costs about two cents.
     zai = await runZaiScan()
     let leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai', undefined, zai.endpoint)
 
-    // 2) BACKUP — Gemini with Google Search grounding when the z.ai engine could
+    // 2) BACKUP, Gemini with Google Search grounding when the z.ai engine could
     //    not answer. If the z.ai cause is money or the key, say so once, gently:
     //    the user can act on that, and it explains why the scan ran on Google.
     ai = await runGeminiScan()
@@ -756,16 +756,16 @@ export async function POST(req: NextRequest) {
       return aiSearchResponse(leads, 'gemini', zaiWhy('Google') || ai.notice)
     }
   } else {
-    // 1) PRIMARY — Gemini with Google Search grounding (the established engine,
+    // 1) PRIMARY, Gemini with Google Search grounding (the established engine,
     //    when its free tier is in the mood). Deadline trimmed to 22s so a second
     //    engine still gets its turn inside the 60s function budget.
     ai = await runGeminiScan()
     let leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
 
-    // 2) SECOND — z.ai GLM with live Web Search grounding (the platform pool:
+    // 2) SECOND, z.ai GLM with live Web Search grounding (the platform pool:
     //    a saved key would have taken the lead spot above). Google was tried
-    //    first and could not answer — say so once, gently.
+    //    first and could not answer, say so once, gently.
     zai = await runZaiScan()
     leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) {
@@ -776,7 +776,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3) FALLBACK A — OpenStreetMap: real, keyless directory listings (no AI
+  // 3) FALLBACK A, OpenStreetMap: real, keyless directory listings (no AI
   //    needed to fetch them), then DeepSeek ranks them to the seller when a
   //    DeepSeek key exists. With a GPS pin we search a tight 5 km radius around
   //    it instead of geocoding the city name. The gate is RUNWAY, not a fixed
@@ -788,7 +788,7 @@ export async function POST(req: NextRequest) {
   const osm =
     osmRunway > 16_000
       ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
-      : { leads: [], note: 'skipped — the web search used the time budget' }
+      : { leads: [], note: 'skipped, the web search used the time budget' }
   if (osm.leads.length > 0) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
     const dirNotice = zaiWhy('the real business directory')
@@ -857,7 +857,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // 4) FALLBACK B — Explee verified data when configured (no fabricated demo data, ever)
+  // 4) FALLBACK B, Explee verified data when configured (no fabricated demo data, ever)
   const ex = Date.now() - t0 < 50_000 ? await searchLeads(definition, city || undefined, cap) : { leads: [] }
   if (ex.leads.length > 0) {
     // Region gate: even the verified feed wears the same lens before an

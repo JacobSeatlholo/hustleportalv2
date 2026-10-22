@@ -6,10 +6,10 @@ import { sendMail } from '@/lib/mailer'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// POST /api/admin/exec/clients/welcome — the owner's welcome pass.
+// POST /api/admin/exec/clients/welcome, the owner's welcome pass.
 //
 // Sends a welcome email from the OWNER's own account (ceo@businesshustle.co.za)
-// to every client imported from the owner's directory domains — body { domain }
+// to every client imported from the owner's directory domains, body { domain }
 // for one, { domains: [...] } for several (a directory roster can carry real
 // published addresses on the businesses' own domains alongside reserved slots
 // on the owner's domain). Every send is logged in the OWNER's email log, so
@@ -19,7 +19,7 @@ export const maxDuration = 60
 //
 // Idempotent: anyone who already has a welcome email logged (same owner, same
 // recipient, welcome subject) is reported and NEVER resent. Reruns are always
-// safe — that also makes the second call a free audit of the first.
+// safe, that also makes the second call a free audit of the first.
 const OWNER_EMAIL = 'ceo@businesshustle.co.za'
 const MARKER = 'Welcome to HustlePortal'
 const MAX_SENDS_PER_CALL = 40
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       continue
     }
     // One welcome per client, ever. The dedupe reads the OWNER's log, which is
-    // exactly what the Mail section shows — server side truth, not a flag.
+    // exactly what the Mail section shows, server side truth, not a flag.
     const prior = await db.emailLog.findFirst({
       where: { userId: owner.id, toEmail: c.email, subject: { contains: MARKER } },
       select: { id: true, status: true, createdAt: true },

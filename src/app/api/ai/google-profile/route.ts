@@ -23,7 +23,7 @@ export interface GoogleProfileKit {
   steps: string[]
 }
 
-// POST /api/ai/google-profile — the AI Co-Founder writes the member's complete
+// POST /api/ai/google-profile, the AI Co-Founder writes the member's complete
 // Google Business Profile kit: description, categories, services, posts, review
 // replies, photo checklist and the apply steps. Google's own Business Profile API
 // is gated behind an access request that takes about two weeks and is aimed at
@@ -107,7 +107,7 @@ Write my full Google profile kit.`
   const raw = parseJsonLoose<Record<string, unknown>>(result.text)
   if (!raw || typeof raw.description !== 'string' || !raw.description.trim()) {
     return NextResponse.json(
-      { error: 'The kit came back incomplete. Try again — the second run usually lands it.' },
+      { error: 'The kit came back incomplete. Try again, the second run usually lands it.' },
       { status: 502 }
     )
   }

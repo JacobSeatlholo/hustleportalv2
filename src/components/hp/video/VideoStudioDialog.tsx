@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * VideoStudioDialog — members build their own pitch video and attach it to
+ * VideoStudioDialog, members build their own pitch video and attach it to
  * the email they are writing. The Remotion Player shows a live preview, and
  * the final MP4 is rendered BY THE MEMBER'S OWN BROWSER with
  * @remotion/web-renderer, so the platform pays zero render cost and runs no
@@ -9,7 +9,7 @@
  *
  * v2: logo upload (downscaled client side, transparency detected so JPG logos
  * get the hero plate treatment and never an ugly floating white box), and a
- * quality selector — Maximum is 1080p at a controlled 5.5 Mbps bitrate with
+ * quality selector, Maximum is 1080p at a controlled 5.5 Mbps bitrate with
  * hardware acceleration preferred, Sharp is 720p. Both are honest about file
  * size against the email attachment cap.
  *
@@ -215,7 +215,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
             videoBitrate: p.bitrate,
             hardwareAcceleration: 'no-preference',
             // The composition carries no audio track, so the output was always
-            // silent — muting skips the AAC encoder worker entirely and removes
+            // silent, muting skips the AAC encoder worker entirely and removes
             // a whole class of "audio worker failed" render failures.
             muted: true,
             licenseKey: 'free-license',
@@ -432,5 +432,5 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   )
 }
 
-// Remotion's loose Record types vs our strict PitchProps — one bridge, used twice
+// Remotion's loose Record types vs our strict PitchProps, one bridge, used twice
 const LooseVideo = PitchVideo as unknown as React.FC<Record<string, unknown>>

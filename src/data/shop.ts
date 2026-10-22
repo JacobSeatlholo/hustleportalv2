@@ -1,4 +1,4 @@
-// Store catalogue — real Business Hustle products (from app.businesshustle.co.za/shop)
+// Store catalogue, real Business Hustle products (from app.businesshustle.co.za/shop)
 // Purchases happen via Yoco-secured product pages or WhatsApp ordering, exactly like the legacy site.
 
 export interface ShopItem {
@@ -31,7 +31,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     color: '#F5C518',
     img: 'https://app.businesshustle.co.za/wp-content/uploads/2023/09/Hustle-Basics-2023-cover-450x450.png',
     cat: 'Starter Kits',
-    desc: 'Essential entrepreneur toolkit — on sale from R399',
+    desc: 'Essential entrepreneur toolkit, on sale from R399',
     fullDesc:
       'The essential guide for entrepreneurs, freelancers and small business owners. Frameworks, planning tools and strategy to get you started.',
     url: 'https://app.businesshustle.co.za/product/hustle-basics-ebook/',
@@ -46,7 +46,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Project Management',
     desc: 'Monthly business growth subscription',
     fullDesc:
-      'Ongoing access to tools, resources and business growth support — billed monthly. Cancel anytime.',
+      'Ongoing access to tools, resources and business growth support, billed monthly. Cancel anytime.',
     url: 'https://app.businesshustle.co.za/product/hustle-guru-subscription/',
     waMsg: "Hi HustlePortal team! I'd like the Hustle Guru Subscription (R249/mo). Please assist.",
   },
@@ -59,7 +59,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Starter Kits',
     desc: 'Brand strategy templates & frameworks',
     fullDesc:
-      'Everything you need to build a brand strategy — positioning templates, messaging frameworks, and brand identity tools.',
+      'Everything you need to build a brand strategy, positioning templates, messaging frameworks, and brand identity tools.',
     url: 'https://app.businesshustle.co.za/product/brand-strategist-starter-kit/',
     waMsg: "Hi HustlePortal team! I'd like the Brand Strategist Starter Kit (R650). Please assist.",
   },
@@ -85,7 +85,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Consulting & Strategy',
     desc: 'Professional content for your brand',
     fullDesc:
-      'Photo, video, copywriting and social content tailored for South African audiences — content that drives engagement and sales.',
+      'Photo, video, copywriting and social content tailored for South African audiences, content that drives engagement and sales.',
     url: 'https://app.businesshustle.co.za/product/content-creation/',
     waMsg: "Hi HustlePortal team! I'm interested in Content Creation (R1,550). Please assist.",
   },
@@ -98,7 +98,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Starter Kits',
     desc: 'Get your business on KloofStreet.online',
     fullDesc:
-      "Starter listing and brand feature on KloofStreet.online — your business in SA's premier hyperlocal digital guide.",
+      "Starter listing and brand feature on KloofStreet.online, your business in SA's premier hyperlocal digital guide.",
     url: 'https://app.businesshustle.co.za/product/kloof-street-starter-feature-package/',
     waMsg: "Hi HustlePortal team! I'm interested in the Kloof Street Starter Feature Package (R960). Please assist.",
   },
@@ -111,7 +111,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Starter Kits',
     desc: 'Enhanced KloofStreet.online presence',
     fullDesc:
-      'Full brand feature, priority placement and growth tools on KloofStreet.online — the hyperlocal business platform.',
+      'Full brand feature, priority placement and growth tools on KloofStreet.online, the hyperlocal business platform.',
     url: 'https://app.businesshustle.co.za/product/kloof-street-growth-package/',
     waMsg: "Hi HustlePortal team! I'm interested in the Kloof Street Growth Package (R1,360). Please assist.",
   },
@@ -124,7 +124,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Consulting & Strategy',
     desc: 'Professional graphic design for your brand',
     fullDesc:
-      'Professional graphic design — logo, brand identity, marketing materials and visual assets built for your business.',
+      'Professional graphic design, logo, brand identity, marketing materials and visual assets built for your business.',
     url: 'https://app.businesshustle.co.za/product/graphic-design/',
     waMsg: "Hi HustlePortal team! I'm interested in Graphic Design (R2,999). Please assist.",
   },
@@ -137,7 +137,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Consulting & Strategy',
     desc: 'Full business case & financial model',
     fullDesc:
-      'A comprehensive business case — market analysis, financial projections, risk assessment and strategic roadmap for your venture.',
+      'A comprehensive business case, market analysis, financial projections, risk assessment and strategic roadmap for your venture.',
     url: 'https://app.businesshustle.co.za/product/business-case-planning/',
     waMsg: "Hi HustlePortal team! I'm interested in Business Case Planning (R4,999). Please assist.",
   },
@@ -150,7 +150,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Digital Products',
     desc: 'Influencer marketing campaign management',
     fullDesc:
-      'End-to-end influencer campaign — strategy, influencer matching, content briefs, execution and performance reporting.',
+      'End-to-end influencer campaign, strategy, influencer matching, content briefs, execution and performance reporting.',
     url: 'https://app.businesshustle.co.za/product/influencer-campaign/',
     waMsg: "Hi HustlePortal team! I'm interested in an Influencer Campaign (R4,999). Please assist.",
   },
@@ -176,7 +176,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Digital Products',
     desc: 'Full brand + web + marketing bundle',
     fullDesc:
-      'The complete growth package — brand identity, web presence, content strategy and marketing setup all in one bundle.',
+      'The complete growth package, brand identity, web presence, content strategy and marketing setup all in one bundle.',
     url: 'https://app.businesshustle.co.za/product/brand-scale-up-bundle/',
     waMsg: "Hi HustlePortal team! I'm interested in the Brand Scale Up Bundle (R7,999). Please assist.",
   },
@@ -189,7 +189,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Consulting & Strategy',
     desc: 'Business risk & regulatory compliance plan',
     fullDesc:
-      'Comprehensive risk assessment and compliance strategy — governance frameworks, regulatory alignment and risk mitigation for your business.',
+      'Comprehensive risk assessment and compliance strategy, governance frameworks, regulatory alignment and risk mitigation for your business.',
     url: 'https://app.businesshustle.co.za/product/risk-compliance-strategy/',
     waMsg: "Hi HustlePortal team! I'm interested in Risk & Compliance Strategy (R8,500). Please assist.",
   },
@@ -200,9 +200,9 @@ export const SHOP_ITEMS: ShopItem[] = [
     color: '#F5C518',
     img: 'https://app.businesshustle.co.za/wp-content/uploads/2025/02/www.businesshustle.co_.za-Brand-starter-package-1-450x450.png',
     cat: 'Web Development',
-    desc: 'Full brand launch — identity, web & marketing',
+    desc: 'Full brand launch, identity, web & marketing',
     fullDesc:
-      'Our most comprehensive launch offer — complete brand identity, web development, content creation and marketing strategy. Built to launch fast.',
+      'Our most comprehensive launch offer, complete brand identity, web development, content creation and marketing strategy. Built to launch fast.',
     url: 'https://app.businesshustle.co.za/product/brand-launch-package/',
     waMsg: "Hi HustlePortal team! I'm interested in the Brand Launch Package (R21,000). Please assist.",
   },
@@ -215,7 +215,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     cat: 'Starter Kits',
     desc: 'KloofStreet.online brand feature options',
     fullDesc:
-      'Multiple brand feature tiers for KloofStreet.online — get your business visible to thousands of local shoppers.',
+      'Multiple brand feature tiers for KloofStreet.online, get your business visible to thousands of local shoppers.',
     url: 'https://app.businesshustle.co.za/product/essential-kloof-street-brand-feature-package/',
     waMsg: "Hi HustlePortal team! I'm interested in the Kloof Street Brand Feature Package. Please show me the options.",
   },

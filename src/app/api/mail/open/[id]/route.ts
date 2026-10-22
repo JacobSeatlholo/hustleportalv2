@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/mail/open/[id] — the invisible 1x1 open tracker bound to an EmailLog
+// GET /api/mail/open/[id], the invisible 1x1 open tracker bound to an EmailLog
 // row. Public by necessity (mail clients fetch it, no auth). First fetch stamps
 // openedAt and bumps openCount; when the send is linked to a lead, the lead's
 // pipeline stage moves NEW -> CONTACTED so the team sees who actually read.

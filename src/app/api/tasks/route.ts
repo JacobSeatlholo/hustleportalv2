@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// POST /api/tasks — create (personal or team), optionally tied to a pipeline contact.
+// POST /api/tasks, create (personal or team), optionally tied to a pipeline contact.
 // Backfill support: status and createdAt let a record of ALREADY completed work be
 // logged with its real date. createdAt can never be in the future, and the sealed
 // TaskEvent still stamps the true moment the record was logged.
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
     if (!member) return NextResponse.json({ error: 'Not a member of that team.' }, { status: 403 })
     // Assignment integrity: a team task can only land on someone who is
-    // actually IN that team — no assigning across the membership wall.
+    // actually IN that team, no assigning across the membership wall.
     if (assigneeId && assigneeId !== userId) {
       const assignee = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId: assigneeId } } })
       if (!assignee) return NextResponse.json({ error: 'That person is not a member of this team.' }, { status: 400 })

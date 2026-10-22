@@ -4,8 +4,8 @@
  * The personalization brain behind the post signup survey.
  *
  * Two answers power everything:
- *   profession — what they do (accountant, lawyer, solopreneur...)
- *   persona    — what they want first (find customers, get paid, stay on
+ *   profession, what they do (accountant, lawyer, solopreneur...)
+ *   persona   , what they want first (find customers, get paid, stay on
  *                top of work, run everything)
  *
  * Each persona carries a mastery track: three moves in the order that pays,

@@ -1,17 +1,17 @@
 'use client'
 
 /**
- * Conversion touchpoints — every key moment in the product is a potential,
+ * Conversion touchpoints, every key moment in the product is a potential,
  * GENTLE introduction to a Business Hustle service or store package.
  *
  * The rules that keep this trust-first (never sales-heavy):
- *   1. CONTEXT ONLY — a touchpoint fires at the exact moment it is useful.
+ *   1. CONTEXT ONLY, a touchpoint fires at the exact moment it is useful.
  *      Never banners-on-every-page, never popups over popups.
- *   2. NEVER BLOCKING — the user's work always completes first; the card
+ *   2. NEVER BLOCKING, the user's work always completes first; the card
  *      appears after success, as a natural next step.
- *   3. FREQUENCY-CAPPED — each touchpoint can snooze itself for days or
+ *   3. FREQUENCY-CAPPED, each touchpoint can snooze itself for days or
  *      retire permanently (per device), so regulars never feel nagged.
- *   4. PROFESSIONAL TONE — outcome-first copy, real prices, one tap to act,
+ *   4. PROFESSIONAL TONE, outcome-first copy, real prices, one tap to act,
  *      one tap to dismiss.
  *
  * Tagline that anchors the whole system:
@@ -40,7 +40,7 @@ function write(id: string, rec: TpRecord) {
   try {
     localStorage.setItem(storageKey(id), JSON.stringify(rec))
   } catch {
-    // private mode — touchpoints simply reappear, acceptable
+    // private mode, touchpoints simply reappear, acceptable
   }
 }
 

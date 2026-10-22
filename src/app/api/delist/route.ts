@@ -22,7 +22,7 @@ function throttled(ip: string): boolean {
 }
 
 /**
- * POST /api/delist — the public "remove my business" endpoint (POPIA).
+ * POST /api/delist, the public "remove my business" endpoint (POPIA).
  *
  * No auth on purpose: the requester is a business owner, not an app user.
  * It records a listing suppression (enforced within a minute everywhere the
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   await createSuppression({ name: business, city, contact, reason, source: 'WEB' })
 
-  // Team alert — a human sees every removal request. Best effort: the
+  // Team alert, a human sees every removal request. Best effort: the
   // suppression itself is already live, the mail only informs.
   try {
     await sendSystemMail({

@@ -6,9 +6,9 @@ import { getVapidPublicKey, sendPushToUser } from '@/lib/push'
 export const maxDuration = 30
 
 /**
- * GET /api/push → { publicKey } — the VAPID public key the browser subscribes with.
+ * GET /api/push → { publicKey }, the VAPID public key the browser subscribes with.
  * POST /api/push { action:'subscribe', subscription, previousEndpoint? } → store this
- *   device (and forget the dead device it replaced — iOS rotates endpoints).
+ *   device (and forget the dead device it replaced, iOS rotates endpoints).
  * POST /api/push { action:'unsubscribe', endpoint } → forget this device.
  * POST /api/push { action:'test' } → send a real test push to all my devices and
  *   return the honest truth about every device: stored, delivered or dead.
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       update: { userId, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
     })
     // iOS rotates web push endpoints periodically (pushsubscriptionchange).
-    // The replacement row is stored above — retire the dead device it replaced
+    // The replacement row is stored above, retire the dead device it replaced
     // so the morning cron never pushes into a retired endpoint.
     const previousEndpoint = typeof body.previousEndpoint === 'string' ? body.previousEndpoint : ''
     if (previousEndpoint && previousEndpoint !== sub.endpoint) {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     // Instant payoff: the first push proves the pipe works end to end.
     await sendPushToUser(userId, {
       title: 'Notifications are on 🎉',
-      body: "You'll hear from HustlePortal when it matters — starting with tasks due today.",
+      body: "You'll hear from HustlePortal when it matters, starting with tasks due today.",
       url: '/?view=tasks',
       tag: 'welcome',
     })
@@ -78,14 +78,14 @@ export async function POST(req: NextRequest) {
     // The honest truth, per device: how many subscriptions this account holds,
     // how many accepted the push, what died and with which status. The old
     // version answered "no device received the test push" for BOTH "never
-    // subscribed" and "subscribed but the send failed" — which made the
+    // subscribed" and "subscribed but the send failed", which made the
     // system impossible to debug from the phone.
     if (r.sent === 0) {
       return NextResponse.json(
         {
           error:
             r.subscriptions === 0
-              ? 'No device is subscribed on this account yet — turn notifications on first, then send a test.'
+              ? 'No device is subscribed on this account yet, turn notifications on first, then send a test.'
               : r.pruned > 0
                 ? `The stored device ${r.pruned === 1 ? 'was' : 'were'} dead (push service said so) and ${r.pruned === 1 ? 'it has' : 'they have'} been cleared. Turn notifications on again on this device to re-subscribe.`
                 : `The push service refused the send (status ${r.errors[0]?.status || 'unknown'}). Turn notifications off and on again on this device, then test once more.`,

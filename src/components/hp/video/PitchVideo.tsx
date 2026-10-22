@@ -2,7 +2,7 @@ import React from 'react'
 import { AbsoluteFill, Img, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 
 /**
- * PitchVideo — the HustlePortal marketing video template, v2.
+ * PitchVideo, the HustlePortal marketing video template, v2.
  * 12 seconds, 30fps, resolution independent (scales from the 720 design grid
  * to 1080 and beyond). The member can attach their own logo: it pops in the
  * opener, rides as a watermark in the service scene and crowns the closing
@@ -10,7 +10,7 @@ import { AbsoluteFill, Img, interpolate, Sequence, spring, useCurrentFrame, useV
  *
  * Everything is deterministic (spring, interpolate and Math.sin only, no Date
  * or Math random) so the browser render and the Player preview are frame
- * identical. System font stack only — the web renderer draws inside the
+ * identical. System font stack only, the web renderer draws inside the
  * member's own browser, so no webfont loading can fail mid render.
  */
 

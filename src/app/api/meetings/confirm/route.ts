@@ -11,7 +11,7 @@ import { confirmAndNotify } from '@/lib/meetingConfirm'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/meetings/confirm?token=… — the page the invite email opens.
+// GET /api/meetings/confirm?token=…, the page the invite email opens.
 // Side effect free: the actual confirm is a form POST, so email scanners that
 // prefetch links can never confirm anything by accident.
 export async function GET(req: NextRequest) {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(confirmPage(meeting), { headers: HTML_HEADERS })
 }
 
-// POST /api/meetings/confirm — the one tap lands here. Confirms the meeting,
+// POST /api/meetings/confirm, the one tap lands here. Confirms the meeting,
 // emails BOTH parties the final details, and drops a note to the team inbox.
 export async function POST(req: NextRequest) {
   let token = ''

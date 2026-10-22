@@ -6,7 +6,7 @@ import { getYocoKeyMode, getYocoWebhookSecret } from '@/lib/yoco'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 
-// GET /api/admin/exec — the Executive Dashboard feed: platform KPIs + the full
+// GET /api/admin/exec, the Executive Dashboard feed: platform KPIs + the full
 // client roster (plan, account status, wallet, activity). Exec only.
 //
 // The lens shows the REAL business. Every automated probe address, house owned
@@ -163,7 +163,7 @@ export async function GET() {
     declined: statusCount('DECLINED'),
   }
 
-  // Meetings set before sharing existed get their share token on first sight —
+  // Meetings set before sharing existed get their share token on first sight,
   // idempotent, and the token only ever reaches the owner and the parties.
   const meetingRows = await Promise.all(
     meetings.map(async (m) => {

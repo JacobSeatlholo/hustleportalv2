@@ -10,14 +10,14 @@ import { bumpChallenge } from '@/lib/gamification'
 export const maxDuration = 60
 
 /**
- * POST /api/leads/reveal — spend credits to unlock contact details.
+ * POST /api/leads/reveal, spend credits to unlock contact details.
  *
  * HONESTY CONTRACT (no more fabricated contacts):
  *  - Leads with stored (real) contact details: charge and unlock, as before.
  *  - Leads with NO stored contact: Gemini runs a GROUNDED web lookup for the
  *    business's PUBLICLY LISTED details. If verified details are found we charge
  *    and unlock; if not, the user is NOT charged and we say so plainly.
- *  - Fabricated demo contacts (pattern-built emails/phones) were removed —
+ *  - Fabricated demo contacts (pattern-built emails/phones) were removed,
  *    the reveal is real results or your money stays in your wallet.
  */
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   if (lead.unlocked) return NextResponse.json({ lead })
 
   // POPIA opt-out: this business asked to leave the lead index. Refuse before
-  // the grounded lookup and before any charge — an opt-out must never cost
+  // the grounded lookup and before any charge, an opt-out must never cost
   // the seller a cent and must never surface as a purchasable contact.
   if (await isSuppressed({ company: lead.company, city: lead.city, externalId: lead.externalId })) {
     return NextResponse.json({
@@ -98,12 +98,17 @@ export async function POST(req: NextRequest) {
       }
     }
     if (!found) {
+      // The lookup itself failing (daily search allowance drained, key trouble,
+      // network) must never read as "no contact exists". Different message, same
+      // promise: nothing was charged.
+      const searchMessage = !lookup.ok
+        ? `The contact search could not run just now (the daily AI search allowance may be stretched). You were NOT charged. Try ${lead.company} again in a minute.`
+        : `No verified public contact found for ${lead.company}, you were NOT charged.` +
+          (lead.website ? ` Try their website directly: ${lead.website}` : ' Try searching for them directly.')
       return NextResponse.json({
         lead,
         charged: false,
-        message:
-          `No verified public contact found for ${lead.company} — you were NOT charged.` +
-          (lead.website ? ` Try their website directly: ${lead.website}` : ' Try searching for them directly.'),
+        message: searchMessage,
       })
     }
     viaSource = via

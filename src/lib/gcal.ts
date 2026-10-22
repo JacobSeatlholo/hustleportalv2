@@ -1,7 +1,7 @@
 /**
  * Google Calendar sync for appointments.
  * Two tiers:
- *  1. Zero-cred: gcalTemplateLink (see ics.ts) — one-click "Add to Google Calendar".
+ *  1. Zero-cred: gcalTemplateLink (see ics.ts), one-click "Add to Google Calendar".
  *  2. Token-based: if the user stored a GCAL_OAUTH_TOKEN in Integrations (from OAuth
  *     Playground or their own flow), we insert events via the Calendar API directly.
  */

@@ -17,7 +17,7 @@ export const maxDuration = 60
  */
 function bearerOk(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return false // no secret configured — session gate only
+  if (!secret) return false // no secret configured, session gate only
   const header = req.headers.get('authorization') || ''
   return header === `Bearer ${secret}`
 }

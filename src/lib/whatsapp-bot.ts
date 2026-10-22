@@ -1,5 +1,5 @@
 /**
- * Hustle Bot — the shared WhatsApp bot on the platform number.
+ * Hustle Bot, the shared WhatsApp bot on the platform number.
  *
  * One number for the whole platform. A member saves it as "Hustle Bot", sends
  * one message, links by replying with their account email once, and from then
@@ -13,7 +13,7 @@
  * Zero cost by design: Meta charges nothing for service messages (the user
  * messaged first, so the 24 hour window is open and every bot reply is free).
  * The brain is deterministic (no AI calls, no per-message bills) and every
- * credential rides in PlatformConfig like the VAPID keys — zero env setup.
+ * credential rides in PlatformConfig like the VAPID keys, zero env setup.
  *
  * Security model:
  *  - a phone number alone proves nothing: PENDING phones can only link, and
@@ -219,12 +219,12 @@ export function parseWhen(text: string): { date: Date | null; label: string | nu
 // ---------- copy (no hyphens, no emoji, simple English) ----------
 
 const MENU = `Try one of these any time:
-*today* — what is due this week
-*meeting with <name>* — saves the task and links the contact
-*add client <name> in <area>* — new client, add a number if you have it
-*search <word>* — your pipeline
-*leads* — your pipeline numbers
-*stop* — unlink this phone`
+*today*, what is due this week
+*meeting with <name>*, saves the task and links the contact
+*add client <name> in <area>*, new client, add a number if you have it
+*search <word>*, your pipeline
+*leads*, your pipeline numbers
+*stop*, unlink this phone`
 
 const LINK_PROMPT =
   'Hi, Hustle Bot here. The WhatsApp side of HustlePortal. Reply with the email on your Hustle Portal account and I will link this phone. Say *stop* any time and I go quiet.'

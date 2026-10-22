@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { sendSystemMail } from '@/lib/mailer'
 
-// GET /api/teams — my team(s) + members + pending invites
+// GET /api/teams, my team(s) + members + pending invites
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,7 +29,7 @@ export async function GET() {
         email: tm.user.email,
         role: tm.role,
       })),
-      // pending invites are only the owner's business — hide them from other members
+      // pending invites are only the owner's business, hide them from other members
       pending: m.role === 'OWNER' || m.team.ownerId === userId
         ? m.team.invites.map((i) => ({ id: i.id, email: i.email }))
         : [],
@@ -37,7 +37,7 @@ export async function GET() {
   })
 }
 
-// POST /api/teams — create team, or { action:'invite', teamId, email } to add a member
+// POST /api/teams, create team, or { action:'invite', teamId, email } to add a member
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     }
     const normalized = String(email).toLowerCase().trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-      return NextResponse.json({ error: 'That email does not look right — check for typos.' }, { status: 400 })
+      return NextResponse.json({ error: 'That email does not look right, check for typos.' }, { status: 400 })
     }
     const invitee = await db.user.findUnique({ where: { email: normalized } })
     const already = invitee
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
             `Hi ${first},`,
             '',
             `${inviter?.name || 'A teammate'} just added you to the team "${team.name}" on HustlePortal.`,
-            'Shared tasks and pipelines for this team are now in your account — sign in to see them.',
+            'Shared tasks and pipelines for this team are now in your account, sign in to see them.',
             '',
             `Sign in: ${base}/?view=tasks`,
             '',
@@ -104,8 +104,8 @@ export async function POST(req: NextRequest) {
           '',
           `${inviter?.name || 'A teammate'} uses HustlePortal to run their business and invited you to the team "${team.name}".`,
           '',
-          'Register free with THIS email address and you will land in the team automatically —',
-          'no setup, no codes. You get R99 in free lead credits too.',
+          'Register free with THIS email address and you will land in the team automatically.',
+          'No setup, no codes. You get R99 in free lead credits too.',
           '',
           `Join here: ${base}/?ref=&view=dashboard`,
           '',
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ team })
 }
 
-// DELETE /api/teams?inviteId= — owner cancels a pending invite
+// DELETE /api/teams?inviteId=, owner cancels a pending invite
 export async function DELETE(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

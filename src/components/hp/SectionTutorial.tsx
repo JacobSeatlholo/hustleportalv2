@@ -1,11 +1,11 @@
 'use client'
 
 /**
- * SectionTutorial — "How this works" for EVERY section, so a user never gets lost.
+ * SectionTutorial, "How this works" for EVERY section, so a user never gets lost.
  *
  *  - A floating Tutorial button stays in thumb reach on every view.
  *  - Core sections auto-open their walkthrough once, on first visit
- *    (per-view localStorage flag — never nags again).
+ *    (per-view localStorage flag, never nags again).
  *  - Steps are plain-language outcome cards (same skeleton as the welcome tour),
  *    so nothing depends on fragile element-positioning.
  *
@@ -67,7 +67,7 @@ export default function SectionTutorial() {
   const [openView, setOpenView] = useState<ViewKey | null>(null)
   const [step, setStep] = useState(0)
 
-  // Auto-open ONCE per view for the core sections — after the view settles.
+  // Auto-open ONCE per view for the core sections, after the view settles.
   useEffect(() => {
     const def = SECTION_TUTORIALS[view]
     if (!def?.auto) return
@@ -106,7 +106,7 @@ export default function SectionTutorial() {
 
   return (
     <>
-      {/* Floating Tutorial button — thumb reach on phones, corner on desktop.
+      {/* Floating Tutorial button, thumb reach on phones, corner on desktop.
           Hidden while the dialog is open or the current view has no tutorial. */}
       {!openView && SECTION_TUTORIALS[view] && (
         <button

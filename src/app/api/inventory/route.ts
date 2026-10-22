@@ -5,9 +5,9 @@ import { bumpChallenge } from '@/lib/gamification'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 
 /**
- * Inventory — dead-simple stock management.
+ * Inventory, dead-simple stock management.
  * GET    /api/inventory          → { items, totals }
- * POST   /api/inventory          → create { name, sku?, quantity?, unit?, costPrice?, sellPrice?, lowStockAt?, notes? }
+ * POST   /api/inventory          → create { name, sku?, quantity?, unit?, costPrice?, sellPrice?, lowStockAt?, supplier?, location?, notes? }
  * PATCH  /api/inventory          → update { id, ...fields } (quantity is the NEW value; use `adjust` for ±delta)
  * DELETE /api/inventory?id=      → remove
  */
@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
       costPrice: num(b.costPrice) ?? 0,
       sellPrice: num(b.sellPrice) ?? 0,
       lowStockAt: num(b.lowStockAt) ?? 0,
+      supplier: String(b.supplier || '').trim() || null,
+      location: String(b.location || '').trim() || null,
       notes: String(b.notes || '').trim() || null,
     },
   })
@@ -80,6 +82,8 @@ export async function PATCH(req: NextRequest) {
   if (b.costPrice !== undefined) data.costPrice = num(b.costPrice) ?? existing.costPrice
   if (b.sellPrice !== undefined) data.sellPrice = num(b.sellPrice) ?? existing.sellPrice
   if (b.lowStockAt !== undefined) data.lowStockAt = num(b.lowStockAt) ?? existing.lowStockAt
+  if (b.supplier !== undefined) data.supplier = String(b.supplier).trim() || null
+  if (b.location !== undefined) data.location = String(b.location).trim() || null
   if (b.adjust !== undefined) data.quantity = Math.max(0, existing.quantity + (num(b.adjust) ?? 0))
   else if (b.quantity !== undefined) data.quantity = Math.max(0, num(b.quantity) ?? existing.quantity)
 

@@ -3,7 +3,7 @@ import { parseIcs } from '@/lib/icsImport'
 import { resolveProject } from '@/lib/workspace'
 
 /**
- * icsSync.ts — the shared ingest for one-shot ICS imports and feed syncs.
+ * icsSync.ts, the shared ingest for one-shot ICS imports and feed syncs.
  * Dedupe law: an event with a UID never lands twice (uid is the calendar
  * world's identity); UID-less events are matched on title + start time
  * (±90 seconds, because feeds love to shave seconds).

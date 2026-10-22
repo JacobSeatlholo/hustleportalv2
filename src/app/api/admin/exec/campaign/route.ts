@@ -4,8 +4,8 @@ import { db } from '@/lib/db'
 import { sendCampaignMail, normalizeCampaignFrom } from '@/lib/mailer'
 
 // Campaign mail for the owner's own lists (ecosystem announcements).
-// POST /api/admin/exec/campaign — send ONE email, exec seat only.
-// GET  /api/admin/exec/campaign — the read-out: every campaign send with its
+// POST /api/admin/exec/campaign, send ONE email, exec seat only.
+// GET  /api/admin/exec/campaign, the read-out: every campaign send with its
 //       open time and the lead's pipeline stage, so the team can see who read
 //       what and when and move contacts from NEW to CONTACTED.
 //
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, to, from: r.via, campaign, leadId, logId: log.id })
 }
 
-// GET — the visible read function. Per campaign: totals + every send with its
+// GET, the visible read function. Per campaign: totals + every send with its
 // open time and the linked lead's pipeline stage (NEW / CONTACTED / ...).
 export async function GET() {
   const gate = await requireExec()

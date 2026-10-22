@@ -1,5 +1,5 @@
 /**
- * levels.ts — the pure hustle ladder, safe to import from client components
+ * levels.ts, the pure hustle ladder, safe to import from client components
  * (no database here). gamification.ts builds on it server-side.
  */
 export const LEVELS = [

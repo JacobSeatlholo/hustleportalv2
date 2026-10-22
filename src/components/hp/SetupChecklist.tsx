@@ -18,7 +18,7 @@ const ITEMS: Item[] = [
     id: 'GCAL_OAUTH_TOKEN',
     label: 'Google Calendar token',
     why: 'Two-way appointment sync (Jitsi links and .ics work without it).',
-    how: 'Optional — paste an OAuth token from Google Cloud.',
+    how: 'Optional, paste an OAuth token from Google Cloud.',
   },
 ]
 
@@ -26,7 +26,7 @@ const YOCO_ITEM: Item = {
   id: 'YOCO_WEBHOOK',
   label: 'Yoco webhook',
   why: 'Card top-ups only auto-credit wallets once the webhook is registered.',
-  how: 'One click — we register this deployment with Yoco for you.',
+  how: 'One click, we register this deployment with Yoco for you.',
 }
 
 export default function SetupChecklist() {
@@ -91,7 +91,7 @@ export default function SetupChecklist() {
     <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 md:p-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-display text-lg leading-tight">Unlock even more — {remaining} step{remaining === 1 ? '' : 's'} left</div>
+          <div className="font-display text-lg leading-tight">Unlock even more, {remaining} step{remaining === 1 ? '' : 's'} left</div>
           <p className="text-xs text-muted-foreground mt-0.5">
             AI, email, calendar and payments already work out of the box. These are optional upgrades.
           </p>
@@ -119,7 +119,7 @@ export default function SetupChecklist() {
             </div>
             {i.id === 'YOCO_WEBHOOK' ? (
               keyBad ? (
-                <span className="shrink-0 text-xs text-amber-500 max-w-36 text-right">Fix YOCO_SECRET_KEY in Vercel — paste the Portal secret key, not the whsec_ webhook secret</span>
+                <span className="shrink-0 text-xs text-amber-500 max-w-36 text-right">Fix YOCO_SECRET_KEY in Vercel, paste the Portal secret key, not the whsec_ webhook secret</span>
               ) : (
                 <button
                   onClick={registerWebhook}

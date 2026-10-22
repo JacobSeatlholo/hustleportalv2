@@ -22,7 +22,7 @@ async function loadTarget(id: string) {
   })
 }
 
-// GET /api/admin/exec/client/[id] — one client, everything the exec needs on
+// GET /api/admin/exec/client/[id], one client, everything the exec needs on
 // the desk: profile, plan, wallet, payment history (top-ups + credit ledger),
 // projects, pipeline shape. Exec only.
 export async function GET(_req: NextRequest, ctx: Ctx) {
@@ -107,7 +107,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   })
 }
 
-// PATCH /api/admin/exec/client/[id] — pause or restore an account.
+// PATCH /api/admin/exec/client/[id], pause or restore an account.
 // Body: { status: 'ACTIVE' | 'SUSPENDED', reason?: string }
 // Guard rails: the exec cannot pause themselves or any other admin/exec account.
 export async function PATCH(req: NextRequest, ctx: Ctx) {

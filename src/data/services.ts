@@ -8,7 +8,7 @@ export interface BhService {
   waMsg: string
 }
 
-/** Business Hustle client services — carried over from hustleportal.online (Services page). */
+/** Business Hustle client services, carried over from hustleportal.online (Services page). */
 export const BH_SERVICES: BhService[] = [
   {
     id: 'brand-strategy',
@@ -17,7 +17,7 @@ export const BH_SERVICES: BhService[] = [
     desc: 'Position your offer to win',
     color: '#F5C518',
     detail:
-      'We craft positioning strategies for SA businesses — from logo to market narrative. Clear brand strategy, messaging that resonates.',
+      'We craft positioning strategies for SA businesses, from logo to market narrative. Clear brand strategy, messaging that resonates.',
     waMsg: "Hi HustlePortal team! I'm interested in Brand Strategy. Please tell me more.",
   },
   {
@@ -37,7 +37,7 @@ export const BH_SERVICES: BhService[] = [
     desc: 'Get your business online',
     color: '#34d399',
     detail:
-      'Google Business Profile setup, SEO and social media management — data-driven campaigns turn traffic into customers.',
+      'Google Business Profile setup, SEO and social media management, data-driven campaigns turn traffic into customers.',
     waMsg: "Hi HustlePortal team! I'm interested in Digital Marketing. Please tell me more.",
   },
   {
@@ -47,7 +47,7 @@ export const BH_SERVICES: BhService[] = [
     desc: 'Stories that build your brand',
     color: '#f87171',
     detail:
-      'Photo, video, copywriting and social content for SA audiences — content that drives engagement and sales.',
+      'Photo, video, copywriting and social content for SA audiences, content that drives engagement and sales.',
     waMsg: "Hi HustlePortal team! I'm interested in Content Creation. Please tell me more.",
   },
   {
@@ -67,7 +67,7 @@ export const BH_SERVICES: BhService[] = [
     desc: 'A roadmap to your next revenue level',
     color: '#fb923c',
     detail:
-      'Four-track business and growth advisory packages for SA founders — clarity and a clear next step to grow revenue and scale.',
+      'Four-track business and growth advisory packages for SA founders, clarity and a clear next step to grow revenue and scale.',
     waMsg: "Hi HustlePortal team! I'm interested in Business Coaching. Please tell me more.",
   },
 ]

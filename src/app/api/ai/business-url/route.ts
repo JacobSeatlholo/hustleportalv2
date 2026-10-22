@@ -19,7 +19,7 @@ export const maxDuration = 60
  *   - three ready-to-send sales pitches (cold intro, follow-up, upsell)
  *   - keywords worth owning
  * The full analysis is saved on the workspace (Project.audienceInsight) so every
- * later AI draft — pitches, emails, plans — grounds on it automatically.
+ * later AI draft, pitches, emails, plans, grounds on it automatically.
  */
 
 const MAX_HTML_BYTES = 3 * 1024 * 1024
@@ -27,7 +27,7 @@ const MAX_TEXT_CHARS = 14_000
 
 async function normalizeUrl(raw: string): Promise<string | null> {
   // Hardened: syntactic checks PLUS a DNS resolve whose every answer must be
-  // public — string blocklists alone miss octal IPs, IPv6 loopback and DNS
+  // public, string blocklists alone miss octal IPs, IPv6 loopback and DNS
   // that points at private/link-local space (cloud metadata included).
   const verdict = await safeUrl(raw)
   return verdict.ok ? verdict.url! : null
@@ -123,7 +123,7 @@ function metaContent(html: string, name: string): string {
 /**
  * The no-AI floor: read the site's own meta tags and contact links directly.
  * When the AI minute is rate-limited, this still fills the profile with facts
- * the site itself states — name, tagline, contact email, phone. Nothing is
+ * the site itself states, name, tagline, contact email, phone. Nothing is
  * invented; whatever the site does not say stays empty.
  */
 function extractFromHtml(html: string, text: string, finalUrl: string): BusinessAnalysis {
@@ -241,11 +241,11 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 2) Gemini dissection — grounded ONLY in the page text, shaped for reality:
+  // 2) Gemini dissection, grounded ONLY in the page text, shaped for reality:
   //    the profile fields the user actually needs are a SMALL, FAST output, so
   //    they go first and land even on a slow free-tier minute. The pitch drafts
   //    are a big payload that can outlive any sane timeout, so they run second,
-  //    only when the clock allows — a bonus, never the difference between a
+  //    only when the clock allows, a bonus, never the difference between a
   //    filled profile and a dead end.
   const system =
     'You are a meticulous South African market analyst and direct-response copywriter. You research a business from its website text and produce precise, professional output. Never invent facts that are not supported by the text. When the text is thin, say less rather than guess. Write pitches in plain, confident English for WhatsApp and SMS length emails (South African small-business tone: warm, direct, no hype, no emojis).'

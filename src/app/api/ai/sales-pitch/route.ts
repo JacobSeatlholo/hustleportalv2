@@ -23,13 +23,13 @@ export async function POST(req: NextRequest) {
   const filled = [project.industry, project.valueProp, project.targetMarket, project.offerings].filter(Boolean).length
   if (filled === 0) {
     return NextResponse.json({
-      error: 'Fill in at least your industry and what you offer first — the AI pitches from your profile, not thin air.',
+      error: 'Fill in at least your industry and what you offer first, the AI pitches from your profile, not thin air.',
     }, { status: 400 })
   }
 
   const result = await geminiGenerate(userId, {
     system:
-      'You are a sharp South African sales copywriter. Write a sales pitch grounded ONLY in the business profile provided — never invent products, clients or prices. ' +
+      'You are a sharp South African sales copywriter. Write a sales pitch grounded ONLY in the business profile provided, never invent products, clients or prices. ' +
       'Plain text, 3 short paragraphs: (1) hook that names the target market, (2) what they offer + the value proposition, (3) a concrete call to action. ' +
       'No headings, no markdown, no emojis.',
     prompt: `=== BUSINESS PROFILE ===\n${profileText(project)}\n\nWrite the pitch.`,

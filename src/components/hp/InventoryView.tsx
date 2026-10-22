@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Inventory — stock management for businesses that sell things.
+ * Inventory, stock management for businesses that sell things.
  * Add items, adjust quantities in one tap, see stock value and low-stock alerts.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -33,7 +33,7 @@ interface ImportReport {
 }
 
 /**
- * ImportDialog — bring an existing stock list in: upload or paste CSV.
+ * ImportDialog, bring an existing stock list in: upload or paste CSV.
  * Recognised columns: name/item/product, sku/code, quantity/qty, unit,
  * cost, sell/price, low stock/reorder, notes. Duplicates are reported, not doubled.
  */
@@ -109,6 +109,8 @@ interface Item {
   costPrice: number
   sellPrice: number
   lowStockAt: number
+  supplier: string | null
+  location: string | null
   notes: string | null
 }
 
@@ -119,7 +121,7 @@ interface Totals {
   lowCount: number
 }
 
-const EMPTY = { name: '', sku: '', quantity: '', unit: '', costPrice: '', sellPrice: '', lowStockAt: '', notes: '' }
+const EMPTY = { name: '', sku: '', quantity: '', unit: '', costPrice: '', sellPrice: '', lowStockAt: '', supplier: '', location: '', notes: '' }
 
 export default function InventoryView() {
   const { bumpRefresh } = useHp()
@@ -161,6 +163,8 @@ export default function InventoryView() {
           costPrice: parseFloat(form.costPrice) || 0,
           sellPrice: parseFloat(form.sellPrice) || 0,
           lowStockAt: parseFloat(form.lowStockAt) || 0,
+          supplier: form.supplier,
+          location: form.location,
           notes: form.notes,
         }),
       })
@@ -173,6 +177,22 @@ export default function InventoryView() {
       toast({ title: 'Could not add item', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Type the exact count instead of tapping plus one at a time.
+  const [qtyEdit, setQtyEdit] = useState<{ id: string; value: string } | null>(null)
+
+  async function setExact(item: Item, value: string) {
+    const n = parseFloat(value)
+    setQtyEdit(null)
+    if (!Number.isFinite(n) || n < 0 || n === item.quantity) return
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, quantity: n } : i)))
+    try {
+      await api('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id: item.id, quantity: n }) })
+      bumpRefresh()
+    } catch {
+      load()
     }
   }
 
@@ -232,7 +252,7 @@ export default function InventoryView() {
         </div>
       </div>
 
-      {/* Free plan slot meter — honest countdown, one tap to the plans. The server
+      {/* Free plan slot meter, honest countdown, one tap to the plans. The server
           enforces the same number; this just makes the ceiling visible before it bites. */}
       {!paid && (
         <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
@@ -275,7 +295,7 @@ export default function InventoryView() {
             <Boxes className="h-8 w-8 mx-auto text-muted-foreground" />
             <p className="text-sm font-medium">No stock items yet</p>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Add what you sell — Paraffin 750ml, Airtime R10, Maize 5kg — and keep counts honest with one-tap adjustments.
+              Add what you sell, Paraffin 750ml, Airtime R10, Maize 5kg. Keep counts honest: tap the number to type the exact stock, or use the plus and minus buttons.
             </p>
             <Button onClick={() => setShowAdd(true)} className="mt-2"><Plus className="h-4 w-4 mr-1" /> Add your first item</Button>
           </CardContent>
@@ -296,6 +316,8 @@ export default function InventoryView() {
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {i.sellPrice > 0 ? `Sells at ${randsPlain(i.sellPrice)}` : 'No sell price'}
                       {i.sellPrice > 0 && i.costPrice > 0 && ` · margin ${randsPlain(i.sellPrice - i.costPrice)}`}
+                      {i.supplier ? ` · supplier ${i.supplier}` : ''}
+                      {i.location ? ` · ${i.location}` : ''}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -303,7 +325,26 @@ export default function InventoryView() {
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
                     <div className={`text-center w-16 ${low ? 'text-amber-500 font-semibold' : 'font-semibold'}`}>
-                      {fmt(i.quantity)}<span className="text-[10px] text-muted-foreground">{i.unit ? ` ${i.unit}` : ''}</span>
+                      {qtyEdit?.id === i.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min={0}
+                          step="any"
+                          className="w-14 rounded border bg-background px-1 text-sm"
+                          value={qtyEdit.value}
+                          onChange={(e) => setQtyEdit({ id: i.id, value: e.target.value })}
+                          onBlur={() => setExact(i, qtyEdit.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') setExact(i, qtyEdit.value)
+                            if (e.key === 'Escape') setQtyEdit(null)
+                          }}
+                        />
+                      ) : (
+                        <button title="Tap to type the exact count" onClick={() => setQtyEdit({ id: i.id, value: String(i.quantity) })}>
+                          {fmt(i.quantity)}<span className="text-[10px] text-muted-foreground">{i.unit ? ` ${i.unit}` : ''}</span>
+                        </button>
+                      )}
                     </div>
                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => adjust(i, 1)} aria-label={`Add one ${i.name}`}>
                       <Plus className="h-3.5 w-3.5" />
@@ -325,20 +366,25 @@ export default function InventoryView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add stock item</DialogTitle>
-            <DialogDescription>Keep it simple — name and quantity are enough to start.</DialogDescription>
+            <DialogDescription>Name and quantity are enough to start. SKU, supplier and location are there when you need them.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Item name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Paraffin 750ml" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Quantity</Label><Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="12" /></div>
-              <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="bottles" /></div>
+              <div className="space-y-1.5"><Label>Quantity in stock</Label><Input type="number" min={0} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="12" /></div>
+              <div className="space-y-1.5"><Label>Unit (each, kg, litres)</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="bottles" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>SKU / stock code</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="PAR-750" /></div>
+              <div className="space-y-1.5"><Label>Supplier</Label><Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Who you buy it from" /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Cost (R)</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} placeholder="12" /></div>
               <div className="space-y-1.5"><Label>Sell (R)</Label><Input type="number" value={form.sellPrice} onChange={(e) => setForm({ ...form, sellPrice: e.target.value })} placeholder="18" /></div>
               <div className="space-y-1.5"><Label>Low at</Label><Input type="number" value={form.lowStockAt} onChange={(e) => setForm({ ...form, lowStockAt: e.target.value })} placeholder="3" /></div>
             </div>
-            <div className="space-y-1.5"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Supplier, where it's stored…" /></div>
+            <div className="space-y-1.5"><Label>Stock location</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Shelf 2, back room" /></div>
+            <div className="space-y-1.5"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Anything else worth remembering" /></div>
             <Button onClick={addItem} disabled={busy || !form.name.trim()} className="w-full">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add item'}
             </Button>

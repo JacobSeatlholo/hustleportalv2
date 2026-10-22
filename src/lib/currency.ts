@@ -1,8 +1,8 @@
 /**
- * Currency localizer — one rule, legally sound:
+ * Currency localizer, one rule, legally sound:
  *   Billing ALWAYS happens in South African Rand (ZAR). Yoco settles in ZAR.
  *   Visitors inside South Africa (and anyone whose country we cannot prove)
- *   see Rand only — a South African must never be served a dollar figure.
+ *   see Rand only, a South African must never be served a dollar figure.
  *   Proven visitors from other countries see an honest converted estimate,
  *   labelled as an estimate, with the Rand amount never hidden.
  */

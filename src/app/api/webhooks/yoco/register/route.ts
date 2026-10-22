@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { setConfig, getConfig, CONFIG_KEYS } from '@/lib/config'
 import { getYocoSecretKey, registerYocoWebhook, getYocoWebhookSecret, getYocoSecretKeyStatus, YocoError } from '@/lib/yoco'
 
-/** GET /api/webhooks/yoco/register — webhook config status (admin). */
+/** GET /api/webhooks/yoco/register, webhook config status (admin). */
 export async function GET() {
   const me = await getUserId()
   if (!me) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,9 +22,9 @@ export async function GET() {
 }
 
 /**
- * POST /api/webhooks/yoco/register — register this app's webhook endpoint with Yoco
+ * POST /api/webhooks/yoco/register, register this app's webhook endpoint with Yoco
  * and auto-store the returned signing secret (shown only once by Yoco).
- * Body: { url?: string } — defaults to this deployment's /api/webhooks/yoco.
+ * Body: { url?: string }, defaults to this deployment's /api/webhooks/yoco.
  */
 export async function POST(req: NextRequest) {
   const me = await getUserId()

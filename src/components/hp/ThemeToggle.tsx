@@ -34,7 +34,7 @@ function applyTheme(t: HpTheme) {
   try {
     document.documentElement.classList.toggle('calm', t === 'calm')
     localStorage.setItem(KEY, t)
-  } catch { /* private mode — theme stays for the session only */ }
+  } catch { /* private mode, theme stays for the session only */ }
 }
 
 /** Read the current theme reactively (used by surfaces that render their own toggle). */
@@ -49,7 +49,7 @@ export function useHpTheme() {
 }
 
 /**
- * ThemeToggle — Console vs Calm display.
+ * ThemeToggle, Console vs Calm display.
  * One small switch, everywhere it matters: landing header, app sidebar,
  * profile settings. Calm drops the contrast: muted brass, softer surfaces.
  */

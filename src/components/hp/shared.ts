@@ -94,6 +94,7 @@ export interface Invoice {
   subtotal: number
   taxRate: number
   total: number
+  pricesIncludeVat?: boolean
   logoUrl: string | null
   bankDetails: string | null
   notes: string | null
@@ -183,7 +184,7 @@ export interface CampaignState {
   status: 'PAUSED' | 'ACTIVE' | 'DONE' | 'CANCELLED'
   perHour: number
   from?: string
-  provider?: 'RESEND' | 'SES' // the transport lane — free lane by default, SES when its keys are in
+  provider?: 'RESEND' | 'SES' // the transport lane, free lane by default, SES when its keys are in
   createdAt: string
   startedAt?: string
   completedAt?: string

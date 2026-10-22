@@ -63,7 +63,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true })
 }
 
-// POST /api/appointments/[id] — kept for symmetry: force a Google Calendar sync now
+// POST /api/appointments/[id], kept for symmetry: force a Google Calendar sync now
 export async function POST(_req: NextRequest, { params }: Params) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

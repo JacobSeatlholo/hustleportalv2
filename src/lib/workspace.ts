@@ -55,7 +55,7 @@ export async function resolveProject(userId: string, projectId?: string | null) 
   return getOrCreateDefaultProject(userId)
 }
 
-/** The default "My Business" workspace — created on first use, never deleted. */
+/** The default "My Business" workspace, created on first use, never deleted. */
 export async function getOrCreateDefaultProject(userId: string) {
   const existing = await db.project.findFirst({
     where: { userId, isDefault: true },

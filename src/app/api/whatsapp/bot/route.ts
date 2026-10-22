@@ -7,14 +7,14 @@ import { getBotConfig, verifySignature, handleBotMessage, type BotIncoming } fro
 export const maxDuration = 60
 
 /**
- * Hustle Bot webhook — the ONE shared WhatsApp number for the whole platform.
+ * Hustle Bot webhook, the ONE shared WhatsApp number for the whole platform.
  *   GET  = Meta subscription handshake (hub.challenge against WA_BOT_VERIFY_TOKEN,
  *          which self-generates in PlatformConfig on first use, like the VAPID keys)
  *   POST = inbound messages + delivery statuses, processed AFTER the 200 so Meta
  *          never retry-storms the endpoint. Always answers 200.
  *
  * Config lives in PlatformConfig (WA_BOT_TOKEN, WA_BOT_PHONE_ID, WA_BOT_APP_SECRET,
- * WA_BOT_ENABLED) — set through /api/admin/exec/whatsapp-bot. While the token is
+ * WA_BOT_ENABLED), set through /api/admin/exec/whatsapp-bot. While the token is
  * absent the webhook answers politely and acts on nothing.
  */
 
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch {
-    // never fail Meta — retries would duplicate work
+    // never fail Meta, retries would duplicate work
     return NextResponse.json({ ok: true })
   }
 }

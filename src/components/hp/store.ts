@@ -60,7 +60,7 @@ export const useHp = create<HpState>((set) => ({
     set({ activeProjectId: id })
   },
   loadSession: async (silent = false) => {
-    // silent: background refresh — never flip the boot loader
+    // silent: background refresh, never flip the boot loader
     if (!silent) set({ sessionLoading: true })
     try {
       const data = await api<SessionData>('/api/auth/me')

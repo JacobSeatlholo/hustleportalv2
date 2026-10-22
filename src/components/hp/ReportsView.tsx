@@ -123,7 +123,7 @@ export default function ReportsView() {
 
         {/* Income vs expense */}
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="font-medium text-sm mb-4 flex items-center gap-2"><LineChart className="h-4 w-4 text-brand" /> Income vs expenses — 6 months</h3>
+          <h3 className="font-medium text-sm mb-4 flex items-center gap-2"><LineChart className="h-4 w-4 text-brand" /> Income vs expenses, 6 months</h3>
           <div className="flex items-end gap-3 h-44">
             {report.months.map((m) => (
               <div key={m.key} className="flex-1 flex flex-col items-center gap-1">

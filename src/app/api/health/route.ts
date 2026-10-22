@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/health → liveness + which platform integrations are wired.
- * Reports PRESENCE ONLY (booleans) and a classified DB ping — never secret
+ * Reports PRESENCE ONLY (booleans) and a classified DB ping, never secret
  * values, never hostnames or usernames from the connection string.
  *
  * dbPingError classes (Prisma codes) map to concrete user actions:
@@ -39,7 +39,7 @@ export async function GET() {
     try {
       await prisma.$queryRaw`SELECT 1`
       dbPing = true
-      // Enumerate public tables (names only — no data) to detect empty/partial schema.
+      // Enumerate public tables (names only, no data) to detect empty/partial schema.
       const rows = (await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`) as { table_name: string }[]
       tables = rows.map((r) => String(r.table_name))
       try {
@@ -80,7 +80,7 @@ export async function GET() {
 
   // Hardened disclosure: an anonymous visitor gets liveness + integration
   // PRESENCE booleans only. The deep diagnostics (table inventory, error
-  // classes, step-by-step results) are an owner/exec eye — they describe the
+  // classes, step-by-step results) are an owner/exec eye, they describe the
   // database schema shape, which is attack-planning material, not public info.
   const gate = await requireExec()
   const detail = gate.ok

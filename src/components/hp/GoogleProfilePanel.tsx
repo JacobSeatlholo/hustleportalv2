@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * GoogleProfilePanel — the third AI Co-Founder tab. One tap turns the member's
+ * GoogleProfilePanel, the third AI Co-Founder tab. One tap turns the member's
  * profile into a complete Google Business Profile kit: description, categories,
  * services, weekly posts, review replies, a photo shot list and the exact paste
  * steps. Google gates direct publishing behind its own approval process, so the

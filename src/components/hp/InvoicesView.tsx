@@ -88,6 +88,7 @@ export default function InvoicesView() {
   const [clientEmail, setClientEmail] = useState('')
   const [items, setItems] = useState<Item[]>([{ description: '', quantity: 1, unitPrice: 0 }])
   const [taxRate, setTaxRate] = useState(15)
+  const [vatMode, setVatMode] = useState<'excl' | 'incl'>('excl')
   const [notes, setNotes] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [sendAfter, setSendAfter] = useState(false)
@@ -97,7 +98,7 @@ export default function InvoicesView() {
   const [bizLogoBusy, setBizLogoBusy] = useState(false)
   const bizLogoRef = useRef<HTMLInputElement>(null)
 
-  // Conversion touchpoints — quiet, frequency-capped, never blocking (see touchpoints.ts)
+  // Conversion touchpoints, quiet, frequency-capped, never blocking (see touchpoints.ts)
   // invoice-logo is DERIVED: latest invoice without a logo + frequency gate → the card
   // survives navigation and reappears until its 2-show cap (or snooze/retire) ends it.
   const [logoNudgeNumber, setLogoNudgeNumber] = useState('')
@@ -172,11 +173,16 @@ export default function InvoicesView() {
 
   useEffect(() => { load() }, [load])
 
+  // Same math as the server: exclude mode adds VAT on top, include mode pulls
+  // VAT OUT (gross x rate/(100+rate)) so the client is never charged twice.
   const totals = useMemo(() => {
-    const subtotal = items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0)
-    const total = subtotal * (1 + (Number(taxRate) || 0) / 100)
-    return { subtotal, total }
-  }, [items, taxRate])
+    const gross = items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0)
+    const rate = Number(taxRate) || 0
+    const incl = vatMode === 'incl'
+    const subtotal = incl ? Math.round((gross * 100) / (100 + rate) * 100) / 100 : gross
+    const total = incl ? gross : Math.round(subtotal * (1 + rate / 100) * 100) / 100
+    return { subtotal, total, vat: Math.round((total - subtotal) * 100) / 100 }
+  }, [items, taxRate, vatMode])
 
   function resetForm() {
     setClientName(''); setClientEmail('')
@@ -246,7 +252,7 @@ export default function InvoicesView() {
       const res = await api<{ invoice: Invoice }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
-          clientName, clientEmail, items, taxRate, notes, logoUrl,
+          clientName, clientEmail, items, taxRate, pricesIncludeVat: vatMode === 'incl', notes, logoUrl,
           status, projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
           bankDetails: bankLines(bank).join('\n'),
         }),
@@ -268,7 +274,7 @@ export default function InvoicesView() {
     try {
       await api(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       toast({ title: `${inv.number} → ${status}` })
-      // Touchpoint: first money in — the natural moment to suggest reinvesting in growth.
+      // Touchpoint: first money in, the natural moment to suggest reinvesting in growth.
       if (isFirstPaid && tpCanShow('first-paid')) {
         tpMarkShown('first-paid', 1)
         setFirstPayNudge(true)
@@ -306,15 +312,16 @@ export default function InvoicesView() {
 
   function printInvoice(inv: Invoice) {
     setPrintable(inv)
-    setTimeout(() => window.print(), 120)
+    setTimeout(() => window.print(), 300)
   }
 
   return (
-    <div className="space-y-6 print:hidden">
+    <>
+      <div className="space-y-6 print:hidden">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl">Invoices</h2>
-          <p className="text-sm text-muted-foreground">VAT-ready ZAR invoices with your logo — print, PDF via the browser, or mark as sent.</p>
+          <p className="text-sm text-muted-foreground">VAT-ready ZAR invoices with your logo, print, PDF via the browser, or mark as sent.</p>
         </div>
         <div className="flex items-center gap-2">
           {(session?.projects?.length ?? 0) > 1 && (
@@ -334,12 +341,12 @@ export default function InvoicesView() {
         </div>
       </div>
 
-      {/* Banking details — printed on every new invoice */}
+      {/* Banking details, printed on every new invoice */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-medium text-sm">Your banking details</h3>
-              <p className="text-xs text-muted-foreground">Saved once — printed automatically on every invoice you create.</p>
+              <p className="text-xs text-muted-foreground">Saved once, printed automatically on every invoice you create.</p>
             </div>
             <div className="flex items-center gap-2">
               {bankLines(bank).length > 0 ? (
@@ -394,7 +401,7 @@ export default function InvoicesView() {
           )}
       </div>
 
-      {/* Business logo (Operator) — uploaded once, printed on every invoice */}
+      {/* Business logo (Operator), uploaded once, printed on every invoice */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -459,7 +466,7 @@ export default function InvoicesView() {
           </div>
           {!logoUrl && (
             <p className="text-[11px] text-muted-foreground">
-              Tip — invoices with a logo read as established and get paid faster.{' '}
+              Tip, invoices with a logo read as established and get paid faster.{' '}
               <button type="button" className="underline underline-offset-2 hover:text-brand" onClick={() => goStore('Content Creation')}>
                 See packages from R1,550
               </button>{' '}or{' '}
@@ -488,7 +495,7 @@ export default function InvoicesView() {
             {items.map((item, idx) => (
               <div key={idx} className="flex gap-2 items-center">
                 <Input
-                  placeholder={`Item ${idx + 1} — e.g. Social media retainer`}
+                  placeholder={`Item ${idx + 1}, e.g. Social media retainer`}
                   value={item.description}
                   onChange={(e) => setItems((rows) => rows.map((r, i) => (i === idx ? { ...r, description: e.target.value } : r)))}
                   className="flex-1"
@@ -517,12 +524,20 @@ export default function InvoicesView() {
 
           <div className="grid sm:grid-cols-3 gap-3 items-end">
             <div className="space-y-1.5">
-              <Label htmlFor="i-tax">VAT / tax %</Label>
+              <Label htmlFor="i-tax">VAT rate %</Label>
               <Input id="i-tax" type="number" min={0} max={100} step={0.5} value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))} />
+              <Select value={vatMode} onValueChange={(v) => setVatMode(v as 'excl' | 'incl')}>
+                <SelectTrigger className="h-8 text-xs" aria-label="Are your prices including VAT?"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="excl">Prices exclude VAT</SelectItem>
+                  <SelectItem value="incl">Prices include VAT</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="text-sm">
-              <p className="text-muted-foreground">Subtotal <b className="text-foreground">{randsPlain(totals.subtotal)}</b></p>
-              <p>Total incl. VAT <b className="text-brand font-display text-lg">{randsPlain(Math.round(totals.total * 100) / 100)}</b></p>
+              <p className="text-muted-foreground">Subtotal (excl VAT) <b className="text-foreground">{randsPlain(totals.subtotal)}</b></p>
+              <p className="text-muted-foreground">VAT <b className="text-foreground">{randsPlain(totals.vat)}</b></p>
+              <p>Total <b className="text-brand font-display text-lg">{randsPlain(Math.round(totals.total * 100) / 100)}</b></p>
             </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={sendAfter} onChange={(e) => setSendAfter(e.target.checked)} className="accent-yellow-400" />
@@ -545,11 +560,11 @@ export default function InvoicesView() {
         </div>
       )}
 
-      {/* Touchpoints — quiet conversions at the moment they matter */}
+      {/* Touchpoints, quiet conversions at the moment they matter */}
       {logoNudgeNumber && (
         <TouchpointCard
           id="invoice-logo"
-          title={`${logoNudgeNumber} is out — without your logo`}
+          title={`${logoNudgeNumber} is out, without your logo`}
           body="Invoices that look established get paid faster. A logo and consistent branding make every document read as a real business."
           snoozeDays={7}
           footer="Quoted before any work starts · tracked on your Tasks · replies come to your email"
@@ -570,10 +585,10 @@ export default function InvoicesView() {
       {firstPayNudge && (
         <TouchpointCard
           id="first-paid"
-          title="First payment in — well run."
+          title="First payment in, well run."
           body="Cashflow is fuel, and owners who reinvest early grow fastest. Content and marketing packages turn this month's invoices into next month's customers."
           snoozeDays={30}
-          footer="Free assessment — our team reviews where your business is and recommends the next step"
+          footer="Free assessment, our team reviews where your business is and recommends the next step"
         >
           <TouchpointAction primary onClick={() => goStore()}>
             Browse growth packages
@@ -594,7 +609,7 @@ export default function InvoicesView() {
         {loading ? (
           <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
         ) : invoices.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">No invoices yet — create your first one above.</p>
+          <p className="text-sm text-muted-foreground py-12 text-center">No invoices yet, create your first one above.</p>
         ) : (
           <div className="divide-y">
             {invoices.map((inv) => (
@@ -631,12 +646,14 @@ export default function InvoicesView() {
         )}
       </div>
 
-      {/* Printable template (also drives window.print) */}
-      {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
-
-      {/* Direct line to the team — shared with every touchpoint on the platform */}
+      {/* Direct line to the team, shared with every touchpoint on the platform */}
       <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} presetMessage={reqPreset} />
-    </div>
+      </div>
+
+      {/* Printable template lives OUTSIDE the print:hidden container above.
+          Inside it, printing hid the invoice itself and produced a blank page. */}
+      {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
+    </>
   )
 }
 
@@ -703,9 +720,12 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
 
           <div className="flex justify-end mt-4">
             <div className="w-56 space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-neutral-500">Subtotal</span><span>{randsPlain(invoice.subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-neutral-500">Subtotal (excl VAT)</span><span>{randsPlain(invoice.subtotal)}</span></div>
               <div className="flex justify-between"><span className="text-neutral-500">VAT ({invoice.taxRate}%)</span><span>{randsPlain(Math.round(vat * 100) / 100)}</span></div>
-              <div className="flex justify-between font-bold text-base border-t pt-1.5"><span>Total</span><span>{randsPlain(invoice.total)}</span></div>
+              <div className="flex justify-between font-bold text-base border-t pt-1.5"><span>Total (incl VAT)</span><span>{randsPlain(invoice.total)}</span></div>
+              {invoice.pricesIncludeVat && (
+                <p className="text-[10px] text-neutral-400 text-right">Line prices shown include VAT.</p>
+              )}
             </div>
           </div>
 

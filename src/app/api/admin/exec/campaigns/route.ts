@@ -7,10 +7,10 @@ import {
 } from '@/lib/campaignqueue'
 
 /**
- * Campaign queues — the bulk path for outreach at real volume.
+ * Campaign queues, the bulk path for outreach at real volume.
  *
  * POST   create a queue (recipients are staged as QUEUED rows; NOTHING sends
- *        until the operator presses Start — the draft gate is structural)
+ *        until the operator presses Start, the draft gate is structural)
  * GET    every campaign with its queue state and honest counters
  * PATCH  start / pause / resume / cancel a queue
  *
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (body.trim().length < 20) return NextResponse.json({ error: 'Body is required.' }, { status: 400 })
 
   // A second batch joining a running campaign keeps the pace the operator
-  // already chose — omitting perHour in the payload must never reset it.
+  // already chose, omitting perHour in the payload must never reset it.
   const states0 = await readCampaignStates()
   const existingState = states0[tag]
   const perHour = payload.perHour == null
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'SES lane is not configured yet. Add the SES API keys to the environment first, or use the free lane.' }, { status: 400 })
   }
 
-  // Recipients from pipeline leads — same access wall as every lead action.
+  // Recipients from pipeline leads, same access wall as every lead action.
   const leadIds = Array.isArray(payload.leads) ? payload.leads.filter((x) => typeof x === 'string' && x.length > 5) : []
   const memberships = await db.teamMember.findMany({ where: { userId: gate.me.id }, select: { teamId: true } })
   const teamIds = memberships.map((m) => m.teamId)
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       if (email && EMAIL_RE.test(email)) wanted.set(email, { email, leadId: l.id })
     }
   }
-  // Raw pasted addresses — honest about the ones that never stood a chance.
+  // Raw pasted addresses, honest about the ones that never stood a chance.
   const invalid: string[] = []
   for (const raw of Array.isArray(payload.emails) ? payload.emails : []) {
     const email = String(raw || '').trim().toLowerCase()
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
       skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
       skippedDuplicate: existingRows.length,
       invalid,
-      note: 'Nothing new to queue — everyone on this list already has a send or a strike against them.',
+      note: 'Nothing new to queue, everyone on this list already has a send or a strike against them.',
     })
   }
 
@@ -174,7 +174,7 @@ export async function GET() {
     readCampaignStates(),
   ])
 
-  // Signed unsubscribe link per row — exec eyes only. The link every
+  // Signed unsubscribe link per row, exec eyes only. The link every
   // recipient actually gets is baked into their email at send time.
   const rowsOut = rows.map((r) => ({ ...r, unsubUrl: unsubscribeUrl(r.id) }))
 

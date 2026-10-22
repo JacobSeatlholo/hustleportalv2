@@ -73,7 +73,7 @@ function hotLeadToContact(h: {
   const reply = clean(h.whyHot)?.slice(0, 160)
   const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
   const tag = projectLabelForCampaign(h.campaignName)
-  // A reply to a city campaign puts the contact in that city's orbit — the
+  // A reply to a city campaign puts the contact in that city's orbit, the
   // honest fill for a pool row with no city on file.
   const cityGuess = cityFromText(h.campaignName)
   return {

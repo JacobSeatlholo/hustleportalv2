@@ -1,8 +1,8 @@
 /**
- * WhatsApp toolkit — South-Africa-first phone normalization, contact-list
+ * WhatsApp toolkit, South-Africa-first phone normalization, contact-list
  * parsing (paste / VCF / CSV) and wa.me deep links.
  *
- * Pure functions only — safe to import on client (live preview) and server.
+ * Pure functions only, safe to import on client (live preview) and server.
  *
  * Honest constraint this module is built around: Meta does NOT expose any API
  * to read the contact list inside someone's WhatsApp Business app. The
@@ -20,7 +20,7 @@ export interface NormalizedPhone {
 
 export interface ParsedContact {
   name?: string
-  phone: string // raw as found — normalize before trusting
+  phone: string // raw as found, normalize before trusting
   email?: string
   raw: string
 }
@@ -38,7 +38,7 @@ export function normalizePhone(rawInput: string): NormalizedPhone {
 
   if (!digits) return { e164: null, display: raw, valid: false, invalidReason: 'no digits' }
 
-  // Explicit international (+…) — trust the caller's country code.
+  // Explicit international (+…), trust the caller's country code.
   if (plus || digits.startsWith('27') || (raw.startsWith('00') && digits.length >= 11)) {
     let d = digits.startsWith('00') ? digits.slice(2) : digits
     // 0027… / +27 with a stray leading 0 after the country code (027 082 …)
@@ -105,7 +105,7 @@ function cleanName(line: string, phoneSpan: string, email?: string): string | un
 
 /**
  * Parse a pasted contact list in (almost) any shape:
- *  - one per line:  "Thandi — 082 123 4567", "+27 82 123 4567", "Thandi, 0821234567, thandi@gmail.com"
+ *  - one per line:  "Thandi, 082 123 4567", "+27 82 123 4567", "Thandi, 0821234567, thandi@gmail.com"
  *  - WhatsApp group-participant / broadcast-list copies
  *  - vCard (.vcf) exports (BEGIN:VCARD blocks)
  *  - CSV with a phone-ish header row (comma / semicolon / tab)
@@ -234,7 +234,7 @@ function parsePhoneCsv(text: string): ParsedContact[] {
     if (!phone) continue
     const first = nameIdx >= 0 ? (cells[nameIdx] || '').trim() : ''
     const company = companyIdx >= 0 ? (cells[companyIdx] || '').trim() : ''
-    const name = [first, company].filter(Boolean).join(first && company ? ' — ' : '') || undefined
+    const name = [first, company].filter(Boolean).join(first && company ? ', ' : '') || undefined
     out.push({ name, phone, email: emailIdx >= 0 ? (cells[emailIdx] || '').trim() || undefined : undefined, raw: row.trim().slice(0, 120) })
   }
   return out
@@ -251,7 +251,7 @@ export function waLink(e164: string, message?: string): string {
 /** Prefilled greeting for a client row. */
 export function waGreeting(name: string, businessName?: string | null): string {
   const first = (name || '').split(' ')[0] || 'there'
-  const from = businessName ? ` — ${businessName}` : ''
+  const from = businessName ? `, ${businessName}` : ''
   return `Hi ${first}!${from}`
 }
 

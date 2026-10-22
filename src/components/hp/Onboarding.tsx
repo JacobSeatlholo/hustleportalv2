@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Onboarding — the two question survey that meets every new account the
+ * Onboarding, the two question survey that meets every new account the
  * moment the app opens, before anything else asks for attention.
  *
  * WHY IT EXISTS

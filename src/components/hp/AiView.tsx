@@ -22,8 +22,8 @@ interface PlanRecord {
 }
 
 const QUESTIONS = [
-  { key: 'business', q: 'What is your business name and what does it do?', placeholder: 'e.g. FlexFit SA — online personal training platform' },
-  { key: 'targetMarket', q: 'Who is your target market?', placeholder: 'e.g. Working professionals aged 25–40 in SA cities' },
+  { key: 'business', q: 'What is your business name and what does it do?', placeholder: 'e.g. FlexFit SA, online personal training platform' },
+  { key: 'targetMarket', q: 'Who is your target market?', placeholder: 'e.g. Working professionals aged 25 to 40 in SA cities' },
   { key: 'revenueModel', q: 'How does your business make money?', placeholder: 'e.g. Monthly subscriptions + coaching sessions' },
   { key: 'competitors', q: 'Who are your competitors and what makes you different?', placeholder: 'e.g. Virgin Active, but 10x cheaper and fully remote' },
   { key: 'goals', q: 'What is your 12-month goal?', placeholder: 'e.g. 100 paying customers and R50k monthly revenue' },
@@ -228,7 +228,7 @@ export default function AiView() {
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" />
                 <p className="font-medium">Writing your plan…</p>
                 <Progress value={80} className="max-w-xs mx-auto" />
-                <p className="text-xs text-muted-foreground">Grounded in SA market reality — this takes up to a minute.</p>
+                <p className="text-xs text-muted-foreground">Grounded in SA market reality, this takes up to a minute.</p>
               </CardContent>
             </Card>
           )}

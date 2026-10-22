@@ -1,5 +1,5 @@
 /**
- * quality.ts — the lead-quality law.
+ * quality.ts, the lead-quality law.
  *
  * Every contact that enters the platform through ANY door (CSV import, paste,
  * signup form, API) passes these checks. Junk data never becomes a row:
@@ -25,7 +25,7 @@ export function isEmail(v: unknown): boolean {
   return true
 }
 
-/** Lowercase, trimmed email — the canonical storage form. */
+/** Lowercase, trimmed email, the canonical storage form. */
 export function normEmail(v: unknown): string {
   return typeof v === 'string' ? v.trim().toLowerCase() : ''
 }

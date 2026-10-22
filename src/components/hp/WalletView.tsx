@@ -38,13 +38,13 @@ export default function WalletView() {
     const t = params.get('topup')
     if (t) {
       if (t === 'success') {
-        setReturnNote('Payment received — your credits are being added to your wallet right now.')
+        setReturnNote('Payment received, your credits are being added to your wallet right now.')
         setTimeout(load, 4000)
         setTimeout(load, 9000)
       } else if (t === 'cancelled') {
-        setReturnNote('Checkout cancelled — nothing was charged.')
+        setReturnNote('Checkout cancelled, nothing was charged.')
       } else if (t === 'failed') {
-        setReturnNote('Payment did not go through. No charge was made — please try again.')
+        setReturnNote('Payment did not go through. No charge was made, please try again.')
       }
       window.history.replaceState({}, '', window.location.pathname)
     }
@@ -58,7 +58,7 @@ export default function WalletView() {
         { method: 'POST', body: JSON.stringify({ packageId: pack.id }) }
       )
       if (res.redirectUrl) {
-        // Live Yoco Checkout — hand off to the hosted payment page.
+        // Live Yoco Checkout, hand off to the hosted payment page.
         window.location.href = res.redirectUrl
         return
       }

@@ -17,13 +17,13 @@ function clean(v: unknown): string {
 }
 
 /**
- * PATCH /api/admin/exec/client/[id]/profile — set the member identity fields
+ * PATCH /api/admin/exec/client/[id]/profile, set the member identity fields
  * on a member account: name, businessName, industry, city, phone.
  *
  * This is the membership face correction: when a member self registers with
  * loose details (lowercase business name, missing industry) the exec can align
  * the account to the membership record without touching the login. Email,
- * role, account status and credentials are deliberately NOT settable here —
+ * role, account status and credentials are deliberately NOT settable here,
  * email moves live on the invite route, pause lives on the status PATCH, and
  * credentials belong to the member alone.
  *
@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ ok: true, changed: 0, message: 'Profile already matches — nothing to change.' })
+    return NextResponse.json({ ok: true, changed: 0, message: 'Profile already matches, nothing to change.' })
   }
 
   const updated = await db.user.update({

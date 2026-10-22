@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         // every subscribe call, while sub.id is stable across upserts (same row,
         // new plan) and Yoco rejects a reused key with a different payload.
         idempotencyKey: reference,
-        name: `HustlePortal ${plan.name} — ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
+        name: `HustlePortal ${plan.name}, ${cycle === 'ANNUAL' ? 'annual (2 months free)' : 'monthly'}${npoNumber ? ' (nonprofit rate)' : ''}`,
       })
       await db.subscription.update({ where: { id: sub.id }, data: { providerRef: checkout.id } })
       // Ring the till bell: the owner hears the moment a real human opens a
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Sandbox mode — instant activation, QA probe accounts only (same quota
+  // Sandbox mode, instant activation, QA probe accounts only (same quota
   // grant as the live webhook). Double-gated: the email suffix AND a server
   // env switch. Anyone can REGISTER a @hustleqa.example.com address (email is
   // not verified at signup), so the env switch is what actually stands between
@@ -133,14 +133,14 @@ export async function POST(req: NextRequest) {
   })
 }
 
-// GET /api/subscribe — the caller's current plan state (with lazy expiry + auto-resume).
+// GET /api/subscribe, the caller's current plan state (with lazy expiry + auto-resume).
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let sub = await db.subscription.findUnique({ where: { userId } })
   if (!sub) return NextResponse.json({ subscription: null, plan: 'FREE' })
 
-  // Lazy pause end: PAUSED past pausedUntil auto-resumes — renewsAt shifts by the
+  // Lazy pause end: PAUSED past pausedUntil auto-resumes, renewsAt shifts by the
   // frozen duration (30 days) so zero paid days are lost.
   if (sub.status === 'PAUSED' && sub.pausedUntil && sub.pausedUntil.getTime() <= Date.now()) {
     const shiftMs = 30 * 24 * 60 * 60 * 1000

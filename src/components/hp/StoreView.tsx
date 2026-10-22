@@ -109,7 +109,7 @@ export default function StoreView() {
       {/* product grid */}
       {items.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
-          Nothing matches &ldquo;{q}&rdquo; — try another search.
+          Nothing matches &ldquo;{q}&rdquo;, try another search.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,7 +218,7 @@ export default function StoreView() {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground text-center">
-                Secured by Yoco — card, Apple Pay &amp; Google Pay. Custom requests? WhatsApp us.
+                Secured by Yoco, card, Apple Pay &amp; Google Pay. Custom requests? WhatsApp us.
               </p>
             </div>
           )}
@@ -227,7 +227,7 @@ export default function StoreView() {
 
       <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground pt-2">
         <Loader2 className="h-3 w-3 animate-spin hidden" />
-        <span>Every purchase supports the platform — built for South African businesses, by a South African team.</span>
+        <span>Every purchase supports the platform, built for South African businesses, by a South African team.</span>
       </div>
     </div>
   )

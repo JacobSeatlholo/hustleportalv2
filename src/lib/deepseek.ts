@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
 
 /**
- * DeepSeek engine — pay-per-use chat completions, no daily quota walls.
+ * DeepSeek engine, pay-per-use chat completions, no daily quota walls.
  * OpenAI-compatible API at https://api.deepseek.com (Bearer key).
  *
  * DeepSeek CANNOT browse the web. It never discovers businesses on its own:
  * callers hand it REAL source records (OpenStreetMap directory entries, the
  * seller's own website text) and it matches, scores and explains them. Every
  * caller must re-validate that contact details in the answer exist verbatim in
- * the source data — the engine is never trusted to produce contact facts.
+ * the source data, the engine is never trusted to produce contact facts.
  *
  * Key resolution: the user's own key (their credits, their control) first, then
  * the platform key from the environment. A failing user key is never silently

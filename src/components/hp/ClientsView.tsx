@@ -79,7 +79,7 @@ export default function ClientsView() {
   const [reqService, setReqService] = useState<RequestedService | null>(null)
   const businessName = useHp((s) => s.session?.user?.businessName) ?? null
 
-  // Live parse preview — same engine the server runs on import
+  // Live parse preview, same engine the server runs on import
   const importPreview = useMemo(() => {
     if (!importText.trim()) return { detected: 0, valid: 0, invalid: 0 }
     const parsed = parseContactList(importText)
@@ -89,14 +89,14 @@ export default function ClientsView() {
 
   async function load() {
     // Soft refresh: skeletons only on a cold book. With clients on screen the list
-    // stays put while the fresh one arrives — no jarring flash on workspace switch.
+    // stays put while the fresh one arrives, no jarring flash on workspace switch.
     if (clients.length === 0) setLoading(true)
     try {
       const pid = effProject && effProject !== 'ALL' ? `?projectId=${encodeURIComponent(effProject)}` : ''
       const data = await api<{ clients: Client[] }>(`/api/clients${pid}`)
       setClients(data.clients)
       // Touchpoint: a real book of relationships is the natural moment to offer
-      // automated follow-ups — once, quietly, and never again if dismissed.
+      // automated follow-ups, once, quietly, and never again if dismissed.
       if (data.clients.length >= 5 && tpCanShow('clients-relations')) {
         tpMarkShown('clients-relations', 1)
         setRelCount(data.clients.length)
@@ -146,7 +146,7 @@ export default function ClientsView() {
     setImportOpen(true)
   }
 
-  // "Scan my WhatsApp" — screenshot in, contacts out (AI vision),
+  // "Scan my WhatsApp", screenshot in, contacts out (AI vision),
   // results land in the SAME preview/commit pipeline as a paste.
   async function scanScreenshot(f: File | undefined) {
     if (!f) return
@@ -288,7 +288,7 @@ export default function ClientsView() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl">Clients</h1>
-          <p className="text-sm text-muted-foreground">Your CRM — everyone you do business with, in one place.</p>
+          <p className="text-sm text-muted-foreground">Your CRM, everyone you do business with, in one place.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={openImport}>
@@ -304,7 +304,7 @@ export default function ClientsView() {
         <TouchpointCard
           id="clients-relations"
           title={`You know ${relCount} people who pay you.`}
-          body="Relationships pay the bills — staying in touch is what turns one job into repeat work. Our team can set up follow-up messages that go out on time, every time."
+          body="Relationships pay the bills, staying in touch is what turns one job into repeat work. Our team can set up follow-up messages that go out on time, every time."
           snoozeDays={14}
           footer="Quoted before any work starts · tracked on your Tasks"
         >
@@ -501,7 +501,7 @@ export default function ClientsView() {
               <MessageCircle className="h-4 w-4 text-brand" /> Import your WhatsApp list
             </DialogTitle>
             <DialogDescription>
-              Paste your contact list (group members, broadcast list, chat exports) or upload a .vcf / .csv — we detect
+              Paste your contact list (group members, broadcast list, chat exports) or upload a .vcf / .csv, we detect
               SA numbers, pair the names, skip duplicates and add everyone in one click.
             </DialogDescription>
           </DialogHeader>
@@ -522,7 +522,7 @@ export default function ClientsView() {
                 <div className="space-y-1">
                   <p className="text-xs font-medium">Skipped entries:</p>
                   {importResult.invalid.map((row, i) => (
-                    <p key={i} className="text-[11px] text-muted-foreground truncate">• {row.raw} — {row.reason}</p>
+                    <p key={i} className="text-[11px] text-muted-foreground truncate">• {row.raw}, {row.reason}</p>
                   ))}
                 </div>
               )}
@@ -532,7 +532,7 @@ export default function ClientsView() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* AI screenshot scan — fastest path: no typing, no export */}
+              {/* AI screenshot scan, fastest path: no typing, no export */}
               <label
                 className={`relative flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3 cursor-pointer hover:border-brand/60 transition-colors ${scanBusy ? 'pointer-events-none opacity-70' : ''}`}
               >
@@ -546,7 +546,7 @@ export default function ClientsView() {
                 <span className="flex-1">
                   <span className="block text-sm font-medium">Scan a WhatsApp screenshot</span>
                   <span className="block text-xs text-muted-foreground">
-                    {scanBusy ? 'AI is reading your screenshot…' : 'Screenshot your chat list or contact page — AI types the names & numbers in for you'}
+                    {scanBusy ? 'AI is reading your screenshot…' : 'Screenshot your chat list or contact page, AI types the names & numbers in for you'}
                   </span>
                 </span>
                 <input
@@ -566,7 +566,7 @@ export default function ClientsView() {
 
               <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 p-3 cursor-pointer hover:border-brand/50 transition-colors">
                 <Upload className="h-4 w-4 text-brand" />
-                <span className="text-xs text-muted-foreground">Upload contacts file (.vcf, .csv, .txt — from your phone or WhatsApp)</span>
+                <span className="text-xs text-muted-foreground">Upload contacts file (.vcf, .csv, .txt, from your phone or WhatsApp)</span>
                 <input
                   type="file"
                   accept=".vcf,.csv,.txt,text/vcard,text/csv,text/plain"
@@ -582,7 +582,7 @@ export default function ClientsView() {
                   rows={7}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
-                  placeholder={'Thandi Mokoena — 082 123 4567\n+27 83 987 6543\nSipho, 072 555 1234, sipho@gmail.com'}
+                  placeholder={'Thandi Mokoena, 082 123 4567\n+27 83 987 6543\nSipho, 072 555 1234, sipho@gmail.com'}
                   className="font-mono text-xs"
                 />
               </div>
@@ -595,7 +595,7 @@ export default function ClientsView() {
                       {importPreview.invalid > 0 && <span className="text-muted-foreground font-normal"> · {importPreview.invalid} line{importPreview.invalid === 1 ? '' : 's'} without a valid number will be skipped</span>}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">No valid numbers yet — make sure the numbers are in the text.</span>
+                    <span className="text-muted-foreground">No valid numbers yet, make sure the numbers are in the text.</span>
                   )}
                 </div>
               )}
@@ -612,7 +612,7 @@ export default function ClientsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Direct line to the team — shared with every touchpoint on the platform */}
+      {/* Direct line to the team, shared with every touchpoint on the platform */}
       <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} />
     </div>
   )

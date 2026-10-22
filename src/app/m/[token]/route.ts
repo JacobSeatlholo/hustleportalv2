@@ -9,11 +9,11 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// GET /m/<shareToken> — the shared meeting page the owner hands to both
+// GET /m/<shareToken>, the shared meeting page the owner hands to both
 // parties (WhatsApp, email, however they talk). Shows the appointment details,
 // the note thread, and the actions either side may take: post a note, propose
 // a new time, confirm a proposed time. The token is the credential: unguessable,
-// stable, and it never expires — the page always reflects the latest truth.
+// stable, and it never expires, the page always reflects the latest truth.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params
   const clean = String(token || '').trim()

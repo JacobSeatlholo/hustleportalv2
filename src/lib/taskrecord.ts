@@ -1,5 +1,5 @@
 /**
- * The sealed task record — accountability the team can trust.
+ * The sealed task record, accountability the team can trust.
  *
  * Every meaningful task moment (created, sent to someone, opened, status moved,
  * commented, edited) is appended as a TaskEvent. Each event seals the previous

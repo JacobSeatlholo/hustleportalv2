@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 
 /**
- * GLM engine — pay as you go chat completions with REAL web search grounding.
+ * GLM engine, pay as you go chat completions with REAL web search grounding.
  * OpenAI-compatible API, Bearer key. Two doors serve the same GLM family and
  * the keys look identical (id.secret), but each door only accepts its own:
  *   z.ai   → https://api.z.ai/api/paas/v4          (international platform)
@@ -20,7 +20,7 @@ import { db } from '@/lib/db'
  *
  * Key resolution: the user's own key first (their credits, their control), then
  * the platform key from the environment. A failing user key is never silently
- * swapped for the platform key — spending someone else's paid credits without
+ * swapped for the platform key, spending someone else's paid credits without
  * asking is not what a careful product does.
  *
  * The platform env var is canonically ZAI_API_KEY, but the operator is human:

@@ -34,10 +34,10 @@ function ResetForm() {
         body: JSON.stringify({ action: 'reset', token, password }),
       })
       setDone(true)
-      toast({ title: 'Password updated ✓', description: 'You\u2019re signed in — taking you to your dashboard.' })
+      toast({ title: 'Password updated ✓', description: 'You\u2019re signed in, taking you to your dashboard.' })
       setTimeout(() => router.push('/'), 1400)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Reset failed — try again.')
+      setError(e instanceof Error ? e.message : 'Reset failed, try again.')
     } finally {
       setBusy(false)
     }
@@ -66,7 +66,7 @@ function ResetForm() {
       <Card className={card}>
         <CardContent className="p-6 md:p-8 space-y-4 text-center">
           <MailCheck className="h-9 w-9 text-brand mx-auto" />
-          <p className="text-sm font-medium">Password updated — you&apos;re signed in.</p>
+          <p className="text-sm font-medium">Password updated, you&apos;re signed in.</p>
           <p className="text-xs text-muted-foreground">Taking you to your dashboard…</p>
         </CardContent>
       </Card>

@@ -39,7 +39,7 @@ interface IcsReport {
 }
 
 /**
- * IcsImportDialog — bring an existing calendar in: upload an .ics file, paste
+ * IcsImportDialog, bring an existing calendar in: upload an .ics file, paste
  * its content, or connect a read-only feed link. Connected feeds get a
  * one-tap Sync now that only ever ADDS new events.
  */
@@ -209,6 +209,7 @@ export default function CalendarView() {
   const [when, setWhen] = useState('')
   const [duration, setDuration] = useState(60)
   const [notes, setNotes] = useState('')
+  const [meetLink, setMeetLink] = useState('')
 
   const recRef = useRef<SpeechRecognitionLike | null>(null)
 
@@ -237,7 +238,7 @@ export default function CalendarView() {
     }
     const SR = W.SpeechRecognition || W.webkitSpeechRecognition
     if (!SR) {
-      toast({ title: 'Voice not supported', description: 'This browser has no speech recognition — type the details instead.', variant: 'destructive' })
+      toast({ title: 'Voice not supported', description: 'This browser has no speech recognition, type the details instead.', variant: 'destructive' })
       return
     }
     const rec = new SR()
@@ -291,7 +292,7 @@ export default function CalendarView() {
       const res = await api<{ appointment: Appointment; gcalSynced: boolean }>('/api/appointments', {
         method: 'POST',
         body: JSON.stringify({
-          title, clientName, notes, source,
+          title, clientName, notes, meetLink: meetLink.trim() || undefined, source,
           projectId: activeProjectId,
           startsAt: startsAt.toISOString(),
           endsAt: new Date(startsAt.getTime() + duration * 60000).toISOString(),
@@ -299,9 +300,13 @@ export default function CalendarView() {
       })
       toast({
         title: 'Appointment saved ✓',
-        description: res.gcalSynced ? 'Synced to Google Calendar.' : `Jitsi link ready: ${res.appointment.meetLink}`,
+        description: res.gcalSynced
+          ? 'Synced to Google Calendar.'
+          : meetLink.trim()
+            ? `Your meeting link is on the invite: ${res.appointment.meetLink}`
+            : `Backup meeting link created: ${res.appointment.meetLink}`,
       })
-      setTitle(''); setClientName(''); setWhen(''); setNotes(''); setTranscript('')
+      setTitle(''); setClientName(''); setWhen(''); setNotes(''); setMeetLink(''); setTranscript('')
       bumpRefresh()
       load()
     } catch (e) {
@@ -329,7 +334,7 @@ export default function CalendarView() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-display text-2xl">Calendar</h2>
-          <p className="text-sm text-muted-foreground">Appointments with shareable Jitsi meets, Google Calendar sync and voice capture.</p>
+          <p className="text-sm text-muted-foreground">Appointments with your own Zoom, Meet or Teams links, Google Calendar sync and voice capture.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setIcsOpen(true)}>
@@ -373,7 +378,7 @@ export default function CalendarView() {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="a-title">Title</Label>
-              <Input id="a-title" placeholder="Discovery call — Bloom Beauty" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input id="a-title" placeholder="Discovery call, Bloom Beauty" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -390,6 +395,11 @@ export default function CalendarView() {
               <Input id="a-when" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="a-link">Meeting link (optional)</Label>
+              <Input id="a-link" type="url" placeholder="Paste your Zoom, Google Meet or Teams link" value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Paste the meeting link your clients already know. Leave it empty and a backup link is created for you.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="a-notes">Notes (optional)</Label>
               <Input id="a-notes" placeholder="Bring the quote…" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
@@ -401,13 +411,13 @@ export default function CalendarView() {
                 <Mic className="h-4 w-4" /> Save as voice
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground">Every appointment gets a shareable Jitsi meet link. If you connected Google Calendar in Integrations, it syncs automatically.</p>
+            <p className="text-[11px] text-muted-foreground">Bring your own Zoom, Google Meet or Teams link and it rides on every invite. No link? A backup meeting link is created. Google Calendar syncs automatically if you connected it under Integrations.</p>
           </div>
         </div>
 
         {/* Lists */}
         <div className="lg:col-span-3 space-y-4">
-          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked — capture your next meeting by voice." appts={upcoming} onDelete={remove} />
+          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} />
           <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} past />
         </div>
       </div>

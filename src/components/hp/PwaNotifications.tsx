@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * PwaNotifications — opt-in web push for the installed app.
+ * PwaNotifications, opt-in web push for the installed app.
  * States: unsupported → default (can ask) → granted (subscribed / enable / test) → denied.
  * The VAPID public key comes from the server (stored in PlatformConfig, zero env setup).
  *
@@ -14,7 +14,7 @@
  *    end message and never reached the amber guidance card. iPhone tabs now
  *    get the Add to Home Screen steps in both the menu and the profile screen.
  *  - The test action returns the honest per-device truth (stored / sent /
- *    pruned / refused) and the toast repeats exactly that — the old version
+ *    pruned / refused) and the toast repeats exactly that, the old version
  *    answered the same "turn notifications on first" for every failure.
  *  - A push that arrives while the app is open and visible is relayed by the
  *    service worker as a message; PushInAppRelay (mount once in AppShell)
@@ -128,7 +128,7 @@ export async function enablePush(): Promise<'granted' | 'denied' | 'error'> {
     })
     return 'granted'
   } catch (e) {
-    // keep the reason in the console — the toast stays human
+    // keep the reason in the console, the toast stays human
     console.error('[push] enable failed', e)
     return 'error'
   }
@@ -150,12 +150,12 @@ export async function sendTestPush(): Promise<TestPushResult> {
     })
   } catch (e) {
     const err = e as { data?: { error?: string; subscriptions?: number; pruned?: number } }
-    // the api helper throws with .data on non 200 — the diagnostics ride along
+    // the api helper throws with .data on non 200, the diagnostics ride along
     return { ok: false, error: err?.data?.error || 'The test could not be sent.', subscriptions: err?.data?.subscriptions, pruned: err?.data?.pruned }
   }
 }
 
-/** Mount ONCE in the app shell — shows in app toasts for pushes that arrive
+/** Mount ONCE in the app shell, shows in app toasts for pushes that arrive
  *  while the app is open (the service worker relays those as messages). */
 export function PushInAppRelay() {
   const { toast } = useToast()
@@ -185,7 +185,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
     if (permission === 'denied') {
       return compact ? null : (
         <p className="text-xs text-muted-foreground">
-          Notifications are blocked in your browser settings — unblock them for hustleportal.online to get reminders.
+          Notifications are blocked in your browser settings, unblock them for hustleportal.online to get reminders.
         </p>
       )
     }
@@ -200,7 +200,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
           <span className="space-y-1">
-            <span className="block font-medium">This is {cav}'s built in browser — it never allows notifications.</span>
+            <span className="block font-medium">This is {cav}'s built in browser, it never allows notifications.</span>
             <span className="block">1. Tap the ••• or share menu at the top.</span>
             <span className="block">2. Choose Open in Safari (or Open in browser).</span>
             <span className="block">3. Turn notifications on from there.</span>
@@ -218,7 +218,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           <Smartphone className="h-4 w-4 mt-0.5 shrink-0" />
           <span className="space-y-1">
-            <span className="block font-medium">The app is installed correctly — your iPhone just needs a newer iOS.</span>
+            <span className="block font-medium">The app is installed correctly, your iPhone just needs a newer iOS.</span>
             <span className="block">1. Open Settings, General, Software Update.</span>
             <span className="block">2. Update to iOS 16.4 or newer.</span>
             <span className="block">3. Come back here and turn notifications on.</span>
@@ -256,7 +256,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
     try {
       const r = await enablePush()
       if (r === 'granted') {
-        // The welcome push arrives while this app is open — the in app relay
+        // The welcome push arrives while this app is open, the in app relay
         // shows it, so no reload is needed to prove the pipe works.
         refresh()
         toast({ title: 'Notifications on', description: 'Your device is subscribed. Reminders now reach you even when the app is closed.' })
@@ -266,7 +266,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
         toast({
           title: 'Could not enable notifications',
           description: iosTab
-            ? 'On iPhone, notifications need the installed app — add HustlePortal to your Home Screen, open it from the icon, then try here again.'
+            ? 'On iPhone, notifications need the installed app, add HustlePortal to your Home Screen, open it from the icon, then try here again.'
             : 'Open the installed app and try again.',
           variant: 'destructive',
         })
@@ -281,7 +281,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
     try {
       const r = await sendTestPush()
       if (r.ok) {
-        toast({ title: 'Test sent', description: `Delivered to ${r.sent} device${r.sent === 1 ? '' : 's'}. Look at your phone — it should be there within seconds.` })
+        toast({ title: 'Test sent', description: `Delivered to ${r.sent} device${r.sent === 1 ? '' : 's'}. Look at your phone, it should be there within seconds.` })
       } else {
         toast({ title: 'Test did not go through', description: r.error || 'Turn notifications on first, then send a test.', variant: 'destructive' })
       }
@@ -324,7 +324,7 @@ export default function PwaNotifications({ compact = false }: { compact?: boolea
           </>
         ) : (
           <>
-            <span className="text-sm text-muted-foreground">Get reminders on this device — tasks due, pipeline nudges.</span>
+            <span className="text-sm text-muted-foreground">Get reminders on this device, tasks due, pipeline nudges.</span>
             <Button size="sm" onClick={onEnable} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4 mr-1" />} Turn on
             </Button>

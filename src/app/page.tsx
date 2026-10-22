@@ -17,7 +17,7 @@ export default function Home() {
 
   useEffect(() => {
     // PWA / shortcut deep-links: /?view=leads opens that module directly
-    // (start_url is "/" — /dashboard etc. do not exist in this single-page app).
+    // (start_url is "/", /dashboard etc. do not exist in this single-page app).
     const params = new URLSearchParams(window.location.search)
     const target = params.get('view') as ViewKey | null
     if (target && VALID_VIEWS.includes(target)) useHp.getState().setView(target)
@@ -25,8 +25,8 @@ export default function Home() {
   }, [])
 
   // SEO / AI discoverability: the Landing markup is always rendered (server
-  // render included), so crawlers that never run JavaScript — Google first
-  // pass, GPTBot, ClaudeBot, PerplexityBot, social preview bots — see the
+  // render included), so crawlers that never run JavaScript, Google first
+  // pass, GPTBot, ClaudeBot, PerplexityBot, social preview bots, see the
   // full marketing content instead of an empty splash. While the session
   // check runs, the branded splash overlays it, so signed in members keep
   // the exact load experience they had before.

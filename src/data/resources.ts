@@ -1,4 +1,4 @@
-// Resource Hub — free tools, guides & learning materials (curated by Business Hustle)
+// Resource Hub, free tools, guides & learning materials (curated by Business Hustle)
 
 export interface ResourceTool {
   name: string
@@ -51,22 +51,22 @@ export const RESOURCES: ResourceCategory[] = [
     color: '#F5C518',
     title: 'System Design Notes',
     items: [
-      { name: '01 — Scaling', url: 'https://github.com/liquidslr/system-design-notes/tree/main/01.%20Scaling', desc: 'Horizontal & vertical scaling, load balancers, CDN' },
-      { name: '02 — Back-of-Envelope Estimation', url: 'https://github.com/liquidslr/system-design-notes/tree/main/02.%20Back%20Of%20the%20Envelope%20Estimation', desc: 'Latency numbers, storage & throughput estimation' },
-      { name: '03 — System Design Framework', url: 'https://github.com/liquidslr/system-design-notes/tree/main/03.%20System%20Design%20Framework', desc: 'Step-by-step interview framework' },
-      { name: '04 — Rate Limiter', url: 'https://github.com/liquidslr/system-design-notes/tree/main/04.%20Rate%20Limiter', desc: 'Token bucket, leaky bucket, sliding window' },
-      { name: '05 — Consistent Hashing', url: 'https://github.com/liquidslr/system-design-notes/tree/main/05.%20Consistent%20Hashing', desc: 'Distributed data partitioning' },
-      { name: '06 — Key-Value Store', url: 'https://github.com/liquidslr/system-design-notes/tree/main/06.%20Key-Value%20Store', desc: 'CAP theorem, replication, consistency' },
-      { name: '07 — Unique ID Generator', url: 'https://github.com/liquidslr/system-design-notes/tree/main/07.%20Unique%20ID%20Generator', desc: 'Snowflake IDs, UUID, distributed IDs' },
-      { name: '08 — URL Shortener', url: 'https://github.com/liquidslr/system-design-notes/tree/main/08.%20URL%20Shortener', desc: 'Hash functions, redirects, analytics' },
-      { name: '09 — Web Crawler', url: 'https://github.com/liquidslr/system-design-notes/tree/main/09.%20Web%20Crawler', desc: 'Politeness, BFS, distributed crawling' },
-      { name: '10 — Notification System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/10.%20Notification%20System', desc: 'Push, SMS, email at scale' },
-      { name: '11 — News Feed System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/11.%20News%20Feed%20System', desc: 'Fan-out on write vs read, ranking' },
-      { name: '12 — Chat System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/12.%20Chat%20System', desc: 'WebSockets, message delivery, group chat' },
-      { name: '13 — Search Autocomplete', url: 'https://github.com/liquidslr/system-design-notes/tree/main/13.%20Search%20Autocomplete', desc: 'Trie, top-k, real-time suggestions' },
-      { name: '14 — YouTube / Video CDN', url: 'https://github.com/liquidslr/system-design-notes/tree/main/14.%20YouTube', desc: 'Encoding pipeline, CDN, metadata storage' },
-      { name: '15 — Google Drive', url: 'https://github.com/liquidslr/system-design-notes/tree/main/15.%20Google%20Drive', desc: 'Block storage, sync, conflict resolution' },
-      { name: 'Full Repo — All Notes ⭐1.2k', url: 'https://github.com/liquidslr/system-design-notes', desc: "System Design Interview: An Insider's Guide — community notes" },
+      { name: '01, Scaling', url: 'https://github.com/liquidslr/system-design-notes/tree/main/01.%20Scaling', desc: 'Horizontal & vertical scaling, load balancers, CDN' },
+      { name: '02, Back-of-Envelope Estimation', url: 'https://github.com/liquidslr/system-design-notes/tree/main/02.%20Back%20Of%20the%20Envelope%20Estimation', desc: 'Latency numbers, storage & throughput estimation' },
+      { name: '03, System Design Framework', url: 'https://github.com/liquidslr/system-design-notes/tree/main/03.%20System%20Design%20Framework', desc: 'Step-by-step interview framework' },
+      { name: '04, Rate Limiter', url: 'https://github.com/liquidslr/system-design-notes/tree/main/04.%20Rate%20Limiter', desc: 'Token bucket, leaky bucket, sliding window' },
+      { name: '05, Consistent Hashing', url: 'https://github.com/liquidslr/system-design-notes/tree/main/05.%20Consistent%20Hashing', desc: 'Distributed data partitioning' },
+      { name: '06, Key-Value Store', url: 'https://github.com/liquidslr/system-design-notes/tree/main/06.%20Key-Value%20Store', desc: 'CAP theorem, replication, consistency' },
+      { name: '07, Unique ID Generator', url: 'https://github.com/liquidslr/system-design-notes/tree/main/07.%20Unique%20ID%20Generator', desc: 'Snowflake IDs, UUID, distributed IDs' },
+      { name: '08, URL Shortener', url: 'https://github.com/liquidslr/system-design-notes/tree/main/08.%20URL%20Shortener', desc: 'Hash functions, redirects, analytics' },
+      { name: '09, Web Crawler', url: 'https://github.com/liquidslr/system-design-notes/tree/main/09.%20Web%20Crawler', desc: 'Politeness, BFS, distributed crawling' },
+      { name: '10, Notification System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/10.%20Notification%20System', desc: 'Push, SMS, email at scale' },
+      { name: '11, News Feed System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/11.%20News%20Feed%20System', desc: 'Fan-out on write vs read, ranking' },
+      { name: '12, Chat System', url: 'https://github.com/liquidslr/system-design-notes/tree/main/12.%20Chat%20System', desc: 'WebSockets, message delivery, group chat' },
+      { name: '13, Search Autocomplete', url: 'https://github.com/liquidslr/system-design-notes/tree/main/13.%20Search%20Autocomplete', desc: 'Trie, top-k, real-time suggestions' },
+      { name: '14, YouTube / Video CDN', url: 'https://github.com/liquidslr/system-design-notes/tree/main/14.%20YouTube', desc: 'Encoding pipeline, CDN, metadata storage' },
+      { name: '15, Google Drive', url: 'https://github.com/liquidslr/system-design-notes/tree/main/15.%20Google%20Drive', desc: 'Block storage, sync, conflict resolution' },
+      { name: 'Full Repo, All Notes ⭐1.2k', url: 'https://github.com/liquidslr/system-design-notes', desc: "System Design Interview: An Insider's Guide, community notes" },
     ],
   },
   {
@@ -118,7 +118,7 @@ export const RESOURCES: ResourceCategory[] = [
     color: '#a78bfa',
     title: 'Education & Training',
     items: [
-      { name: 'edX', url: 'https://edx.org', desc: 'Harvard, MIT & more — free' },
+      { name: 'edX', url: 'https://edx.org', desc: 'Harvard, MIT & more, free' },
       { name: 'FreeCodeCamp', url: 'https://freecodecamp.com', desc: 'Full coding curriculum' },
       { name: 'Coursera', url: 'https://coursera.org', desc: 'World-class online courses' },
     ],

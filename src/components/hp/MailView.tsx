@@ -30,7 +30,7 @@ const GOALS = [
   'Follow up on a quote I sent',
   'Re-engage a cold prospect',
   'Pitch a specific offering',
-  '__custom__', // “Write my own…” — free-text goal, e.g. “Welcome email for my team”
+  '__custom__', // “Write my own…”, free-text goal, e.g. “Welcome email for my team”
 ]
 const CUSTOM_GOAL = '__custom__'
 
@@ -67,7 +67,7 @@ export default function MailView() {
   const [body, setBody] = useState('')
   const [draftId, setDraftId] = useState<string | null>(null)
 
-  // Campaigns (exec): batch queues with read receipts — build the audience,
+  // Campaigns (exec): batch queues with read receipts, build the audience,
   // review the draft, press Start, and the engine paces the sends like a human.
   const isAdmin = session?.user?.role === 'ADMIN'
   const [campaignRows, setCampaignRows] = useState<CampaignRow[] | null>(null)
@@ -119,7 +119,7 @@ export default function MailView() {
         const r = await api<{ sent: number; failed: number; skipped: number }>('/api/cron/campaign-tick')
         if (r.sent || r.failed || r.skipped) loadCampaigns()
       } catch {
-        // session lapse or cooldown — cron still drives the queue
+        // session lapse or cooldown, cron still drives the queue
       }
     }, 60_000)
     return () => clearInterval(t)
@@ -296,10 +296,10 @@ export default function MailView() {
   useEffect(() => { load() }, [load])
 
   async function draftWithGemini() {
-    // A typed goal wins — the presets are just the fast path.
+    // A typed goal wins, the presets are just the fast path.
     const effectiveGoal = goal === CUSTOM_GOAL ? customGoal.trim() : goal
     if (goal === CUSTOM_GOAL && !effectiveGoal) {
-      toast({ title: 'Write your goal first', description: 'One line is enough — e.g. "Welcome email for my team".', variant: 'destructive' })
+      toast({ title: 'Write your goal first', description: 'One line is enough, e.g. "Welcome email for my team".', variant: 'destructive' })
       return
     }
     setDrafting(true)
@@ -353,7 +353,7 @@ export default function MailView() {
       setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null)
       load()
     } catch (e) {
-      // Calm inline card instead of a toast wall — details stay under the composer
+      // Calm inline card instead of a toast wall, details stay under the composer
       setSendError(e instanceof Error ? e.message : 'Send failed')
       load()
     } finally {
@@ -375,29 +375,29 @@ export default function MailView() {
   const engineReady = mailStatus ? mailStatus.platformConfigured && mailStatus.domainStatus === 'verified' : null
   const statusDot = engineReady === true ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
   const statusText = (() => {
-    if (!mailStatus) return 'Sends via the HustlePortal mail engine — replies route back to your inbox.'
+    if (!mailStatus) return 'Sends via the HustlePortal mail engine, replies route back to your inbox.'
     if (mailStatus.gmailConfigured && engineReady) {
-      return `Goes out from your Gmail — the HustlePortal engine (${mailStatus.fromAddress}) backs it up automatically.`
+      return `Goes out from your Gmail, the HustlePortal engine (${mailStatus.fromAddress}) backs it up automatically.`
     }
     if (mailStatus.gmailConfigured && !engineReady) {
-      return 'Goes out from your Gmail when it passes the connection test — meanwhile the HustlePortal engine is finishing setup and may only reach your own inbox.'
+      return 'Goes out from your Gmail when it passes the connection test, meanwhile the HustlePortal engine is finishing setup and may only reach your own inbox.'
     }
     if (!mailStatus.platformConfigured) {
-      return 'HustlePortal mail engine is warming up — connect Gmail under Integrations to send in the meantime.'
+      return 'HustlePortal mail engine is warming up, connect Gmail under Integrations to send in the meantime.'
     }
     if (engineReady) {
       return mailStatus.sendingAs
-        ? `Email ready — goes out from ${mailStatus.sendingAs} (your business's own address). Replies route to your inbox.`
-        : `Email ready — goes out from ${mailStatus.fromAddress}. Replies route to your inbox.`
+        ? `Email ready, goes out from ${mailStatus.sendingAs} (your business's own address). Replies route to your inbox.`
+        : `Email ready, goes out from ${mailStatus.fromAddress}. Replies route to your inbox.`
     }
-    return `${mailStatus.sendingDomain} is verifying in Resend — your sends work to your own inbox meanwhile and open up to everyone the moment verification completes. Nothing for you to configure.`
+    return `${mailStatus.sendingDomain} is verifying in Resend, your sends work to your own inbox meanwhile and open up to everyone the moment verification completes. Nothing for you to configure.`
   })()
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-2xl">Mail</h2>
-        <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile — sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
+        <p className="text-sm text-muted-foreground">AI drafts grounded in your business profile, sending works out of the box. Connect your Gmail if you want it sent from your own address.</p>
       </div>
 
       {/* Campaigns (exec): build a queue, pace it, watch read receipts land */}
@@ -557,7 +557,7 @@ export default function MailView() {
         </div>
       )}
 
-      {/* Free plan email meter — honest count, calm tone, one tap to the plans.
+      {/* Free plan email meter, honest count, calm tone, one tap to the plans.
           The server enforces the ceiling; this makes it visible before it bites. */}
       {!paid && (
         <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
@@ -589,7 +589,7 @@ export default function MailView() {
                 }}
                 className="w-full h-9 rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">— No lead —</option>
+                <option value="">No lead selected</option>
                 {leads.map((l) => (
                   <option key={l.id} value={l.id}>{l.company}{l.contactName ? ` · ${l.contactName}` : ''}</option>
                 ))}
@@ -618,7 +618,7 @@ export default function MailView() {
                 />
               )}
               {goal === CUSTOM_GOAL && (
-                <p className="text-[11px] text-muted-foreground">Any goal works — the AI drafts around it. Presets stay one click away.</p>
+                <p className="text-[11px] text-muted-foreground">Any goal works, the AI drafts around it. Presets stay one click away.</p>
               )}
             </div>
           </div>
@@ -680,7 +680,7 @@ export default function MailView() {
             {sendError && (
               <div className="rounded-lg border border-rose-500/40 bg-rose-500/5 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-rose-400">Send failed — here&apos;s why and the fix</p>
+                  <p className="text-xs font-medium text-rose-400">Send failed, here&apos;s why and the fix</p>
                   <button onClick={() => setSendError(null)} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -707,7 +707,7 @@ export default function MailView() {
           {loading ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
           ) : emails.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-6 text-center">No emails yet — draft one and it lands here.</p>
+            <p className="text-xs text-muted-foreground py-6 text-center">No emails yet, draft one and it lands here.</p>
           ) : (
             <div className="space-y-2 max-h-[32rem] overflow-y-auto hp-scroll">
               {emails.map((e) => (
@@ -746,7 +746,7 @@ export default function MailView() {
       <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <Mail className="h-4 w-4 text-brand shrink-0 mt-0.5" />
         <span>
-          Sending is included — hit Send and HustlePortal delivers, with replies routed back to your account email.
+          Sending is included, hit Send and HustlePortal delivers, with replies routed back to your account email.
           Prefer your own address on the label? Connect Gmail in Integrations (optional, takes about a minute).
         </span>
       </div>
@@ -798,7 +798,7 @@ export default function MailView() {
         </DialogContent>
       </Dialog>
 
-      {/* New campaign composer — audience, message, review. Queues are born
+      {/* New campaign composer, audience, message, review. Queues are born
           paused: nothing sends until Start is pressed on the campaign card. */}
       <Dialog open={composerOpen} onOpenChange={(o) => { if (!o) setComposerOpen(false) }}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hp-scroll">
@@ -918,7 +918,7 @@ export default function MailView() {
                 <p className="font-medium text-[13px]">Before it queues</p>
                 <p className="text-muted-foreground">{pickCount} recipients · {cPerHour} per hour · {cProvider === 'SES' ? 'SES lane' : 'free lane'} · finishes in {finishEstimate(pickCount, Number(cPerHour))}</p>
                 <p className="text-muted-foreground">Every email carries a one tap unsubscribe link and open tracking. Bounces and spam complaints remove the address automatically.</p>
-                <p className="text-foreground/80 font-medium">Nothing sends yet. The queue waits paused — you press Start on the card once the draft is approved.</p>
+                <p className="text-foreground/80 font-medium">Nothing sends yet. The queue waits paused, you press Start on the card once the draft is approved.</p>
               </div>
               {cSubject.trim() && cBody.trim() && (
                 <div className="rounded-lg border p-3">

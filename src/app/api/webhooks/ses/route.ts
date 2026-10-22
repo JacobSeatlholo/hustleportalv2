@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 /**
- * Amazon SES feedback — the SES lane's ears. SNS posts bounce and complaint
+ * Amazon SES feedback, the SES lane's ears. SNS posts bounce and complaint
  * events here and every permanent bounce or complaint lands the address on
- * the Suppression list — the same law the Resend lane obeys. A domain that
+ * the Suppression list, the same law the Resend lane obeys. A domain that
  * keeps its complaint rate far under 0.3% keeps its seat in the inbox.
  *
  * Setup (once AWS grants production access):
  *   SES → Configuration sets → create one (e.g. hustle-campaigns)
  *     → Event destination → Amazon SNS topic → HTTPS endpoint:
  *       https://www.hustleportal.online/api/webhooks/ses?key=<SES_WEBHOOK_SECRET>
- *   Send mail on that set by setting SES_CONFIG_SET in the environment — the
+ *   Send mail on that set by setting SES_CONFIG_SET in the environment, the
  *   mailer stamps X-SES-CONFIGURATION-SET on every SES-lane send.
  * SubscriptionConfirmation is answered automatically (the SubscribeURL must
  * point at amazonaws.com, nothing else is fetched).
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   const isComplaint = type === 'Complaint'
   // Transient bounces (mailbox full, greylisting) usually deliver on the
-  // retry — they never suppress and never mark a send as bounced.
+  // retry, they never suppress and never mark a send as bounced.
   const permanent = isComplaint || msg.bounce?.bounceType !== 'Transient'
   const providerId = msg.mail?.messageId?.trim() || ''
   const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000)
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     // Match the exact send by provider id first, then the same fallback the
     // Resend webhook uses: this address, sent recently, newest wins. An event
-    // that matches nothing touches nothing — junk events can never poison the
+    // that matches nothing touches nothing, junk events can never poison the
     // suppression list, and every genuine engine bounce lands within minutes
     // so the 7 day window is generous.
     let log = providerId

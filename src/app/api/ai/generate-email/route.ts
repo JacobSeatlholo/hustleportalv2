@@ -23,7 +23,7 @@ function escapeBreaksInStrings(s: string): string | null {
 }
 
 /**
- * Robust {subject, body} extraction — Gemini occasionally wraps the JSON in
+ * Robust {subject, body} extraction, Gemini occasionally wraps the JSON in
  * prose, emits real newlines inside strings, or drops an escape. Never let raw
  * JSON land in the user's composer.
  */
@@ -97,8 +97,10 @@ export async function POST(req: NextRequest) {
 
   const result = await geminiGenerate(userId, {
     system:
-      'You write cold/outreach emails for a South African small business. Ground every claim in the business profile below — never invent products or prices. ' +
-      'Style: warm, direct, no corporate fluff, South African English. 120–180 words max. ' +
+      'You write outreach emails for a South African small business. The sender is the business owner writing to THEIR client or prospect. ' +
+      'Ground every claim in the business profile below, never invent products, prices, results or facts. If a useful detail is missing, leave it out or write [add it] so the owner fills it in. ' +
+      'Never mention HustlePortal, never link to hustleportal.online, never add referral codes, platform adverts or a P.S. promoting anything: the email must read 100% as the owner\'s own voice. ' +
+      'Style: warm, direct, no corporate fluff, South African English. 120 to 180 words max. ' +
       'Return ONLY JSON: { "subject": string, "body": string } where body is plain text with \\n line breaks and a sign-off from the owner.',
     prompt: [
       `=== BUSINESS PROFILE ===\n${profileText(project)}`,
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
     // One self-repair round: ask the model to re-emit its own output as valid JSON.
     const retry = await geminiGenerate(userId, {
       system:
-        'You repair broken AI drafts. Return ONLY valid JSON: { "subject": string, "body": string }. Preserve the original wording and all \\n line breaks — change nothing except JSON validity. No markdown, no commentary.',
+        'You repair broken AI drafts. Return ONLY valid JSON: { "subject": string, "body": string }. Preserve the original wording and all \\n line breaks, change nothing except JSON validity. No markdown, no commentary.',
       prompt: `The following text was meant to be JSON with a "subject" and a "body" but is malformed. Repair it and return ONLY the corrected JSON:\n\n${result.text.slice(0, 2400)}`,
       json: true,
     })

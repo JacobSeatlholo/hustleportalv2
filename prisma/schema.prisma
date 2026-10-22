@@ -407,9 +407,10 @@ model Invoice {
   status      String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE
   items       String    @default("[]") // JSON [{description, quantity, unitPrice}]
   currency    String    @default("ZAR")
-  subtotal    Float     @default(0)
+  subtotal    Float     @default(0) // EXCLUDING VAT (computed from the prices below)
   taxRate     Float     @default(15)
-  total       Float     @default(0)
+  total       Float     @default(0) // INCLUDING VAT: what the client actually pays
+  pricesIncludeVat Boolean @default(false) // true when the line prices were typed VAT inclusive
   logoUrl     String?   // data URL for the printable template
   bankDetails String?   // banking details snapshot printed on the invoice (plain text lines)
   notes       String?
@@ -681,6 +682,8 @@ model InventoryItem {
   costPrice   Float    @default(0) // rands per unit
   sellPrice   Float    @default(0) // rands per unit
   lowStockAt  Float    @default(0) // alert when quantity <= this
+  supplier    String?  // who you buy it from
+  location    String?  // shelf, bin, storeroom
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

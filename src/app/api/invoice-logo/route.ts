@@ -6,7 +6,7 @@ import { planState, upgradeJson } from '@/lib/limits'
 export const dynamic = 'force-dynamic'
 
 /**
- * Business invoice logo — set it once, every invoice carries it.
+ * Business invoice logo, set it once, every invoice carries it.
  * The feature lives on Operator: free accounts get the honest 402 upgrade moment.
  * SVG only (crisp at any print size, tiny payload). Sanitised server side before
  * it is ever stored, because an SVG can carry script if you let it.
@@ -37,7 +37,7 @@ export async function GET() {
   return NextResponse.json({ logoUrl: row?.value || null })
 }
 
-// PUT /api/invoice-logo { svg } → { logoUrl } — Operator feature.
+// PUT /api/invoice-logo { svg } → { logoUrl }, Operator feature.
 export async function PUT(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

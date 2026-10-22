@@ -182,7 +182,7 @@ async function landOnBench(
       benchByFp.set(fp, { id: 'tmp', fingerprint: fp, status: 'NEW', contactName: null, email: null, phone: null, website: null, industry: null, city: null })
       added++
     } catch {
-      skipped++ // lost a unique race — the face is already on the bench
+      skipped++ // lost a unique race, the face is already on the bench
     }
   }
   return { added, refreshed, skipped }

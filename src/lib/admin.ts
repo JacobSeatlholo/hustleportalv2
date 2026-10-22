@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 /**
- * Executive access gate — the business owner's controls.
+ * Executive access gate, the business owner's controls.
  *
  * The master account is pinned by email: whatever else happens on that
- * account (projects, leads, subscription — all untouchable), its privilege
+ * account (projects, leads, subscription, all untouchable), its privilege
  * flags are the only thing this module may flip, and it does so lazily and
  * idempotently so the Exec Dashboard nav simply appears on the owner's next
  * session load. No other account is ever modified by this module.
@@ -39,7 +39,7 @@ export function isExecUser(me: ExecUser | null): boolean {
 
 /**
  * Lazy self-heal: when the master account holder signs in (or their session
- * loads) without exec flags yet, promote just the flags. Idempotent — the
+ * loads) without exec flags yet, promote just the flags. Idempotent, the
  * update only runs while the flags are missing, then never again.
  * Returns the possibly-refreshed flags.
  */

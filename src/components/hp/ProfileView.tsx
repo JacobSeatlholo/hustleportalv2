@@ -86,7 +86,7 @@ export default function ProfileView() {
   const [analysis, setAnalysis] = useState<UrlAnalysis | null>(null)
   const [copiedPitch, setCopiedPitch] = useState<number | null>(null)
 
-  // My Projects hub — every created project with its description, people and numbers
+  // My Projects hub, every created project with its description, people and numbers
   interface ProjectRow {
     id: string; name: string; description: string | null; isDefault: boolean
     counts: { leads: number; clients: number; invoices: number }
@@ -214,7 +214,7 @@ export default function ProfileView() {
       setInviteEmail('')
       toast(
         res.added
-          ? { title: 'Teammate added to your team', description: 'They got an email with the news — shared tasks are live for them now.' }
+          ? { title: 'Teammate added to your team', description: 'They got an email with the news, shared tasks are live for them now.' }
           : { title: 'Invitation sent', description: 'The moment they register with this email, they land in your team automatically.' }
       )
     } catch (e) {
@@ -276,7 +276,7 @@ export default function ProfileView() {
 
   async function analyzeUrl() {
     if (!urlInput.trim()) {
-      toast({ title: 'Add your web address first', description: 'e.g. bloombeauty.co.za — the AI reads the site and fills your profile.', variant: 'destructive' })
+      toast({ title: 'Add your web address first', description: 'e.g. bloombeauty.co.za, the AI reads the site and fills your profile.', variant: 'destructive' })
       return
     }
     setAnalyzing(true)
@@ -287,7 +287,7 @@ export default function ProfileView() {
       })
       setAnalysis(r.analysis)
 
-      // Auto-fill the profile FOR THE USER TO VERIFY & CONFIRM — empty fields only,
+      // Auto-fill the profile FOR THE USER TO VERIFY & CONFIRM, empty fields only,
       // nothing overwrites what they already typed, and nothing saves until "Save changes".
       const a = r.analysis || {}
       const filled: string[] = []
@@ -317,7 +317,7 @@ export default function ProfileView() {
           description: `${r.notice ? r.notice + ' ' : ''}Filled: ${filled.join(', ')}. Check each field, then press Save changes to confirm.`,
         })
       } else {
-        toast({ title: 'Business analysis complete ✓', description: r.notice || 'Your profile fields were already filled — review them and save.' })
+        toast({ title: 'Business analysis complete ✓', description: r.notice || 'Your profile fields were already filled, review them and save.' })
       }
     } catch (e) {
       toast({ title: 'Analysis failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
@@ -332,7 +332,7 @@ export default function ProfileView() {
       setCopiedPitch(idx)
       setTimeout(() => setCopiedPitch(null), 1500)
     } catch {
-      toast({ title: 'Could not copy — select the text manually', variant: 'destructive' })
+      toast({ title: 'Could not copy, select the text manually', variant: 'destructive' })
     }
   }
 
@@ -467,7 +467,7 @@ export default function ProfileView() {
               <div className="text-sm text-muted-foreground">Level {level.level} · {session.user.xp} XP</div>
               <Progress value={level.progress} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                {level.next ? `${level.next.min - session.user.xp} XP to ${level.next.name}` : 'Max level — legend.'}
+                {level.next ? `${level.next.min - session.user.xp} XP to ${level.next.name}` : 'Max level, legend.'}
               </p>
               {nextLevel && (
                 <p className="text-xs text-brand font-medium">
@@ -543,7 +543,7 @@ export default function ProfileView() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  We read your site once, Gemini drafts your profile, and you confirm. Empty fields only — nothing overwrites what you already entered, and nothing saves until you press Save changes.
+                  We read your site once, Gemini drafts your profile, and you confirm. Empty fields only, nothing overwrites what you already entered, and nothing saves until you press Save changes.
                 </p>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -583,7 +583,7 @@ export default function ProfileView() {
                     )}
                   </div>
                 </div>
-                <CityField value={form.city} onChange={(v) => setForm({ ...form, city: v })} label="City" hint="Pick a shortcut, type any city or township, or tag your location — nothing is stored until you save." />
+                <CityField value={form.city} onChange={(v) => setForm({ ...form, city: v })} label="City" hint="Pick a shortcut, type any city or township, or tag your location, nothing is stored until you save." />
               </div>
               <div className="space-y-1.5">
                 <Label>WhatsApp number</Label>
@@ -629,8 +629,8 @@ export default function ProfileView() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Value proposition — what you actually do for people</Label>
-                <Textarea rows={2} value={ws.valueProp} onChange={(e) => setWs({ ...ws, valueProp: e.target.value })} placeholder="We turn township businesses into brands people trust — logos, sites and socials that sell." />
+                <Label>Value proposition, what you actually do for people</Label>
+                <Textarea rows={2} value={ws.valueProp} onChange={(e) => setWs({ ...ws, valueProp: e.target.value })} placeholder="We turn township businesses into brands people trust, logos, sites and socials that sell." />
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -643,8 +643,8 @@ export default function ProfileView() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Offerings — one per line</Label>
-                <Textarea rows={3} value={ws.offerings} onChange={(e) => setWs({ ...ws, offerings: e.target.value })} placeholder={'Social media retainer — R7,500/mo\nLogo & brand kit — R3,200\nLanding page — R1,850'} />
+                <Label>Offerings, one per line</Label>
+                <Textarea rows={3} value={ws.offerings} onChange={(e) => setWs({ ...ws, offerings: e.target.value })} placeholder={'Social media retainer, R7,500/mo\nLogo & brand kit, R3,200\nLanding page, R1,850'} />
               </div>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
@@ -678,7 +678,7 @@ export default function ProfileView() {
                   <p className="text-sm whitespace-pre-line">{salesPitch}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Fill in the profile above, then generate — Gemini writes a pitch grounded only in what you put here.
+                    Fill in the profile above, then generate, Gemini writes a pitch grounded only in what you put here.
                     Needs a Gemini API key in Integrations.
                   </p>
                 )}
@@ -688,7 +688,7 @@ export default function ProfileView() {
               <div className="rounded-lg border border-brand/25 bg-brand/5 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium flex items-center gap-1.5">
-                    <ScanSearch className="h-3.5 w-3.5 text-brand" /> AI website analysis — audience, brand &amp; pitches
+                    <ScanSearch className="h-3.5 w-3.5 text-brand" /> AI website analysis, audience, brand &amp; pitches
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -776,7 +776,7 @@ export default function ProfileView() {
                       </div>
                     )}
                     <p className="text-[10px] text-muted-foreground">
-                      {analysis.sourceUrl ? `Analyzed from ${analysis.sourceUrl}` : 'Saved to this workspace'} — every AI draft now grounds on this research.
+                      {analysis.sourceUrl ? `Analyzed from ${analysis.sourceUrl}` : 'Saved to this workspace'}, every AI draft now grounds on this research.
                     </p>
                   </div>
                 )}
@@ -789,7 +789,7 @@ export default function ProfileView() {
             </CardContent>
           </Card>
 
-          {/* My Projects — every project you run: description, people, numbers */}
+          {/* My Projects, every project you run: description, people, numbers */}
           <Card id="my-projects-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -997,7 +997,7 @@ export default function ProfileView() {
                           </Button>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          Already on HustlePortal? Added instantly. Not yet? They get an email — registering with this address drops them straight into your team.
+                          Already on HustlePortal? Added instantly. Not yet? They get an email, registering with this address drops them straight into your team.
                         </p>
                       </div>
                     )}
@@ -1039,7 +1039,7 @@ export default function ProfileView() {
 }
 
 /**
- * WorkspaceModulesCard — the modular workspace control.
+ * WorkspaceModulesCard, the modular workspace control.
  * Every plan includes every capability; this decides what is VISIBLE on the
  * menu. Switching a module off removes it from the sidebar and bottom bar,
  * and its tutorial falls silent until it returns.
@@ -1054,7 +1054,7 @@ function WorkspaceModulesCard() {
       .then((r) => {
         const row = r.settings.find((s) => s.key === 'MODULES')
         if (row) {
-          try { setDisabled(JSON.parse(row.value).filter((k: unknown) => typeof k === 'string')) } catch { /* corrupt — start clean */ }
+          try { setDisabled(JSON.parse(row.value).filter((k: unknown) => typeof k === 'string')) } catch { /* corrupt, start clean */ }
         }
       })
       .catch(() => {})
@@ -1083,7 +1083,7 @@ function WorkspaceModulesCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          Your plan includes every module. Switch off what you do not use yet — the menu, the bottom bar and the
+          Your plan includes every module. Switch off what you do not use yet, the menu, the bottom bar and the
           tutorials follow. Switch it back any time; nothing is ever lost.
         </p>
         {loading ? (

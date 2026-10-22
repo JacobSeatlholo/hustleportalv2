@@ -1,12 +1,12 @@
 'use client'
 
 /**
- * CityField — one consistent "where are you?" input, used everywhere a city is keyed in:
+ * CityField, one consistent "where are you?" input, used everywhere a city is keyed in:
  * signup, profile, Lead Finder, quick capture, service requests.
  *
  * Quick-pick chips + free typing + optional one-tap location tagging (browser geolocation →
  * BigDataCloud reverse geocode, no API key needed). The detected city is only ever a
- * PROPOSAL the user confirms — nothing is stored until the parent form is saved.
+ * PROPOSAL the user confirms, nothing is stored until the parent form is saved.
  */
 import { useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,7 @@ export default function CityField({
   onChange,
   label = 'City',
   placeholder = 'Type your city, township or suburb…',
-  hint = 'Chips are shortcuts — you can type any city, township or suburb, or tag your location.',
+  hint = 'Chips are shortcuts, you can type any city, township or suburb, or tag your location.',
   /** Optional: fires with the tagged GPS position (cleared with null when the value is edited). */
   onCoords,
 }: {
@@ -42,7 +42,7 @@ export default function CityField({
     if (!navigator.geolocation) {
       toast({
         title: 'Location not available',
-        description: 'Your browser does not support location — type your city instead.',
+        description: 'Your browser does not support location, type your city instead.',
         variant: 'destructive',
       })
       return
@@ -66,7 +66,7 @@ export default function CityField({
               : city
           )
         } catch {
-          // Reverse geocode failed, but the GPS fix itself is good — hand the raw
+          // Reverse geocode failed, but the GPS fix itself is good, hand the raw
           // coordinates up (Lead Finder searches a 5 km radius around the pin).
           onCoords?.(coords)
           setLocating(false)
@@ -82,7 +82,7 @@ export default function CityField({
         setLocating(false)
         toast({
           title: 'Location permission declined',
-          description: 'No problem — type your city manually below.',
+          description: 'No problem, type your city manually below.',
           variant: 'destructive',
         })
       },

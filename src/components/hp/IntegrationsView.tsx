@@ -26,14 +26,14 @@ const INTEGRATIONS: {
     title: 'Gmail address (optional)',
     icon: <Mail className="h-4 w-4 text-brand" />,
     placeholder: 'you@gmail.com',
-    helper: 'Optional upgrade — Mail already sends via the HustlePortal engine. Add your Gmail to send from your own address instead.',
+    helper: 'Optional upgrade, Mail already sends via the HustlePortal engine. Add your Gmail to send from your own address instead.',
   },
   {
     key: 'GMAIL_APP_PASSWORD',
     title: 'Gmail app password (optional)',
     icon: <KeyRound className="h-4 w-4 text-brand" />,
     placeholder: '16-character app password',
-    helper: 'Google rejects normal passwords for sending — you MUST use a 16-character App Password: Google Account → Security → 2-Step Verification ON → App passwords (myaccount.google.com/apppasswords). Paste it without spaces. Stored only on your account.',
+    helper: 'Google rejects normal passwords for sending, you MUST use a 16-character App Password: Google Account → Security → 2-Step Verification ON → App passwords (myaccount.google.com/apppasswords). Paste it without spaces. Stored only on your account.',
     secret: true,
   },
   {
@@ -41,7 +41,7 @@ const INTEGRATIONS: {
     title: 'Gemini API key (optional)',
     icon: <Sparkles className="h-4 w-4 text-brand" />,
     placeholder: 'AIza… or AQ… (Google issues both)',
-    helper: 'The AI already runs on HustlePortal AI — no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
+    helper: 'The AI already runs on HustlePortal AI, no key needed. Add your own free key (aistudio.google.com/apikey) to run on your own quota. If Google ever blocks your key, HustlePortal AI automatically takes over, so scans never die.',
     secret: true,
   },
   {
@@ -49,7 +49,7 @@ const INTEGRATIONS: {
     title: 'DeepSeek key (optional ranking engine)',
     icon: <Brain className="h-4 w-4 text-brand" />,
     placeholder: 'sk-…',
-    helper: 'Pay as you go ranker from platform.deepseek.com. With your key saved, map directory leads are matched and ranked to what you sell on YOUR credits — no daily quota wall, pennies per scan.',
+    helper: 'Pay as you go ranker from platform.deepseek.com. With your key saved, map directory leads are matched and ranked to what you sell on YOUR credits, no daily quota wall, pennies per scan.',
     secret: true,
   },
   {
@@ -79,7 +79,7 @@ function CopyRow({ label, value, mono = true }: { label: string; value: string; 
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      toast({ title: 'Could not copy — select the text manually', variant: 'destructive' })
+      toast({ title: 'Could not copy, select the text manually', variant: 'destructive' })
     }
   }
   return (
@@ -94,7 +94,7 @@ function CopyRow({ label, value, mono = true }: { label: string; value: string; 
   )
 }
 
-/** WhatsApp Business Cloud API connect card — per-user credentials + webhook. */
+/** WhatsApp Business Cloud API connect card, per-user credentials + webhook. */
 function WhatsAppCard() {
   const { toast } = useToast()
   const { bumpRefresh } = useHp()
@@ -146,7 +146,7 @@ function WhatsAppCard() {
     try {
       await api('/api/whatsapp/connect', { method: 'DELETE' })
       await load()
-      toast({ title: 'WhatsApp disconnected', description: 'Your contacts stay — only the API link was removed.' })
+      toast({ title: 'WhatsApp disconnected', description: 'Your contacts stay, only the API link was removed.' })
     } catch {
       // non-fatal
     } finally {
@@ -181,7 +181,7 @@ function WhatsAppCard() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        <b className="text-foreground">1-click import, zero setup:</b> your clients list can bulk-import any WhatsApp list you paste or upload (Clients → Import from WhatsApp) — Meta does not let ANY tool read your app&apos;s contact list, so that&apos;s the compliant way.{' '}
+        <b className="text-foreground">1-click import, zero setup:</b> your clients list can bulk-import any WhatsApp list you paste or upload (Clients → Import from WhatsApp), Meta does not let ANY tool read your app&apos;s contact list, so that&apos;s the compliant way.{' '}
         <b className="text-foreground">Optional API link below</b> adds auto-capture: everyone who messages your business number is added to your CRM automatically.
       </p>
 
@@ -207,7 +207,7 @@ function WhatsAppCard() {
       {!loading && status?.connected && (
         <div className="space-y-3">
           <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-medium"><ShieldCheck className="h-3.5 w-3.5 text-brand" /> Finish in Meta (2 pastes) — activates auto-capture</div>
+            <div className="flex items-center gap-1.5 text-xs font-medium"><ShieldCheck className="h-3.5 w-3.5 text-brand" /> Finish in Meta (2 pastes), activates auto-capture</div>
             <p className="text-[11px] text-muted-foreground">
               In Meta developers → WhatsApp → Configuration: set the Callback URL and Verify token below, then click Subscribe to the <b>messages</b> field. After that, every customer who messages your number lands in Clients automatically.
             </p>
@@ -237,7 +237,7 @@ interface DiagReport {
   verdict: string
 }
 
-/** AI diagnostics — reproduces the exact call chain the scan/AI features use and explains failures in plain language. */
+/** AI diagnostics, reproduces the exact call chain the scan/AI features use and explains failures in plain language. */
 function AIDiagnosticsCard() {
   const { toast } = useToast()
   const [report, setReport] = useState<DiagReport | null>(null)
@@ -309,7 +309,7 @@ interface SvcStatus {
 }
 
 /**
- * System status — the trust panel. One honest answer to "is everything working
+ * System status, the trust panel. One honest answer to "is everything working
  * right now?": live checks against the database, the AI engine, the email engine
  * and push, plus what THIS device supports (voice dictation). Refreshes itself;
  * a status panel never cries wolf, so failures stay quiet until the check lands.
@@ -327,7 +327,7 @@ function SystemStatusCard() {
       setServices(res.services)
       setCheckedAt(new Date(res.checkedAt).getTime())
     } catch {
-      // silent — the panel keeps the last known truth
+      // silent, the panel keeps the last known truth
     } finally {
       setRefreshing(false)
     }
@@ -410,7 +410,7 @@ function SystemStatusCard() {
 }
 
 /**
- * Email engine status — the ONE card that answers "can I send email right now?".
+ * Email engine status, the ONE card that answers "can I send email right now?".
  * Shows live Resend domain verification (fetched server-side with the platform key)
  * so setup never feels like guesswork.
  */
@@ -445,7 +445,7 @@ function MailEngineCard() {
     setTestMsg(null)
     try {
       const res = await api<{ ok: boolean; notice?: string }>('/api/emails/test', { method: 'POST' })
-      setTestMsg({ ok: true, text: res.notice || 'Test email sent — check your inbox (and spam).' })
+      setTestMsg({ ok: true, text: res.notice || 'Test email sent, check your inbox (and spam).' })
     } catch (e) {
       setTestMsg({ ok: false, text: e instanceof Error ? e.message : 'Test send failed.' })
     } finally {
@@ -491,16 +491,16 @@ function MailEngineCard() {
         <p className={`text-xs leading-relaxed rounded-lg border px-2.5 py-2 ${lastSend.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
           {lastSend.via === 'no-account' ? (
             <>
-              <b>Last reset request — no account match.</b> Someone asked to reset the password for <b>{lastSend.to}</b>{' '}
+              <b>Last reset request, no account match.</b> Someone asked to reset the password for <b>{lastSend.to}</b>{' '}
               at {new Date(lastSend.at).toLocaleString('en-ZA')}, but no HustlePortal account uses that address, so nothing was sent.
-              If that was you: check the address for a typo, or sign up fresh — the reset link only goes to the exact email on the account.
+              If that was you: check the address for a typo, or sign up fresh, the reset link only goes to the exact email on the account.
             </>
           ) : (
             <>
               <b>Last system email</b> ({lastSend.ok ? 'accepted by the engine' : 'failed'}){lastSend.via ? ` · via ${lastSend.via}` : ''}:{' '}
-              <b>{lastSend.to}</b> — “{lastSend.subject}” at {new Date(lastSend.at).toLocaleString('en-ZA')}.
+              <b>{lastSend.to}</b>, “{lastSend.subject}” at {new Date(lastSend.at).toLocaleString('en-ZA')}.
               {lastSend.ok
-                ? ' Accepted means Resend took it — if it never lands, check spam and confirm this is the exact address you check.'
+                ? ' Accepted means Resend took it, if it never lands, check spam and confirm this is the exact address you check.'
                 : ` Engine error: ${lastSend.error || 'unknown'}`}
             </>
           )}
@@ -509,12 +509,12 @@ function MailEngineCard() {
       <p className="text-xs text-muted-foreground">
         {!status ? 'Checking the sending engine…'
           : !status.platformConfigured
-            ? 'The built-in engine is warming up. You can already send by connecting Gmail below — or wait a moment and check again.'
+            ? 'The built-in engine is warming up. You can already send by connecting Gmail below, or wait a moment and check again.'
             : verified
-              ? `Ready — every send goes out from ${status.fromAddress} with replies routed back to your account email. Zero setup, nothing to maintain.`
+              ? `Ready, every send goes out from ${status.fromAddress} with replies routed back to your account email. Zero setup, nothing to maintain.`
               : status.domainStatus === 'failed'
-                ? `${status.sendingDomain} failed verification at Resend — open resend.com/domains to see which DNS record is missing or wrong, fix it at your domain\u2019s DNS host, then hit Verify again.`
-                : `${status.sendingDomain} is finishing verification — DNS records can take from a few minutes up to a few hours to be seen. Sends already work to your own inbox; they open up to every client the moment it flips to verified. No other setup exists.`}
+                ? `${status.sendingDomain} failed verification at Resend, open resend.com/domains to see which DNS record is missing or wrong, fix it at your domain\u2019s DNS host, then hit Verify again.`
+                : `${status.sendingDomain} is finishing verification, DNS records can take from a few minutes up to a few hours to be seen. Sends already work to your own inbox; they open up to every client the moment it flips to verified. No other setup exists.`}
       </p>
     </div>
   )
@@ -566,10 +566,10 @@ export default function IntegrationsView() {
       setSettings((rows) => [...rows.filter((r) => r.key !== key), res.setting])
       setDrafts((d) => ({ ...d, [key]: '' }))
       if (key === 'GEMINI_API_KEY' && res.validation) {
-        // The verdict IS the toast — a blocked key is named in the same minute it's pasted.
+        // The verdict IS the toast, a blocked key is named in the same minute it's pasted.
         setGeminiVerdict({ ok: res.validation.ok, msg: res.validation.message })
         toast({
-          title: res.validation.ok ? 'Gemini key verified ✓' : 'Key saved — but Google rejected it',
+          title: res.validation.ok ? 'Gemini key verified ✓' : 'Key saved, but Google rejected it',
           description: res.validation.ok
             ? 'AI will now run on your own quota.'
             : 'HustlePortal AI automatically covers the gap, so nothing breaks. See the note under the key for the fix.',
@@ -579,7 +579,7 @@ export default function IntegrationsView() {
         const engine = 'DeepSeek'
         setEngineVerdicts((v) => ({ ...v, [key]: { ok: res.validation!.ok, msg: res.validation!.message } }))
         toast({
-          title: res.validation.ok ? `${engine} key verified ✓` : `Key saved — but ${engine} flagged something`,
+          title: res.validation.ok ? `${engine} key verified ✓` : `Key saved, but ${engine} flagged something`,
           description: res.validation.ok
             ? 'Scans now run on your own credits.'
             : 'See the note under the key for the fix. Nothing breaks meanwhile.',
@@ -607,7 +607,7 @@ export default function IntegrationsView() {
     }
   }
 
-  // SMTP handshake against the saved Gmail creds — instant verdict, no email sent.
+  // SMTP handshake against the saved Gmail creds, instant verdict, no email sent.
   async function testGmail() {
     setMailTesting(true)
     setMailVerdict(null)
@@ -628,8 +628,8 @@ export default function IntegrationsView() {
       <div>
         <h2 className="font-display text-2xl">Integrations</h2>
         <p className="text-sm text-muted-foreground">
-          Plug &amp; play — AI, email, calendar links and payments already work with zero setup. Everything below is an
-          optional upgrade. Your keys stay on your account only — nothing shared, nothing pooled.
+          Plug &amp; play, AI, email, calendar links and payments already work with zero setup. Everything below is an
+          optional upgrade. Your keys stay on your account only, nothing shared, nothing pooled.
         </p>
       </div>
 
@@ -711,7 +711,7 @@ export default function IntegrationsView() {
                         {mailTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                         Test Gmail connection
                       </Button>
-                      <span className="text-[11px] text-muted-foreground">Runs a real Google login check — no email is sent.</span>
+                      <span className="text-[11px] text-muted-foreground">Runs a real Google login check, no email is sent.</span>
                     </div>
                     {mailVerdict && (
                       <p className={`text-xs rounded-md border px-2.5 py-2 ${mailVerdict.ok ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/5' : 'border-rose-500/40 text-rose-400 bg-rose-500/5'}`}>
@@ -730,7 +730,7 @@ export default function IntegrationsView() {
         <p className="font-medium text-foreground">About verified leads</p>
         <p>
           Verified leads are sourced, checked and delivered to your pipeline <b>by the HustlePortal team behind the
-          scenes</b> — you see the results, not the plumbing. We feed your pipeline. You run your business.
+          scenes</b>, you see the results, not the plumbing. We feed your pipeline. You run your business.
         </p>
       </div>
     </div>

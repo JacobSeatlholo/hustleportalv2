@@ -2,12 +2,12 @@
  * Gemini calls grounded in the user's business profile.
  * PLUG & PLAY: works out of the box with the platform key (Vercel env GEMINI_API_KEY).
  * A user's own key (UserSetting: GEMINI_API_KEY, Integrations hub) is an OPTIONAL
- * override — power users can run AI on their own quota.
+ * override, power users can run AI on their own quota.
  *
  * RESILIENCE (fixes the "models/gemini-2.0-flash is no longer available" class of failures):
  *  - Dynamic model discovery: Google retires model IDs over time (2.0-flash retired, 3.x shipped).
  *    Before the first call on an instance we ask ListModels what THIS key can actually see and pick
- *    the best flash-tier model from our preference list — so a Google-side retirement self-heals
+ *    the best flash-tier model from our preference list, so a Google-side retirement self-heals
  *    instead of hard-failing. Re-verified every 30 minutes; a cached winner that starts returning
  *    404 mid-flight is evicted immediately.
  *  - Key chain: the user's own key is tried first; if it is rejected (invalid key, restrictions,
@@ -18,7 +18,7 @@
 import { db } from '@/lib/db'
 
 /**
- * Preference order — alias first (tracks Google's current stable Flash), then numbered
+ * Preference order, alias first (tracks Google's current stable Flash), then numbered
  * generations as fallbacks. Only entries the key can actually SEE get called (discovery),
  * so stale names here are harmless.
  */
@@ -39,7 +39,7 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 /**
  * Google now mints TWO key generations: classic AIza… keys and the newer AI Studio
- * "auth keys" that start with AQ. — both are valid Gemini API keys. They hit the exact
+ * "auth keys" that start with AQ., both are valid Gemini API keys. They hit the exact
  * same endpoints; what differs is the carrier. Classic keys ride the ?key= query param;
  * AQ auth keys ride the documented x-goog-api-key header. Choosing by prefix keeps both
  * generations on one code path with zero guesswork.
@@ -56,7 +56,7 @@ export function geminiFetchTarget(
   return { url: `${BASE}${pathAndQuery}`, headers: { 'x-goog-api-key': k } }
 }
 
-/** Pool cache — PER KEY (a user key and the platform key can see different model
+/** Pool cache, PER KEY (a user key and the platform key can see different model
  * lists), verified against ListModels, refreshed on this TTL. The pool is the FULL
  * ranked list of usable flash models, not one winner: Google's free-tier quota is
  * PER MODEL (GenerateRequestsPerDayPerProjectPerModel), so spreading the day's
@@ -67,7 +67,7 @@ function keyTag(key: string): string {
   return `${key.slice(0, 8)}:${key.slice(-4)}`
 }
 
-/** Round-robin cursor per key — consecutive calls start on different models so
+/** Round-robin cursor per key, consecutive calls start on different models so
  * bursts land on separate RPM buckets and the day spreads across separate RPD buckets. */
 const poolCursor = new Map<string, number>()
 
@@ -81,7 +81,7 @@ function liteFirst(models: string[]): string[] {
 }
 
 /**
- * Per-model thinking control, named generations only (aliases stay untouched —
+ * Per-model thinking control, named generations only (aliases stay untouched,
  * their generation is unknown). 2.5 models accept thinkingBudget 0 = thinking off;
  * 3.x models take thinkingLevel low. Returns null when the model should run stock.
  */
@@ -114,8 +114,8 @@ function benchKey(key: string): void {
 }
 
 /**
- * Per-(key,model) quota bench: a 429 that names a DAY bucket — or a ZERO free-tier
- * limit for this model on this project — will not clear inside this request, nor
+ * Per-(key,model) quota bench: a 429 that names a DAY bucket, or a ZERO free-tier
+ * limit for this model on this project, will not clear inside this request, nor
  * within a minute. Without this bench the drained model sits at the head of every
  * later walk: pure latency tax plus pointless request volume. A day bucket rides
  * the bench 30 minutes; a zero limit (needs billing or a different project, it
@@ -149,7 +149,7 @@ function benchModelQuota(key: string, model: string, kind: 'day' | 'zero' | 'min
         : MODEL_QUOTA_COOLDOWN_MS
   modelQuotaCooldown.set(modelQuotaTag(key, model), Date.now() + ms)
 }
-/** Google names the exhausted bucket with a numeric limit — 0 means no free tier for this model here. */
+/** Google names the exhausted bucket with a numeric limit, 0 means no free tier for this model here. */
 function quotaZeroLimit(raw: string): boolean {
   return /"limit":\s*"?0"?|limit:\s*0\b/i.test(raw)
 }
@@ -220,10 +220,10 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
           : 'The AI engine is pacing its free requests this minute. One more try usually lands.'
       }
       return own
-        ? 'Your saved Gemini key has used its free daily search allowance for now. Google refills it around 09:00 South African time. A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
-        : 'The AI engine has used its free daily search allowance for now. Google refills it at its daily reset, around 09:00 South African time.'
+        ? 'Your saved Gemini key has used its free daily search allowance for today. Google refills it around 09:00 South African time. Need more now? A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
+        : 'The free AI search allowance is used up for today. It refills around 09:00 South African time. Two faster options: add your own free Gemini key under Integrations for an instant fresh allowance, or try again after the reset.'
     case 'MODEL':
-      // A retired model is NEVER the user's key's fault — no "YOUR key" suffix here.
+      // A retired model is NEVER the user's key's fault, no "YOUR key" suffix here.
       return 'Google is rotating its AI models right now and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically. Please try again in a minute.'
     case 'EMPTY':
       return 'Gemini returned an empty response. Try rephrasing, or attach a clearer image.'
@@ -243,7 +243,7 @@ interface Failure {
 }
 
 /**
- * Surface the failure the user can actually DO something about — and, when BOTH
+ * Surface the failure the user can actually DO something about, and, when BOTH
  * keys failed for different reasons, name each cause so the escape hatch is
  * obvious (mirrors the mail engine's combined-error contract).
  */
@@ -292,7 +292,7 @@ function shortOtherCause(f: Failure): string {
  * What can THIS key actually call right now? ListModels once per TTL, build the FULL
  * pool: every preference entry the key can see (alias-first, newest numbered flash
  * after), then any other flash-tier Gemini models visible, newest first. Discovery
- * is best-effort — any failure falls back to the static preference chain.
+ * is best-effort, any failure falls back to the static preference chain.
  */
 async function resolveModels(key: string): Promise<string[]> {
   const now = Date.now()
@@ -315,7 +315,7 @@ async function resolveModels(key: string): Promise<string[]> {
       )
       const pool = [
         ...MODEL_PREFERENCE.filter((m) => usable.has(m)),
-        // Any other flash-tier Gemini model the key can see, newest first — extra
+        // Any other flash-tier Gemini model the key can see, newest first, extra
         // daily buckets Google offers on this project. Gemma/Pro excluded (no search
         // grounding / too slow for the deadline); excluded families are hard no's.
         ...[...usable]
@@ -334,7 +334,7 @@ async function resolveModels(key: string): Promise<string[]> {
       }
     }
   } catch {
-    // discovery is best-effort — fall through to the static chain
+    // discovery is best-effort, fall through to the static chain
   }
   return [...MODEL_PREFERENCE]
 }
@@ -363,7 +363,7 @@ async function callGemini(
     }
   }
 
-  // A benched (drained/blocked) key rides the BACK of the line — the healthy key
+  // A benched (drained/blocked) key rides the BACK of the line, the healthy key
   // answers first and the notice still tells the truth about whose quota was used.
   const benchedCount = keys.filter((k) => keyBenched(k.key)).length
   const orderedKeys =
@@ -375,7 +375,7 @@ async function callGemini(
   let userKeyFailure: Failure | null = null // remember WHY the user's key was bypassed → honest notice on fallback success
   let timedOut = false
   // Hard deadline for the WHOLE chain: per-attempt timeouts shrink as the clock
-  // runs down, so (keys × models) can never stack past the caller's budget —
+  // runs down, so (keys × models) can never stack past the caller's budget,
   // the single biggest cause of Vercel 504s on slow paths.
   const deadline = Date.now() + timeoutMs
 
@@ -385,7 +385,7 @@ async function callGemini(
     const pool = speed ? liteFirst(discovered) : discovered
     const usable = pool.filter((m) => !modelDrained(key, m))
     if (usable.length === 0) {
-      // Every model on this key is inside a quota bench — say so honestly and
+      // Every model on this key is inside a quota bench, say so honestly and
       // move to the next key without paying Google a single 429 for it.
       const f: Failure = { cls: 'QUOTA', ownKey, status: 429, detail: 'all models on this key are inside a quota cooldown' }
       failures.push(f)
@@ -418,7 +418,7 @@ async function callGemini(
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
           // Head plus the quota fields that name the EXHAUSTED bucket (daily vs
-          // monthly, per model vs per project) — that distinction decides the fix.
+          // monthly, per model vs per project), that distinction decides the fix.
           const flat = raw.replace(/\s+/g, ' ')
           const quotaBits = [
             flat.match(/quotaId"\s*:\s*"[^"]+/)?.[0],
@@ -431,10 +431,10 @@ async function callGemini(
           const failure: Failure = { cls, ownKey, status: res.status, detail: raw }
           failures.push(failure)
           if (ownKey && !userKeyFailure) userKeyFailure = failure
-          // A cached pool that Google just changed — evict so the next request re-discovers.
+          // A cached pool that Google just changed, evict so the next request re-discovers.
           if (cls === 'MODEL') modelCache.delete(keyTag(key))
           // Key-level fatals bench the key: a 403/invalid key rejects EVERY model.
-          // A PerDay 429 does NOT bench the key any more — the per-model bench below
+          // A PerDay 429 does NOT bench the key any more, the per-model bench below
           // retires exactly the drained model and its pool siblings keep answering.
           if (cls === 'KEY_INVALID' || cls === 'PERMISSION') {
             benchKey(key)
@@ -449,7 +449,7 @@ async function callGemini(
             if (/PerDay/i.test(raw) || zero) benchModelQuota(key, model, zero ? 'zero' : 'day')
             else if (/PerMinute/i.test(raw)) benchModelQuota(key, model, 'minute')
             // A 429 with NO named bucket (bare RESOURCE_EXHAUSTED, no quotaId in the
-            // body) is a PROJECT-level wall — every sibling model shares it, so
+            // body) is a PROJECT-level wall, every sibling model shares it, so
             // walking the pool would just hammer Google. Break the walk WITHOUT
             // benching the key: ungrounded calls (mail, OCR) share the project but
             // not this bucket, and they are still healthy.
@@ -461,7 +461,7 @@ async function callGemini(
             // up. (The old park and retry after Google's named delay is retired:
             // benching plus rotation keeps the same recovery odds without parking
             // a scan for up to 8 seconds per drained model.)
-            continue // next model — separate quota bucket
+            continue // next model, separate quota bucket
           }
           // Model-level problems (404 etc.): try the next model on this key.
           continue
@@ -478,8 +478,8 @@ async function callGemini(
           continue
         }
         trace?.push(`gemini/${model} → ${res.status} (${Date.now() - tModel}ms) ok`)
-        // Pool freshness is owned by the TTL cache — nothing to rewrite on success.
-        // The user's own key was bypassed but the platform saved the answer — say so,
+        // Pool freshness is owned by the TTL cache, nothing to rewrite on success.
+        // The user's own key was bypassed but the platform saved the answer, say so,
         // once, gently: the app stayed seamless AND the user learns their key needs care.
         const notice =
           userKeyFailure && !ownKey
@@ -495,7 +495,7 @@ async function callGemini(
         if (/abort|timeout|TimeoutError/i.test(msg)) { timedOut = true; break }
       }
     }
-    if (timedOut) break // connectivity problem — don't hammer the chain
+    if (timedOut) break // connectivity problem, don't hammer the chain
   }
 
   return { ok: false, error: bestError(failures) }
@@ -515,11 +515,11 @@ export async function geminiGenerate(
     generationConfig: {
       temperature: opts.json ? 0.4 : 0.8,
       // Callers producing big structured payloads (site analysis with 3 pitches,
-      // business plans) MUST be able to raise this — a truncated JSON document
+      // business plans) MUST be able to raise this, a truncated JSON document
       // fails to parse and reads to the user as "the AI could not read the page".
       maxOutputTokens: opts.maxOutputTokens ?? (opts.search ? 2000 : 1200),
       // NOTE: JSON mime mode is incompatible with search grounding on many model
-      // versions — when searching, we ask for raw JSON in the prompt and parse loosely.
+      // versions, when searching, we ask for raw JSON in the prompt and parse loosely.
       ...(opts.json && !opts.search ? { responseMimeType: 'application/json' } : {}),
     },
     // Real-world grounding: Google Search results the model actually saw (real businesses).
@@ -529,7 +529,7 @@ export async function geminiGenerate(
 }
 
 /**
- * Vision call — extract structured data from a photo/screenshot (OCR+understanding).
+ * Vision call, extract structured data from a photo/screenshot (OCR+understanding).
  * Same hardened key/model chain + error contract as geminiGenerate. Low temperature for extraction.
  */
 export async function geminiVision(
@@ -582,13 +582,13 @@ export interface GeminiKeyValidation {
  * Probe a candidate user-supplied Gemini key with ListModels (cheap, fast, and it
  * exercises the exact same authorization surface as generateContent). Called when a
  * key is saved under Integrations so a Google-blocked key is flagged in the SAME
- * minute it's pasted — not three screens later when a scan fails.
+ * minute it's pasted, not three screens later when a scan fails.
  */
 export async function validateGeminiKey(key: string): Promise<GeminiKeyValidation> {
   const k = key.trim()
   // Two valid generations: classic AIza… (about 39 chars) and the newer AI Studio
   // auth keys starting with AQ. (longer). The ListModels probe below is the real
-  // verdict — the shape check only catches obvious paste mistakes.
+  // verdict, the shape check only catches obvious paste mistakes.
   if (!/^(AIza[0-9A-Za-z_-]{30,}|AQ\S{30,})$/.test(k)) {
     return {
       ok: false,
@@ -603,7 +603,7 @@ export async function validateGeminiKey(key: string): Promise<GeminiKeyValidatio
       signal: AbortSignal.timeout(10_000),
     })
     if (res.ok) {
-      return { ok: true, status: 'OK', message: 'Key verified with Google — AI will run on your own quota, with HustlePortal AI as automatic backup.' }
+      return { ok: true, status: 'OK', message: 'Key verified with Google, AI will run on your own quota, with HustlePortal AI as automatic backup.' }
     }
     const raw = await res.text().catch(() => '')
     const cls = classify(res.status, raw)
@@ -611,7 +611,7 @@ export async function validateGeminiKey(key: string): Promise<GeminiKeyValidatio
       return {
         ok: false,
         status: 'BLOCKED_403',
-        message: 'Google blocked this key (403 Permission denied). Fastest fix: create a brand-new key at aistudio.google.com/apikey — new AI Studio keys work instantly. Or in Google Cloud console, enable the "Generative Language API" for this key\'s project and remove any API/website restrictions on the key. HustlePortal AI covers you meanwhile.',
+        message: 'Google blocked this key (403 Permission denied). Fastest fix: create a brand-new key at aistudio.google.com/apikey, new AI Studio keys work instantly. Or in Google Cloud console, enable the "Generative Language API" for this key\'s project and remove any API/website restrictions on the key. HustlePortal AI covers you meanwhile.',
       }
     }
     if (cls === 'QUOTA') {
@@ -620,9 +620,9 @@ export async function validateGeminiKey(key: string): Promise<GeminiKeyValidatio
     return {
       ok: false,
       status: 'INVALID',
-      message: 'Google rejected this key (invalid, deleted or mistyped). Copy it again from aistudio.google.com/apikey — or just remove it to ride HustlePortal AI.',
+      message: 'Google rejected this key (invalid, deleted or mistyped). Copy it again from aistudio.google.com/apikey, or just remove it to ride HustlePortal AI.',
     }
   } catch {
-    return { ok: false, status: 'UNREACHABLE', message: 'Could not reach Google to verify the key just now — it was saved and will be used as-is.' }
+    return { ok: false, status: 'UNREACHABLE', message: 'Could not reach Google to verify the key just now, it was saved and will be used as-is.' }
   }
 }

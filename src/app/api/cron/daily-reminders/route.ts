@@ -6,18 +6,18 @@ import { globalCooldown } from '@/lib/ratelimit'
 export const maxDuration = 60
 
 /**
- * Daily task reminders — Vercel Cron hits this every morning (05:00 UTC / 07:00 SAST).
+ * Daily task reminders, Vercel Cron hits this every morning (05:00 UTC / 07:00 SAST).
  * Pushes "N tasks due today" to every user with push subscriptions + tasks due today.
  *
  * Auth: Vercel Cron sends `Authorization: Bearer $CRON_SECRET` when CRON_SECRET is set.
- * If the env is absent we accept the call (it only sends notifications — harmless),
+ * If the env is absent we accept the call (it only sends notifications, harmless),
  * BUT behind a 10-minute global cooldown: the scheduled pinger fires once a day and
  * sails through, while a stranger hammering the URL gets honest "already ran" answers
  * instead of a push blast to every user on the platform.
  */
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return true // no secret configured — cooldown below keeps abuse bounded
+  if (!secret) return true // no secret configured, cooldown below keeps abuse bounded
   const header = req.headers.get('authorization') || ''
   return header === `Bearer ${secret}`
 }
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'cooldown', retryAfterSec: cooldown.retryAfterSec })
   }
 
-  // "Today" in South Africa — the whole customer base is SAST (UTC+2) today.
+  // "Today" in South Africa, the whole customer base is SAST (UTC+2) today.
   const now = new Date()
   const start = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Johannesburg' }))
   start.setHours(0, 0, 0, 0)
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     take: 2000,
   })
 
-  // group per recipient: assignee wins, else creator — and keep the day's schedule
+  // group per recipient: assignee wins, else creator, and keep the day's schedule
   // (times shown in SAST, the timezone this whole customer base lives in)
   const perUser = new Map<string, { count: number; lines: string[] }>()
   for (const t of due) {
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   for (const [userId, { count, lines }] of perUser) {
     if (!activeIds.has(userId)) { skippedSuspended++; continue }
     const body = [
-      'Open HustlePortal to knock them out — small daily wins compound.',
+      'Open HustlePortal to knock them out, small daily wins compound.',
       lines.length ? lines.join('\n') : '',
       count > lines.length ? `+ ${count - lines.length} more` : '',
     ].filter(Boolean).join('\n')

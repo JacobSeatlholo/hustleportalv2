@@ -22,7 +22,7 @@ interface IncomingLead {
   notes?: string
 }
 
-// POST /api/admin/exec/client/[id]/leads — drop leads straight into a client's
+// POST /api/admin/exec/client/[id]/leads, drop leads straight into a client's
 // pipeline. Body: { leads: IncomingLead[], source?: 'EXPLEE' | 'MANUAL', projectId? }
 // The exec pulls a lead from Explee (or types one) and hands it over; the
 // client finds it waiting in their Lead Finder pipeline, stage NEW.
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, created: 0, skipped, message: 'All of these are already in their pipeline — nothing double loaded.' })
+    return NextResponse.json({ ok: true, created: 0, skipped, message: 'All of these are already in their pipeline, nothing double loaded.' })
   }
 
   const result = await db.lead.createMany({ data: rows })

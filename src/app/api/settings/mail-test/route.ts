@@ -6,7 +6,7 @@ export const maxDuration = 30
 
 /**
  * POST /api/settings/mail-test → SMTP handshake against the SAVED Gmail creds.
- * Verifies the login without sending an email — instant feedback for the
+ * Verifies the login without sending an email, instant feedback for the
  * App Password loop (normal passwords fail here exactly like a real send).
  */
 export async function POST() {
@@ -16,7 +16,7 @@ export async function POST() {
   const creds = await getUserMailCreds(userId)
   if (!creds) {
     return NextResponse.json(
-      { ok: false, error: 'No Gmail connection saved yet — add your Gmail address and app password above.' },
+      { ok: false, error: 'No Gmail connection saved yet, add your Gmail address and app password above.' },
       { status: 400 }
     )
   }
@@ -36,7 +36,7 @@ export async function POST() {
     clearGmailFailure(userId) // a passing login lifts any send-time cooldown
     return NextResponse.json({
       ok: true,
-      message: `Gmail connection verified for ${creds.user} — sends from your address will work.`,
+      message: `Gmail connection verified for ${creds.user}, sends from your address will work.`,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to reach Gmail'

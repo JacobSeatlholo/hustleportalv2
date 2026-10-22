@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { expleeHotLeads } from '@/lib/explee'
 
-// GET /api/admin/exec/hotleads — the outreach pulse on the Executive Dashboard:
+// GET /api/admin/exec/hotleads, the outreach pulse on the Executive Dashboard:
 // every hot lead across the businesshustle Explee workspace, newest first,
 // pulled live from the Explee API with campaign names joined. Exec only.
 // Pass ?campaignId=<id> to focus the panel on one campaign; omit it for the

@@ -12,7 +12,7 @@ export const maxDuration = 30
  *
  * This is the curation layer on top of the automated feeds. The pool drinks
  * from the outreach projects and every scan; here the owner reads it, filters
- * it by project or search, and hands the right faces to the right member —
+ * it by project or search, and hands the right faces to the right member,
  * the member finds them waiting in their pipeline, stage New, source TEAM,
  * at no cost to them.
  *

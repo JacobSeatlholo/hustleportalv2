@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       // Lead-quality law starts at the front door: a malformed address would
       // never receive the welcome email, the reset link, or a single invoice.
       if (!isEmail(normalized)) {
-        return NextResponse.json({ error: 'That email address does not look right — check it and try again.' }, { status: 400 })
+        return NextResponse.json({ error: 'That email address does not look right, check it and try again.' }, { status: 400 })
       }
       const exists = await db.user.findUnique({ where: { email: normalized } })
       if (exists) {
@@ -69,19 +69,19 @@ export async function POST(req: NextRequest) {
       // Master account (exec email): make sure its exec flags exist. Idempotent,
       // touches nothing besides the two privilege flags on that one email.
       await ensureExecAdmin(user).catch(() => {})
-      // welcome bonus — R99 in lead credits: enough for real teaser reveals,
+      // welcome bonus, R99 in lead credits: enough for real teaser reveals,
       // the taste that sells the R199 Operator plan
       const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
       if (welcomeCents > 0) {
-        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus — R${Math.round(welcomeCents / 100)} in lead credits`)
+        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits`)
       }
       await awardXp(user.id, 'SIGNUP', 50, 'Joined HustlePortal')
       await bumpChallenge(user.id, 'login')
-      // Referral attribution (teams invite teams) — R10 to the referrer on signup.
+      // Referral attribution (teams invite teams), R10 to the referrer on signup.
       try {
         await attributeSignup(user.id, normalized, body.refCode)
       } catch { /* attribution must never block registration */ }
-      // Welcome email — the first branded message of the relationship. Awaited
+      // Welcome email, the first branded message of the relationship. Awaited
       // (serverless freezes unawaited promises after the response) but wrapped
       // so a failed send can never block registration.
       try {
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         console.error('[auth] welcome email failed for', normalized, e)
       }
       // Seamless teams: any pending invites for this email attach the new account
-      // to those teams automatically — no "ask them to register first, then invite".
+      // to those teams automatically, no "ask them to register first, then invite".
       const joinedTeams: string[] = []
       try {
         const pending = await db.teamInvite.findMany({
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       // Brute-force doors: a wide per-IP door for whole offices behind one NAT,
       // and a narrow per-email door that ONLY failed attempts open. The owner
       // typing the right password can never be locked out by an attacker
-      // hammering their address — success clears the failure counter.
+      // hammering their address, success clears the failure counter.
       const ipGate = rateLimit(`login:ip:${clientIp(req)}`, 60, 5 * 60 * 1000)
       const emailKey = `login:fail:${String(email).toLowerCase().trim()}`
       if (!ipGate.ok) {
@@ -191,15 +191,15 @@ export async function POST(req: NextRequest) {
       const ipGate = rateLimit(`forgot:ip:${clientIp(req)}`, 5, 60 * 60 * 1000)
       const emailGate = rateLimit(`forgot:email:${email}`, 3, 60 * 60 * 1000)
       if (!ipGate.ok || !emailGate.ok) {
-        // Same neutral message as a miss — no new information for an attacker.
+        // Same neutral message as a miss, no new information for an attacker.
         return NextResponse.json({
           ok: true,
-          message: 'If an account exists for that email, a reset link is on its way — check your inbox (and spam, just in case).',
+          message: 'If an account exists for that email, a reset link is on its way, check your inbox (and spam, just in case).',
         })
       }
       const user = await db.user.findUnique({ where: { email } })
       if (!user) {
-        // Diagnostic truth-stamp: the request happened, but no account matches —
+        // Diagnostic truth-stamp: the request happened, but no account matches,
         // the #1 cause of "the reset email never arrived". Admins see it in
         // Integrations → Mail; the requester still gets the same neutral reply.
         await recordNoAccountReset(email).catch(() => {})
@@ -224,20 +224,20 @@ export async function POST(req: NextRequest) {
             '',
             'Someone (hopefully you) asked to reset the password for your HustlePortal account.',
             '',
-            'Reset it here — the link works for 30 minutes and can be used once:',
+            'Reset it here, the link works for 30 minutes and can be used once:',
             resetUrl,
             '',
-            'If you didn\'t ask for this, ignore this email — your password stays as it was.',
+            'If you didn\'t ask for this, ignore this email, your password stays as it was.',
             '',
-            '— HustlePortal · the Business OS for South African businesses',
+            'HustlePortal · the Business OS for South African businesses',
           ].join('\n'),
         })
         if (!sent.ok) console.error('[auth] reset email failed for', email)
       }
-      // Same response whether or not the account exists — no account enumeration.
+      // Same response whether or not the account exists, no account enumeration.
       return NextResponse.json({
         ok: true,
-        message: 'If an account exists for that email, a reset link is on its way — check your inbox (and spam, just in case).',
+        message: 'If an account exists for that email, a reset link is on its way, check your inbox (and spam, just in case).',
       })
     }
 
@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
         where: { resetTokenHash: sha256(token), resetTokenExpiry: { gt: new Date() } },
       })
       if (!user) {
-        return NextResponse.json({ error: 'This reset link is invalid or has expired — request a fresh one.' }, { status: 400 })
+        return NextResponse.json({ error: 'This reset link is invalid or has expired, request a fresh one.' }, { status: 400 })
       }
       await db.user.update({
         where: { id: user.id },
@@ -265,11 +265,11 @@ export async function POST(req: NextRequest) {
           resetTokenHash: null,
           resetTokenExpiry: null,
           // New epoch: every session cookie issued before this reset is dead
-          // on its next request — a stolen cookie cannot outlive the fix.
+          // on its next request, a stolen cookie cannot outlive the fix.
           sessionEpoch: { increment: 1 },
         },
       })
-      // Sign them straight in — one less step on a small screen.
+      // Sign them straight in, one less step on a small screen.
       await createSession(user.id)
       await ensureWallet(user.id)
       return NextResponse.json({ ok: true })

@@ -6,14 +6,14 @@ export { LEVELS, levelFor }
 /**
  * The hustle ladder lives in levels.ts (pure, client-safe). XP is earned by
  * doing real work in the platform, and every level pays a REAL wallet credit
- * — gamification with money on the line, because a title alone does not feed
+ *, gamification with money on the line, because a title alone does not feed
  * a pipeline. Rewards are granted automatically inside awardXp the moment a
  * level is crossed.
  */
 
 /**
  * Award XP and, when a level is crossed, pay the level reward into the
- * wallet immediately. The reward is a real CreditTx — spendable on lead
+ * wallet immediately. The reward is a real CreditTx, spendable on lead
  * reveals like any other credit. Level-up never blocks the caller: a
  * wallet hiccup costs the bonus, never the XP.
  */
@@ -32,10 +32,10 @@ export async function awardXp(userId: string, type: string, amount: number, desc
     if (reached && reached.rewardCents > 0) {
       try {
         const { addCredits } = await import('@/lib/wallet')
-        await addCredits(userId, reached.rewardCents, 'BONUS', `Level up: ${reached.name} — ${reached.reward}`)
+        await addCredits(userId, reached.rewardCents, 'BONUS', `Level up: ${reached.name}, ${reached.reward}`)
         rewardCents = reached.rewardCents
         await db.xpEvent.create({
-          data: { userId, type: 'LEVEL_REWARD', amount: 0, description: `${reached.icon} ${reached.name} unlocked — ${reached.reward}` },
+          data: { userId, type: 'LEVEL_REWARD', amount: 0, description: `${reached.icon} ${reached.name} unlocked, ${reached.reward}` },
         })
       } catch { /* the XP stands even if the wallet blink fails */ }
     }
@@ -44,14 +44,14 @@ export async function awardXp(userId: string, type: string, amount: number, desc
 }
 
 /**
- * Daily missions. Targets above 1 turn the checklist into progress bars —
+ * Daily missions. Targets above 1 turn the checklist into progress bars,
  * a half-full bar pulls the brain back to finish the job. Every key here is
  * bumped from a real server action; nothing is self-reported.
  */
 export const CHALLENGES = [
   { key: 'login', label: 'Check in today', xp: 15, target: 1 },
   { key: 'add_lead', label: 'Add new leads', xp: 30, target: 2 },
-  { key: 'add_task', label: 'Plan your day — add a task', xp: 20, target: 1 },
+  { key: 'add_task', label: 'Plan your day, add a task', xp: 20, target: 1 },
   { key: 'complete_task', label: 'Complete tasks', xp: 25, target: 2 },
   { key: 'log_expense', label: 'Log a finance entry', xp: 20, target: 1 },
   { key: 'ai_chat', label: 'Ask the AI Advisor something', xp: 25, target: 1 },
@@ -64,7 +64,7 @@ export const CHALLENGES = [
   { key: 'google_profile', label: 'Polish your Google profile', xp: 25, target: 1 },
 ]
 
-/** Streak milestones that pay bonus XP — consistency compounds, visibly. */
+/** Streak milestones that pay bonus XP, consistency compounds, visibly. */
 export const STREAK_MILESTONES: Record<number, number> = { 7: 50, 14: 100, 30: 250 }
 
 function today() {
@@ -83,7 +83,7 @@ function dayShift(day: string, deltaDays: number): string {
 /**
  * The check-in streak: consecutive SAST days with a completed login
  * challenge, counting today (if already checked in) or ending yesterday.
- * One query, walked in memory — cheap enough to run on every session load.
+ * One query, walked in memory, cheap enough to run on every session load.
  */
 export async function loginStreak(userId: string): Promise<number> {
   const day = today()

@@ -9,7 +9,7 @@ const PERSONAS = ['FIND_CLIENTS', 'GET_PAID', 'STAY_ON_TOP', 'RUN_EVERYTHING']
 const PROFESSIONS = ['ACCOUNTANT', 'ADVISOR', 'LAWYER', 'ENTREPRENEUR', 'SOLOPRENEUR', 'OTHER']
 
 /**
- * POST /api/onboard — save the two question post signup survey: how they work
+ * POST /api/onboard, save the two question post signup survey: how they work
  * (profession) and what they want first (persona). Idempotent: answering again
  * from Profile simply updates the answers, so personalization can follow the
  * user as their business changes. First completion stamps onboardedAt, which

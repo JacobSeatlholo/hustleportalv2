@@ -1,10 +1,10 @@
 /**
- * POPIA listing suppression — the enforcement half of "remove my business".
+ * POPIA listing suppression, the enforcement half of "remove my business".
  *
  * A business that asks to leave the lead index stops appearing everywhere:
  * scan ingestion drops it, the verified pool never serves it, and the paid
  * reveal refuses it before any charge. Pool filters match on the normalised
- * name only (broad on purpose — an opt-out must never leak through a city
+ * name only (broad on purpose, an opt-out must never leak through a city
  * or fingerprint variation); the reveal check is precise (map listing id,
  * or name plus city when both are known). A 60 second cache keeps the
  * per-request cost at one read while keeping take-down near-immediate.
@@ -37,7 +37,7 @@ async function rows(): Promise<SuppressionRow[]> {
     cache = { at: Date.now(), rows: fresh }
     return fresh
   } catch {
-    // suppression must never take a scan or a reveal down — serve the cache
+    // suppression must never take a scan or a reveal down, serve the cache
     return cache?.rows || []
   }
 }
@@ -46,13 +46,13 @@ export function invalidateSuppressionCache(): void {
   cache = null
 }
 
-/** Normalised names of every suppressed business — the broad pool filter. */
+/** Normalised names of every suppressed business, the broad pool filter. */
 export async function suppressedNameKeys(): Promise<Set<string>> {
   const all = await rows()
   return new Set(all.map((r) => r.nameKey).filter((k) => k))
 }
 
-/** External map listing ids under suppression — exact filter for scan results. */
+/** External map listing ids under suppression, exact filter for scan results. */
 export async function suppressedOsmIds(): Promise<Set<string>> {
   const all = await rows()
   return new Set(all.map((r) => r.osmId).filter((v): v is string => !!v))
@@ -91,7 +91,7 @@ export async function createSuppression(input: { name: string; city?: string; os
     invalidateSuppressionCache()
     return { created: true }
   } catch (e) {
-    // unique (nameKey, city) — already honoured
+    // unique (nameKey, city), already honoured
     if ((e as { code?: string })?.code === 'P2002') return { created: false }
     throw e
   }

@@ -1,5 +1,5 @@
 /**
- * Facilitated meetings — the owner's first business case engine.
+ * Facilitated meetings, the owner's first business case engine.
  *
  * The boss sets a meeting between a member (Zola) and an outside guest (Ian).
  * The member confirms with one tap from the invite email; on confirmation both
@@ -129,7 +129,7 @@ export function welcomeEmail(info: {
   proposedWhen?: string | null
 }): { subject: string; body: string } {
   const f = first(info.memberName)
-  const subject = `Welcome to HustlePortal, ${f} — choose your password`
+  const subject = `Welcome to HustlePortal, ${f}, choose your password`
   const body = [
     `Hi ${f},`,
     '',
@@ -176,7 +176,7 @@ export function inviteEmail(m: MeetingLike & { confirmToken: string }): { subjec
     'The Business Hustle team set up an introduction for you. Here are the details:',
     '',
     `WHAT: ${m.title}`,
-    `WHEN: ${meetingWhen(m.startsAt)} — ${meetingLength(m.startsAt, m.endsAt)}`,
+    `WHEN: ${meetingWhen(m.startsAt)}, ${meetingLength(m.startsAt, m.endsAt)}`,
     `WITH: ${guestLabel(m)}`,
     whereLine(m),
     ...(m.notes ? ['', m.notes] : []),
@@ -207,7 +207,7 @@ export function confirmedEmail(m: MeetingLike, recipientName: string): { subject
     'Good news: the time works for everyone, so the meeting is set.',
     '',
     `WHAT: ${m.title}`,
-    `WHEN: ${meetingWhen(m.startsAt)} — ${meetingLength(m.startsAt, m.endsAt)}`,
+    `WHEN: ${meetingWhen(m.startsAt)}, ${meetingLength(m.startsAt, m.endsAt)}`,
     `WHO: ${memberLabel(m)} (${m.memberEmail}) and ${guestLabel(m)}`,
     whereLine(m),
     ...(m.notes ? ['', m.notes] : []),
@@ -352,7 +352,7 @@ export const HTML_HEADERS = { 'content-type': 'text/html; charset=utf-8' }
 
 // ------------------------------------------------------- shared meeting page
 //
-// The owner hands one unguessable link (/m/<shareToken>) to BOTH parties —
+// The owner hands one unguessable link (/m/<shareToken>) to BOTH parties,
 // on WhatsApp, over email, however they talk. The page shows the appointment
 // details and lets either side leave a note or propose a new time; the owner
 // sees every update on the Executive Dashboard. Same visual language as the
@@ -375,7 +375,7 @@ function statusBanner(status: string): string {
   if (status === 'CONFIRMED')
     return `<div style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);color:#6ee7b7;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">MEETING IS SET</div>`
   if (status === 'DECLINED')
-    return `<div style="background:rgba(113,113,122,.12);border:1px solid rgba(113,113,122,.4);color:#a1a1aa;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">THE PROPOSED TIME WAS DECLINED — PROPOSE A NEW ONE BELOW</div>`
+    return `<div style="background:rgba(113,113,122,.12);border:1px solid rgba(113,113,122,.4);color:#a1a1aa;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">THE PROPOSED TIME WAS DECLINED, PROPOSE A NEW ONE BELOW</div>`
   return `<div style="background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.4);color:#f5c518;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;">AWAITING CONFIRMATION</div>`
 }
 
@@ -444,7 +444,7 @@ export function sharedPageHtml(
     ? `<form method="post" action="/api/meetings/shared" style="margin-top:14px;">
     <input type="hidden" name="token" value="${token}" />
     <input type="hidden" name="action" value="confirm" />
-    <button type="submit" style="width:100%;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.45);border-radius:12px;padding:14px;font-size:15px;font-weight:bold;cursor:pointer;">This time works — confirm it</button>
+    <button type="submit" style="width:100%;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.45);border-radius:12px;padding:14px;font-size:15px;font-weight:bold;cursor:pointer;">This time works, confirm it</button>
   </form>`
     : ''}
 </div>
@@ -493,7 +493,7 @@ export function sharedPageHtml(
 
 // ------------------------------------------------------- shared page emails
 
-/** Note posted on the shared page — goes to the OTHER side, plus the link. */
+/** Note posted on the shared page, goes to the OTHER side, plus the link. */
 export function meetingNoteEmail(
   m: MeetingLike,
   recipientName: string,
@@ -524,7 +524,7 @@ export function meetingNoteEmail(
   return { subject, body }
 }
 
-/** New time proposed on the shared page — goes to BOTH sides. */
+/** New time proposed on the shared page, goes to BOTH sides. */
 export function meetingMovedEmail(
   m: MeetingLike,
   recipientName: string,

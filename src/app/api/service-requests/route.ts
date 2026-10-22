@@ -6,7 +6,7 @@ import { sendTeamMail } from '@/lib/mailer'
 export const maxDuration = 30
 
 /**
- * POST /api/service-requests — the user requests a Business Hustle service
+ * POST /api/service-requests, the user requests a Business Hustle service
  * (web design, marketing, coaching…) from inside the platform.
  *
  * One request, three reliable outcomes:
@@ -19,7 +19,7 @@ export const maxDuration = 30
  */
 
 const URGENCY = {
-  ASAP: { priority: 'HIGH', dueInDays: 1, label: 'Urgent — ASAP' },
+  ASAP: { priority: 'HIGH', dueInDays: 1, label: 'Urgent, ASAP' },
   THIS_WEEK: { priority: 'MEDIUM', dueInDays: 3, label: 'This week' },
   PLANNING: { priority: 'LOW', dueInDays: null, label: 'Just planning' },
 } as const
@@ -80,7 +80,7 @@ async function createServiceRequest(
       notes:
         `Requested via HustlePortal Services · urgency: ${u.label}\n` +
         (message ? `\nYour brief: ${message}\n` : '') +
-        `\nThe Business Hustle team has been emailed — they reply to ${user.email}. Mark this done once the project is delivered.`,
+        `\nThe Business Hustle team has been emailed, they reply to ${user.email}. Mark this done once the project is delivered.`,
       priority: u.priority,
       dueDate,
       status: 'TODO',
@@ -89,7 +89,7 @@ async function createServiceRequest(
     },
   })
 
-  // 2) Email the team — Reply-To the user so replies land in their inbox.
+  // 2) Email the team, Reply-To the user so replies land in their inbox.
   const mailBody = [
     `New service request ${ref} (urgency: ${u.label})`,
     ``,
@@ -107,7 +107,7 @@ async function createServiceRequest(
     .join('\n')
 
   const mail = await sendTeamMail(userId, {
-    subject: `[Service request · ${u.label}] ${serviceTitle} — ${ref}`,
+    subject: `[Service request · ${u.label}] ${serviceTitle}, ${ref}`,
     body: mailBody,
   })
 
@@ -116,7 +116,7 @@ async function createServiceRequest(
     data: {
       userId,
       toEmail: 'to' in mail ? mail.to : 'team@businesshustle.co.za',
-      subject: `[Service request · ${u.label}] ${serviceTitle} — ${ref}`,
+      subject: `[Service request · ${u.label}] ${serviceTitle}, ${ref}`,
       body: mailBody,
       status: mail.ok ? 'SENT' : 'FAILED',
       provider: 'PLATFORM',
@@ -130,6 +130,6 @@ async function createServiceRequest(
     task,
     emailSent: mail.ok,
     emailTo: 'to' in mail ? mail.to : undefined,
-    ...(mail.ok ? {} : { emailWarning: 'Your request is tracked in Tasks. The email gateway hiccuped — our team can also see it next time you contact us; no action needed.' }),
+    ...(mail.ok ? {} : { emailWarning: 'Your request is tracked in Tasks. The email gateway hiccuped, our team can also see it next time you contact us; no action needed.' }),
   })
 }

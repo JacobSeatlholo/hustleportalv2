@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 export const maxDuration = 30
 
 /**
- * Resend webhooks — the honesty feed of the sending lane.
+ * Resend webhooks, the honesty feed of the sending lane.
  * email.bounced / email.complained -> the address never hears from us again
  * (Suppression) and the log row shows the truth (BOUNCED).
  *

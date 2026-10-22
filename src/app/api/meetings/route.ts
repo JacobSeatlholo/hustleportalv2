@@ -23,7 +23,7 @@ function normalizeEmail(v: unknown): string {
   return String(v || '').toLowerCase().trim()
 }
 
-// GET /api/meetings — exec sees every facilitated meeting; a member sees the
+// GET /api/meetings, exec sees every facilitated meeting; a member sees the
 // ones they are part of (so their own views can surface them later). Every row
 // carries its share link token (generated on the spot for meetings set before
 // sharing existed) so the owner can copy the /m/<token> link straight out of
@@ -43,7 +43,7 @@ export async function GET() {
     take: 50,
     include: { _count: { select: { comments: true } } },
   })
-  // Meetings set before sharing existed get their token on first sight —
+  // Meetings set before sharing existed get their token on first sight,
   // idempotent, and the token only ever reaches the owner and the parties.
   const rows = await Promise.all(
     meetings.map(async (m) => {
@@ -59,7 +59,7 @@ export async function GET() {
   return NextResponse.json({ meetings: rows })
 }
 
-// POST /api/meetings — exec only: set a facilitated meeting.
+// POST /api/meetings, exec only: set a facilitated meeting.
 // Creates the member's account when it does not exist yet (with the standard
 // welcome credit), sends the welcome email (password link + Google Calendar
 // how to), then the proposal email with the one tap confirm link.
@@ -87,6 +87,12 @@ export async function POST(req: NextRequest) {
   // A physical venue means the meeting is in person: no Jitsi link is created,
   // and every page and email shows the venue instead of "Online".
   const location = String(body.location || '').trim().slice(0, 200) || null
+  // The operator can bring their own meeting link (Zoom, Google Meet, Teams).
+  // Real people meet on the tools they already use; the generated backup link
+  // exists only when they bring nothing.
+  const customLink = /^https?:\/\//i.test(String(body.meetLink || '').trim())
+    ? String(body.meetLink).trim().slice(0, 500)
+    : null
   let title = String(body.title || '').trim()
   const startsAt = body.startsAt ? new Date(body.startsAt) : null
   const durationMin = Math.min(Math.max(Number(body.durationMin) || 60, 15), 240)
@@ -107,7 +113,7 @@ export async function POST(req: NextRequest) {
 
   // Member account: reuse it when the email already exists, otherwise set one
   // up exactly like a signup would (wallet, welcome credit) minus the session
-  // — the operator is creating it, so nobody gets signed in here.
+  //, the operator is creating it, so nobody gets signed in here.
   let member = await db.user.findUnique({ where: { email: memberEmail } })
   let accountCreated = false
   let passwordUrl: string | null = null
@@ -128,10 +134,10 @@ export async function POST(req: NextRequest) {
     await ensureWallet(member.id)
     const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
     if (welcomeCents > 0) {
-      await addCredits(member.id, welcomeCents, 'BONUS', `Welcome bonus — R${Math.round(welcomeCents / 100)} in lead credits`)
+      await addCredits(member.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits`)
     }
     await awardXp(member.id, 'SIGNUP', 50, 'Joined HustlePortal').catch(() => {})
-    // Direct "choose your password" link (48 hour window) — friendlier than
+    // Direct "choose your password" link (48 hour window), friendlier than
     // asking a brand new member to find the Forgot password button.
     const token = crypto.randomBytes(32).toString('hex')
     await db.user.update({
@@ -155,7 +161,7 @@ export async function POST(req: NextRequest) {
       guestEmail,
       startsAt,
       endsAt,
-      meetLink: location ? null : jitsiMeetLink(title),
+      meetLink: customLink || (location ? null : jitsiMeetLink(title)),
       location,
       confirmToken: crypto.randomBytes(24).toString('hex'),
       shareToken: crypto.randomBytes(16).toString('base64url'),
@@ -192,7 +198,7 @@ export async function POST(req: NextRequest) {
   )
 }
 
-// PATCH /api/meetings — exec only: reschedule a proposed meeting and/or
+// PATCH /api/meetings, exec only: reschedule a proposed meeting and/or
 // record a confirmation on the member's behalf (she confirmed in person).
 // Confirmation runs through the same engine as the member's own one tap, so
 // both parties get the identical final-details email with the new time.

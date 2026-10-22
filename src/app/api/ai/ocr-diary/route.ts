@@ -4,12 +4,12 @@ import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { geminiVision, parseJsonLoose } from '@/lib/gemini'
 
 /**
- * POST /api/ai/ocr-diary — "Snap my diary": upload a photo of the user's paper
+ * POST /api/ai/ocr-diary, "Snap my diary": upload a photo of the user's paper
  * diary / notebook / day-planner and AI reads to-dos and scheduled items out
  * of it, resolving relative dates ("tomorrow", "Friday", "next week Tue")
  * against TODAY in Africa/Johannesburg.
  *
- * Returns structured tasks + events ONLY — the client shows an editable
+ * Returns structured tasks + events ONLY, the client shows an editable
  * preview and commits through the existing POST /api/tasks and
  * POST /api/appointments endpoints.
  *
@@ -21,7 +21,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const MAX_ITEMS = 60
 
 function saToday(): { iso: string; weekday: string } {
-  // Africa/Johannesburg is UTC+2 year-round — no DST edge cases.
+  // Africa/Johannesburg is UTC+2 year-round, no DST edge cases.
   const now = new Date(Date.now() + 2 * 3600_000)
   const iso = now.toISOString().slice(0, 10)
   const weekday = new Date(now).toLocaleDateString('en-ZA', { weekday: 'long', timeZone: 'Africa/Johannesburg' })
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     mimeType,
     json: true,
     system:
-      'You are a precise data-capture assistant for a South African small-business owner. You photograph their paper diary/notebook and turn every entry into a task or an appointment. Transcribe handwriting faithfully — never invent entries. Times are South African (SAST, UTC+2).',
+      'You are a precise data-capture assistant for a South African small-business owner. You photograph their paper diary/notebook and turn every entry into a task or an appointment. Transcribe handwriting faithfully, never invent entries. Times are South African (SAST, UTC+2).',
     prompt: `Today is ${today.iso} (${today.weekday}), Africa/Johannesburg (UTC+2).
 
 Read this photo of a diary / notebook / planner page. Split every entry into:

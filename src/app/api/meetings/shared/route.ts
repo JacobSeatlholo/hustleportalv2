@@ -16,14 +16,14 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/meetings/shared — actions from the shared meeting page
+// POST /api/meetings/shared, actions from the shared meeting page
 // (/m/<shareToken>). The token is the credential: only someone the owner sent
 // the link to has it. Three actions, all plain HTML form posts so the page
 // works on any phone with zero JavaScript:
-//   comment  — a note both sides and the team see; the other side is emailed
-//   propose  — a new time; the meeting flips back to PROPOSED and both sides
+//   comment , a note both sides and the team see; the other side is emailed
+//   propose , a new time; the meeting flips back to PROPOSED and both sides
 //              are emailed to confirm
-//   confirm  — one tap confirm of a proposed time (same engine as the invite
+//   confirm , one tap confirm of a proposed time (same engine as the invite
 //              email, so the same final-details emails go out)
 // Every action ends with a redirect back to the page, so the visitor always
 // lands on the current truth.
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     await db.meetingComment.create({
       data: { meetingId: meeting.id, side, authorName: author, body },
     })
-    // The other side hears it the moment it lands (best effort — a mail hiccup
+    // The other side hears it the moment it lands (best effort, a mail hiccup
     // never blocks the note itself). The poster does not email themselves.
     const to = otherSideEmail(meeting, side)
     const name = otherSideName(meeting, side)

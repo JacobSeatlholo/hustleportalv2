@@ -41,7 +41,7 @@ export default function TasksView() {
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
 
-  // Voice dictation — title mic and description mic write straight into the fields
+  // Voice dictation, title mic and description mic write straight into the fields
   const titleVoice = useVoiceInput(setTitle)
   const notesVoice = useVoiceInput(setNotes)
   // Live comment counts per task (list payload ships the DB count; the thread updates it locally)
@@ -379,7 +379,7 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
       onCommentCountChange(task.id, (comments?.length || 0) + 1)
       setDraft('')
     } catch {
-      // non-fatal — the draft stays in the input
+      // non-fatal, the draft stays in the input
     } finally {
       setPosting(false)
     }
@@ -438,7 +438,7 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
               </div>
             )}
           </div>
-          {/* Team discussion — comments happen IN context, not in a WhatsApp group */}
+          {/* Team discussion, comments happen IN context, not in a WhatsApp group */}
           <button
             onClick={openThread}
             className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
@@ -446,14 +446,14 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 ? 'border-brand/50 text-brand bg-brand/5'
                 : 'border-stone-600/60 text-muted-foreground hover:border-brand hover:text-brand'
             }`}
-            aria-label={threadOpen ? 'Hide discussion' : `Discussion — ${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+            aria-label={threadOpen ? 'Hide discussion' : `Discussion, ${commentCount} comment${commentCount === 1 ? '' : 's'}`}
             aria-expanded={threadOpen}
           >
             <MessageSquare className="h-3.5 w-3.5" />
             {commentCount > 0 && <span>{commentCount}</span>}
             {threadOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
-          {/* The sealed record — sent, opened, done: who did what, and exactly when */}
+          {/* The sealed record, sent, opened, done: who did what, and exactly when */}
           <button
             onClick={openRecord}
             className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
@@ -481,7 +481,7 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
               </div>
             ) : !comments || comments.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No comments yet — start the discussion. Everyone on this task sees it here, in context.
+                No comments yet, start the discussion. Everyone on this task sees it here, in context.
               </p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto hp-scroll pr-1">

@@ -3,7 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ensureRefCode, refLink } from '@/lib/referral'
 
-// GET /api/refs — my referral code, link, stats and recent invites.
+// GET /api/refs, my referral code, link, stats and recent invites.
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

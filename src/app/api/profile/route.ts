@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId, hashPassword, verifyPassword } from '@/lib/auth'
 
-// PATCH /api/profile — update own profile
+// PATCH /api/profile, update own profile
 export async function PATCH(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

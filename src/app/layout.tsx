@@ -21,16 +21,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // Canonical host is www — the apex 308 redirects there.
+  // Canonical host is www, the apex 308 redirects there.
   metadataBase: new URL("https://www.hustleportal.online"),
-  title: "HustlePortal™ — Business OS for South African Entrepreneurs",
+  title: "HustlePortal™, Business OS for South African Entrepreneurs",
   description:
     "Leads, clients, invoicing, tasks and finance in one professional system. Source leads with AI, reveal verified contacts with prepaid credits. Built in South Africa.",
   keywords: [
     "HustlePortal", "Business Hustle", "leads South Africa", "CRM for entrepreneurs",
     "AI business plan", "SME tools South Africa", "business OS", "township economy",
   ],
-  authors: [{ name: "Business Hustle — Simple Eternity Holdings (Pty) Ltd" }],
+  authors: [{ name: "Business Hustle, Simple Eternity Holdings (Pty) Ltd" }],
   manifest: "/manifest.webmanifest",
   applicationName: "HustlePortal",
   appleWebApp: {
@@ -61,8 +61,8 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "HustlePortal™ — Business OS for South African Entrepreneurs",
-    description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI — built for South African businesses.",
+    title: "HustlePortal™, Business OS for South African Entrepreneurs",
+    description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI, built for South African businesses.",
     url: "/",
     siteName: "HustlePortal",
     type: "website",
@@ -72,14 +72,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "HustlePortal — the Business OS for South African Entrepreneurs",
+        alt: "HustlePortal, the Business OS for South African Entrepreneurs",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "HustlePortal™ — Business OS for South African Entrepreneurs",
-    description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI — built for South African businesses.",
+    title: "HustlePortal™, Business OS for South African Entrepreneurs",
+    description: "Run your business like a business. Leads, CRM, invoicing, tasks, finance & AI, built for South African businesses.",
     images: ["/og-image.png"],
   },
 };

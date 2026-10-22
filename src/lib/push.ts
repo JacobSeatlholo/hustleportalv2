@@ -1,13 +1,13 @@
 /**
- * Web Push — zero-config VAPID.
+ * Web Push, zero-config VAPID.
  *
  * VAPID keys are generated ONCE and stored in PlatformConfig (no env access needed
  * on Vercel). Every installed PWA can subscribe; the subscription row survives until
  * the push service reports it dead (404/410 → pruned).
  *
  * Public surface:
- *   getVapidPublicKey() — client asks via /api/push (GET) before subscribing.
- *   sendPushToUser(userId, payload) — fire-and-forget to every device of the user.
+ *   getVapidPublicKey(), client asks via /api/push (GET) before subscribing.
+ *   sendPushToUser(userId, payload), fire-and-forget to every device of the user.
  */
 import { db } from '@/lib/db'
 
@@ -28,7 +28,7 @@ async function ensureVapidKeys(): Promise<{ publicKey: string; privateKey: strin
   }
   const webpush = (await import('web-push')).default
   const keys = webpush.generateVAPIDKeys()
-  // Two upserts (PlatformConfig has no multi-key API) — one write wins the race, the
+  // Two upserts (PlatformConfig has no multi-key API), one write wins the race, the
   // other is idempotent on the same values. If a concurrent generation happened
   // between reads and writes, re-read once so both servers converge on ONE pair.
   await db.platformConfig.upsert({
@@ -61,7 +61,7 @@ export interface PushSendReport {
   subscriptions: number
   sent: number
   pruned: number
-  /** One line per dead or failing device, endpoint tail only — enough to
+  /** One line per dead or failing device, endpoint tail only, enough to
    *  diagnose "notifications are broken" without ever storing a full endpoint
    *  in a response. A 403 is the VAPID key mismatch signature: the stored
    *  subscription can never receive again, so it gets pruned like 404/410. */
@@ -89,16 +89,16 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
           await webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             JSON.stringify(payload),
-            { TTL: 60 * 60 * 24 * 3 } // 3 days — a stale nudge is worse than none
+            { TTL: 60 * 60 * 24 * 3 } // 3 days, a stale nudge is worse than none
           )
           sent++
         } catch (e) {
           const err = e as { statusCode?: number }
           const status = err.statusCode || 0
           // 404/410: the push service retired the endpoint. 403: the VAPID
-          // keys no longer match (key rotation or a pre-migration row) — that
+          // keys no longer match (key rotation or a pre-migration row), that
           // device can never receive again either. All three prune. 0 means
-          // the request died before a status (network) — keep the row and
+          // the request died before a status (network), keep the row and
           // record it so the test action can tell the truth.
           if (status === 404 || status === 410 || status === 403) {
             await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {})
@@ -109,7 +109,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       })
     )
   } catch {
-    // push is best-effort — never break a request over it
+    // push is best-effort, never break a request over it
   }
   return { subscriptions: deviceCount, sent, pruned, errors }
 }

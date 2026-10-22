@@ -53,11 +53,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ uid: strin
   const { uid } = await ctx.params
   try {
     const user = await db.user.findUnique({ where: { id: uid } })
-    if (!user) return NextResponse.json({ ok: true }) // swallow — wrong endpoint, don't leak
+    if (!user) return NextResponse.json({ ok: true }) // swallow, wrong endpoint, don't leak
 
     // Hardening: the webhook is unauthenticated by design (Meta signs with the
     // app secret, which per-user setups do not carry), so it gets two doors:
-    //  1. A per-user rate ceiling — a forged message storm cannot flood the
+    //  1. A per-user rate ceiling, a forged message storm cannot flood the
     //     client list or the push surface.
     //  2. Inbound messages only capture for users who actually connected
     //     WhatsApp (an access token on file). Everyone else: polite 200, zero writes.
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ uid: strin
                 name: profileName || norm.display || `WhatsApp ${from.slice(-4)}`,
                 phone: norm.valid ? norm.display : from,
                 source: 'WHATSAPP_AUTO',
-                notes: 'Auto-captured — messaged your WhatsApp Business number',
+                notes: 'Auto-captured, messaged your WhatsApp Business number',
               },
             })
             clientId = created.id
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ uid: strin
     }
     return NextResponse.json({ ok: true })
   } catch {
-    // never fail Meta — retries would duplicate work
+    // never fail Meta, retries would duplicate work
     return NextResponse.json({ ok: true })
   }
 }

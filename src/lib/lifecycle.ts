@@ -7,15 +7,15 @@ import { isExecEmail } from '@/lib/admin'
 import { getPlan } from '@/lib/plans'
 
 /**
- * The lifecycle machine — the follow up the funnel was missing.
+ * The lifecycle machine, the follow up the funnel was missing.
  *
  * The data said it plain: 13 of 27 real humans never touched a tool, one sat at
  * the Yoco till and nothing fired, and the campaign lane never once messaged our
  * own signups. This sweep closes that gap on the transactional lane:
  *
- *   day 3   — joined 3+ days ago, never used a tool, no plan        -> one nudge
- *   day 7   — joined 7+ days ago, still never used a tool           -> one offer
- *   checkout — subscription PENDING past 20 minutes, human, no nudge -> one email
+ *   day 3  , joined 3+ days ago, never used a tool, no plan        -> one nudge
+ *   day 7  , joined 7+ days ago, still never used a tool           -> one offer
+ *   checkout, subscription PENDING past 20 minutes, human, no nudge -> one email
  *
  * Laws: one email per milestone EVER (EmailLog campaign tag dedupe), suppression
  * checked before every send, probes/internals/exec never touched, a mail hiccup

@@ -1,5 +1,5 @@
 /**
- * Referral engine — "teams invite teams" distribution loop.
+ * Referral engine, "teams invite teams" distribution loop.
  * Every user gets a personal code (lazy-generated). Attribution happens at
  * registration via ?ref=CODE. Rewards: R10 signup, R50 first subscription.
  */
@@ -21,7 +21,7 @@ export async function ensureRefCode(userId: string): Promise<string> {
       const updated = await db.user.update({ where: { id: userId }, data: { refCode: code } })
       return updated.refCode as string
     } catch {
-      // unique collision — retry with a new code
+      // unique collision, retry with a new code
     }
   }
   throw new Error('Could not generate a referral code')
@@ -55,7 +55,7 @@ export async function attributeSignup(newUserId: string, newEmail: string, rawCo
       status: 'SIGNED_UP',
     },
   })
-  await addCredits(referrer.id, REFERRAL_REWARD_SIGNUP_CENTS, 'BONUS', `Referral reward — ${newEmail || 'a new member'} joined`)
+  await addCredits(referrer.id, REFERRAL_REWARD_SIGNUP_CENTS, 'BONUS', `Referral reward, ${newEmail || 'a new member'} joined`)
   return referrer.id
 }
 
@@ -76,6 +76,6 @@ export async function rewardOnSubscribe(invitedUserId: string): Promise<void> {
     referral.referrerId,
     REFERRAL_REWARD_PAID_CENTS,
     'BONUS',
-    `Referral reward — ${invited?.name || invited?.email || 'your invite'} subscribed 🎉`
+    `Referral reward, ${invited?.name || invited?.email || 'your invite'} subscribed 🎉`
   )
 }

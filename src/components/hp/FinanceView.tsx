@@ -74,7 +74,7 @@ export default function FinanceView() {
     <div className="space-y-4">
       <div>
         <h1 className="font-display text-3xl">Finance</h1>
-        <p className="text-sm text-muted-foreground">Simple money in, money out — the numbers that matter.</p>
+        <p className="text-sm text-muted-foreground">Simple money in, money out, the numbers that matter.</p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">

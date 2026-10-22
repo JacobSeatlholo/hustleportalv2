@@ -1,6 +1,6 @@
 'use client'
 /**
- * Due-time reminders — the moment a task hits its due time while the app is
+ * Due-time reminders, the moment a task hits its due time while the app is
  * open, a local notification fires (service worker when available, plain
  * Notification otherwise). Server push covers the morning summary; this covers
  * the exact minute, zero extra infrastructure.
@@ -22,7 +22,7 @@ export default function TaskReminders() {
       try {
         const r = await api<{ tasks: Task[] }>('/api/tasks?scope=mine')
         if (alive) tasks = r.tasks
-      } catch { /* offline or logged out — try again on the next poll */ }
+      } catch { /* offline or logged out, try again on the next poll */ }
     }
 
     async function tick() {

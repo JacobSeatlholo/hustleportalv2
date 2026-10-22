@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { recordTaskEvent, verifyChain } from '@/lib/taskrecord'
 
 /**
- * GET /api/tasks/[id]/record — the sealed accountability record.
+ * GET /api/tasks/[id]/record, the sealed accountability record.
  *
  * Returns the task's full hash-chained event history (created, sent, opened,
  * status moves, comments, edits) plus a `verified` flag: true only when every

@@ -1,31 +1,30 @@
 /**
- * Email sending — PLUG & PLAY.
+ * Email sending, PLUG & PLAY.
  * Resolution order:
- *   1. USER'S OWN Gmail (optional, Integrations hub) — their voice, replies land in their inbox.
+ *   1. USER'S OWN Gmail (optional, Integrations hub), their voice, replies land in their inbox.
  *      Skipped automatically for 10 minutes after an auth failure (circuit breaker) so one
  *      bad password never blocks sends.
- *   2. PLATFORM sending via Resend (server env RESEND_API_KEY) — works for everyone, zero setup.
+ *   2. PLATFORM sending via Resend (server env RESEND_API_KEY), works for everyone, zero setup.
  *      Sends from the branded address (noreply@hustleportal.online) and falls back to the
- *      Resend test sender while the domain is still verifying — no RESEND_FROM env needed.
+ *      Resend test sender while the domain is still verifying, no RESEND_FROM env needed.
  *      Replies go to the user's account email via Reply-To.
  * HustlePortal never forces users to create app passwords or OAuth grants.
  */
 import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
-import { ensureRefCode } from '@/lib/referral'
 
 /**
- * Distribution engine: every email sent through HustlePortal carries a branded
- * signature with the SENDER's referral link. Mail is the product's biggest
- * organic surface — each client touch recruits the next member.
+ * Member mail carries NO ads, NO product pitch and NO referral link, ever.
+ * The email belongs to the member's business and their client, not to our
+ * growth loop. A platform delivered send adds one quiet delivery line and
+ * mail sent through the member's own Gmail adds nothing at all. (A public
+ * reviewer nailed us on this: a two line business email used to ship with
+ * a HustlePortal advert plus a referral code. Never again.) Full legal
+ * footers stay on platform ORIGINATED mail: campaign and lifecycle sends
+ * append them in their own send paths.
  */
-async function buildSignature(userId: string): Promise<string> {
-  try {
-    const code = await ensureRefCode(userId)
-    return `\n\nSent with HustlePortal · the Business OS for South African businesses\nOutsell, outlast, outperform. Start free: https://hustleportal.online/?ref=${code}`
-  } catch {
-    return '\n\nSent with HustlePortal · hustleportal.online'
-  }
+function memberFooter(): string {
+  return '\n\nDelivered by HustlePortal (hustleportal.online)'
 }
 
 export type MailCreds = { user: string; appPassword: string }
@@ -34,14 +33,14 @@ export type MailSendResult =
   | { ok: true; provider: 'GMAIL' | 'PLATFORM'; notice?: string }
   | { ok: false; error: string }
 
-/** Branded sender — works the moment hustleportal.online verifies in Resend. */
+/** Branded sender, works the moment hustleportal.online verifies in Resend. */
 const BRANDED_FROM = 'HustlePortal <noreply@hustleportal.online>'
-/** Resend's test sender — delivers to the account's own inbox while the domain verifies. */
+/** Resend's test sender, delivers to the account's own inbox while the domain verifies. */
 const SANDBOX_FROM = 'HustlePortal <onboarding@resend.dev>'
 
 /**
  * The legal footer every email leaving hustleportal.online carries. Short by
- * design — one confidentiality line, the company behind the send, the live
+ * design, one confidentiality line, the company behind the send, the live
  * legal links (Terms, Privacy & POPIA, Cookie Policy, PAIA Manual) and the
  * copyright. Plain text, no images, quiet and professional.
  */
@@ -63,7 +62,7 @@ function legalFooter(): string {
 }
 
 /**
- * Per-user sending identity — every business mails from ITS OWN address on our domain:
+ * Per-user sending identity, every business mails from ITS OWN address on our domain:
  * "Nkosi Brands" → nkosi-brands@hustleportal.online. The domain is verified, Resend
  * accepts any local part on it, and DKIM/SPF sign the send. Reply-To stays the user's
  * real account email, so replies land in THEIR inbox (set in resendSend).
@@ -137,7 +136,7 @@ async function stampDomainProof(): Promise<void> {
       update: { value: new Date().toISOString() },
     })
   } catch {
-    // proof is best-effort — never let it break a send
+    // proof is best-effort, never let it break a send
   }
 }
 
@@ -156,7 +155,7 @@ const LAST_SEND_KEY = 'MAIL_LAST_SYSTEM_SEND'
 /**
  * Durable record of the last system email (password resets etc.): recipient, subject,
  * time, outcome. This is how we answer "the email never arrived" without a full-access
- * Resend key — the send either fired (with the exact address it went to) or it didn't.
+ * Resend key, the send either fired (with the exact address it went to) or it didn't.
  */
 async function stampLastSystemSend(entry: { to: string; subject: string; ok: boolean; via?: string; error?: string }): Promise<void> {
   try {
@@ -166,7 +165,7 @@ async function stampLastSystemSend(entry: { to: string; subject: string; ok: boo
       update: { key: LAST_SEND_KEY, value: JSON.stringify({ ...entry, at: new Date().toISOString() }) },
     })
   } catch {
-    // best-effort — never break a send over bookkeeping
+    // best-effort, never break a send over bookkeeping
   }
 }
 
@@ -181,10 +180,10 @@ export async function readLastSystemSend(): Promise<{ to: string; subject: strin
 }
 
 /**
- * A reset was requested for an email that matches NO account — the most common
+ * A reset was requested for an email that matches NO account, the most common
  * "the email never arrived" cause. Stamp it so diagnostics show the request
  * happened and nothing was sent (admin-only view). Never reveals whether an
- * account exists to the requester — the API response stays identical.
+ * account exists to the requester, the API response stays identical.
  */
 export async function recordNoAccountReset(email: string): Promise<void> {
   await stampLastSystemSend({
@@ -214,7 +213,7 @@ async function fetchResendDomains(apiKey: string): Promise<MailDomainRow[]> {
   }
 }
 
-/** One-call status for the Mail UI — engine state, sender address, live Resend domain verification. */
+/** One-call status for the Mail UI, engine state, sender address, live Resend domain verification. */
 export async function getMailStatus(userId: string): Promise<MailStatus> {
   const apiKey = process.env.RESEND_API_KEY?.trim() || ''
   const rows = apiKey ? await fetchResendDomains(apiKey) : []
@@ -248,7 +247,7 @@ export async function getMailStatus(userId: string): Promise<MailStatus> {
 
 // ------------------------------------------------------- gmail circuit breaker
 
-/** After an auth rejection, stop retrying Gmail for 10 min — platform engine takes over. */
+/** After an auth rejection, stop retrying Gmail for 10 min, platform engine takes over. */
 const gmailBlockedUntil = new Map<string, number>()
 const GMAIL_COOLDOWN_MS = 10 * 60_000
 
@@ -281,7 +280,7 @@ export function isGmailAuthError(msg: string): boolean {
 
 /**
  * Translate raw SMTP/transport failures into one actionable line.
- * The classic case: 535 BadCredentials — Gmail refuses NORMAL passwords for
+ * The classic case: 535 BadCredentials, Gmail refuses NORMAL passwords for
  * sending; only App Passwords work (2-Step Verification required).
  */
 export function classifyGmailError(msg: string): string {
@@ -414,8 +413,8 @@ async function resendSend(
 
 /**
  * Platform engine, zero-config:
- *   attempt 1 → branded from (noreply@hustleportal.online) — works once the domain verifies;
- *   attempt 2 → Resend test sender — keeps own-inbox delivery working while DNS is pending.
+ *   attempt 1 → branded from (noreply@hustleportal.online), works once the domain verifies;
+ *   attempt 2 → Resend test sender, keeps own-inbox delivery working while DNS is pending.
  * No RESEND_FROM env var is ever required.
  */
 async function sendViaPlatform(
@@ -433,8 +432,8 @@ async function sendViaPlatform(
   // USER mail goes out from the business's own identity on our domain; the
   // RESEND_FROM env (operator override) still wins when explicitly set.
   const branded = process.env.RESEND_FROM?.trim() || (await userSendingIdentity(userId)).from
-  // Every send from our domain carries the legal footer.
-  const payload = { ...mail, body: mail.body + legalFooter() }
+  // Member and team sends from our domain carry one quiet delivery line.
+  const payload = { ...mail, body: mail.body + memberFooter() }
   const first = await resendSend(apiKey, branded, userId, payload)
   if (first.ok) {
     // Branded from accepted → the domain IS verified at Resend. Prime the status
@@ -458,7 +457,7 @@ async function sendViaPlatform(
 
 /**
  * One-call send used by /api/emails.
- * Tries the user's own Gmail first (their voice) — unless it just failed auth
+ * Tries the user's own Gmail first (their voice), unless it just failed auth
  * (10-min circuit breaker). Falls back to the platform engine so the send still
  * happens, and says so honestly via `notice`. When BOTH fail, the error names
  * the two causes + their fixes.
@@ -468,9 +467,7 @@ export async function sendMail(
   mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
 ): Promise<MailSendResult> {
   const attachments = sanitizeAttachments(mail.attachments)
-  const payloadMail = { ...mail, attachments }
-  const signature = await buildSignature(userId)
-  const payload = { ...payloadMail, body: mail.body + signature }
+  const payload = { ...mail, attachments } // no signature: the sender's voice stays theirs
   const creds = await getUserMailCreds(userId)
   if (creds && !gmailOnCooldown(userId)) {
     const r = await sendViaUserGmail(creds, payload)
@@ -479,7 +476,7 @@ export async function sendMail(
       return r
     }
     if (isGmailAuthError(r.error)) flagGmailFailure(userId)
-    // their Gmail failed — fall through to platform so the send still happens
+    // their Gmail failed, fall through to platform so the send still happens
     const fb = await sendViaPlatform(userId, payload)
     if (fb.ok) {
       return {
@@ -506,7 +503,7 @@ export async function sendMail(
 export const TEAM_INBOX = process.env.TEAM_INBOX_EMAIL?.trim() || 'team@businesshustle.co.za'
 
 /**
- * Internal team notification (e.g. service requests) — platform delivery only,
+ * Internal team notification (e.g. service requests), platform delivery only,
  * NO referral signature, Reply-To the requesting user so the team can answer
  * straight from their inbox.
  */
@@ -526,7 +523,7 @@ export async function sendTeamMail(
  * of their OWN other products (BlackBiz etc.). Platform engine only, the
  * campaign identity the owner picked, NO referral signature, Reply-To the team
  * inbox, legal footer attached. The From stays on hustleportal.online by
- * construction — the domain signs the send, anything else gets rejected or
+ * construction, the domain signs the send, anything else gets rejected or
  * lands in spam.
  */
 export const CAMPAIGN_FROM_DEFAULT = 'BlackBiz <blackbiz@hustleportal.online>'
@@ -546,7 +543,7 @@ export function normalizeCampaignFrom(raw?: string): string {
  * Campaign HTML: the plain text body rendered as clean readable mail (short
  * lines, clickable links, no images that can break) plus the invisible 1x1
  * open tracker. The marker line "See it in motion: <url>" renders as a big
- * clickable video thumbnail instead of a text line — email clients refuse
+ * clickable video thumbnail instead of a text line, email clients refuse
  * inline <video>, so the poster opens the clip in the browser. Reading clients
  * that load images fire the pixel; plain-text only readers do not, so open
  * counts are a floor, never a ceiling.
@@ -606,12 +603,12 @@ export async function sendCampaignMail(
 
 // ---- SES lane ----
 // The second transport for campaign queues. Same body, same open pixel, same
-// one-click unsubscribe law — a bigger fuel tank for when the free lane's
+// one-click unsubscribe law, a bigger fuel tank for when the free lane's
 // ~100/day ceiling is behind us. Picked per campaign via the queue state;
 // nothing here changes how the free lane behaves.
 //
 // TRANSPORT: SES v2 HTTPS API, NOT SMTP. AWS does not offer an SMTP endpoint
-// in Africa (Cape Town) af-south-1 — email-smtp.af-south-1.amazonaws.com has
+// in Africa (Cape Town) af-south-1, email-smtp.af-south-1.amazonaws.com has
 // no DNS record and Node dies on it with "getaddrinfo EBUSY". The API
 // endpoint (email.af-south-1.amazonaws.com) is alive in the region and is
 // signed with plain IAM keys via SigV4. Bounce/complaint events still flow
@@ -630,7 +627,7 @@ function sha256hex(data: string): string {
   return createHash('sha256').update(data).digest('hex')
 }
 
-/** SigV4 for a JSON POST — enough of AWS Signature v4 for one SES call, no SDK. */
+/** SigV4 for a JSON POST, enough of AWS Signature v4 for one SES call, no SDK. */
 function sesSigV4Headers(key: string, secret: string, region: string, host: string, path: string, body: string, amzDate: string): Record<string, string> {
   const dateStamp = amzDate.slice(0, 8)
   const scope = `${dateStamp}/${region}/ses/aws4_request`
@@ -693,7 +690,7 @@ export async function sendCampaignMailViaSes(
   const host = `email.${region}.amazonaws.com`
   const path = '/v2/email/outbound-emails'
   // One quiet retry for transient network/DNS hiccups; API errors (auth,
-  // sandbox, unverified identity) are NOT retried — they answer honestly.
+  // sandbox, unverified identity) are NOT retried, they answer honestly.
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
@@ -727,7 +724,7 @@ export async function sendCampaignMailViaSes(
 }
 
 /**
- * System emails (password resets, receipts, alerts) — platform engine only,
+ * System emails (password resets, receipts, alerts), platform engine only,
  * branded from, NO referral signature, Reply-To the team inbox.
  * Same zero-config ladder as user mail: branded from first, test sender while
  * the domain verifies.
@@ -737,7 +734,7 @@ export async function sendSystemMail(
 ): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
-    console.error('[mail] system mail skipped — RESEND_API_KEY missing')
+    console.error('[mail] system mail skipped, RESEND_API_KEY missing')
     return { ok: false, error: 'Email engine is not configured.' }
   }
   const from = process.env.RESEND_FROM?.trim() || BRANDED_FROM

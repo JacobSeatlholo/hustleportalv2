@@ -5,7 +5,7 @@ import { safeUrl } from '@/lib/ssrf'
 import { ingestIcsForUser, ICS_FEED_SETTING_KEY } from '@/lib/icsSync'
 
 /**
- * POST /api/appointments/import-ics — bring an existing calendar in without retyping it.
+ * POST /api/appointments/import-ics, bring an existing calendar in without retyping it.
  * Body: { ics?: string, url?: string, saveFeed?: boolean }
  *  - ics: pasted or uploaded .ics file content (one-shot import)
  *  - url: a read-only calendar feed (Google Calendar "secret iCal address",
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'That calendar file is too large. Export a shorter date range and try again.' }, { status: 400 })
   }
   if (!/BEGIN:VCALENDAR/i.test(text) && !/BEGIN:VEVENT/i.test(text)) {
-    return NextResponse.json({ error: 'This does not look like a calendar (.ics) file — no events found in it.' }, { status: 400 })
+    return NextResponse.json({ error: 'This does not look like a calendar (.ics) file, no events found in it.' }, { status: 400 })
   }
 
   const result = await ingestIcsForUser(userId, text)
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...result,
       feedSaved,
-      message: 'Every event in that calendar is already here — nothing new to add.',
+      message: 'Every event in that calendar is already here, nothing new to add.',
     })
   }
   return NextResponse.json({ ...result, feedSaved })

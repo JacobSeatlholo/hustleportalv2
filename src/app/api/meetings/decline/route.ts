@@ -5,7 +5,7 @@ import { declinedEmail, invalidTokenPage, declinedPage, HTML_HEADERS } from '@/l
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/meetings/decline — the honest second option on the confirm page.
+// POST /api/meetings/decline, the honest second option on the confirm page.
 // Nothing gets cancelled behind anyone's back: the team gets a note and will
 // offer fresh times.
 export async function POST(req: NextRequest) {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const note = declinedEmail(meeting)
   await sendSystemMail({ to: TEAM_INBOX, ...note }).catch(() => {})
 
-  console.log(`[meetings] declined: ${meeting.memberName} (${meeting.memberEmail}) — ${meeting.title}`)
+  console.log(`[meetings] declined: ${meeting.memberName} (${meeting.memberEmail}), ${meeting.title}`)
 
   return new NextResponse(declinedPage(meeting), { headers: HTML_HEADERS })
 }

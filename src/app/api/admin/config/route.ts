@@ -7,7 +7,7 @@ function isAdmin(role: string) {
   return role === 'ADMIN'
 }
 
-// GET /api/admin/config — platform settings + stats (admin only)
+// GET /api/admin/config, platform settings + stats (admin only)
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,7 +49,7 @@ export async function GET() {
   })
 }
 
-// POST /api/admin/config — update settings
+// POST /api/admin/config, update settings
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

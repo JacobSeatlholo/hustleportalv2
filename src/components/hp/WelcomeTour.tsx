@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * WelcomeTour — pop-ups that welcome and guide every new user through the
+ * WelcomeTour, pop-ups that welcome and guide every new user through the
  * platform. Fires once on first dashboard entry (per browser); replayable from
  * Profile. Negative-churn by design: users who complete onboarding are far
  * less likely to churn, so the tour sells OUTCOMES (outsell, outlast,
@@ -81,7 +81,7 @@ export default function WelcomeTour() {
       icon: <Rocket className="h-7 w-7 text-brand" />,
       kicker: 'Welcome to HustlePortal',
       title: 'Outsell. Outlast. Outperform.',
-      body: 'This is your Business OS — leads, follow-ups, invoicing and an AI co-founder that knows your numbers, in one professional system. Let\'s take 30 seconds to show you around.',
+      body: 'This is your Business OS, leads, follow-ups, invoicing and an AI co-founder that knows your numbers, in one professional system. Let\'s take 30 seconds to show you around.',
       cta: "Show me around",
     },
     {
@@ -96,7 +96,7 @@ export default function WelcomeTour() {
       icon: <Sparkles className="h-7 w-7 text-brand" />,
       kicker: 'Your unfair advantage',
       title: 'The AI Co-Founder knows your business',
-      body: 'Ask it anything — pricing, pitch, follow-ups, next moves. It reads your real pipeline and answers like a sharp business partner. Included free with every plan.',
+      body: 'Ask it anything, pricing, pitch, follow-ups, next moves. It reads your real pipeline and answers like a sharp business partner. Included free with every plan.',
       cta: 'Meet your Co-Founder',
       goTo: () => setView('ai'),
     },
@@ -112,7 +112,7 @@ export default function WelcomeTour() {
       icon: <Users className="h-7 w-7 text-brand" />,
       kicker: 'Grow together',
       title: 'Invite owners. Earn R50 each.',
-      body: 'Teams that grow together, win together. Share your invite link — when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
+      body: 'Teams that grow together, win together. Share your invite link, when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
       cta: 'Get my invite link',
       goTo: () => setView('grow'),
     },
@@ -120,7 +120,7 @@ export default function WelcomeTour() {
       icon: <Smartphone className="h-7 w-7 text-brand" />,
       kicker: 'One-tap access',
       title: 'Take HustlePortal home',
-      body: 'Add HustlePortal to your phone\'s home screen — it opens full screen like a proper app, one tap away. iPhone: Share → Add to Home Screen. Android: menu → Install app.',
+      body: 'Add HustlePortal to your phone\'s home screen, it opens full screen like a proper app, one tap away. iPhone: Share → Add to Home Screen. Android: menu → Install app.',
       cta: 'Show me how (30 sec)',
       goTo: openInstallTutorial,
     },
@@ -128,7 +128,7 @@ export default function WelcomeTour() {
       icon: <Trophy className="h-7 w-7 text-brand" />,
       kicker: 'You\'re ready',
       title: 'Let\'s get you paid',
-      body: 'Add your first lead, send your first follow-up, and watch your streak grow. HustlePortal levels up as you do — every action earns XP. Now go outperform.',
+      body: 'Add your first lead, send your first follow-up, and watch your streak grow. HustlePortal levels up as you do, every action earns XP. Now go outperform.',
       cta: "Let's get to work",
     },
   ]

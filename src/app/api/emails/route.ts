@@ -17,13 +17,13 @@ export async function GET() {
   return NextResponse.json({ emails })
 }
 
-// POST /api/emails → send a draft (or ad-hoc mail) — plug & play:
+// POST /api/emails → send a draft (or ad-hoc mail), plug & play:
 // user's own Gmail if connected, otherwise the HustlePortal mail engine sends for them.
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // Send-rate ceiling per account: a human never hits 60 sends in an hour,
-  // but this door sends real email through the platform mail engine — the
+  // but this door sends real email through the platform mail engine, the
   // ceiling keeps a compromised or scripted account from turning HustlePortal
   // into a spam relay. 60/hour, generous and honest.
   const sendGate = rateLimit(`emails:send:${userId}`, 60, 60 * 60 * 1000)
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Attachments (the Video Studio pitch video rides here): base64 strings,
-  // sanitized and size capped inside sendMail — invalid entries drop quietly.
+  // sanitized and size capped inside sendMail, invalid entries drop quietly.
   const attachments = Array.isArray(body.attachments)
     ? body.attachments.map((a: { filename?: unknown; content?: unknown }) => ({
         filename: String(a?.filename || 'attachment'),

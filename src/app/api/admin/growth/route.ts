@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { MRR_TARGET_CENTS } from '@/lib/plans'
 import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 
-// GET /api/admin/growth — owner revenue dashboard: MRR vs target, referrals, churn.
+// GET /api/admin/growth, owner revenue dashboard: MRR vs target, referrals, churn.
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

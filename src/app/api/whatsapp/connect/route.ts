@@ -25,7 +25,7 @@ function mask(v: string | null | undefined): string | null {
   return v.slice(0, 3) + '••••' + v.slice(-4)
 }
 
-/** GET /api/whatsapp/connect — connection status for the current user. */
+/** GET /api/whatsapp/connect, connection status for the current user. */
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -57,10 +57,10 @@ export async function POST(req: NextRequest) {
   const accessToken = String(body.accessToken || '').trim()
 
   if (!/^\d{5,}$/.test(phoneNumberId)) {
-    return NextResponse.json({ error: 'Phone Number ID looks wrong — it is a long numeric ID from your Meta app dashboard.' }, { status: 400 })
+    return NextResponse.json({ error: 'Phone Number ID looks wrong, it is a long numeric ID from your Meta app dashboard.' }, { status: 400 })
   }
   if (accessToken.length < 15) {
-    return NextResponse.json({ error: 'Access token looks too short — paste the full System User token from Meta.' }, { status: 400 })
+    return NextResponse.json({ error: 'Access token looks too short, paste the full System User token from Meta.' }, { status: 400 })
   }
 
   let verifyToken = await getSetting(userId, 'WA_VERIFY_TOKEN')
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     await setSetting(userId, 'WA_VERIFY_TOKEN', verifyToken)
   }
 
-  // Live verification against Meta — never mark connected on a guess.
+  // Live verification against Meta, never mark connected on a guess.
   let displayNumber: string | null = null
   try {
     const res = await fetch(`${GRAPH}/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${encodeURIComponent(accessToken)}`, {
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
     displayNumber = data.display_phone_number || null
   } catch {
-    return NextResponse.json({ error: 'Could not reach Meta Graph API to verify — check your network and try again.' }, { status: 502 })
+    return NextResponse.json({ error: 'Could not reach Meta Graph API to verify, check your network and try again.' }, { status: 502 })
   }
 
   await setSetting(userId, 'WA_PHONE_NUMBER_ID', phoneNumberId)
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   })
 }
 
-/** DELETE /api/whatsapp/connect — disconnect WhatsApp Business. */
+/** DELETE /api/whatsapp/connect, disconnect WhatsApp Business. */
 export async function DELETE() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

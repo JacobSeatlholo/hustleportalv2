@@ -1,14 +1,14 @@
 /**
- * OSM lead sourcing — REAL businesses from OpenStreetMap (Overpass API + Nominatim).
+ * OSM lead sourcing, REAL businesses from OpenStreetMap (Overpass API + Nominatim).
  *
  * Why this exists: Gemini's google_search grounding has its own quota bucket and can
  * 429 while plain generation still works. Fabricated "demo" leads are banned, so the
  * honest fallback is a REAL, queryable directory: OpenStreetMap business POIs carry
- * name, phone, website, email, address — actual, publicly mappable facts.
+ * name, phone, website, email, address, actual, publicly mappable facts.
  *
  * Flow: (optional plain-Gemini step translates the seller's need into OSM tag filters)
  *       → Nominatim geocodes the area → Overpass returns name-bearing POIs with contacts.
- * Gemini NEVER generates the business data itself — Overpass is the source of truth.
+ * Gemini NEVER generates the business data itself, Overpass is the source of truth.
  */
 
 const OVERPASS_ENDPOINTS = [
@@ -171,11 +171,11 @@ out tags center ${Math.max(limit * 6, 60)};`
 }
 
 /**
- * Nominatim category search — same OpenStreetMap data, works from datacenter IPs.
+ * Nominatim category search, same OpenStreetMap data, works from datacenter IPs.
  * THE CARRIER MATTERS: Nominatim's /search only recognises a handful of category
  * params (amenity among them) and silently ignores shop/craft/office/leisure ones,
  * answering 400 "Nothing to search for". The documented special phrase form
- * q=[shop=massage] works for EVERY category, so that is what we send — one bracket
+ * q=[shop=massage] works for EVERY category, so that is what we send, one bracket
  * query per candidate value, merged. extratags=1 returns website/phone/email where
  * mapped. Real businesses or nothing.
  */
@@ -241,7 +241,7 @@ async function searchNominatimLeads(
     const seen = new Set<string>()
     const leads: OsmLead[] = []
     for (const r of rowsAll) {
-      // Skip place/boundary rows — “Johannesburg” is not a hairdresser.
+      // Skip place/boundary rows, “Johannesburg” is not a hairdresser.
       if (r.category === 'place' || r.category === 'boundary' || r.type === 'administrative') continue
       const name = (r.name || r.display_name?.split(',')[0] || '').trim()
       if (!name) continue
@@ -258,7 +258,7 @@ async function searchNominatimLeads(
         website: (ex.website || ex['contact:website'] || '').replace(/^https?:\/\//, '').replace(/\/$/, '') || undefined,
         industry: (kv.value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         city: suburb || addr.city || area,
-        why: `Listed on OpenStreetMap${suburb ? ' in ' + suburb : ''}${addr.state ? ', ' + addr.state : ''} — a real, mappable business matching what you sell.`,
+        why: `Listed on OpenStreetMap${suburb ? ' in ' + suburb : ''}${addr.state ? ', ' + addr.state : ''}, a real, mappable business matching what you sell.`,
         score: 4,
         externalId: r.osm_id ? `osm_n_${r.osm_id}` : undefined,
       })
@@ -271,9 +271,9 @@ async function searchNominatimLeads(
 }
 
 /**
- * Photon (komoot) POI search — the friendliest keyless endpoint for datacenter IPs
+ * Photon (komoot) POI search, the friendliest keyless endpoint for datacenter IPs
  * (Overpass mirrors refuse them more often than not; Photon rarely does). Same OSM
- * data via its own index. Contacts are rarely mapped here — reveal's grounded lookup
+ * data via its own index. Contacts are rarely mapped here, reveal's grounded lookup
  * handles the contact hunt; these leads are real names with real locations.
  */
 async function searchPhotonLeads(
@@ -321,7 +321,7 @@ async function searchPhotonLeads(
         company: name,
         industry,
         city: suburb || area,
-        why: `Listed on OpenStreetMap${suburb ? ` in ${suburb}` : ''} (Photon index) — a real, mappable business matching what you sell. Contact details come through on reveal.`,
+        why: `Listed on OpenStreetMap${suburb ? ` in ${suburb}` : ''} (Photon index), a real, mappable business matching what you sell. Contact details come through on reveal.`,
         score: 3,
         externalId: p.osm_id ? `osm_p_${String(p.osm_type || 'n')[0]}_${p.osm_id}` : undefined,
       })
@@ -345,15 +345,15 @@ export async function searchOsmLeads(
   const deadlineAt = opts?.deadlineAt ?? Date.now() + 60_000
   const remaining = () => deadlineAt - Date.now()
   if (remaining() < 15_000) {
-    return { leads: [], note: 'The map directory was out of time budget — try again in a minute.' }
+    return { leads: [], note: 'The map directory was out of time budget, try again in a minute.' }
   }
-  // GPS pin from the client skips Nominatim entirely — a 5 km radius around the
+  // GPS pin from the client skips Nominatim entirely, a 5 km radius around the
   // real position beats geocoding a city name the user may have typed loosely.
   const place =
     opts?.lat !== undefined && opts?.lng !== undefined
       ? { lat: opts.lat, lon: opts.lng }
       : await geocodePlace(area)
-  if (!place) return { leads: [], note: `Could not map "${area}" to a map area — check the spelling.` }
+  if (!place) return { leads: [], note: `Could not map "${area}" to a map area, check the spelling.` }
 
   const tagFilters = buildTagFilters(definition).tags
   const runOverpass = async (query: string, phaseCapMs = 12_000): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
@@ -365,7 +365,7 @@ export async function searchOsmLeads(
     const phaseEnd = Date.now() + phaseCapMs
     for (const endpoint of OVERPASS_ENDPOINTS) {
       const left = remaining()
-      if (left < 5_000) break // no budget for another mirror — bail honestly
+      if (left < 5_000) break // no budget for another mirror, bail honestly
       if (Date.now() >= phaseEnd) break // phase spent: the fallbacks get their turn
       try {
         const res = await fetch(endpoint, {
@@ -376,7 +376,7 @@ export async function searchOsmLeads(
           // Nominatim + Photon fallbacks still need.
           signal: AbortSignal.timeout(Math.max(1_000, Math.min(10_000, left, phaseEnd - Date.now()))),
         })
-        if (!res.ok) continue // mirror busy/blocked — try the next one
+        if (!res.ok) continue // mirror busy/blocked, try the next one
         const json = (await res.json()) as { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }
         return { ok: true, data: json }
       } catch {
@@ -402,7 +402,7 @@ export async function searchOsmLeads(
       result = await runOverpass(overpassQuery(place, [], limit, opts?.lat !== undefined), overpassCap())
     }
     if (!result.ok) {
-      // Overpass mirrors refuse datacenter traffic more often than not — Nominatim's
+      // Overpass mirrors refuse datacenter traffic more often than not, Nominatim's
       // category search (same OSM data, indexer-friendly, bounded around the mapped
       // point) picks up the slack, then Photon (most datacenter-friendly of all)
       // before we admit defeat. Low gates: they answer in 1 to 3 seconds when
@@ -415,7 +415,7 @@ export async function searchOsmLeads(
         const ph = await searchPhotonLeads(area, definition, limit, place)
         if (ph.leads.length > 0) return ph
       }
-      return { leads: [], note: remaining() > 0 ? 'The map directory is busy right now — try again in a minute.' : 'The map directory was out of time budget — try again in a minute.' }
+      return { leads: [], note: remaining() > 0 ? 'The map directory is handling other scans right now. Give it a minute and scan again.' : 'The map directory ran out of its time budget for this scan. Try again in a minute, or narrow the area.' }
     }
     const data = result.data!
     const seen = new Set<string>()
@@ -438,7 +438,7 @@ export async function searchOsmLeads(
         website: (t.website || t['contact:website'] || '').replace(/^https?:\/\//, '').replace(/\/$/, '') || undefined,
         industry: tagIndustry(t),
         city: suburb || t['addr:city'] || area,
-        why: `Listed on OpenStreetMap${t['opening_hours'] ? ' · open ' + t['opening_hours'] : ''}${suburb ? ' · ' + suburb : area ? ' · ' + area : ''}${lat && lon ? ` (pin ${lat.toFixed(4)}, ${lon.toFixed(4)})` : ''} — a real, mappable business${tagFilters.length ? ' matching what you sell' : ''}.`,
+        why: `Listed on OpenStreetMap${t['opening_hours'] ? ' · open ' + t['opening_hours'] : ''}${suburb ? ' · ' + suburb : area ? ' · ' + area : ''}${lat && lon ? ` (pin ${lat.toFixed(4)}, ${lon.toFixed(4)})` : ''}, a real, mappable business${tagFilters.length ? ' matching what you sell' : ''}.`,
         score: tagFilters.length ? 4 : 3,
         externalId: `osm_${el.type}_${el.id}`,
       })
@@ -447,7 +447,7 @@ export async function searchOsmLeads(
     if (leads.length === 0) {
       // Sparse township coverage in the map directory → Nominatim's category indexer
       // (same OSM data) gets one more shot, then Photon, before we admit defeat.
-      // Same low gates as the failure path — they only run while there is real
+      // Same low gates as the failure path, they only run while there is real
       // runway, and they answer fast when they answer at all.
       const nom = remaining() > 10_000 ? await searchNominatimLeads(area, definition, limit, place) : { leads: [] }
       if (nom.leads.length > 0) return nom
@@ -458,6 +458,6 @@ export async function searchOsmLeads(
     }
     return { leads, note: leads.length ? undefined : 'No named businesses with contact details matched that category in this area yet.' }
   } catch {
-    return { leads: [], note: 'Could not reach the map directory — try again shortly.' }
+    return { leads: [], note: 'Could not reach the map directory, try again shortly.' }
   }
 }

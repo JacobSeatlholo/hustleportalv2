@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   ])
   if (!phoneNumberId?.value || !accessToken?.value) {
     return NextResponse.json(
-      { error: 'Connect your WhatsApp Business number in Integrations first — then you can send from HustlePortal.' },
+      { error: 'Connect your WhatsApp Business number in Integrations first, then you can send from HustlePortal.' },
       { status: 400 }
     )
   }
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         data: { userId, clientId: client.id, phone: norm.e164, direction: 'OUT', body: message, status: 'SENT', waMessageId: wamid },
       })
     } catch {
-      failed.push({ name: client.name, reason: 'Could not reach Meta — try again' })
+      failed.push({ name: client.name, reason: 'Could not reach Meta, try again' })
       await db.waMessage.create({
         data: { userId, clientId: client.id, phone: norm.e164, direction: 'OUT', body: message, status: 'FAILED', error: 'network' },
       })

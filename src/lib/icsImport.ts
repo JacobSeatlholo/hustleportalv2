@@ -1,5 +1,5 @@
 /**
- * icsImport.ts — RFC 5545 VEVENT extraction for calendar import & sync.
+ * icsImport.ts, RFC 5545 VEVENT extraction for calendar import & sync.
  *
  * Nobody should have to retype their diary to join the platform. Paste an
  * .ics file or point at a calendar feed URL and every VEVENT becomes a real
@@ -9,7 +9,7 @@
  * understand as decoration.
  *
  * Time policy (honest and simple):
- *  - "Z" timestamps are true UTC — converted exactly.
+ *  - "Z" timestamps are true UTC, converted exactly.
  *  - "TZID=..." and floating times are read as South African time (UTC+2),
  *    the platform's home. A calendar from another zone may land an hour out
  *    in the rare case; the time is always human-editable after import.

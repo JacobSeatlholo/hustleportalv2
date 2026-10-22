@@ -1,6 +1,6 @@
 'use client'
 /**
- * Google Analytics 4 — zero effect on the project until you flip it on:
+ * Google Analytics 4, zero effect on the project until you flip it on:
  * set NEXT_PUBLIC_GA_MEASUREMENT_ID (G-XXXXXXXXXX) in Vercel → Environment
  * Variables and redeploy. No DNS records, no Vercel domain dialogs, nothing
  * else. With the variable unset this component renders nothing at all.

@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { recordTaskEvent } from '@/lib/taskrecord'
 
 /**
- * Discussion threads on tasks — the in-context alternative to WhatsApp groups.
+ * Discussion threads on tasks, the in-context alternative to WhatsApp groups.
  * GET  /api/tasks/[id]/comments → comments (oldest first) with author names
  * POST /api/tasks/[id]/comments { body } → new comment
  *

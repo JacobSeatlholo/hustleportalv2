@@ -26,7 +26,6 @@ function parseItems(raw: unknown): Item[] {
 function money(n: number) {
   return Math.round(n * 100) / 100
 }
-
 // GET /api/invoices?status=&projectId= → { invoices, logoUrl } (logoUrl = the Operator business logo every new invoice starts with)
 // projectId narrows the list to one workspace; projectId=ALL (or omitted) keeps the classic mixed view.
 export async function GET(req: NextRequest) {
@@ -53,6 +52,11 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/invoices → create with auto number + ZAR totals (15% VAT default)
+// VAT works BOTH ways, correctly:
+//   pricesIncludeVat=false → prices are EXCLUDING VAT. VAT = subtotal × rate. Total = subtotal + VAT.
+//   pricesIncludeVat=true  → prices already INCLUDE VAT. VAT = gross × rate/(100+rate). Total stays gross.
+// subtotal is ALWAYS stored excluding VAT and total ALWAYS including VAT, so the
+// printed invoice and every report read the same no matter which mode was used.
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,9 +69,19 @@ export async function POST(req: NextRequest) {
   }
   const project = await resolveProject(userId, body.projectId)
 
-  const subtotal = money(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))
+  const gross = money(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))
   const taxRate = Number(body.taxRate) >= 0 ? Number(body.taxRate) : 15
-  const total = money(subtotal * (1 + taxRate / 100))
+  const pricesIncludeVat = body.pricesIncludeVat === true
+  let subtotal: number
+  let total: number
+  if (pricesIncludeVat) {
+    // Prices already contain the VAT: pull it OUT, never add it on top.
+    subtotal = money((gross * 100) / (100 + taxRate))
+    total = gross
+  } else {
+    subtotal = gross
+    total = money(subtotal * (1 + taxRate / 100))
+  }
 
   // Auto number: INV-0001 style, per user, retry on collision
   let number = ''
@@ -91,6 +105,7 @@ export async function POST(req: NextRequest) {
       subtotal,
       taxRate,
       total,
+      pricesIncludeVat,
       notes: body.notes || null,
       logoUrl: typeof body.logoUrl === 'string' && body.logoUrl.startsWith('data:image/') ? body.logoUrl : null,
       // Bank details snapshot: printed on this invoice forever, even if settings change later.

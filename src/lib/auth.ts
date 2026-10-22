@@ -6,7 +6,7 @@ import { ensureExecAdmin, isExecEmail, type ExecUser } from '@/lib/admin'
 
 /**
  * Session secret policy (hardened):
- *  - Production REQUIRES process.env.AUTH_SECRET — there is no fallback a
+ *  - Production REQUIRES process.env.AUTH_SECRET, there is no fallback a
  *    stranger could read in the repo. Boot fails loudly without it, which is
  *    the correct behaviour for a live deployment carrying real accounts.
  *  - Outside production (sandbox/dev) a random per-boot secret is generated,
@@ -16,7 +16,7 @@ function loadSecret(): Uint8Array {
   const env = process.env.AUTH_SECRET?.trim()
   if (env && env.length >= 16) return new TextEncoder().encode(env)
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('AUTH_SECRET is missing or too short — refusing to sign sessions with a guessable key.')
+    throw new Error('AUTH_SECRET is missing or too short, refusing to sign sessions with a guessable key.')
   }
   const g = globalThis as { __hpDevSecret?: Uint8Array }
   if (!g.__hpDevSecret) {
@@ -72,7 +72,7 @@ export async function getUserId(): Promise<string | null> {
     const { payload } = await jwtVerify(token, SECRET, { algorithms: ['HS256'] })
     const sub = (payload.sub as string) || null
     if (!sub) return null
-    // A paused (suspended) account is locked out of EVERYTHING immediately —
+    // A paused (suspended) account is locked out of EVERYTHING immediately,
     // the JWT itself stays valid, but the person behind it no longer does.
     const status = await db.user.findUnique({
       where: { id: sub },
@@ -80,7 +80,7 @@ export async function getUserId(): Promise<string | null> {
     })
     if (!status || status.accountStatus === 'SUSPENDED') return null
     // Session epoch check: tokens issued before a password reset carry no ep
-    // claim (treated as epoch 1) or a stale one — both die the moment the
+    // claim (treated as epoch 1) or a stale one, both die the moment the
     // epoch moves, so a stolen cookie cannot outlive the owner's new password.
     const tokenEpoch = typeof payload.ep === 'number' ? payload.ep : 1
     if (tokenEpoch !== (status.sessionEpoch ?? 1)) return null

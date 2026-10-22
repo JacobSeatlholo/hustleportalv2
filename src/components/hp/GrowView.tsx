@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * GrowView — "Grow & Earn": the distribution + revenue hub.
- *  - Share your personal invite link (WhatsApp-first — that's where SA business lives)
+ * GrowView, "Grow & Earn": the distribution + revenue hub.
+ *  - Share your personal invite link (WhatsApp-first, that's where SA business lives)
  *  - Subscribe to a monthly plan (Operator R199 / Boss R499) via Yoco Checkout
  * Negative churn: invite rewards + plan perks make leaving cost more than staying.
  */
@@ -115,7 +115,7 @@ export default function GrowView() {
   useEffect(() => { load() }, [load])
 
   // Charge now intent: a plan picked on the landing page rides through signup.
-  // The moment this view opens, that plan's checkout fires exactly once — the
+  // The moment this view opens, that plan's checkout fires exactly once, the
   // stored intent is consumed before anything else can see it. ONE GATE: a
   // brand new account answers the two question survey first (the onboarding
   // survey owns the first moment), then this fires on the settle event, so
@@ -153,7 +153,7 @@ export default function GrowView() {
   function shareWhatsApp() {
     if (!refs) return
     const msg = encodeURIComponent(
-      `I run my whole business on HustlePortal — leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win: ${refs.link}`
+      `I run my whole business on HustlePortal, leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win: ${refs.link}`
     )
     window.open(`https://wa.me/?text=${msg}`, '_blank')
   }
@@ -169,7 +169,7 @@ export default function GrowView() {
         window.location.href = res.redirectUrl
         return
       }
-      toast({ title: 'Plan activated ✓', description: res.note || 'Sandbox mode — set YOCO_SECRET_KEY for live payments.' })
+      toast({ title: 'Plan activated ✓', description: res.note || 'Sandbox mode, set YOCO_SECRET_KEY for live payments.' })
       bumpRefresh()
       await load()
     } catch (e) {
@@ -236,7 +236,7 @@ export default function GrowView() {
       <div className="rounded-lg border border-brand/30 bg-brand/5 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Gift className="h-5 w-5 text-brand" />
-          <h3 className="font-display text-lg">Invite business owners — earn as they grow</h3>
+          <h3 className="font-display text-lg">Invite business owners, earn as they grow</h3>
         </div>
         <div className="grid sm:grid-cols-3 gap-3">
           <Metric label="Invited" value={String(refs?.stats.signedUp ?? 0)} />
@@ -291,7 +291,7 @@ export default function GrowView() {
         </div>
         {(active || plans?.subscription?.status === 'PAUSED') && plans?.subscription?.renewsAt && (
           <p className="text-xs text-muted-foreground">
-            Renews {new Date(plans.subscription.renewsAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })} · never auto-charged — you choose to renew · your data stays yours.
+            Renews {new Date(plans.subscription.renewsAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })} · never auto-charged, you choose to renew · your data stays yours.
           </p>
         )}
         {active && (
@@ -300,7 +300,7 @@ export default function GrowView() {
               {planBusy === 'pause' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Pause 30 days
             </Button>
-            <span className="text-[11px] text-muted-foreground self-center">Dead season? Freeze your plan — every paid day is kept.</span>
+            <span className="text-[11px] text-muted-foreground self-center">Dead season? Freeze your plan, every paid day is kept.</span>
           </div>
         )}
         {plans?.subscription?.status === 'PAUSED' && (
@@ -309,7 +309,7 @@ export default function GrowView() {
               {planBusy === 'resume' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Resume now
             </Button>
-            <span className="text-[11px] text-muted-foreground self-center">Resuming restores your plan instantly — no paid days lost.</span>
+            <span className="text-[11px] text-muted-foreground self-center">Resuming restores your plan instantly, no paid days lost.</span>
           </div>
         )}
         <div className="flex items-center gap-2 justify-center">
@@ -328,7 +328,7 @@ export default function GrowView() {
             </button>
           </div>
         </div>
-        {/* Nonprofit rate — organisations of any size keep more of their budget */}
+        {/* Nonprofit rate, organisations of any size keep more of their budget */}
         <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <HeartHandshake className="h-4 w-4 text-emerald-500" />
@@ -421,7 +421,7 @@ export default function GrowView() {
                   ) : isCurrent && plans?.subscription?.billingCycle === cycle ? (
                     'Current plan'
                   ) : (
-                    `Go ${p.name} — ${currency.price(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}${isAnnual ? '/yr' : '/mo'}`
+                    `Go ${p.name}, ${currency.price(priceWithNpoDiscount(isAnnual ? p.annualCents : p.priceCents))}${isAnnual ? '/yr' : '/mo'}`
                   )}
                 </Button>
               </div>

@@ -124,14 +124,14 @@ export default function AppShell() {
   }, [])
 
   // One-time reachability tip (installed app on a phone): the user asked for a
-  // prompt suggesting the tilt trick — but the honest fix is the bottom menu bar.
+  // prompt suggesting the tilt trick, but the honest fix is the bottom menu bar.
   useEffect(() => {
     const t = setTimeout(() => {
       try {
         const standalone = window.matchMedia('(display-mode: standalone)').matches
         const phone = window.matchMedia('(max-width: 767px)').matches
         if (standalone && phone && localStorage.getItem(TILT_TIP_KEY) !== '1') setShowTiltTip(true)
-      } catch { /* private mode — skip the tip */ }
+      } catch { /* private mode, skip the tip */ }
     }, 4000)
     return () => clearTimeout(t)
   }, [])
@@ -204,8 +204,8 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen hp-gradient-bg flex">
-      {/* Sidebar — desktop */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground fixed inset-y-0 z-40">
+      {/* Sidebar, desktop */}
+      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground fixed inset-y-0 z-40 print:hidden">
         <SidebarContent
           view={view}
           setView={setView}
@@ -218,11 +218,11 @@ export default function AppShell() {
         />
       </aside>
 
-      {/* Sidebar — mobile drawer */}
+      {/* Sidebar, mobile drawer */}
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative w-64 bg-sidebar text-sidebar-foreground flex flex-col">
+          <aside className="relative w-64 bg-sidebar text-sidebar-foreground flex flex-col print:hidden">
             <button className="absolute top-3 right-3 text-white/60" onClick={() => setSidebarOpen(false)}>
               <X className="h-5 w-5" />
             </button>
@@ -242,8 +242,8 @@ export default function AppShell() {
 
       {/* Main */}
       <div className="flex-1 md:ml-60 min-w-0 flex flex-col">
-        {/* Topbar — taller touch targets + safe-area padding so nothing hides under a notch */}
-        <header className="sticky top-0 z-30 bg-background border-b" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        {/* Topbar, taller touch targets + safe-area padding so nothing hides under a notch */}
+        <header className="sticky top-0 z-30 bg-background border-b print:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center gap-2 px-3 py-2.5 min-h-[56px]">
             <Button variant="ghost" size="icon" className="md:hidden h-11 w-11" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
@@ -306,10 +306,10 @@ export default function AppShell() {
         <PushInAppRelay />
         <UpgradeListener />
 
-        {/* Thumb-reach bottom navigation (phones only) — the fix for top-bar buttons
+        {/* Thumb-reach bottom navigation (phones only), the fix for top-bar buttons
             being out of comfortable reach on tall screens. */}
         <nav
-          className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background print:hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           aria-label="Main menu"
         >
@@ -339,20 +339,20 @@ export default function AppShell() {
           </div>
         </nav>
 
-        {/* One-time reachability tip — the user asked for the tilt trick prompt */}
+        {/* One-time reachability tip, the user asked for the tilt trick prompt */}
         <Dialog open={showTiltTip} onOpenChange={(o) => { if (!o) { localStorage.setItem(TILT_TIP_KEY, '1'); setShowTiltTip(false) } }}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> Quick tip for your phone</DialogTitle>
               <DialogDescription>
-                If buttons at the top of the screen feel out of reach, tilt your screen back slightly — that usually does the trick.
+                If buttons at the top of the screen feel out of reach, tilt your screen back slightly, that usually does the trick.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm space-y-1.5">
                 <p className="font-medium">Even better: the menu is now at the bottom.</p>
                 <p className="text-muted-foreground text-[13px]">
-                  Home, Leads, Tasks and Invoices sit in the bar at the bottom of the screen — thumb distance on any phone.
+                  Home, Leads, Tasks and Invoices sit in the bar at the bottom of the screen, thumb distance on any phone.
                   Tap <b>More</b> for the full menu, and hold-and-drag menu items to sort them your way.
                 </p>
               </div>
@@ -370,7 +370,7 @@ export default function AppShell() {
           <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5">
             <div className="flex flex-wrap justify-between gap-2">
               <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
-              <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™ — <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
+              <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™, <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <a href="https://businesshustle.co.za/terms" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Terms of Service</a>
@@ -385,7 +385,7 @@ export default function AppShell() {
   )
 }
 
-/** Company/project workspace switcher — every view scopes its data to this workspace. */
+/** Company/project workspace switcher, every view scopes its data to this workspace. */
 function ProjectSwitcher() {
   const { session, activeProjectId, setActiveProject } = useHp()
   const [open, setOpen] = useState(false)
@@ -476,7 +476,7 @@ const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
 }
 
 /**
- * SidebarContent — the user's personal menu.
+ * SidebarContent, the user's personal menu.
  * Long-press (hold ~1/3s) any menu item, then drag to sort the menu YOUR priority order.
  * Click still navigates; the order persists per user (UserSetting: NAV_ORDER).
  */
@@ -513,7 +513,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
             orderRef.current = clean
             setOrder(clean)
           }
-        } catch { /* corrupt order — fall back to default */ }
+        } catch { /* corrupt order, fall back to default */ }
       })
       .catch(() => {})
   }, [])
@@ -578,7 +578,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not fatal */ }
     pressTimer.current = setTimeout(() => {
       setDragKey(key)
-      try { navigator.vibrate?.(25) } catch { /* no haptics — fine */ }
+      try { navigator.vibrate?.(25) } catch { /* no haptics, fine */ }
     }, 320)
   }
 
@@ -588,7 +588,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
       reorderAt(key, e.clientY)
       return
     }
-    // drifted before activation — that is a scroll, not a hold
+    // drifted before activation, that is a scroll, not a hold
     const dx = e.clientX - pressPos.current.x
     const dy = e.clientY - pressPos.current.y
     if (dx * dx + dy * dy > 100 && pressTimer.current) clearTimeout(pressTimer.current)

@@ -10,7 +10,7 @@ export const maxDuration = 60
 const NO_KEY_MSG =
   'The AI business plan needs your free Gemini API key. Get one in 1 minute at aistudio.google.com/apikey, then paste it under Integrations.'
 
-// POST /api/ai/plan — generate a real business plan from wizard answers
+// POST /api/ai/plan, generate a real business plan from wizard answers
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -41,9 +41,9 @@ Owner context: ${user.name}, business ${user.businessName || '(as above)'}, indu
 
 Structure the plan with these markdown sections (## level):
 1. Mission (2 sentences)
-2. Target Market (who, where, why they buy — 4-5 sentences)
+2. Target Market (who, where, why they buy, 4-5 sentences)
 3. Revenue Streams (a markdown list with realistic pricing in R)
-4. Marketing Plan (WhatsApp-first, community, referrals — 5 bullet actions)
+4. Marketing Plan (WhatsApp-first, community, referrals, 5 bullet actions)
 5. 90-Day Milestones (4 measurable milestones)
 6. This Week (3 concrete actions)
 7. Risks & Fixes (2 risks with practical fixes)
@@ -75,7 +75,7 @@ Keep it under 700 words. No preamble, start with the first heading.`
   return NextResponse.json({ plan })
 }
 
-// GET /api/ai/plan — list user's plans
+// GET /api/ai/plan, list user's plans
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

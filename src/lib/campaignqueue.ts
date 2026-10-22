@@ -1,5 +1,5 @@
 /**
- * Campaign queue engine — batch sends paced like a human, not a cannon.
+ * Campaign queue engine, batch sends paced like a human, not a cannon.
  *
  * Law of the engine:
  *   1. NOTHING sends until the operator presses Start. Queues are born PAUSED.
@@ -48,7 +48,7 @@ export async function readCampaignStates(): Promise<Record<string, CampaignState
       const parsed = JSON.parse(row.value) as CampaignState
       out[row.key.slice(CAMPAIGN_STATE_PREFIX.length)] = parsed
     } catch {
-      // corrupt row — ignore, campaign shows as paused
+      // corrupt row, ignore, campaign shows as paused
     }
   }
   return out
@@ -58,7 +58,7 @@ export async function writeCampaignState(tag: string, state: CampaignState): Pro
   await setConfig(campaignStateKey(tag), JSON.stringify(state))
 }
 
-/** One tap unsubscribe link — signed so strangers cannot force it on others. */
+/** One tap unsubscribe link, signed so strangers cannot force it on others. */
 export function unsubscribeSig(logId: string): string {
   const salt = process.env.CRON_SECRET?.trim() || process.env.RESEND_API_KEY?.trim() || 'hustle-unsub-v1'
   let h = 0
@@ -87,7 +87,7 @@ export interface TickResult {
 /**
  * One turn of the engine. Send at most maxSends overall, and per campaign at
  * most perHour minus what that campaign already sent in the last 3600 s.
- * Safe to call from cron, from the UI, or from five places at once — the
+ * Safe to call from cron, from the UI, or from five places at once, the
  * database is the only clock that matters.
  */
 export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
@@ -108,7 +108,7 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
     select: { id: true, campaign: true },
   })
   if (queuedRows.length === 0) {
-    // Every active campaign ran dry — flip them to DONE.
+    // Every active campaign ran dry, flip them to DONE.
     for (const tag of activeTags) {
       const remaining = await db.emailLog.count({ where: { campaign: tag, status: 'QUEUED' } })
       if (remaining === 0 && states[tag]) {
@@ -133,7 +133,7 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
     const allowedThisHour = state.perHour - sentLastHour
     if (allowedThisHour <= 0) continue
 
-    // Suppression is checked at send time — a bounce from an earlier turn of
+    // Suppression is checked at send time, a bounce from an earlier turn of
     // this very campaign still stops the next send to that address.
     const queued = await db.emailLog.findUnique({
       where: { id: row.id },

@@ -7,7 +7,7 @@
  *    (PATCH /api/meetings with confirm: true)
  *
  * Flips the meeting to CONFIRMED, emails BOTH parties the final details
- * (each send is independent — one rejection never silences the other) and
+ * (each send is independent, one rejection never silences the other) and
  * drops a quiet note to the team inbox.
  */
 import { db } from '@/lib/db'
@@ -42,7 +42,7 @@ export async function confirmAndNotify(meeting: MeetingLike & { id: string }) {
   await sendSystemMail({ to: TEAM_INBOX, ...confirmedExecEmail(meeting) }).catch(() => {})
 
   console.log(
-    `[meetings] confirmed: ${memberLabel(meeting)} and ${guestLabel(meeting)} — ${meetingWhen(meeting.startsAt)} · member mail ${a.ok ? 'sent' : 'FAILED'} · guest mail ${b.ok ? 'sent' : 'FAILED'}`,
+    `[meetings] confirmed: ${memberLabel(meeting)} and ${guestLabel(meeting)}, ${meetingWhen(meeting.startsAt)} · member mail ${a.ok ? 'sent' : 'FAILED'} · guest mail ${b.ok ? 'sent' : 'FAILED'}`,
   )
 
   return { member: a, guest: b }

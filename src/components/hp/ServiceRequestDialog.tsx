@@ -11,7 +11,7 @@ import { Loader2, Send } from 'lucide-react'
 import { api } from './shared'
 
 const URGENCY_OPTIONS: { key: 'ASAP' | 'THIS_WEEK' | 'PLANNING'; label: string; hint: string }[] = [
-  { key: 'ASAP', label: 'ASAP — urgent', hint: 'The team prioritises it immediately' },
+  { key: 'ASAP', label: 'ASAP, urgent', hint: 'The team prioritises it immediately' },
   { key: 'THIS_WEEK', label: 'This week', hint: 'Most popular' },
   { key: 'PLANNING', label: 'Just planning', hint: 'Get a quote, no rush' },
 ]
@@ -22,7 +22,7 @@ export interface RequestedService {
 }
 
 /**
- * ServiceRequestDialog — the ONE direct line from anywhere in the product to the
+ * ServiceRequestDialog, the ONE direct line from anywhere in the product to the
  * Business Hustle team. Submitting emails team@businesshustle.co.za AND creates a
  * tracked task with an urgency level on the user's dashboard.
  * Used by ServicesView and by conversion touchpoints (invoice without logo, first
@@ -70,7 +70,7 @@ export function ServiceRequestDialog({
       toast({
         title: `Request ${res.ref} sent ✓`,
         description:
-          'Tracked on your Tasks with its urgency level — the Business Hustle team replies to ' +
+          'Tracked on your Tasks with its urgency level, the Business Hustle team replies to ' +
           (session?.user.email || 'your email') + '.',
       })
       bumpRefresh()
@@ -89,7 +89,7 @@ export function ServiceRequestDialog({
             {service ? `Request: ${service.title}` : 'Request a service'}
           </DialogTitle>
           <DialogDescription>
-            Tell us how urgent this is — the request is emailed to the team and added to your Tasks so nothing gets lost.
+            Tell us how urgent this is, the request is emailed to the team and added to your Tasks so nothing gets lost.
           </DialogDescription>
         </DialogHeader>
 

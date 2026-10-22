@@ -16,9 +16,9 @@ type ImportRow = {
   city?: string
 }
 
-// POST /api/admin/exec/clients/import — exec only, idempotent bulk client
+// POST /api/admin/exec/clients/import, exec only, idempotent bulk client
 // import for owner-owned lead sources (e.g. the kloofstreet.online directory).
-// Creates a MEMBER account per row (random unguessable password — the member
+// Creates a MEMBER account per row (random unguessable password, the member
 // chooses their own later; wallet created, NO welcome credit until the member
 // actually engages). Rows whose email already exists are returned as "exists"
 // with their current account id, so reruns never duplicate anyone.

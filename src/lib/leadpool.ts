@@ -1,5 +1,5 @@
 /**
- * The Verified Lead Pool — the freshness, verification and scale layer under
+ * The Verified Lead Pool, the freshness, verification and scale layer under
  * every lead scan.
  *
  * WHY IT EXISTS
@@ -8,7 +8,7 @@
  *      Every record carries first seen / last seen dates, and the daily refresh
  *      demotes anything unseen for 60 days so dead listings never resurface.
  *   2. VERIFIABLE: contact facts are checked (SA phone shape, website
- *      liveness), scored 0 to 100 and badged honestly — a map listing says
+ *      liveness), scored 0 to 100 and badged honestly, a map listing says
  *      "Map listed", a live website says "Checked · website live". No badge
  *      ever promises more than the checks behind it.
  *   3. SCALE: the first scan of a topic pays the engine quota; every seller
@@ -21,7 +21,7 @@
  * meeting businesses the seller has never contacted.
  *
  * Everything here is best effort by design: a pool failure must never break
- * the scan itself — engines stay the source of truth, the pool multiplies them.
+ * the scan itself, engines stay the source of truth, the pool multiplies them.
  */
 
 import crypto from 'crypto'
@@ -112,7 +112,7 @@ export function scoreFor(checks: VerifyChecks, confirmCount: number, hasWebsite:
 
 /** HEAD, then GET, then plain http. A server that answers at all counts as live.
  * SSRF guard: the host must resolve to public internet space before a single
- * byte is fetched — lead websites are attacker-influenceable data (imports,
+ * byte is fetched, lead websites are attacker-influenceable data (imports,
  * pasted contact lists), so this fetch is a doorway that stays locked. */
 export async function pingWebsite(host: string): Promise<boolean> {
   const { safeUrl } = await import('@/lib/ssrf')
@@ -216,7 +216,7 @@ export async function checkScanAllowance(userId: string): Promise<ScanGate> {
   return { ok: true }
 }
 
-/** True when an ENGINE scan (not a pool serve) ran this topic in the last few minutes — the warm window. */
+/** True when an ENGINE scan (not a pool serve) ran this topic in the last few minutes, the warm window. */
 export async function recentTopicScan(topicFp: string, minutes: number): Promise<boolean> {
   const since = new Date(Date.now() - minutes * 60_000)
   const hit = await db.scanRun.findFirst({
@@ -262,7 +262,7 @@ export interface PoolLead {
 
 // The seller sees a clean card: who to ask, where to find them, and the
 // honest status. The team's campaign conversation ("warm reply to ...")
-// lives in the pool row for the owner's eyes on the Executive Dashboard —
+// lives in the pool row for the owner's eyes on the Executive Dashboard,
 // it never rides a member response.
 function poolToLead(p: LeadPoolRow, local = false): PoolLead {
   return {
@@ -425,7 +425,7 @@ export async function serveFromPool(opts: {
  * contacts the Business Hustle outreach team has already reached (real
  * replies on real campaigns) top the answer up. City matches first, then
  * anywhere in South Africa. Rotation aware, never a company the seller
- * already saved, and only ever a top up — topic matched faces always come
+ * already saved, and only ever a top up, topic matched faces always come
  * first when the pool has them.
  *
  * NICETY IS THE POINT: a contact only helps the seller if it fits their
@@ -464,8 +464,8 @@ function topicWordSet(text: string): Set<string> {
 
 /**
  * LOCATION IS VITAL: a contact only helps the seller if it sits where they
- * sell. Matching is metro aware — sellers say "Johannesburg" while records
- * say "Sandton" or "Midrand" — so the floor serves true metro neighbours
+ * sell. Matching is metro aware, sellers say "Johannesburg" while records
+ * say "Sandton" or "Midrand", so the floor serves true metro neighbours
  * and never crosses a real city line.
  */
 const METRO_ALIASES: Record<string, string[]> = {
@@ -511,8 +511,8 @@ const CITY_DISPLAY: Record<string, string> = {
 }
 
 /**
- * The team's campaigns carry the geography in their names — "Johannesburg
- * explorers" — and a warm reply to a city campaign IS location evidence.
+ * The team's campaigns carry the geography in their names, "Johannesburg
+ * explorers", and a warm reply to a city campaign IS location evidence.
  * This reads any text and returns the place it names, longest match first so
  * Durbanville never answers to Durban. It only ever fills a MISSING city on
  * a pool row: a real fact on file is never overwritten with a guess.
@@ -571,7 +571,7 @@ export async function serveExpleeBoost(opts: {
   const topicWords = topicWordSet(topic)
   // The certainty the product sells: every face on an answer fits the
   // seller's business. Travel project faces serve travel topics; any other
-  // face must share a real word with the topic or it stays in the pool —
+  // face must share a real word with the topic or it stays in the pool,
   // a safari house on a car wash scan is exactly the fluff the platform
   // refuses. When nothing fits, the boost steps aside and the topic matched
   // engines carry the answer instead.
@@ -580,7 +580,7 @@ export async function serveExpleeBoost(opts: {
     : generalRows.filter((r) => rowMatchesTopic(r, topicWords))
   // The seller named a place: only faces that sit there may serve. A Cape
   // Town scan must never be topped up with Johannesburg names just to fill
-  // the list — when nobody in the area fits, the boost steps aside and the
+  // the list, when nobody in the area fits, the boost steps aside and the
   // city grounded engines carry the answer instead.
   const cityScope = Boolean(opts.city) && !/^anywhere/i.test(opts.city || '')
   const inCityIds = new Set<string>()
@@ -595,7 +595,7 @@ export async function serveExpleeBoost(opts: {
   const seen = new Set<string>()
   // WHO TO ASK FOR is a promise: inside every niche + city class, faces that
   // carry a real contact name meet the seller first. Unnamed faces only step
-  // in when the named ones run short — never ahead of them.
+  // in when the named ones run short, never ahead of them.
   const named = ordered.filter((r) => r.contactName)
   ordered = [...named, ...ordered.filter((r) => !r.contactName)]
   // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.

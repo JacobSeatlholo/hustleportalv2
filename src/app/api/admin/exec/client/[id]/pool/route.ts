@@ -6,7 +6,7 @@ import { runClientCampaign } from '@/lib/campaign'
 
 type Ctx = { params: Promise<{ id: string }> }
 
-// POST /api/admin/exec/client/[id]/pool — run a lead campaign for this client,
+// POST /api/admin/exec/client/[id]/pool, run a lead campaign for this client,
 // right now. Body: { definition?, city?, limit? }. Explee first, the platform's
 // verified pool as the free fallback. Results land on the client's bench
 // (status NEW), never straight in their pipeline: the owner reviews first.
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   })
 }
 
-// PATCH /api/admin/exec/client/[id]/pool — work the bench.
+// PATCH /api/admin/exec/client/[id]/pool, work the bench.
 // Body: { action: 'add' | 'addAll' | 'dismiss', ids?: string[], projectId? }
 //   add      → named rows join the client's pipeline (stage NEW) and leave the bench
 //   addAll   → every waiting row joins

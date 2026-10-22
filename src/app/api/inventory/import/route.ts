@@ -6,14 +6,14 @@ import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 import { cleanNumber, normSku } from '@/lib/quality'
 
 /**
- * POST /api/inventory/import — bring an existing stock list in without retyping it.
- * Body: { csv: string } — pasted or uploaded CSV text.
+ * POST /api/inventory/import, bring an existing stock list in without retyping it.
+ * Body: { csv: string }, pasted or uploaded CSV text.
  *
  * Recognised columns (aliases included): name/item/product, sku/code/barcode,
  * quantity/qty/stock, unit, cost/buy price, sell/price/retail, low stock/reorder, notes.
  *
  * Quality law: name required per row, numbers cleaned ("R 1 250,00" parses),
- * duplicates (same SKU or same item name) are skipped and reported — never
+ * duplicates (same SKU or same item name) are skipped and reported, never
  * double-counted stock. Free plan imports up to its item ceiling and says so.
  */
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
   const rows = parseCsv(csv)
   if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV.' }, { status: 400 })
   if (rows.length > MAX_IMPORT_ROWS) {
-    return NextResponse.json({ error: `That file carries ${rows.length} rows. The import takes up to ${MAX_IMPORT_ROWS} at a time — split it and go again.` }, { status: 400 })
+    return NextResponse.json({ error: `That file carries ${rows.length} rows. The import takes up to ${MAX_IMPORT_ROWS} at a time, split it and go again.` }, { status: 400 })
   }
 
   const { paid } = await planState(userId)

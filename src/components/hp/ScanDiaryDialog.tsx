@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * ScanDiaryDialog — "Snap my diary": photo of a paper diary/notebook in,
+ * ScanDiaryDialog, "Snap my diary": photo of a paper diary/notebook in,
  * AI reads the entries out, user reviews/edits in a checklist, then commit
  * flows through the existing POST /api/tasks and POST /api/appointments
  * endpoints (so gamification, Jitsi links and GCal sync all keep working).
@@ -136,7 +136,7 @@ export default function ScanDiaryDialog({
             <NotebookPen className="h-4 w-4 text-brand" /> Snap your diary
           </DialogTitle>
           <DialogDescription>
-            Photograph a diary or notebook page — AI reads the handwriting and queues every to-do into Tasks and every
+            Photograph a diary or notebook page, AI reads the handwriting and queues every to-do into Tasks and every
             appointment into your Calendar. You approve the list before anything is saved.
           </DialogDescription>
         </DialogHeader>

@@ -78,7 +78,7 @@ export default function LeadsView() {
 
   async function load() {
     // Soft refresh: only show skeletons on a cold board. With data on screen the
-    // board stays put while the fresh list arrives — no jarring flash.
+    // board stays put while the fresh list arrives, no jarring flash.
     if (leads.length === 0) setLoading(true)
     try {
       const pid = effProject && effProject !== 'ALL' ? `&projectId=${encodeURIComponent(effProject)}` : ''
@@ -374,7 +374,7 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Quick capture</DialogTitle>
-          <DialogDescription>Add a lead manually. Contact details you enter are free — no reveal cost.</DialogDescription>
+          <DialogDescription>Add a lead manually. Contact details you enter are free, no reveal cost.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5"><Label>Company *</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Nkosi Brands" /></div>
@@ -455,7 +455,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   const projects = session?.projects ?? []
   const [targetProject, setTargetProject] = useState('')
   // Free plan finds 5 real leads per search; Operator widens the net. The server
-  // enforces it (402 → upgrade dialog) — this default just starts everyone honest.
+  // enforces it (402 → upgrade dialog), this default just starts everyone honest.
   const [limit, setLimit] = useState('5')
   const [busy, setBusy] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -511,7 +511,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   }
 
   // Engagement loop while the search runs: rotating status + a live seconds counter
-  // (the honest search can take up to ~40s — silence would feel like a hang).
+  // (the honest search can take up to ~40s, silence would feel like a hang).
   useEffect(() => {
     if (!busy) { setElapsed(0); setStep(0); return }
     const t = setInterval(() => setElapsed((s) => s + 1), 1000)
@@ -530,7 +530,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             projectId: targetProject || undefined,
             country: 'South Africa',
             source: resSource,
-            // Contact details the search itself surfaced are real public info — free, like manual capture.
+            // Contact details the search itself surfaced are real public info, free, like manual capture.
             unlocked: Boolean(r.email || r.phone),
           }),
         })
@@ -540,7 +540,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   }
 
   async function search() {
-    // Empty description is allowed — the server then scouts from the saved profile
+    // Empty description is allowed, the server then scouts from the saved profile
     // (website, offerings, city) and returns REAL businesses as a free teaser.
     setBusy(true)
     setResults([])
@@ -557,7 +557,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
         }),
       })
-      // The search itself is remembered per project — come back later and it is still here.
+      // The search itself is remembered per project, come back later and it is still here.
       saveDiscMem(targetProject, { definition, city, siteUrl, limit })
       setResults(res.leads)
       setMode(res.mode)
@@ -567,7 +567,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
       if (autoAdd && res.leads.length > 0) {
         const added = await saveLeads(res.leads)
         setAddedKeys(new Set(res.leads.map((l) => l.company)))
-        toast({ title: `${added} lead${added === 1 ? '' : 's'} added to your pipeline`, description: 'They are waiting in Leads & Pipeline — start with the best fit.' })
+        toast({ title: `${added} lead${added === 1 ? '' : 's'} added to your pipeline`, description: 'They are waiting in Leads & Pipeline, start with the best fit.' })
         onSaved()
       }
     } catch (e) {
@@ -601,7 +601,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> AI Lead Finder</DialogTitle>
           <DialogDescription>
-            Describe who you want to sell to — Gemini searches the live web and returns REAL, publicly findable businesses. Leave it empty to scout straight from your saved website &amp; profile.
+            Describe who you want to sell to, Gemini searches the live web and returns REAL, publicly findable businesses. Leave it empty to scout straight from your saved website &amp; profile.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -629,7 +629,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Your website — let the AI think like your business</Label>
+            <Label>Your website, let the AI think like your business</Label>
             <Input
               value={siteUrl}
               onChange={(e) => setSiteUrl(e.target.value)}
@@ -638,7 +638,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               autoComplete="off"
             />
             <p className="text-[11px] text-muted-foreground">
-              We read your site and hunt for businesses that need exactly what you sell — matched to your real offering, not a guess.
+              We read your site and hunt for businesses that need exactly what you sell, matched to your real offering, not a guess.
             </p>
           </div>
           <CityField
@@ -646,7 +646,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             value={city}
             onChange={setCity}
             onCoords={setCoords}
-            hint="Type any city, township or suburb — or tap Tag location to search a 5 km radius around you. Leave empty to search all of SA."
+            hint="Type any city, township or suburb, or tap Tag location to search a 5 km radius around you. Leave empty to search all of SA."
           />
           {coords && (
             <p className="text-xs text-emerald-600 bg-emerald-500/10 rounded-lg p-2 flex items-center gap-1.5">
@@ -690,7 +690,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             {busy ? `Searching… ${elapsed}s` : definition.trim() ? 'Find leads' : 'Scout real leads from my profile'}
           </Button>
 
-          {/* Engagement while the (honest, up-to-~40s) search runs — never a silent hang */}
+          {/* Engagement while the (honest, up-to-~40s) search runs, never a silent hang */}
           {busy && (
             <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-2" aria-live="polite">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -701,13 +701,13 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                 <div className="h-full bg-brand rounded-full animate-pulse" style={{ width: `${Math.min(92, 12 + elapsed * 2.5)}%` }} />
               </div>
               <p className="text-[11px] text-muted-foreground">
-                {elapsed}s so far — the AI is reading live search results, not a cached list. Real businesses take a moment.
+                {elapsed}s so far, the AI is reading live search results, not a cached list. Real businesses take a moment.
               </p>
             </div>
           )}
           {!busy && !definition.trim() && (
             <p className="text-[11px] text-muted-foreground text-center">
-              Uses your saved website &amp; profile to find a few REAL businesses in your area — free.
+              Uses your saved website &amp; profile to find a few REAL businesses in your area, free.
             </p>
           )}
 
@@ -741,7 +741,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                   {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : mode === 'POOL' ? 'Verified pool' : 'Verified data'}
                 </Badge>
               </div>
-              {/* Results grow with the dialog's own scroll — one scroll
+              {/* Results grow with the dialog's own scroll, one scroll
                   context, no thumb fight on phones. */}
               <div className="space-y-1.5">
                 {results.map((r) => {
@@ -1032,7 +1032,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
     setTaskSaving(true)
     try {
       const isTeam = task.dest !== 'personal' && task.dest !== 'business'
-      // Resolved in THIS browser's timezone, sent as a UTC instant — same rule as Tasks.
+      // Resolved in THIS browser's timezone, sent as a UTC instant, same rule as Tasks.
       const dueIso = task.dueDate
         ? new Date(task.dueTime ? `${task.dueDate}T${task.dueTime}` : `${task.dueDate}T00:00`).toISOString()
         : null

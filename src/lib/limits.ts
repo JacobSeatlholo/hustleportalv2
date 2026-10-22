@@ -1,5 +1,5 @@
 /**
- * Free-plan ceilings — the server is the only place a limit is real.
+ * Free-plan ceilings, the server is the only place a limit is real.
  * Client meters are cosmetic; every route enforces here BEFORE the work happens.
  *
  * The 402 shape is a contract: the client api() helper sees { upgrade: true } and

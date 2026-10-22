@@ -95,7 +95,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('industry' in body) data.industry = body.industry == null || body.industry === '' ? null : String(body.industry)
   if ('city' in body) data.city = body.city == null || body.city === '' ? null : String(body.city)
 
-  // Move the contact into another pipeline (project). Owner only — a teammate
+  // Move the contact into another pipeline (project). Owner only, a teammate
   // viewing a shared lead cannot re-home it. Stage and notes travel with it.
   if ('projectId' in body) {
     if (lead.userId !== userId) {

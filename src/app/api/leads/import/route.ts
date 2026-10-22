@@ -72,10 +72,10 @@ function pick(row: CsvRow, field: string): string | undefined {
 const MAX_IMPORT_ROWS = 500
 const digitsOf = (s: string | null | undefined) => (s || '').replace(/\D/g, '')
 
-// POST /api/leads/import — CSV import under the lead-quality law:
+// POST /api/leads/import, CSV import under the lead-quality law:
 // invalid emails are refused, phones are normalized to E.164, and duplicates
 // (inside the file or against the existing pipeline) never become rows.
-// A duplicate reported is a retyped lead saved — and a reputation protected.
+// A duplicate reported is a retyped lead saved, and a reputation protected.
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   const rows = parseCsv(csv)
   if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV.' }, { status: 400 })
   if (rows.length > MAX_IMPORT_ROWS) {
-    return NextResponse.json({ error: `That file carries ${rows.length} rows. The import takes up to ${MAX_IMPORT_ROWS} at a time — split it and go again.` }, { status: 400 })
+    return NextResponse.json({ error: `That file carries ${rows.length} rows. The import takes up to ${MAX_IMPORT_ROWS} at a time, split it and go again.` }, { status: 400 })
   }
 
   // The existing pipeline, fingerprinted once for the whole file.
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Duplicate law: same email, same phone digits, or same company in the
-    // same city — the lead already exists, so this row is a retyped copy.
+    // same city, the lead already exists, so this row is a retyped copy.
     const phoneKey = digitsOf(phone)
     const companyKey = `${normCompanyKey(company)}|${(pick(row, 'city') || '').trim().toLowerCase()}`
     const isDup =

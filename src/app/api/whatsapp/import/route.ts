@@ -6,8 +6,8 @@ import { parseContactList, normalizePhone, MAX_IMPORT_BATCH } from '@/lib/whatsa
 import { resolveProject } from '@/lib/workspace'
 
 /**
- * POST /api/whatsapp/import — 1-click bulk import of a WhatsApp contact list.
- * Body: { text: string } (pasted list, group-participant copy, vCard or CSV —
+ * POST /api/whatsapp/import, 1-click bulk import of a WhatsApp contact list.
+ * Body: { text: string } (pasted list, group-participant copy, vCard or CSV,
  * auto-detected) → normalized SA numbers, batch- and CRM-deduped, imported as
  * Clients with source=WHATSAPP/VCF.
  */

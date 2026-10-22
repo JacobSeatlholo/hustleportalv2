@@ -8,7 +8,7 @@ import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { rewardOnSubscribe } from '@/lib/referral'
 import { getPlan, grantPlanRevealCredits } from '@/lib/plans'
 
-/** GET /api/webhooks/yoco — config status (authenticated). */
+/** GET /api/webhooks/yoco, config status (authenticated). */
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -35,7 +35,7 @@ export async function GET() {
     source: process.env.YOCO_WEBHOOK_SECRET ? 'env' : secret ? 'config' : 'none',
     webhookMode: webhookMode || null,
     secretKey: { ...keyStatus, ...(shapeHint ? { hint: shapeHint } : {}) },
-    // 'live' | 'test' | null — lets the owner (and probes) confirm real money
+    // 'live' | 'test' | null, lets the owner (and probes) confirm real money
     // mode without exposing any key material. The key text decides; when it is
     // silent, Yoco's own word at last webhook registration fills the gap.
     mode: getYocoKeyMode() ?? (webhookMode as 'live' | 'test' | null) ?? null,
@@ -43,7 +43,7 @@ export async function GET() {
 }
 
 /**
- * POST /api/webhooks/yoco — receives Yoco Checkout API payment notifications.
+ * POST /api/webhooks/yoco, receives Yoco Checkout API payment notifications.
  * Event shape: { id, type: 'payment.succeeded'|'payment.failed', payload: { amount, id, mode, metadata, ... } }
  * Must respond 2xx within 15s. Verification per Standard Webhooks scheme.
  */
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   const secret = await getYocoWebhookSecret()
   if (!secret) {
-    // Reject unsigned processing entirely — a missing secret must never allow fake top-ups.
+    // Reject unsigned processing entirely, a missing secret must never allow fake top-ups.
     return NextResponse.json({ error: 'Webhook not configured (no signing secret).' }, { status: 503 })
   }
 
@@ -147,6 +147,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  // Unknown event type — acknowledge.
+  // Unknown event type, acknowledge.
   return NextResponse.json({ ok: true, ignored: event.type })
 }

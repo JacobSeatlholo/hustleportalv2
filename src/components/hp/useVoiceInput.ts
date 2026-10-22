@@ -1,6 +1,6 @@
 'use client'
 /**
- * Voice dictation — press the mic, talk, the words land in the field.
+ * Voice dictation, press the mic, talk, the words land in the field.
  * Built on the browser's Web Speech API (Chrome, Edge, Safari; en-ZA first).
  * Degrades honestly: the mic button only appears where the browser supports it,
  * and permission problems surface as one plain line, never a silent failure.
@@ -78,7 +78,7 @@ export function useVoiceInput(onText: (text: string) => void) {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         setError('Microphone permission is off. Allow it in your browser settings and try again.')
       } else if (e.error === 'no-speech') {
-        setError('Nothing heard — tap the mic and speak again.')
+        setError('Nothing heard, tap the mic and speak again.')
       }
     }
     recRef.current = rec

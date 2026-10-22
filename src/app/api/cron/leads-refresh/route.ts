@@ -8,19 +8,19 @@ import { globalCooldown } from '@/lib/ratelimit'
 export const maxDuration = 60
 
 /**
- * Daily lead pool refresh — Vercel Cron hits this once a day (off peak).
+ * Daily lead pool refresh, Vercel Cron hits this once a day (off peak).
  *
  * The freshness contract of the Verified Lead Pool lives here:
  *  1. DEMOTE: any business unseen on a scan for 60 days is marked stale and
  *     never surfaces in a fresh pool serve again. Dead listings do not come back.
  *  2. RE-CHECK: the stalest website bearing records get their site pinged
  *     again. A live site upgrades the record to "active"; a dead one drops the
- *     website badge honestly. No AI quota is spent — plain HTTP checks only.
+ *     website badge honestly. No AI quota is spent, plain HTTP checks only.
  */
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return true // no secret configured — cooldown below keeps abuse bounded
+  if (!secret) return true // no secret configured, cooldown below keeps abuse bounded
   const header = req.headers.get('authorization') || ''
   return header === `Bearer ${secret}`
 }
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
   // 3) PRUNE: scan logs older than 45 days leave. The cooldown, the daily
   //    allowance and the warm window all live within a single day, so old rows
-  //    are pure ballast — without this the table grows one row per scan,
+  //    are pure ballast, without this the table grows one row per scan,
   //    forever, on a platform whose promise is scans every day at scale.
   const pruned = await db.scanRun.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - 45 * 86_400_000) } },
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   // 4) FEED: the pool drinks from the team's own outreach. Every day the
   //    newest Explee hot leads (real people at real companies who REPLIED to
   //    a Business Hustle campaign) land in the shared Verified Lead Pool, so
-  //    every member scans into a floor of credible, verifiable businesses —
+  //    every member scans into a floor of credible, verifiable businesses,
   //    even on a topic no scan has ever warmed. Free read, bounded (one page,
   //    ten website pings), idempotent (the merge law dedupes repeats). A
   //    failure here never breaks the freshness work above.
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
             const campaignLine = h.campaignName ? `our ${h.campaignName} campaign` : 'our outreach'
             const tag = projectLabelForCampaign(h.campaignName)
             // A reply to a city campaign puts the contact in that city's
-            // orbit — the honest fill for a pool row with no city on file.
+            // orbit, the honest fill for a pool row with no city on file.
             const cityGuess = cityFromText(h.campaignName)
             contacts.push({
               company,
@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
   // 5) WHITELABEL SWEEP: a member's pipeline carries neutral labels only.
   //    Historic rows still wearing the internal outreach tag get the neutral
   //    face (TEAM), and any note that ever named the internal tool or quoted
-  //    a campaign reply is rewritten in the platform's own words — the
+  //    a campaign reply is rewritten in the platform's own words, the
   //    seller's notes stay clean. Idempotent, bounded, silent.
   let swept = 0
   try {

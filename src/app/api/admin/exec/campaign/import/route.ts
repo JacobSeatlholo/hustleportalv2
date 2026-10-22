@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 
-// POST /api/admin/exec/campaign/import — load the owner's contact list from a
+// POST /api/admin/exec/campaign/import, load the owner's contact list from a
 // sister product (BlackBiz etc.) into THEIR OWN pipeline so the campaign and
 // the follow-up live in one place. Exec seat only.
 //
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   const owner = await db.user.findUnique({ where: { email: targetEmail }, select: { id: true, name: true } })
   if (!owner) return NextResponse.json({ error: 'No account matches targetEmail.' }, { status: 404 })
 
-  // Project: reuse or create. isDefault stays untouched — never disturb the
+  // Project: reuse or create. isDefault stays untouched, never disturb the
   // owner's existing default workspace.
   let project = await db.project.findFirst({
     where: { userId: owner.id, name: projectName },
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   })
   if (!project) {
     project = await db.project.create({
-      data: { userId: owner.id, name: projectName, description: 'Contacts from the Business Hustle ecosystem — BlackBiz members.' },
+      data: { userId: owner.id, name: projectName, description: 'Contacts from the Business Hustle ecosystem, BlackBiz members.' },
       select: { id: true, name: true },
     })
   }
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
         email,
         source: 'CSV',
         stage: 'NEW',
-        notes: String(l.notes || 'BlackBiz member — ecosystem intro campaign').slice(0, 500),
+        notes: String(l.notes || 'BlackBiz member, ecosystem intro campaign').slice(0, 500),
       },
       select: { id: true },
     })

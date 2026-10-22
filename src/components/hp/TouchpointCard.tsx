@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import { tpSnooze, tpRetire } from './touchpoints'
 
 /**
- * TouchpointCard — the ONE visual form every conversion touchpoint takes.
+ * TouchpointCard, the ONE visual form every conversion touchpoint takes.
  * Slim, calm, professional: a quiet suggestion at the right moment.
- * The product never shouts — the card states the outcome, offers two taps,
+ * The product never shouts, the card states the outcome, offers two taps,
  * and gets out of the way.
  */
 export function TouchpointCard({
@@ -21,7 +21,7 @@ export function TouchpointCard({
   id: string
   title: string
   body: string
-  /** Action buttons — usually one store deep-link + one service request. */
+  /** Action buttons, usually one store deep-link + one service request. */
   children: React.ReactNode
   snoozeDays?: number
   /** Tiny trust line under the actions (e.g. "Quoted before any work starts"). */

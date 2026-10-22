@@ -35,7 +35,7 @@ let planCache: (PlanInfo & { at: number }) | null = null
 let inflight: Promise<PlanInfo> | null = null
 const PLAN_TTL_MS = 5 * 60_000
 
-/** Fetch (or recall) the caller's plan. Free on any error — never block a screen on this. */
+/** Fetch (or recall) the caller's plan. Free on any error, never block a screen on this. */
 export function fetchPlan(force = false): Promise<PlanInfo> {
   if (!force && planCache && Date.now() - planCache.at < PLAN_TTL_MS) {
     return Promise.resolve(planCache)

@@ -1,5 +1,5 @@
 /**
- * In-memory rate limiter — sliding window, single server (standalone Node
+ * In-memory rate limiter, sliding window, single server (standalone Node
  * behind Caddy), so a Map is the honest and correct tool. No external
  * dependency, no cold-start cost.
  *
@@ -68,18 +68,18 @@ export function clientIp(req: Request): string {
   return req.headers.get('x-real-ip') || 'unknown'
 }
 
-/** Shared 429 body — friendly, plain english, no internal detail. */
+/** Shared 429 body, friendly, plain english, no internal detail. */
 export function tooMany(retryAfterSec: number): { error: string; retryAfter: number } {
   const mins = Math.max(1, Math.ceil(retryAfterSec / 60))
   return {
-    error: `Too many attempts in a short time. Give it ${mins} minute${mins === 1 ? '' : 's'} and try again — this keeps your account safe.`,
+    error: `Too many attempts in a short time. Give it ${mins} minute${mins === 1 ? '' : 's'} and try again, this keeps your account safe.`,
     retryAfter: retryAfterSec,
   }
 }
 
 /**
  * Global cooldown for unauthenticated trigger endpoints (cron jobs): when no
- * CRON_SECRET is configured, the job may still run — but at most once per
+ * CRON_SECRET is configured, the job may still run, but at most once per
  * cooldown window. Repeat callers get an honest "already ran recently" answer
  * without the work (and without the push blast / API spend).
  */

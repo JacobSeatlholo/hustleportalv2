@@ -305,7 +305,7 @@ export default function DashboardView() {
         </Card>
       </div>
 
-      {/* AI-scout teaser — real leads from the seller's own website, for an empty pipeline */}
+      {/* AI-scout teaser, real leads from the seller's own website, for an empty pipeline */}
       {k.pipelineCount === 0 && (
         <Card
           className="cursor-pointer hover:shadow-md transition border-brand/40 bg-brand/5"
@@ -318,9 +318,9 @@ export default function DashboardView() {
             <div className="flex items-center gap-3 min-w-0">
               <div className="rounded-lg bg-brand/15 p-2 shrink-0"><Sparkles className="h-5 w-5 text-brand" /></div>
               <div className="min-w-0">
-                <div className="font-medium">AI scout — real leads from your website</div>
+                <div className="font-medium">AI scout, real leads from your website</div>
                 <div className="text-xs text-muted-foreground">
-                  Gemini searches the live web for real businesses in your area that need what you sell. Real results, free to try — your welcome credits cover the first reveals.
+                  Gemini searches the live web for real businesses in your area that need what you sell. Real results, free to try, your welcome credits cover the first reveals.
                 </div>
               </div>
             </div>
@@ -407,9 +407,9 @@ export default function DashboardView() {
                         key={m.key}
                         onClick={() => { const v = MISSION_VIEW[m.key]; if (v) setView(v) }}
                         className="rounded-full border px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-brand/60 transition"
-                        title={`${m.label} — ${m.xp} XP`}
+                        title={`${m.label}, ${m.xp} XP`}
                       >
-                        {m.target > 1 ? `${Math.min(m.count, m.target)}/${m.target} ` : ''}{m.label.replace(/ — .*$/, '')} <span className="text-brand">+{m.xp}</span>
+                        {m.target > 1 ? `${Math.min(m.count, m.target)}/${m.target} ` : ''}{m.label.replace(/, .*$/, '')} <span className="text-brand">+{m.xp}</span>
                       </button>
                     ))}
                   </div>
@@ -512,7 +512,7 @@ export default function DashboardView() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
-            Revenue — last 6 months
+            Revenue, last 6 months
             <button className="text-xs text-brand hover:underline" onClick={() => setView('finance')}>Log income →</button>
           </CardTitle>
         </CardHeader>
@@ -528,7 +528,7 @@ export default function DashboardView() {
           </div>
           {data.months.every((m) => m.income === 0) && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              No income logged yet — your chart fills in as you record revenue in Finance.
+              No income logged yet, your chart fills in as you record revenue in Finance.
             </p>
           )}
         </CardContent>

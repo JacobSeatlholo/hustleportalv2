@@ -17,10 +17,10 @@ function cleanEmail(v: unknown): string {
 }
 
 /**
- * POST /api/admin/exec/client/[id]/invite — point a member account at their
+ * POST /api/admin/exec/client/[id]/invite, point a member account at their
  * real inbox and send the system invitation that gets them to sign in.
  *
- * Body: { email?: string } — pass an email to move the account's login email
+ * Body: { email?: string }, pass an email to move the account's login email
  * first (the old one stops working), or omit it to re-send the invitation to
  * the email already on the account.
  *
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     inviteWindowHours: 24,
     teamLeads: teamLeadCount,
     message: emailChanged
-      ? `Login email moved to ${email}. ${sent.ok ? `Invitation email sent — ${first} can set a password and sign in.` : 'The invitation email failed to send — check the mail engine.'}`
-      : `Email unchanged. ${sent.ok ? 'Invitation email sent again.' : 'The invitation email failed to send — check the mail engine.'}`,
+      ? `Login email moved to ${email}. ${sent.ok ? `Invitation email sent, ${first} can set a password and sign in.` : 'The invitation email failed to send, check the mail engine.'}`
+      : `Email unchanged. ${sent.ok ? 'Invitation email sent again.' : 'The invitation email failed to send, check the mail engine.'}`,
   })
 }

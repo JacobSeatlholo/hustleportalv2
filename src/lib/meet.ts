@@ -1,4 +1,4 @@
-/** Jitsi meet links for appointments — no accounts, no infrastructure needed. */
+/** Jitsi meet links for appointments, no accounts, no infrastructure needed. */
 
 export function jitsiMeetLink(title?: string | null): string {
   const slug = (title || 'meeting')

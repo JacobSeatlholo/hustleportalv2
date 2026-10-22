@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Loader2, ShieldCheck, ArrowLeft, CircleCheck } from 'lucide-react'
 
 /**
- * /remove-listing — the public POPIA opt-out for businesses.
+ * /remove-listing, the public POPIA opt-out for businesses.
  * A listed business asks once; the suppression goes live within a minute
  * and the team confirms at the contact given. No account required.
  */
