@@ -277,12 +277,14 @@ const SceneComputer: React.FC<PitchProps> = ({ businessName, tagline, services, 
   const slidesMode = frame >= M_SWITCH + 4
   const current = Math.max(0, Math.min(slides.length - 1, Math.floor((frame - M_SLIDES) / M_SLIDE_LEN)))
   const sinceSlide = frame - (M_SLIDES + current * M_SLIDE_LEN)
-  const slideBurst = interpolate(sinceSlide, [0, 2, 4], [0.7, 0.35, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
   const text = slides[current] || slides[0]
   const textSize = (text.length > 24 ? 36 : text.length > 14 ? 42 : 50) * s
 
-  // Static bursts: the big one when the screen flips, small ones per slide
+  // Static bursts: the big one when the screen flips, small ones per slide.
+  // Gated on the slide section: below M_SLIDES the clamp would otherwise hand
+  // back the burst PEAK for every boot frame and bury the boot text in noise.
   const switchBurst = interpolate(frame, [M_SWITCH, M_SWITCH + 2.5, M_SWITCH + 5], [0, 0.85, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
+  const slideBurst = frame < M_SLIDES ? 0 : interpolate(sinceSlide, [0, 2, 4], [0.7, 0.35, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
   const burst = Math.max(switchBurst, slideBurst)
 
   // The dive into the screen at the end
