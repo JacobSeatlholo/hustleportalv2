@@ -2074,3 +2074,21 @@ Work Log:
 
 Stage Summary:
 - The pitch video now does what the boss pointed at with the BBC Micro link: the presentation boots and plays inside a computer, personalised per member, and the camera flies into the screen into the call to action. Production stamps ae852ef then 6aef3e8, both health verified with db ping true and integrations green, render gate proven end to end on prod.
+
+---
+Task ID: 106
+Agent: main (Z.ai ops run)
+Task: Boss: "Lets go back to the video generation. Cant i have like different types of presentaton videos? one like the curreent and maybe the other cleaner one we had previously? users can switch between whatever theme they choose."
+
+Work Log:
+- WORKSPACE ROLLBACK RECOVERED FIRST: the local workspace came back sitting at ac8ba04 (pre Task 105) with the old v2 PitchVideo on disk, while origin and production were ahead at the Task 105 stamps. Cause is the workspace recycle between runs. Recovery: git fetch, verified origin/main holds ae852ef and 6aef3e8 and becd600, then git reset hard to origin/main. Local back on the 764 line v3, deploy key intact. Nothing lost, production had never regressed. Lesson for the next agent: after a recycle, diff local main against origin/main before editing, the recycle can rewind tracked files.
+- PitchVideo v4: PitchProps gained theme, machine (default) or clean. Scene2, the classic bold services list from v2, is restored verbatim (accent ring, What we do kicker, glowing bullets, logo watermark) with only the exit window moved from frames 140 to 149 out to 226 to 235 so it fills the same 235 frame slot the machine scene occupies. Both themes share the opener and the call to action. The clean theme arrives on its own wipe at 333 and Scene3 renders the white screen dive flash ONLY for the machine theme (theme gate inside Scene3), so no stray flash after the wipe. Anything that does not pass theme clean defaults to machine, so old callers stay on the computer.
+- VideoStudioDialog: a Theme picker sits above the Player, two cards, Machine (Your services boot up inside a retro computer) and Clean (Bold text on the dark stage, the classic look). The choice rides inputProps into the composition so the preview swaps instantly, and it persists per device in localStorage hp-video-theme with a safe fallback chain (undefined server, blocked storage, anything unexpected all mean machine). Dialog description now says Pick a theme, the retro computer or the classic clean look.
+- Copy law held: no hyphens, no emoji, no dashes in any new user facing string.
+- Typecheck clean in src, local build green in 38 seconds (dbPush SOFT FAILED is the known local pattern, AUTH_SECRET passed inline as a throwaway local gate value only).
+- Deployed 5286e5f, health verified (db ping true, integrations green).
+- Browser QA on prod (agent-browser, ops seat, one login): theme picker live in the studio, Clean selected shows the classic scene exactly as it used to look (What we do, three services with accent bullets, ring on the right, 0:15 duration), Machine swaps back instantly to the retro computer with the LOADING KASI PRINTS boot text. Then a full render on the Clean theme at Light ran 0 to 100, result probed at 960x540 dur 15.00, and localStorage read back clean so the choice survives reopen. Zero page errors. Screenshots kept in scripts/qa_clean_theme.png and qa_machine_swap.png.
+- Master account ZERO logins, ZERO writes this run. Ops seat only. Master password rotation STILL outstanding. Task 97 WhatsApp bot still parked on the boss's three Meta values.
+
+Stage Summary:
+- The Video Studio now carries two presentation themes sharing one 15 second spine: Machine, the retro computer boot with the member's services on the tube, and Clean, the classic bold list, switchable live with the choice remembered. Both themes proven to render end to end on production. Stamp 5286e5f verified green.
