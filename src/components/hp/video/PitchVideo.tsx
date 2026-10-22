@@ -2,11 +2,15 @@ import React, { useMemo } from 'react'
 import { AbsoluteFill, Easing, Img, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 
 /**
- * PitchVideo, the HustlePortal marketing video template, v3.
+ * PitchVideo, the HustlePortal marketing video template, v4.
  * 15 seconds, 30fps, resolution independent (scales from the 720 design grid
  * to 1080 and beyond). The member can attach their own logo: it pops in the
  * opener, rides on the computer screen in the machine scene and crowns the
  * closing call to action.
+ *
+ * Two themes share the opener and the call to action, only the middle act
+ * differs: machine (default) is the retro computer, clean is the classic
+ * bold services list from v2. The member picks in the Video Studio.
  *
  * The machine scene is our answer to "make the presentation appear inside a
  * computer": a retro micro computer boots on the stage, the CRT powers on
@@ -32,6 +36,8 @@ export interface PitchProps {
   logoSrc?: string
   /** False when the logo came from a format without transparency (a JPG). */
   logoHasAlpha?: boolean
+  /** Which middle act plays: the retro computer (default) or the classic clean list. */
+  theme?: 'machine' | 'clean'
 }
 
 export const PITCH_FPS = 30
@@ -192,6 +198,91 @@ const Scene1: React.FC<PitchProps> = ({ businessName, tagline, kicker, accent = 
           {tagline}
         </p>
       </div>
+    </AbsoluteFill>
+  )
+}
+
+/** The clean theme: the classic full screen services list from v2, restored
+ * and stretched to live in the same 235 frame slot the machine scene fills. */
+const Scene2: React.FC<PitchProps> = ({ services, accent = '#f97316', logoSrc, logoHasAlpha }) => {
+  const frame = useCurrentFrame()
+  const { fps, height } = useVideoConfig()
+  const s = height / 720
+  const rows = services.filter((x) => x && x.trim()).slice(0, 3)
+  const textSize = (rows.some((r) => r.length > 26) ? 34 : 44) * s
+
+  const kick = spring({ frame: frame - 2, fps, config: { damping: 200 } })
+  const exit = interpolate(frame, [226, 235], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
+  const ringDrift = Math.sin(frame / 70) * 30 * s
+
+  return (
+    <AbsoluteFill style={{ justifyContent: 'center', padding: `0 ${130 * s}px`, opacity: exit }}>
+      {/* Depth: slow accent ring on the right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          right: -140 * s + ringDrift,
+          top: height / 2 - 260 * s,
+          width: 520 * s,
+          height: 520 * s,
+          borderRadius: 999,
+          border: `${2.5 * s}px solid ${accent}22`,
+        }}
+      />
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 * s, marginBottom: 46 * s, opacity: interpolate(kick, [0, 1], [0, 1]) }}>
+          <div style={{ width: 12 * s, height: 12 * s, borderRadius: 3 * s, background: accent }} />
+          <p style={{ fontFamily: FONT, fontSize: 24 * s, fontWeight: 700, letterSpacing: '0.24em', textTransform: 'uppercase', color: accent, margin: 0 }}>
+            What we do
+          </p>
+        </div>
+        {rows.map((x, i) => {
+          const enter = spring({ frame: frame - 8 - i * 15, fps, config: { damping: 200, mass: 0.8 } })
+          const bullet = spring({ frame: frame - 12 - i * 15, fps, config: { damping: 12, mass: 0.6 } })
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 28 * s,
+                marginBottom: 34 * s,
+                opacity: interpolate(enter, [0, 1], [0, 1]),
+                transform: `translateX(${interpolate(enter, [0, 1], [130 * s, 0])}px)`,
+                filter: `blur(${interpolate(enter, [0, 1], [5, 0])}px)`,
+              }}
+            >
+              <div
+                style={{
+                  width: 16 * s,
+                  height: 16 * s,
+                  borderRadius: 5 * s,
+                  background: accent,
+                  boxShadow: `0 0 ${26 * s}px ${accent}55`,
+                  flexShrink: 0,
+                  transform: `rotate(${interpolate(bullet, [0, 1], [-90, 0])}deg) scale(${interpolate(bullet, [0, 1], [0.4, 1])})`,
+                }}
+              />
+              <span style={{ fontFamily: FONT, fontSize: textSize, fontWeight: 600, color: '#ffffff', lineHeight: 1.2 }}>{x.trim()}</span>
+            </div>
+          )
+        })}
+      </div>
+      {logoSrc && logoHasAlpha ? (
+        <Img
+          src={logoSrc}
+          style={{
+            position: 'absolute',
+            right: 70 * s,
+            bottom: 54 * s,
+            width: 120 * s,
+            height: 120 * s,
+            objectFit: 'contain',
+            opacity: 0.3,
+            filter: 'grayscale(0.1)',
+          }}
+        />
+      ) : null}
     </AbsoluteFill>
   )
 }
@@ -608,13 +699,14 @@ const SceneComputer: React.FC<PitchProps> = ({ businessName, tagline, services, 
   )
 }
 
-const Scene3: React.FC<PitchProps> = ({ businessName, city, phone, accent = '#f97316', logoSrc }) => {
+const Scene3: React.FC<PitchProps> = ({ businessName, city, phone, accent = '#f97316', logoSrc, theme }) => {
   const frame = useCurrentFrame()
   const { fps, height } = useVideoConfig()
   const s = height / 720
 
-  // Entry: the white flood from the screen dive decays away
-  const flashOut = interpolate(frame, [0, 9], [0.92, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
+  // Entry: the white flood from the screen dive decays away. Only the machine
+  // theme dives through a screen, the clean theme arrives on a wipe instead.
+  const flashOut = theme === 'clean' ? 0 : interpolate(frame, [0, 9], [0.92, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
 
   const pop = spring({ frame: frame + 4, fps, config: { damping: 12, mass: 0.7 } })
   const pulse = Math.sin(frame / 9) * 0.5 + 0.5
@@ -720,6 +812,7 @@ export const PitchVideo: React.FC<PitchProps> = (props) => {
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
   const accent = props.accent || '#f97316'
+  const machine = (props.theme || 'machine') !== 'clean'
 
   // Shared stage: deep gradient, two drifting accent glows, vignette, end fade.
   const glowX = interpolate(Math.sin(frame / 110), [-1, 1], [width * 0.12, width * 0.88])
@@ -743,12 +836,13 @@ export const PitchVideo: React.FC<PitchProps> = (props) => {
         <Scene1 {...props} accent={accent} />
       </Sequence>
       <Sequence from={105} durationInFrames={235}>
-        <SceneComputer {...props} accent={accent} />
+        {machine ? <SceneComputer {...props} accent={accent} /> : <Scene2 {...props} accent={accent} />}
       </Sequence>
       <Sequence from={340} durationInFrames={PITCH_DURATION - 340}>
         <Scene3 {...props} accent={accent} />
       </Sequence>
       <Wipe start={98} />
+      {machine ? null : <Wipe start={333} />}
       <AbsoluteFill style={{ background: '#000', opacity: endFade, pointerEvents: 'none' }} />
     </AbsoluteFill>
   )

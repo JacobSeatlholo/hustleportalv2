@@ -7,6 +7,9 @@
  * @remotion/web-renderer, so the platform pays zero render cost and runs no
  * video servers. The only server side piece is the mail attachment itself.
  *
+ * v4: theme switcher. Machine (default, the retro computer) or Clean (the
+ * classic bold services list from v2). The choice is remembered per device.
+ *
  * v3: the machine scene. The member's services boot up and play INSIDE a
  * retro computer on screen: CRT power on, boot text with their name, slides
  * with scanlines and phosphor glow, then the camera dives into the screen.
@@ -119,6 +122,16 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   const [phone, setPhone] = useState(defaults.phone || '')
   const [accentKey, setAccentKey] = useState('ember')
   const [qualityKey, setQualityKey] = useState('max')
+  // Theme choice is remembered per device: machine (the retro computer) or
+  // clean (the classic bold list). The template itself defaults to machine.
+  const [theme, setTheme] = useState<'machine' | 'clean'>(() => {
+    if (typeof window === 'undefined') return 'machine'
+    try {
+      return window.localStorage.getItem('hp-video-theme') === 'clean' ? 'clean' : 'machine'
+    } catch {
+      return 'machine'
+    }
+  })
   const [logo, setLogo] = useState<{ dataUrl: string; hasAlpha: boolean; name: string } | null>(null)
   const [rendering, setRendering] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -128,6 +141,14 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   const abortRef = useRef<AbortController | null>(null)
   const stallRef = useRef({ value: 0, at: 0 })
   const stallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('hp-video-theme', theme)
+    } catch {
+      // Private mode or storage blocked, the choice just lives for this visit
+    }
+  }, [theme])
 
   const accent = ACCENT_PRESETS.find((a) => a.key === accentKey)?.color || '#f97316'
   const preset = QUALITY_PRESETS.find((q) => q.key === qualityKey) || QUALITY_PRESETS[0]
@@ -155,8 +176,9 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
       accent,
       logoSrc: logo?.dataUrl,
       logoHasAlpha: logo?.hasAlpha,
+      theme,
     }),
-    [businessName, smartTagline, services, city, phone, accent, logo, defaults.industry]
+    [businessName, smartTagline, services, city, phone, accent, logo, defaults.industry, theme]
   )
 
   useEffect(() => {
@@ -381,7 +403,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Clapperboard className="h-4 w-4 text-brand" /> Video Studio</DialogTitle>
           <DialogDescription>
-            Build a 15 second pitch video from your business details, watch it live, then attach it to this email. Your services boot up inside a retro computer, your logo rides through every scene, and your own browser renders it at no cost.
+            Build a 15 second pitch video from your business details, watch it live, then attach it to this email. Pick a theme, the retro computer or the classic clean look, add your logo, and your own browser renders it at no cost.
           </DialogDescription>
         </DialogHeader>
 
@@ -457,6 +479,27 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
           </div>
 
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Theme</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTheme('machine')}
+                  className={`rounded-lg border px-3 py-2 text-left transition ${theme === 'machine' ? 'border-brand bg-brand/10' : 'hover:border-muted-foreground/40'}`}
+                >
+                  <span className="block text-sm font-medium">Machine</span>
+                  <span className="block text-[11px] text-muted-foreground">Your services boot up inside a retro computer</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme('clean')}
+                  className={`rounded-lg border px-3 py-2 text-left transition ${theme === 'clean' ? 'border-brand bg-brand/10' : 'hover:border-muted-foreground/40'}`}
+                >
+                  <span className="block text-sm font-medium">Clean</span>
+                  <span className="block text-[11px] text-muted-foreground">Bold text on the dark stage, the classic look</span>
+                </button>
+              </div>
+            </div>
             <div className="rounded-xl border bg-black/40 overflow-hidden">
               <Player
                 component={LooseVideo}
