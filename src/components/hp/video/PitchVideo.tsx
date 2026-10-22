@@ -42,10 +42,15 @@ export interface QualityPreset {
   note: string
 }
 
-/** Controlled high bitrates: motion graphics at these rates come out pristine. */
+/**
+ * Controlled high bitrates: motion graphics at these rates come out pristine.
+ * The chain is also the FALLBACK LADDER: a machine that refuses a rung drops
+ * to the next one, so an export always lands at some quality.
+ */
 export const QUALITY_PRESETS: QualityPreset[] = [
   { key: 'max', label: 'Maximum', width: 1920, height: 1080, bitrate: 5_500_000, note: 'Full HD' },
   { key: 'sharp', label: 'Sharp', width: 1280, height: 720, bitrate: 5_000_000, note: 'HD, smallest file' },
+  { key: 'light', label: 'Light', width: 960, height: 540, bitrate: 3_500_000, note: 'Runs on the weakest devices' },
 ]
 
 export const ACCENT_PRESETS: { key: string; label: string; color: string }[] = [

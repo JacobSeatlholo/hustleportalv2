@@ -7,13 +7,25 @@ import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
 /**
  * Inventory, dead-simple stock management.
  * GET    /api/inventory          → { items, totals }
- * POST   /api/inventory          → create { name, sku?, quantity?, unit?, costPrice?, sellPrice?, lowStockAt?, supplier?, location?, notes? }
+ * POST   /api/inventory          → create { name, sku?, quantity?, unit?, costPrice?, sellPrice?, lowStockAt?, supplier?, location?, image?, notes? }
  * PATCH  /api/inventory          → update { id, ...fields } (quantity is the NEW value; use `adjust` for ±delta)
  * DELETE /api/inventory?id=      → remove
  */
 function num(v: unknown): number | undefined {
   const n = typeof v === 'number' ? v : parseFloat(String(v))
   return Number.isFinite(n) ? n : undefined
+}
+
+// Product photos arrive as small data URLs, downscaled client side. The cap
+// keeps one row from carrying a phone original (megabytes) in the database.
+const IMAGE_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/
+const MAX_IMAGE_CHARS = 160_000
+function imageValue(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined
+  const s = String(v || '').trim()
+  if (!s) return null // empty string clears the photo
+  if (s.length > MAX_IMAGE_CHARS || !IMAGE_RE.test(s)) return undefined // junk is ignored, never stored
+  return s
 }
 
 export async function GET() {
@@ -59,6 +71,7 @@ export async function POST(req: NextRequest) {
       lowStockAt: num(b.lowStockAt) ?? 0,
       supplier: String(b.supplier || '').trim() || null,
       location: String(b.location || '').trim() || null,
+      image: imageValue(b.image) ?? null,
       notes: String(b.notes || '').trim() || null,
     },
   })
@@ -84,6 +97,8 @@ export async function PATCH(req: NextRequest) {
   if (b.lowStockAt !== undefined) data.lowStockAt = num(b.lowStockAt) ?? existing.lowStockAt
   if (b.supplier !== undefined) data.supplier = String(b.supplier).trim() || null
   if (b.location !== undefined) data.location = String(b.location).trim() || null
+  const img = imageValue(b.image)
+  if (img !== undefined) data.image = img
   if (b.adjust !== undefined) data.quantity = Math.max(0, existing.quantity + (num(b.adjust) ?? 0))
   else if (b.quantity !== undefined) data.quantity = Math.max(0, num(b.quantity) ?? existing.quantity)
 

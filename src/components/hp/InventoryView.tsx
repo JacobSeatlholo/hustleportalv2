@@ -4,7 +4,7 @@
  * Inventory, stock management for businesses that sell things.
  * Add items, adjust quantities in one tap, see stock value and low-stock alerts.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +20,7 @@ import { api, randsPlain } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { toCSV } from '@/lib/csv'
-import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles, Upload, Download } from 'lucide-react'
+import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles, Upload, Download, Camera, X } from 'lucide-react'
 
 interface ImportReport {
   imported: number
@@ -100,6 +100,44 @@ function ImportDialog({ open, onOpenChange, onImported }: {
   )
 }
 
+/**
+ * Product photo intake: draw the picture to a max 256px canvas and come back
+ * with a small JPEG data URL the database can carry on the row. Phone photos
+ * arrive in megabytes, a 256px JPEG lands around 20 to 60 kilobytes.
+ */
+async function processImage(file: File): Promise<string> {
+  if (!/^image\/(png|jpeg|jpg|webp)$/.test(file.type)) {
+    throw new Error('format')
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error('size')
+  }
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image()
+      im.onload = () => resolve(im)
+      im.onerror = () => reject(new Error('decode'))
+      im.src = objectUrl
+    })
+    const longEdge = Math.max(img.naturalWidth, img.naturalHeight)
+    const scale = longEdge > 256 ? 256 / longEdge : 1
+    const w = Math.max(2, Math.round(img.naturalWidth * scale))
+    const h = Math.max(2, Math.round(img.naturalHeight * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('canvas')
+    ctx.drawImage(img, 0, 0, w, h)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+    if (dataUrl.length > 160_000) throw new Error('size')
+    return dataUrl
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
 interface Item {
   id: string
   name: string
@@ -111,6 +149,7 @@ interface Item {
   lowStockAt: number
   supplier: string | null
   location: string | null
+  image: string | null
   notes: string | null
 }
 
@@ -122,7 +161,6 @@ interface Totals {
 }
 
 const EMPTY = { name: '', sku: '', quantity: '', unit: '', costPrice: '', sellPrice: '', lowStockAt: '', supplier: '', location: '', notes: '' }
-
 export default function InventoryView() {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
@@ -133,6 +171,10 @@ export default function InventoryView() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
   const [busy, setBusy] = useState(false)
+  const [newImage, setNewImage] = useState<string | null>(null)
+  const rowPhotoRef = useRef<HTMLInputElement>(null)
+  const rowPhotoTarget = useRef<string | null>(null)
+  const addPhotoRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -165,11 +207,13 @@ export default function InventoryView() {
           lowStockAt: parseFloat(form.lowStockAt) || 0,
           supplier: form.supplier,
           location: form.location,
+          image: newImage || '',
           notes: form.notes,
         }),
       })
       toast({ title: `${form.name.trim()} added to stock` })
       setForm({ ...EMPTY })
+      setNewImage(null)
       setShowAdd(false)
       load()
       bumpRefresh()
@@ -177,6 +221,39 @@ export default function InventoryView() {
       toast({ title: 'Could not add item', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Product photos: attach at create time, or tap the camera on a row to set
+  // or replace one on an item that already exists. Clearing is one tap on the X.
+  async function onNewImageFile(f: File | undefined | null) {
+    if (!f) return
+    try {
+      setNewImage(await processImage(f))
+    } catch {
+      toast({ title: 'That picture did not make it in', description: 'Use a PNG, JPG or WebP photo. Keep it under 12 megabytes.', variant: 'destructive' })
+    }
+  }
+
+  async function onRowImageFile(f: File | undefined | null) {
+    const id = rowPhotoTarget.current
+    if (!f || !id) return
+    try {
+      const image = await processImage(f)
+      const res = await api<{ item: Item }>('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id, image }) })
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, image: res.item.image } : i)))
+      toast({ title: 'Photo saved' })
+    } catch {
+      toast({ title: 'Could not save that photo', description: 'Use a PNG, JPG or WebP photo, under 12 megabytes.', variant: 'destructive' })
+    }
+  }
+
+  async function clearImage(item: Item) {
+    try {
+      await api('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id: item.id, image: '' }) })
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, image: null } : i)))
+    } catch {
+      toast({ title: 'Could not remove the photo', variant: 'destructive' })
     }
   }
 
@@ -307,6 +384,30 @@ export default function InventoryView() {
             return (
               <Card key={i.id} className={low ? 'border-amber-500/50' : ''}>
                 <CardContent className="p-3 flex items-center gap-3">
+                  {i.image ? (
+                    <div className="relative shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={i.image} alt={i.name} className="h-11 w-11 rounded-lg object-cover border" />
+                      <button
+                        type="button"
+                        aria-label={`Remove photo of ${i.name}`}
+                        onClick={() => clearImage(i)}
+                        className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-background border flex items-center justify-center text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`Add photo of ${i.name}`}
+                      title="Add a product photo"
+                      onClick={() => { rowPhotoTarget.current = i.id; rowPhotoRef.current?.click() }}
+                      className="h-11 w-11 shrink-0 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-brand/60 transition"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate">{i.name}</span>
@@ -350,6 +451,17 @@ export default function InventoryView() {
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
+                  {i.image ? (
+                    <button
+                      type="button"
+                      aria-label={`Replace photo of ${i.name}`}
+                      title="Replace the photo"
+                      onClick={() => { rowPhotoTarget.current = i.id; rowPhotoRef.current?.click() }}
+                      className="text-muted-foreground hover:text-foreground shrink-0 h-8 w-8 flex items-center justify-center rounded hover:bg-muted"
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                   <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-red-600 shrink-0 h-8 w-8" onClick={() => remove(i)} aria-label={`Delete ${i.name}`}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -362,6 +474,19 @@ export default function InventoryView() {
 
       <ImportDialog open={showImport} onOpenChange={setShowImport} onImported={() => { load(); bumpRefresh() }} />
 
+      {/* hidden photo input, shared by the add dialog and the row camera buttons */}
+      <input
+        ref={rowPhotoRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          if (rowPhotoTarget.current) onRowImageFile(e.target.files?.[0])
+          else onNewImageFile(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -369,6 +494,34 @@ export default function InventoryView() {
             <DialogDescription>Name and quantity are enough to start. SKU, supplier and location are there when you need them.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Product photo</Label>
+              {newImage ? (
+                <div className="flex items-center gap-2.5 rounded-lg border p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={newImage} alt="Product preview" className="h-11 w-11 rounded-lg object-cover border" />
+                  <span className="text-xs text-muted-foreground flex-1">It shows on the stock row.</span>
+                  <button type="button" aria-label="Remove the photo" onClick={() => setNewImage(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { rowPhotoTarget.current = null; addPhotoRef.current?.click() }}
+                  className="w-full flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground hover:border-brand/60 hover:text-foreground transition"
+                >
+                  <Camera className="h-4 w-4" /> Add a product photo. Optional, it shows on the stock row.
+                </button>
+              )}
+              <input
+                ref={addPhotoRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => { onNewImageFile(e.target.files?.[0]); e.target.value = '' }}
+              />
+            </div>
             <div className="space-y-1.5"><Label>Item name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Paraffin 750ml" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Quantity in stock</Label><Input type="number" min={0} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="12" /></div>

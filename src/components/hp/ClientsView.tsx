@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +21,7 @@ import { useHp } from './store'
 import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
-import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera, Check } from 'lucide-react'
+import { Plus, Search, Loader2, Users, Pencil, Trash2, Mail, Phone, Building2, TrendingUp, MessageCircle, Upload, ListChecks, FileText, Camera, Check, History, StickyNote, CalendarClock, MailCheck, MailX, Receipt } from 'lucide-react'
 
 interface Client {
   id: string
@@ -46,6 +46,147 @@ interface ImportResult {
 
 const EMPTY = { name: '', company: '', email: '', phone: '', monthlyValue: '', status: 'ACTIVE', notes: '' }
 
+// ---------- the CRM timeline ----------
+// One client, every touch on one dated feed: notes, tasks, invoices, emails
+// with opens, meetings. This is the memory a CRM is supposed to keep.
+
+type TimelineItem = {
+  type: 'note' | 'task' | 'invoice' | 'email' | 'meeting' | 'client'
+  at: string
+  title: string
+  detail?: string
+  status?: string
+}
+
+const TYPE_META: Record<TimelineItem['type'], { icon: ReactNode; label: string }> = {
+  note: { icon: <StickyNote className="h-3.5 w-3.5" />, label: 'Note' },
+  task: { icon: <ListChecks className="h-3.5 w-3.5" />, label: 'Task' },
+  invoice: { icon: <Receipt className="h-3.5 w-3.5" />, label: 'Invoice' },
+  email: { icon: <MailCheck className="h-3.5 w-3.5" />, label: 'Email' },
+  meeting: { icon: <CalendarClock className="h-3.5 w-3.5" />, label: 'Meeting' },
+  client: { icon: <Users className="h-3.5 w-3.5" />, label: 'Client' },
+}
+
+function timelineWhen(iso: string): string {
+  const d = new Date(iso)
+  const today = new Date()
+  const day = 86_400_000
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((startOf(today) - startOf(d)) / day)
+  const time = d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
+  if (days === 0) return `Today at ${time}`
+  if (days === 1) return `Yesterday at ${time}`
+  if (days > 1 && days < 30) return `${days} days ago`
+  return d.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function statusBadge(status?: string) {
+  if (!status) return null
+  const tone: Record<string, string> = {
+    PAID: 'bg-emerald-500/15 text-emerald-400 border-0',
+    SENT: 'bg-brand/15 text-brand border-0',
+    CONFIRMED: 'bg-emerald-500/15 text-emerald-400 border-0',
+    DONE: 'bg-emerald-500/15 text-emerald-400 border-0',
+    FAILED: 'bg-red-500/15 text-red-400 border-0',
+    DECLINED: 'bg-red-500/15 text-red-400 border-0',
+    OVERDUE: 'bg-amber-500/15 text-amber-500 border-0',
+  }
+  const cls = tone[status] || 'bg-muted text-muted-foreground border-0'
+  return <Badge className={`text-[10px] h-4 ${cls}`}>{status}</Badge>
+}
+
+function TimelineDialog({ client, open, onOpenChange, onCountChange }: {
+  client: Client | null
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onCountChange?: (n: number) => void
+}) {
+  const { toast } = useToast()
+  const [items, setItems] = useState<TimelineItem[] | null>(null)
+  const [noteBody, setNoteBody] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  useEffect(() => {
+    if (!open || !client) return
+    let alive = true
+    setItems(null)
+    api<{ items: TimelineItem[] }>(`/api/clients/${client.id}/timeline`)
+      .then((r) => { if (alive) setItems(r.items) })
+      .catch(() => { if (alive) { setItems([]); toast({ title: 'Could not load the history', variant: 'destructive' }) } })
+    return () => { alive = false }
+  }, [open, client, toast])
+
+  async function addNote() {
+    if (!client || !noteBody.trim()) return
+    setSavingNote(true)
+    try {
+      await api(`/api/clients/${client.id}/timeline`, { method: 'POST', body: JSON.stringify({ body: noteBody }) })
+      const r = await api<{ items: TimelineItem[] }>(`/api/clients/${client.id}/timeline`)
+      setItems(r.items)
+      onCountChange?.(r.items.length)
+      setNoteBody('')
+      toast({ title: 'Note saved' })
+    } catch {
+      toast({ title: 'Could not save the note', variant: 'destructive' })
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><History className="h-4 w-4 text-brand" /> {client?.name}</DialogTitle>
+          <DialogDescription>
+            Every touch on one feed: your notes, tasks, invoices, emails and meetings. The memory a real CRM keeps.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2 items-start">
+          <Textarea
+            rows={2}
+            value={noteBody}
+            onChange={(e) => setNoteBody(e.target.value)}
+            placeholder={`Note about ${client?.name || 'this client'}: called, promised, prefers, owes…`}
+            className="min-h-0"
+          />
+          <Button size="sm" onClick={addNote} disabled={savingNote || !noteBody.trim()} className="shrink-0">
+            {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save note'}
+          </Button>
+        </div>
+        <div className="mt-3 space-y-0 overflow-y-auto min-h-0 flex-1 hp-scroll pr-1">
+          {items === null ? (
+            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nothing on the timeline yet. Save the first note above.</p>
+          ) : (
+            items.map((it, i) => {
+              const meta = TYPE_META[it.type] || TYPE_META.note
+              return (
+                <div key={`${it.type}-${it.at}-${i}`} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="h-7 w-7 rounded-full border bg-muted/50 flex items-center justify-center text-muted-foreground shrink-0">{meta.icon}</div>
+                    {i < items.length - 1 && <div className="w-px flex-1 bg-border my-1" />}
+                  </div>
+                  <div className="pb-4 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{meta.label}</span>
+                      {statusBadge(it.status)}
+                      <span className="text-[10px] text-muted-foreground">{timelineWhen(it.at)}</span>
+                    </div>
+                    <p className="text-sm mt-0.5 break-words">{it.title}</p>
+                    {it.detail && <p className="text-xs text-muted-foreground mt-0.5">{it.detail}</p>}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function ClientsView() {
   const { session, activeProjectId, bumpRefresh } = useHp()
   const { toast } = useToast()
@@ -63,6 +204,8 @@ export default function ClientsView() {
     setClientProject('')
   }, [activeProjectId])
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [timelineFor, setTimelineFor] = useState<Client | null>(null)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -421,6 +564,9 @@ export default function ClientsView() {
                       </a>
                     </Button>
                   )}
+                  <Button variant="ghost" size="icon" onClick={() => { setTimelineFor(c); setTimelineOpen(true) }} title="History">
+                    <History className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Edit">
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -614,6 +760,8 @@ export default function ClientsView() {
 
       {/* Direct line to the team, shared with every touchpoint on the platform */}
       <ServiceRequestDialog open={reqOpen} onOpenChange={setReqOpen} service={reqService} />
+
+      <TimelineDialog client={timelineFor} open={timelineOpen} onOpenChange={setTimelineOpen} />
     </div>
   )
 }

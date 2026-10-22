@@ -277,8 +277,23 @@ model Client {
   projectId String?
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   tasks Task[]
+  notesLog ClientNote[]
 
   @@index([projectId])
+}
+
+// Timestamped relationship notes, the CRM memory: every call, promise and
+// detail worth remembering, dated and readable on the client's timeline.
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
 
 // ============ TASKS ============
@@ -684,6 +699,7 @@ model InventoryItem {
   lowStockAt  Float    @default(0) // alert when quantity <= this
   supplier    String?  // who you buy it from
   location    String?  // shelf, bin, storeroom
+  image       String?  // product photo as a small data URL, downscaled client side
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

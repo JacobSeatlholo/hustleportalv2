@@ -106,7 +106,7 @@ async function processLogo(file: File): Promise<{ dataUrl: string; hasAlpha: boo
 
 export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaults }: VideoStudioDialogProps) {
   const { toast } = useToast()
-  const [supported, setSupported] = useState<boolean | null>(null)
+  const [support, setSupport] = useState<Record<string, boolean | null>>({})
   const [businessName, setBusinessName] = useState(defaults.businessName || 'My Business')
   const [tagline, setTagline] = useState('')
   const [services, setServices] = useState<string[]>(['', '', ''])
@@ -120,9 +120,15 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   const [result, setResult] = useState<{ url: string; blob: Blob; filename: string } | null>(null)
   const resultRef = useRef<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const stallRef = useRef({ value: 0, at: 0 })
+  const stallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const accent = ACCENT_PRESETS.find((a) => a.key === accentKey)?.color || '#f97316'
   const preset = QUALITY_PRESETS.find((q) => q.key === qualityKey) || QUALITY_PRESETS[0]
+  const presetIndex = QUALITY_PRESETS.findIndex((q) => q.key === preset.key)
+  const anySupported = Object.values(support).some((v) => v === true)
+  const supportKnown = Object.keys(support).length > 0
 
   const smartTagline = useMemo(() => {
     if (tagline.trim()) return tagline.trim()
@@ -151,12 +157,44 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   useEffect(() => {
     if (!open) return
     let alive = true
-    setSupported(null)
-    canRenderMediaOnWeb({ width: preset.width, height: preset.height, container: 'mp4', videoCodec: 'h264' })
-      .then((r) => { if (alive) setSupported(Boolean(r.canRender)) })
-      .catch(() => { if (alive) setSupported(false) })
+    setSupport({})
+    // Probe EVERY rung of the ladder once, so a machine that cannot do 1080p
+    // but can do 720p or 540p still gets a working export instead of a wall.
+    Promise.all(
+      QUALITY_PRESETS.map(async (q) => {
+        try {
+          const r = await canRenderMediaOnWeb({ width: q.width, height: q.height, container: 'mp4', videoCodec: 'h264' })
+          return [q.key, Boolean(r.canRender)] as const
+        } catch {
+          return [q.key, false] as const
+        }
+      }),
+    )
+      .then((entries) => {
+        if (alive) setSupport(Object.fromEntries(entries))
+      })
+      .catch(() => {
+        if (alive) setSupport(Object.fromEntries(QUALITY_PRESETS.map((q) => [q.key, false])))
+      })
     return () => { alive = false }
-  }, [open, preset.width, preset.height])
+  }, [open])
+
+  // The selected rung is impossible on this machine: step down to the best
+  // one that can render, and say so. Nobody gets silently dead ended.
+  useEffect(() => {
+    if (!supportKnown || rendering) return
+    if (support[preset.key] === false) {
+      const firstOk = QUALITY_PRESETS.find((q) => support[q.key] === true)
+      if (firstOk) {
+        setQualityKey(firstOk.key)
+        toast({
+          title: `${preset.label} is not available on this machine`,
+          description: `Switched to ${firstOk.label} quality. Same video, it will render.`,
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportKnown, qualityKey])
 
   useEffect(() => {
     // revoke the previous result object URL when it changes or on close
@@ -186,20 +224,31 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
   }, [toast])
 
   const onExport = useCallback(async () => {
-    if (supported === false || rendering) return
+    if (rendering) return
     setRendering(true)
     setProgress(0)
     setResult(null)
-    // No deadends: if the selected quality's exact encoder config is rejected
-    // (some machines and headless browsers refuse a High profile 1080p config),
-    // fall back to Sharp 720p automatically before showing an error.
-    const sharp = QUALITY_PRESETS.find((q) => q.key === 'sharp') || QUALITY_PRESETS[0]
-    const attempts = preset.key === 'sharp' ? [preset] : [preset, sharp]
+    // THE FALLBACK LADDER: every rung from the selected quality down, so a
+    // machine that refuses one exact encoder config still lands an export.
+    const attempts = QUALITY_PRESETS.slice(Math.max(0, presetIndex))
+    const controller = new AbortController()
+    abortRef.current = controller
+    stallRef.current = { value: 0, at: Date.now() }
+    // Watchdog: a WebCodecs worker that dies quietly would otherwise freeze
+    // the dialog at the same percent forever. 45 seconds without any progress
+    // movement means stuck, the abort ends it and the honest error shows.
+    if (stallTimerRef.current) clearInterval(stallTimerRef.current)
+    stallTimerRef.current = setInterval(() => {
+      if (Date.now() - stallRef.current.at > 45_000) {
+        controller.abort()
+      }
+    }, 2_000)
     try {
       for (let i = 0; i < attempts.length; i++) {
         const p = attempts[i]
         try {
           setProgress(0)
+          stallRef.current = { value: 0, at: Date.now() }
           const { getBlob } = await renderMediaOnWeb({
             composition: {
               id: 'pitch',
@@ -219,13 +268,27 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
             // a whole class of "audio worker failed" render failures.
             muted: true,
             licenseKey: 'free-license',
-            onProgress: ({ progress: p2 }) => setProgress(Math.round((p2 || 0) * 100)),
+            signal: controller.signal,
+            onProgress: ({ progress: p2 }) => {
+              const value = Math.round((p2 || 0) * 100)
+              setProgress(value)
+              if (value !== stallRef.current.value) stallRef.current = { value, at: Date.now() }
+            },
           })
           const blob = await getBlob()
+          // A broken encoder can resolve with an empty shell instead of
+          // throwing. A video under a kilobyte is not a video, treat it as a
+          // failed rung and climb down the ladder instead of attaching junk.
+          if (!blob || blob.size < 1000) {
+            throw new Error('the render came back empty')
+          }
           if (blob.size > MAX_ATTACH_BYTES) {
+            const lower = attempts[i + 1]
             toast({
               title: 'The video came out too big to email',
-              description: p.key === 'max' ? 'Switch quality to Sharp 720p and render again. Same video, smaller file.' : 'Shorten a service line or try again. The honest cap is about 9 megabytes.',
+              description: lower
+                ? `Try ${lower.label} quality and render again. Same video, smaller file.`
+                : 'Shorten a service line or try again. The honest cap is about 9 megabytes.',
               variant: 'destructive',
             })
             return
@@ -236,9 +299,30 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
           setResult({ url, blob, filename })
           return
         } catch (e) {
+          if (controller.signal.aborted) {
+            // The watchdog or the member stopped this run. If the watchdog did,
+            // there may still be life lower down the ladder, so climb once.
+            const stalled = Date.now() - stallRef.current.at > 45_000
+            if (!stalled || i >= attempts.length - 1) {
+              console.warn('[video] render aborted', e)
+              toast({
+                title: stalled ? 'The render stalled and was stopped' : 'Render cancelled',
+                description: stalled
+                  ? 'Try again, or pick a lower quality. Light 540p runs on the weakest devices.'
+                  : 'Nothing was attached.',
+                variant: stalled ? 'destructive' : 'default',
+              })
+              return
+            }
+            console.warn('[video] watchdog stopped this rung, dropping down', e)
+            continue
+          }
           if (i < attempts.length - 1) {
-            console.warn('[video] encoder refused this quality, falling back to 720p', e)
-            toast({ title: 'Full HD is not available on this machine', description: 'Rendering in Sharp 720p instead. Same video.' })
+            console.warn('[video] encoder refused this quality, dropping down the ladder', e)
+            toast({
+              title: `${p.label} is not available on this machine`,
+              description: `Rendering in ${attempts[i + 1].label} instead. Same video.`,
+            })
             continue
           }
           throw e
@@ -248,9 +332,18 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
       console.error('[video] render failed', e)
       toast({ title: 'The render stopped', description: 'Try Chrome or Edge on a computer for the smoothest run, then export again.', variant: 'destructive' })
     } finally {
+      if (stallTimerRef.current) {
+        clearInterval(stallTimerRef.current)
+        stallTimerRef.current = null
+      }
+      abortRef.current = null
       setRendering(false)
     }
-  }, [supported, rendering, inputProps, cleanName, toast, preset, qualityKey])
+  }, [rendering, inputProps, cleanName, toast, presetIndex])
+
+  const onCancelRender = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
 
   const toBase64 = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -372,7 +465,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
 
             <div className="space-y-1.5">
               <Label>Quality</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {QUALITY_PRESETS.map((q) => (
                   <button
                     key={q.key}
@@ -390,20 +483,29 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
               )}
             </div>
 
-            {supported === false ? (
+            {supportKnown && !anySupported ? (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                This browser cannot render video at this quality. Open HustlePortal in Chrome or Edge on a computer, or Safari on iPhone with iOS 16.4 or newer, and export from there. Sharp 720p has the widest support.
+                This browser cannot render video at any quality. Open HustlePortal in Chrome or Edge on a computer and export from there.
               </div>
             ) : (
-              <Button className="w-full" onClick={onExport} disabled={rendering || supported !== true}>
+              <Button className="w-full" onClick={onExport} disabled={rendering || (supportKnown && support[preset.key] === false)}>
                 {rendering ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Film className="h-4 w-4 mr-1" />}
-                {rendering ? `Rendering ${progress}%` : 'Create the video'}
+                {rendering ? `Rendering ${progress}%` : !supportKnown ? 'Checking this browser' : 'Create the video'}
               </Button>
             )}
 
             {rendering && (
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-[var(--brand)] transition-all" style={{ width: `${progress}%` }} />
+              <div className="space-y-2">
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-[var(--brand)] transition-all" style={{ width: `${progress}%` }} />
+                </div>
+                <button
+                  type="button"
+                  onClick={onCancelRender}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Cancel the render
+                </button>
               </div>
             )}
 
