@@ -214,6 +214,10 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
             videoCodec: 'h264',
             videoBitrate: p.bitrate,
             hardwareAcceleration: 'no-preference',
+            // The composition carries no audio track, so the output was always
+            // silent — muting skips the AAC encoder worker entirely and removes
+            // a whole class of "audio worker failed" render failures.
+            muted: true,
             licenseKey: 'free-license',
             onProgress: ({ progress: p2 }) => setProgress(Math.round((p2 || 0) * 100)),
           })
