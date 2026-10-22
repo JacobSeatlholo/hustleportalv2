@@ -7,6 +7,11 @@
  * @remotion/web-renderer, so the platform pays zero render cost and runs no
  * video servers. The only server side piece is the mail attachment itself.
  *
+ * v3: the machine scene. The member's services boot up and play INSIDE a
+ * retro computer on screen: CRT power on, boot text with their name, slides
+ * with scanlines and phosphor glow, then the camera dives into the screen.
+ * Bitrates rebalanced so 15 seconds at Maximum stays inside the email cap.
+ *
  * v2: logo upload (downscaled client side, transparency detected so JPG logos
  * get the hero plate treatment and never an ugly floating white box), and a
  * quality selector, Maximum is 1080p at a controlled 5.5 Mbps bitrate with
@@ -376,7 +381,7 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Clapperboard className="h-4 w-4 text-brand" /> Video Studio</DialogTitle>
           <DialogDescription>
-            Build a 12 second pitch video from your business details, watch it live, then attach it to this email. Add your logo, pick the quality, and your own browser renders it at no cost.
+            Build a 15 second pitch video from your business details, watch it live, then attach it to this email. Your services boot up inside a retro computer, your logo rides through every scene, and your own browser renders it at no cost.
           </DialogDescription>
         </DialogHeader>
 
