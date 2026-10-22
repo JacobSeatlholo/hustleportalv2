@@ -190,36 +190,56 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
     setRendering(true)
     setProgress(0)
     setResult(null)
+    // No deadends: if the selected quality's exact encoder config is rejected
+    // (some machines and headless browsers refuse a High profile 1080p config),
+    // fall back to Sharp 720p automatically before showing an error.
+    const sharp = QUALITY_PRESETS.find((q) => q.key === 'sharp') || QUALITY_PRESETS[0]
+    const attempts = preset.key === 'sharp' ? [preset] : [preset, sharp]
     try {
-      const { getBlob } = await renderMediaOnWeb({
-        composition: {
-          id: 'pitch',
-          component: LooseVideo,
-          durationInFrames: PITCH_DURATION,
-          fps: PITCH_FPS,
-          width: preset.width,
-          height: preset.height,
-        },
-        inputProps: inputProps as unknown as Record<string, unknown>,
-        container: 'mp4',
-        videoCodec: 'h264',
-        videoBitrate: preset.bitrate,
-        hardwareAcceleration: 'prefer-hardware',
-        onProgress: ({ progress: p }) => setProgress(Math.round((p || 0) * 100)),
-      })
-      const blob = await getBlob()
-      if (blob.size > MAX_ATTACH_BYTES) {
-        toast({
-          title: 'The video came out too big to email',
-          description: qualityKey === 'max' ? 'Switch quality to Sharp 720p and render again. Same video, smaller file.' : 'Shorten a service line or try again. The honest cap is about 9 megabytes.',
-          variant: 'destructive',
-        })
-        return
+      for (let i = 0; i < attempts.length; i++) {
+        const p = attempts[i]
+        try {
+          setProgress(0)
+          const { getBlob } = await renderMediaOnWeb({
+            composition: {
+              id: 'pitch',
+              component: LooseVideo,
+              durationInFrames: PITCH_DURATION,
+              fps: PITCH_FPS,
+              width: p.width,
+              height: p.height,
+            },
+            inputProps: inputProps as unknown as Record<string, unknown>,
+            container: 'mp4',
+            videoCodec: 'h264',
+            videoBitrate: p.bitrate,
+            hardwareAcceleration: 'no-preference',
+            licenseKey: 'free-license',
+            onProgress: ({ progress: p2 }) => setProgress(Math.round((p2 || 0) * 100)),
+          })
+          const blob = await getBlob()
+          if (blob.size > MAX_ATTACH_BYTES) {
+            toast({
+              title: 'The video came out too big to email',
+              description: p.key === 'max' ? 'Switch quality to Sharp 720p and render again. Same video, smaller file.' : 'Shorten a service line or try again. The honest cap is about 9 megabytes.',
+              variant: 'destructive',
+            })
+            return
+          }
+          const filename = `pitch-${cleanName}.mp4`
+          const url = URL.createObjectURL(blob)
+          resultRef.current = url
+          setResult({ url, blob, filename })
+          return
+        } catch (e) {
+          if (i < attempts.length - 1) {
+            console.warn('[video] encoder refused this quality, falling back to 720p', e)
+            toast({ title: 'Full HD is not available on this machine', description: 'Rendering in Sharp 720p instead. Same video.' })
+            continue
+          }
+          throw e
+        }
       }
-      const filename = `pitch-${cleanName}.mp4`
-      const url = URL.createObjectURL(blob)
-      resultRef.current = url
-      setResult({ url, blob, filename })
     } catch (e) {
       console.error('[video] render failed', e)
       toast({ title: 'The render stopped', description: 'Try Chrome or Edge on a computer for the smoothest run, then export again.', variant: 'destructive' })
