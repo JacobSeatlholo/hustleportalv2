@@ -2111,3 +2111,18 @@ Work Log:
 
 Stage Summary:
 - Video themes are now a real member setting: Machine or Clean set from the profile page, the studio always opens on the member's default, the switcher still works for any single video, and the choice survives devices because it lives on the account. Stamp 759f7ff verified green.
+
+---
+Task ID: 107
+Agent: main (Z.ai ops run)
+Task: Boss: "Whenever i reveal contacts, it seems theres a bug that gets me to reset the screen each time, elsee the next lead does not reveal."
+
+Work Log:
+- Root cause found in LeadsView LeadDetailDialog: the Reveal contact button set a revealing busy flag true on click and NOTHING in the whole file ever set it back to false. The dialog is mounted once for the whole Leads session (lead prop swaps, component persists), so after the FIRST reveal the flag stayed true forever and every next locked lead opened with a permanently disabled button. A full screen reset remounted the view and cleared it, which is exactly the reset the boss was forced into. Sibling busy flags (saving, deleting, moving, taskSaving) all had proper resets; revealing was the only orphan.
+- Fix, two layers: the button handler now awaits the parent reveal (prop typed as void or Promise) and clears the flag in a finally so the spinner honestly tracks the request, plus a safety reset of the flag in the leadId effect so any future stuck path still hands the next lead a live button.
+- Typecheck clean in src, local build green in 38.4s. Deployed d5be758, health verified: db ping true, integrations green, sha matches.
+- Browser QA on prod (agent-browser, ops seat, one login): assigned two verified pool leads to the ops seat via the exec pool API for future use (they arrive pre unlocked, team verified), then exercised the exact boss flow on the two locked imported rows. Reveal one: request completed and the button returned to enabled (old code left it dead here). Opened lead two with NO reset: button enabled, the state that used to be impossible. Clicked reveal on lead two: toast came back Nothing charged (honest contract on unsourced rows, wallet untouched at R109) and the flag reset again. Zero page errors. Screenshot in scripts/qa_double_reveal.png.
+- Master account ZERO logins, ZERO writes this run. Ops seat only. Master password rotation STILL outstanding. Task 97 WhatsApp bot still parked on the boss's three Meta values.
+
+Stage Summary:
+- Contact reveal is sequential again: reveal a lead, close, open the next, the button just works, no screen resets. Root cause was an orphaned busy flag, fixed with await plus finally and a lead swap safety net. Stamp d5be758 verified green.
