@@ -258,6 +258,8 @@ export interface PoolLead {
   verifyScore?: number
   sourceRef?: string
   local?: boolean
+  // raw freshness for the composite scorer (the deck's recency part)
+  lastSeenAt?: Date
 }
 
 // The seller sees a clean card: who to ask, where to find them, and the
@@ -281,6 +283,7 @@ function poolToLead(p: LeadPoolRow, local = false): PoolLead {
     ...(p.verifyScore ? { verifyScore: p.verifyScore } : {}),
     ...(p.sourceRef ? { sourceRef: p.sourceRef } : {}),
     ...(local ? { local: true } : {}),
+    ...(p.lastSeenAt ? { lastSeenAt: p.lastSeenAt } : {}),
   }
 }
 

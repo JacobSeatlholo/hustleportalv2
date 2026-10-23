@@ -414,9 +414,22 @@ interface DiscoverResult {
   verifyScore?: number
   sourceRef?: string
   local?: boolean
+  fitScore?: number
+  categoryKey?: string | null
 }
 
-type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'POOL' | 'NONE'
+type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'POOL' | 'SCARCE' | 'NONE'
+
+// The learning loop's one tap reasons, shown right on the card the seller
+// dismissed. WRONG_INDUSTRY teaches the engine loudest, so it leads.
+const DISMISS_REASONS: { key: string; label: string }[] = [
+  { key: 'WRONG_INDUSTRY', label: 'Wrong industry' },
+  { key: 'TOO_FAR', label: 'Too far away' },
+  { key: 'TOO_BIG', label: 'Too big for me' },
+  { key: 'TOO_SMALL', label: 'Too small for me' },
+  { key: 'ALREADY_CLIENT', label: 'Already a client' },
+  { key: 'NOT_NOW', label: 'Just not now' },
+]
 
 // Per workspace memory: the Lead Finder remembers the last hunt per project.
 // Switch the target project and its own search comes back.
@@ -470,6 +483,8 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   // Persisted so the user chooses once and the app remembers.
   const [autoAdd, setAutoAdd] = useState(true)
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
+  // The dismiss flow: which card is showing its reason chips right now.
+  const [dismissFor, setDismissFor] = useState<string | null>(null)
 
   useEffect(() => {
     try { setAutoAdd(localStorage.getItem('hp_discover_autoadd') !== '0') } catch { /* default on */ }
@@ -519,6 +534,21 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     return () => { clearInterval(t); clearInterval(s) }
   }, [busy])
 
+  // A saved lead is a right swipe: fire and forget, the engine learns either way.
+  function sendSignal(r: DiscoverResult, signal: 'SAVE' | 'DISMISS', reason?: string) {
+    api('/api/leads/signal', {
+      method: 'POST',
+      body: JSON.stringify({
+        signal,
+        ...(reason ? { reason } : {}),
+        company: r.company,
+        industry: r.industry || undefined,
+        city: r.city || undefined,
+        source: resSource,
+      }),
+    }).catch(() => { /* the loop is sugar: a failed signal never blocks a save */ })
+  }
+
   async function saveLeads(list: DiscoverResult[]) {
     // Parallel saves: five leads land in one round trip, not five.
     const res = await Promise.allSettled(
@@ -536,7 +566,21 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
         })
       )
     )
-    return res.filter((x) => x.status === 'fulfilled').length
+    const okCount = res.filter((x) => x.status === 'fulfilled').length
+    if (okCount > 0) for (const r of list) sendSignal(r, 'SAVE')
+    return okCount
+  }
+
+  function dismissLead(r: DiscoverResult, reason?: string) {
+    sendSignal(r, 'DISMISS', reason)
+    setResults((prev) => prev.filter((x) => x.company !== r.company))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.delete(r.company)
+      return next
+    })
+    setDismissFor(null)
+    toast({ title: 'Noted. The engine learns every scan.', description: `${r.company} will not come back, and ${reason === 'WRONG_INDUSTRY' ? 'this industry now ranks lower for you' : 'your taste profile just got sharper'}.` })
   }
 
   async function search() {
@@ -734,11 +778,11 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span>
-                  {results.length} matches found
+                  {results.length} match{results.length === 1 ? '' : 'es'} found
                   {autoAdd && <span className="text-emerald-600 font-medium"> · already in your pipeline</span>}
                 </span>
-                <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : mode === 'OSM' ? 'bg-sky-500/15 text-sky-400' : mode === 'POOL' ? 'bg-brand/20 text-brand' : 'bg-brand/20 text-brand'}>
-                  {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : mode === 'POOL' ? 'Verified pool' : 'Verified data'}
+                <Badge className={mode === 'AI_SEARCH' ? 'bg-emerald-500/15 text-emerald-400' : mode === 'OSM' ? 'bg-sky-500/15 text-sky-400' : mode === 'POOL' ? 'bg-brand/20 text-brand' : mode === 'SCARCE' ? 'bg-amber-500/15 text-amber-500' : 'bg-brand/20 text-brand'}>
+                  {mode === 'AI_SEARCH' ? 'Live web results' : mode === 'OSM' ? 'OpenStreetMap listings' : mode === 'POOL' ? 'Verified pool' : mode === 'SCARCE' ? 'Honest scan' : 'Verified data'}
                 </Badge>
               </div>
               {/* Results grow with the dialog's own scroll, one scroll
@@ -746,53 +790,89 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               <div className="space-y-1.5">
                 {results.map((r) => {
                   const alreadyIn = addedKeys.has(r.company)
+                  const dismissing = dismissFor === r.company
                   return (
-                    <label key={r.company} className={`flex items-start gap-3 rounded-lg border p-2.5 ${alreadyIn ? 'border-emerald-500/40 bg-emerald-500/5' : 'cursor-pointer hover:bg-muted/40'}`}>
-                      <input
-                        type="checkbox"
-                        checked={alreadyIn || selected.has(r.company)}
-                        disabled={alreadyIn}
-                        onChange={(e) => {
-                          const next = new Set(selected)
-                          if (e.target.checked) next.add(r.company)
-                          else next.delete(r.company)
-                          setSelected(next)
-                        }}
-                        className="h-4 w-4 accent-brand mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{r.company}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <span className="truncate">{r.industry || 'Business'} · {r.city || 'SA'}</span>
-                          {r.local && (
-                            <span className="shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 text-[10px] font-medium">in your area</span>
+                    <div key={r.company} className={`rounded-lg border p-2.5 ${alreadyIn ? 'border-emerald-500/40 bg-emerald-500/5' : ''}`}>
+                      <div className="flex items-start gap-3">
+                        <label className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={alreadyIn || selected.has(r.company)}
+                            disabled={alreadyIn}
+                            onChange={(e) => {
+                              const next = new Set(selected)
+                              if (e.target.checked) next.add(r.company)
+                              else next.delete(r.company)
+                              setSelected(next)
+                            }}
+                            className="h-4 w-4 accent-brand mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium truncate">{r.company}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <span className="truncate">{r.industry || 'Business'} · {r.city || 'SA'}</span>
+                              {r.local && (
+                                <span className="shrink-0 rounded-full bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 text-[10px] font-medium">in your area</span>
+                              )}
+                            </div>
+                            {(r.contactName || r.profileUrl) && (
+                              <div className="text-[11px] text-brand mt-0.5 flex items-center gap-1 min-w-0">
+                                <User className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{r.contactName ? `Ask for ${r.contactName}${r.role ? ` (${r.role})` : ''}` : 'Decision maker on file'}</span>
+                                {r.profileUrl && <a className="underline shrink-0" href={r.profileUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>public profile</a>}
+                              </div>
+                            )}
+                            {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
+                            {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
+                            <div className="flex gap-2 mt-1 text-[11px]">
+                              {r.phone && <span className="text-muted-foreground">☎ {r.phone}</span>}
+                              {r.email && <span className="text-muted-foreground truncate">✉ {r.email}</span>}
+                            </div>
+                            {(r.verified || r.seenAgo) && (
+                              <div className="mt-1 text-[10px] text-emerald-600">
+                                {r.verified ? `✓ ${r.verified}` : ''}{r.verified && r.seenAgo ? ' · ' : ''}{r.seenAgo || ''}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {alreadyIn ? (
+                            <Badge className="bg-emerald-500/15 text-emerald-600 text-[10px]">✓ in pipeline</Badge>
+                          ) : r.fitScore != null ? (
+                            <Badge variant="outline" className="text-[10px]">match {r.fitScore}%</Badge>
+                          ) : r.score != null ? (
+                            <Badge variant="outline" className="text-[10px]">fit {r.score}/5</Badge>
+                          ) : null}
+                          {!alreadyIn && (
+                            <button
+                              type="button"
+                              aria-label={`Not for me: ${r.company}`}
+                              onClick={() => setDismissFor(dismissing ? null : r.company)}
+                              className="text-[10px] text-muted-foreground hover:text-destructive transition-colors px-1.5 py-0.5 rounded-md hover:bg-destructive/10"
+                            >
+                              Not for me
+                            </button>
                           )}
                         </div>
-                        {(r.contactName || r.profileUrl) && (
-                          <div className="text-[11px] text-brand mt-0.5 flex items-center gap-1 min-w-0">
-                            <User className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{r.contactName ? `Ask for ${r.contactName}${r.role ? ` (${r.role})` : ''}` : 'Decision maker on file'}</span>
-                            {r.profileUrl && <a className="underline shrink-0" href={r.profileUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>public profile</a>}
-                          </div>
-                        )}
-                        {r.why && <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{r.why}</div>}
-                        {r.website && <div className="text-[11px] text-brand mt-0.5 truncate">{r.website}</div>}
-                        <div className="flex gap-2 mt-1 text-[11px]">
-                          {r.phone && <span className="text-muted-foreground">☎ {r.phone}</span>}
-                          {r.email && <span className="text-muted-foreground truncate">✉ {r.email}</span>}
-                        </div>
-                        {(r.verified || r.seenAgo) && (
-                          <div className="mt-1 text-[10px] text-emerald-600">
-                            {r.verified ? `✓ ${r.verified}` : ''}{r.verified && r.seenAgo ? ' · ' : ''}{r.seenAgo || ''}
-                          </div>
-                        )}
                       </div>
-                      {alreadyIn ? (
-                        <Badge className="bg-emerald-500/15 text-emerald-600 text-[10px] mt-0.5">✓ in pipeline</Badge>
-                      ) : r.score != null ? (
-                        <Badge variant="outline" className="text-[10px] mt-0.5">fit {r.score}/5</Badge>
-                      ) : null}
-                    </label>
+                      {dismissing && (
+                        <div className="mt-2 pt-2 border-t border-border/60">
+                          <p className="text-[11px] text-muted-foreground mb-1.5">Why is {r.company} not for you? The engine learns from every answer.</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {DISMISS_REASONS.map((d) => (
+                              <button
+                                key={d.key}
+                                type="button"
+                                onClick={() => dismissLead(r, d.key)}
+                                className="text-[11px] px-2 py-1 rounded-full border border-border hover:border-destructive hover:text-destructive transition-colors"
+                              >
+                                {d.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>

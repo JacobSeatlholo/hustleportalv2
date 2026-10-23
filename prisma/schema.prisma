@@ -73,6 +73,7 @@ model User {
   taskComments       TaskComment[]
   projectMemberships ProjectMember[]  @relation("ProjectMemberUser")
   poolLeads          ClientPoolLead[]
+  leadSignals        LeadSignal[]
   meetingsOwned      Meeting[]        @relation("MeetingOwner")
   meetingsAsMember   Meeting[]        @relation("MeetingMember")
 }
@@ -843,6 +844,34 @@ model ClientPoolLead {
 
   @@unique([userId, fingerprint])
   @@index([userId, status])
+  @@index([createdAt])
+}
+
+// ============ THE LEARNING LOOP (per seller taste profile) ============
+// Every save is a right swipe, every dismissal a left swipe with a one tap
+// reason. The rows build a per seller taste profile over trades and faces:
+// saves pull a trade up, dismissals pull it down (WRONG_INDUSTRY loudest),
+// and dismissed company faces never serve to that seller again. The
+// discovery engine reads the aggregates on every scan, so the deck a seller
+// sees tomorrow is shaped by what they taught it today. This compounding
+// profile is member anchored data no competitor can buy.
+model LeadSignal {
+  id          String   @id @default(cuid())
+  userId      String
+  signal      String   // SAVE | DISMISS
+  reason      String?  // WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | NOT_NOW
+  companyKey  String   // normKey(company), the face that never returns once dismissed
+  categoryKey String?  // resolved trade key from the taxonomy, server side only
+  city        String?
+  industry    String?
+  source      String?  // the serve lane that showed the face: WEB | MAP | POOL | TEAM
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, signal])
+  @@index([userId, categoryKey])
+  @@index([companyKey])
   @@index([createdAt])
 }
 

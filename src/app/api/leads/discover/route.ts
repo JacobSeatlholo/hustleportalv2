@@ -22,6 +22,9 @@ import {
   type RememberLead,
   type VerifyStamp,
 } from '@/lib/leadpool'
+import { categoryWeights, userDismissedKeys } from '@/lib/leadsignal'
+import { curate, scoreLeads } from '@/lib/leadscore'
+import { sellerTradeKeys, TRADES } from '@/lib/taxonomy'
 
 export const maxDuration = 60
 
@@ -183,6 +186,24 @@ function parseLeadList(text: string, cap: number, city: string) {
 }
 
 /**
+ * THE DECK, where every serve lane funnels through: the Tinder math scores
+ * each face (graph fit blended with the AI ranker's opinion, verification,
+ * freshness, reachability, and the seller's own learned taste), faces below
+ * the relevance bar fall away, and a thin deck says so honestly instead of
+ * padding. Five strong beats thirty hopeless, every time.
+ */
+function buildDeck(
+  leads: OutLead[],
+  definition: string,
+  weights: Map<string, number>,
+  cap: number,
+  area: string
+): { deck: OutLead[]; scarcity?: string } {
+  const scored = scoreLeads(leads, { definition, weights }) as OutLead[]
+  return curate(scored, cap, area)
+}
+
+/**
  * Shared ranking prompt: the AI only decides WHICH source businesses fit the
  * seller and WHY. Every contact field in the answer is copied verbatim from
  * the source record it matched, and any answer that does not map back to a
@@ -190,6 +211,13 @@ function parseLeadList(text: string, cap: number, city: string) {
  * ranks reality, it never supplies facts.
  */
 function rankingPrompt(definition: string, raw: AiLead[], cap: number) {
+  const keys = sellerTradeKeys(definition)
+  const labels = keys
+    .map((k) => TRADES.find((t) => t.key === k)?.label || k)
+    .slice(0, 4)
+  const tradeLine = labels.length
+    ? `The seller's trade maps to: ${labels.join(', ')}. A business is a fit when its type of business buys from those trades.\n`
+    : ''
   const source = raw
     .map((l, i) =>
       `${i + 1}. company: ${l.company} | type: ${l.industry || 'unknown'}${l.city ? ` | area: ${l.city}` : ''}${l.phone ? ` | phone: ${l.phone}` : ''}${l.website ? ` | website: ${l.website}` : ''}`
@@ -200,11 +228,12 @@ function rankingPrompt(definition: string, raw: AiLead[], cap: number) {
       'You are a meticulous lead qualifier for South African small businesses. You receive a numbered list of REAL businesses from the OpenStreetMap directory and a seller description. You pick which of those real businesses are worth the seller contacting. You NEVER invent a company, phone number, website or email: every field you output must come from the list. Only businesses physically located in South Africa qualify. If nothing fits, return fewer leads.',
     prompt:
       `The seller offers:\n"""${definition.slice(0, 900)}"""\n\n` +
+      tradeLine +
       `Real businesses from the map directory:\n${source}\n\n` +
       `Pick up to ${cap} businesses from the list above that would realistically buy what the seller offers.\n` +
       `Rules:\n` +
       `- company: copy the name EXACTLY as it appears in the list.\n` +
-      `- score: 1 to 5 fit for the seller. Reserve 4 and 5 for strong fits.\n` +
+      `- score: 1 to 5 fit for the seller. 5 = exactly the business type this seller dreams of as a client, its kind of business directly buys what they sell. 4 = clearly buys it. 3 = plausible but unproven. 2 = a stretch. 1 = wrong industry entirely. Reserve 5 for direct consumers of the offering.\n` +
       `- why: one short line grounded in the type and area shown in the list.\n` +
       `- never output phone, website or email. Those stay attached from the source automatically.\n` +
       `- drop businesses that clearly do not fit. Fewer, better leads win.\n` +
@@ -432,6 +461,8 @@ type OutLead = {
   seenAgo?: string
   verifyScore?: number
   sourceRef?: string
+  fitScore?: number
+  categoryKey?: string | null
 }
 
 /** Attach the pool's verification chips, known humans and the area mark to what the engines just found. */
@@ -513,6 +544,14 @@ export async function POST(req: NextRequest) {
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // THE LEARNING LOOP: dismissed faces never serve again, and the seller's
+  // per trade taste multipliers ride on every deck this scan builds.
+  const [savedKeys, dismissedKeys, weights] = await Promise.all([
+    userSavedKeys(userId),
+    userDismissedKeys(userId),
+    categoryWeights(userId),
+  ])
+  const excludeKeys = new Set([...savedKeys, ...dismissedKeys])
 
   // TEASER: no definition → build the search from the seller's saved profile (website first).
   // Grounds on the REQUESTED workspace (Lead Finder dropdown), default workspace otherwise.
@@ -570,7 +609,6 @@ export async function POST(req: NextRequest) {
   // another seller scanned in the last few minutes serves warm while the pool
   // grows. Rotation: least recently served faces first, so scanning again keeps
   // meeting businesses the seller has never contacted.
-  const excludeKeys = await userSavedKeys(userId)
   // The boost may only leave home when the scan says where home is: a GPS pin
   // without a city name gives the team floor nothing to match against.
   const boostAllowed = !hasPin || Boolean(city)
@@ -582,27 +620,31 @@ export async function POST(req: NextRequest) {
     poolBoosted = up.boosted
   }
   if (pooled.length >= cap) {
-    await logScanRun(userId, topicFp, 'POOL', pooled.length, true)
+    const { deck, scarcity } = buildDeck(pooled, definition, weights, cap, areaLabel)
+    await logScanRun(userId, topicFp, 'POOL', deck.length, true)
     return NextResponse.json({
-      leads: pooled,
-      mode: 'POOL',
+      leads: deck,
+      mode: deck.length ? 'POOL' : 'SCARCE',
       source: 'POOL',
       fromPool: true,
-      note:
-        'Fresh faces from the verified lead pool. Every business here was confirmed on a recent scan and none are already in your pipeline. Scan again anytime and the pool keeps rotating in businesses you have not met yet.' +
-        (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : ''),
+      ...(scarcity ? { note: scarcity } : { note: 'Fresh faces from the verified lead pool. Every business here was confirmed on a recent scan and none are already in your pipeline. Scan again anytime and the pool keeps rotating in businesses you have not met yet.' + (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : '') }),
     })
   }
   if (pooled.length > 0 && (await recentTopicScan(topicFp, 10))) {
-    await logScanRun(userId, topicFp, 'WARM', pooled.length, true)
+    const { deck, scarcity } = buildDeck(pooled, definition, weights, cap, areaLabel)
+    await logScanRun(userId, topicFp, 'WARM', deck.length, true)
     return NextResponse.json({
-      leads: pooled,
-      mode: 'POOL',
+      leads: deck,
+      mode: deck.length ? 'POOL' : 'SCARCE',
       source: 'POOL',
       fromPool: true,
-      note:
-        `Served while the pool warms up: a recent scan just mapped this ground, so these ${pooled.length} verified leads are ready now. Your next scan in a few minutes brings fresh faces too.` +
-        (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : ''),
+      ...(scarcity
+        ? { note: scarcity }
+        : {
+            note:
+              `Served while the pool warms up: a recent scan just mapped this ground, so these ${deck.length} verified leads are ready now. Your next scan in a few minutes brings fresh faces too.` +
+              (poolBoosted > 0 ? ` Plus ${poolBoosted} team verified contact${poolBoosted === 1 ? '' : 's'} our own outreach confirmed.` : ''),
+          }),
     })
   }
 
@@ -635,7 +677,7 @@ export async function POST(req: NextRequest) {
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
       `- NEVER construct an address from a pattern, if the phone/email is not in the results, omit the field.\n` +
       `- "why" = one line on why THIS business likely needs the seller (reference what you saw).\n` +
-      `- score = 1-5 fit for the seller.\n` +
+      `- score = 1 to 5 fit for the seller: 5 means this type of business directly buys what the seller sells, 1 means wrong industry. When unsure, score low, the deck only serves what clears the relevance bar.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
       `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","role":"","profileUrl":"","why":"","score":3}]}`,
   })
@@ -699,19 +741,20 @@ export async function POST(req: NextRequest) {
     if (final.length < cap) {
       final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition, boostAllowed)).leads
     }
-    await logScanRun(userId, topicFp, 'AI_SEARCH', final.length, false)
+    const { deck, scarcity } = buildDeck(final, definition, weights, cap, areaLabel)
+    await logScanRun(userId, topicFp, 'AI_SEARCH', deck.length, false)
     // Engine names stay internal: the note describes the outcome, never the
     // plumbing. Both grounded engines share one neutral wording.
     const baseNote = teaser
       ? `Scouted live from the web using your saved profile${pinArea ? ' · within 5 km of your location' : city ? ` · focused on ${city}` : ''}. Real, publicly findable businesses, grounded in live search.`
       : `Live web results grounded in real search${pinArea ? ' within 5 km of your location' : ''}, real, publicly findable businesses.`
     return NextResponse.json({
-      leads: final,
-      mode: 'AI_SEARCH',
+      leads: deck,
+      mode: deck.length ? 'AI_SEARCH' : 'SCARCE',
       source: 'WEB',
       ...(notice ? { notice } : {}),
+      ...(scarcity ? { note: scarcity } : { note: deck.length > leads.length ? `${baseNote} Topped up with verified pool leads you have not seen yet.` : baseNote }),
       ...(body.debug ? { glmTrace, geminiTrace } : {}),
-      note: final.length > leads.length ? `${baseNote} Topped up with verified pool leads you have not seen yet.` : baseNote,
     })
   }
 
@@ -823,37 +866,43 @@ export async function POST(req: NextRequest) {
     if (final.length < cap) {
       final = (await topUpWithTeamVerified(final, cap, city, excludeKeys, definition, boostAllowed)).leads
     }
-    const rankScore = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l.score || 0]))
+    // The ranked opinions ride onto the cards (why + score), then the deck's
+    // composite order decides what ships: the ranker's taste is an input to
+    // the score, not the whole verdict.
     const rankedById = new Map((ranked?.leads || []).map((l) => [normKey(l.company), l]))
-    final = final
-      .map((l) => {
-        const r = rankedById.get(normKey(l.company || ''))
-        return r ? { ...l, why: r.why || l.why, score: r.score || l.score } : l
-      })
-      .sort((a, b) => (rankScore.get(normKey(b.company || '')) || 0) - (rankScore.get(normKey(a.company || '')) || 0))
-    await logScanRun(userId, topicFp, 'OSM', final.length, false)
+    final = final.map((l) => {
+      const r = rankedById.get(normKey(l.company || ''))
+      return r ? { ...l, why: r.why || l.why, score: r.score || l.score } : l
+    })
+    const { deck, scarcity } = buildDeck(final, definition, weights, cap, areaLabel)
+    await logScanRun(userId, topicFp, 'OSM', deck.length, false)
     if (ranked && ranked.leads.length > 0) {
       const engineName = ranked.engine || 'AI'
       return NextResponse.json({
-        leads: final,
-        mode: 'OSM',
+        leads: deck,
+        mode: deck.length ? 'OSM' : 'SCARCE',
         source: 'OSM',
         ...(ranked.notice || dirNotice ? { notice: ranked.notice || dirNotice } : {}),
         ...(osm.note ? { osmNote: osm.note } : {}),
+        ...(scarcity ? { note: scarcity } : {}),
         ...(body.debug ? { glmTrace, geminiTrace } : {}),
-        note: teaser
-          ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by ${engineName}. Contact details come straight from the directory.`
-          : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by ${engineName} to what you sell. Contact details as listed in the directory.`,
+        ...(scarcity
+          ? {}
+          : {
+              note: teaser
+                ? `Scouted from the real business directory${areaLine} using your saved profile, then matched and ranked by ${engineName}. Contact details come straight from the directory.`
+                : `Real businesses from the OpenStreetMap directory${areaLine}, matched and ranked by ${engineName} to what you sell. Contact details as listed in the directory.`,
+            }),
       })
     }
     return NextResponse.json({
-      leads: final,
-      mode: 'OSM',
+      leads: deck,
+      mode: deck.length ? 'OSM' : 'SCARCE',
       source: 'OSM',
       ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
       ...(osm.note ? { osmNote: osm.note } : {}),
+      ...(scarcity ? { note: scarcity } : { note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed.` }),
       ...(body.debug ? { glmTrace, geminiTrace } : {}),
-      note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed.`,
     })
   }
 
@@ -874,8 +923,12 @@ export async function POST(req: NextRequest) {
         budgetUntil: t0 + 54_000,
       })
       const final = decorateLeads(saEx, stamps, city || undefined)
-      await logScanRun(userId, topicFp, 'EXPLEE', final.length, false)
-      return NextResponse.json({ ...ex, leads: final, source: 'TEAM' })
+      const { deck, scarcity } = buildDeck(final, definition, weights, cap, areaLabel)
+      await logScanRun(userId, topicFp, 'EXPLEE', deck.length, false)
+      if (!deck.length && scarcity) {
+        return NextResponse.json({ leads: [], mode: 'SCARCE', source: 'TEAM', note: scarcity })
+      }
+      return NextResponse.json({ ...ex, leads: deck, source: 'TEAM', ...(scarcity ? { note: scarcity } : {}) })
     }
   }
 
