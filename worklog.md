@@ -2126,3 +2126,19 @@ Work Log:
 
 Stage Summary:
 - Contact reveal is sequential again: reveal a lead, close, open the next, the button just works, no screen resets. Root cause was an orphaned busy flag, fixed with await plus finally and a lead swap safety net. Stamp d5be758 verified green.
+
+---
+Task ID: 108
+Agent: main (Z.ai ops run)
+Task: Boss: "sure go ahead." (on inventory product images, the CRM client timeline, and the city curation offer)
+
+Work Log:
+- STATUS CORRECTION FIRST: both remaining Reddit plan items were already built and shipped in f15a212 on Oct 22 (Task 104: video render robustness + inventory product photos + CRM client timeline). The handover notes listed them as not started, they were stale. Production has been carrying both ever since. Nothing to build this run, so the run became a verification pass.
+- Inventory product photos verified on prod (agent-browser, ops seat, one login): generated a test PNG, injected it through the add dialog picker via DataTransfer (native file dialogs cannot be scripted), the preview appeared, the item saved with the photo, the row thumbnail rendered with the remove X. Replace photo through the row camera worked, clear photo through the X worked (camera add button came back), item deleted clean afterwards. Screenshot in scripts/qa_inventory_photo.png.
+- CRM client timeline verified on prod: created QA Timeline Client, opened the History dialog (note composer present), saved a note, and the API returned the merged feed: the note at 05:18 plus the client added entry at 05:17 with correct counts. One lesson: the compact accessibility snapshot hides the custom timeline rows, the DOM check (dialog innerText) showed the full feed rendering, NOTE and CLIENT rows with timestamps. What looked like a feed bug was a snapshot artifact. The dialog genuinely works. QA client deleted afterwards. Screenshot in scripts/qa_client_timeline.png.
+- Pool note: assigned two verified pool leads to the ops seat earlier in this run via the exec pool API (Absolut Hair, AKJP Studio) for future reveal QA, they arrive pre unlocked as team verified contacts.
+- What remains from the offer is the per city lead curation rhythm. It is member anchored by design (Brody pattern: curate for a named member's industry and city so the leads are hyperlocal and useful), so the next city needs the boss's anchor choice before curation starts.
+- Master account ZERO logins, ZERO writes this run. Ops seat only. Master password rotation STILL outstanding. Task 97 WhatsApp bot still parked on the boss's three Meta values.
+
+Stage Summary:
+- The whole Reddit plan is closed with proof: video render hardening, inventory product photos and the CRM client timeline all live and verified on production. The only open offer is the next city curation, waiting on the boss's member and city anchor. No deploy this run, no code change needed, health last verified green at 03efc8c.
