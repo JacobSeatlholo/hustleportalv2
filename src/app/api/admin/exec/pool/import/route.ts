@@ -14,6 +14,13 @@ import { suppressedNameKeys } from '@/lib/suppression'
 //
 // POST { poolTag: 'BH2024', rows: [...] }   upsert, max 500 per call
 // POST { removeTag: 'BH2024-QA' }           delete every pool row under that tag
+// GET  ?poolTag=BH2024                      read rows back out (exec only)
+//      ?tagPrefix=BH2024-                   whole segment family instead of one tag
+//      &withEmail=1                         only rows that carry an address
+//      &mxOk=1                              only rows whose domain proved a live MX
+// This is the door the campaign queue drinks from: pull the verified
+// addresses, feed POST /api/admin/exec/campaigns. It is also how the boss
+// gets any segment back as data, for example every BH2024-OPENED row.
 //
 // Merge law on existing rows: fill gaps, never clobber good facts with
 // blanks, never steal a row from another project tag, never lower a score.
@@ -185,5 +192,77 @@ export async function POST(req: Request) {
     merged,
     skippedSuppressed,
     skippedInvalid,
+  })
+}
+
+// Read rows back out, exec eyes only. Powers the campaign queue feed (pull
+// the verified addresses under a tag, hand them to POST /api/admin/exec/
+// campaigns) and any "give me the opened segment as data" request.
+export async function GET(req: Request) {
+  const gate = await requireExec()
+  if (!gate.ok) return gate.res
+
+  const url = new URL(req.url)
+  const poolTag = slugTag(url.searchParams.get('poolTag') || '')
+  const tagPrefix = (url.searchParams.get('tagPrefix') || '')
+    .trim().toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+  const withEmail = url.searchParams.get('withEmail') === '1'
+  const mxOkOnly = url.searchParams.get('mxOk') === '1'
+
+  if (!poolTag && !tagPrefix) {
+    return NextResponse.json({ error: 'Pass poolTag or tagPrefix, for example BH2024.' }, { status: 400 })
+  }
+
+  const rows = await db.leadPool.findMany({
+    where: {
+      active: true,
+      ...(poolTag ? { poolTag } : { poolTag: { startsWith: tagPrefix } }),
+      ...(withEmail ? { email: { not: null } } : {}),
+    },
+    orderBy: [{ verifyScore: 'desc' }, { lastSeenAt: 'desc' }],
+    take: 5000,
+    select: {
+      id: true, company: true, city: true, contactName: true, role: true, email: true,
+      phone: true, industry: true, poolTag: true, verifyScore: true, verifyChecks: true,
+      lastVerifiedAt: true, lastSeenAt: true,
+    },
+  })
+
+  // mxOk lives in verifyChecks JSON, stamped by the MX verification at prep
+  // time. Parse once here so callers never touch the raw JSON blob.
+  let mxOk = 0
+  const out = rows
+    .map((r) => {
+      let checks: Record<string, unknown> = {}
+      try { checks = r.verifyChecks ? JSON.parse(r.verifyChecks) : {} } catch { checks = {} }
+      return { row: r, mxOkFlag: Boolean(checks.mxOk) }
+    })
+    .filter((r) => (mxOkOnly ? r.mxOkFlag : true))
+    .map(({ row, mxOkFlag }) => {
+      if (mxOkFlag) mxOk++
+      return {
+        id: row.id,
+        company: row.company,
+        city: row.city,
+        contactName: row.contactName,
+        role: row.role,
+        email: row.email,
+        phone: row.phone,
+        industry: row.industry,
+        poolTag: row.poolTag,
+        verifyScore: row.verifyScore,
+        mxOk: mxOkFlag,
+        lastVerifiedAt: row.lastVerifiedAt,
+        lastSeenAt: row.lastSeenAt,
+      }
+    })
+
+  return NextResponse.json({
+    ok: true,
+    filter: poolTag ? { poolTag } : { tagPrefix },
+    matched: rows.length,
+    returned: out.length,
+    mxOk,
+    rows: out,
   })
 }
