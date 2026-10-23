@@ -84,6 +84,30 @@ export interface TickResult {
   perCampaign: Record<string, { sent: number; failed: number; skipped: number }>
 }
 
+// ---- Opportunistic heartbeat ----
+// The Vercel Cron slots on this plan are two daily jobs and both are taken,
+// so the queue drinks from the platform's own traffic instead: hot routes
+// (health probes, member sessions, campaign open pixels) nudge the engine as
+// they flow. A per instance cooldown keeps the nudge cheap, the empty state
+// costs one small read, and the database pacing law stays the only clock that
+// matters, so extra nudges can never push a queue past its perHour ceiling.
+// Wrapped head to toe in try catch: a heartbeat can never break the route
+// that carried it.
+let lastOpportunisticTick = 0
+
+export async function opportunisticTick(maxSends = 2, minGapMs = 90_000): Promise<void> {
+  try {
+    const now = Date.now()
+    if (now - lastOpportunisticTick < minGapMs) return
+    lastOpportunisticTick = now
+    const states = await readCampaignStates()
+    if (!Object.values(states).some((s) => s.status === 'ACTIVE')) return
+    await tickCampaigns(maxSends)
+  } catch {
+    // the heartbeat stays silent on purpose
+  }
+}
+
 /**
  * One turn of the engine. Send at most maxSends overall, and per campaign at
  * most perHour minus what that campaign already sent in the last 3600 s.

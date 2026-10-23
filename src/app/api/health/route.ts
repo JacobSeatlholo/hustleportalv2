@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
+import { opportunisticTick } from '@/lib/campaignqueue'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,6 +87,10 @@ export async function GET() {
   const detail = gate.ok
     ? { error: dbPingError, tables, userQuery, steps }
     : { error: null, tables: null, userQuery: null, steps: {} }
+
+  // Health probes are the steadiest traffic the platform sees, so they carry
+  // the queue heartbeat too (cooldown gated, DB paced, silent on failure).
+  await opportunisticTick()
 
   return NextResponse.json({
     ok: true,

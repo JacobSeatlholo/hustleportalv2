@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { opportunisticTick } from '@/lib/campaignqueue'
 
 // GET /api/mail/open/[id], the invisible 1x1 open tracker bound to an EmailLog
 // row. Public by necessity (mail clients fetch it, no auth). First fetch stamps
@@ -63,6 +64,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   } catch {
     // tracking must never break the email render
   }
+  // Every opened mail nudges the queue engine forward (cooldown gated, DB
+  // paced). Awaits first: serverless freezes work that starts after the
+  // response, and the pixel is exactly the kind of traffic a live campaign
+  // generates on its own.
+  await opportunisticTick()
   return new Response(new Uint8Array(PIXEL), {
     status: 200,
     headers: {

@@ -3,6 +3,7 @@ import { getSessionUser, publicUser } from '@/lib/auth'
 import { levelFor, todaysChallenges, loginStreak } from '@/lib/gamification'
 import { ensureWallet } from '@/lib/wallet'
 import { listProjects, getOrCreateDefaultProject } from '@/lib/workspace'
+import { opportunisticTick } from '@/lib/campaignqueue'
 
 export async function GET() {
   try {
@@ -12,6 +13,10 @@ export async function GET() {
     const challenges = await todaysChallenges(user.id)
     await getOrCreateDefaultProject(user.id)
     const projects = await listProjects(user.id)
+    // Member sessions are the steadiest human traffic the platform sees, so
+    // they carry the queue heartbeat too (cooldown gated, DB paced, silent on
+    // failure, and it never adds work while no campaign is ACTIVE).
+    await opportunisticTick()
     return NextResponse.json({
       user: publicUser(user),
       wallet: { balance: wallet.balance },
