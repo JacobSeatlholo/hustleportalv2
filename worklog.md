@@ -2092,3 +2092,22 @@ Work Log:
 
 Stage Summary:
 - The Video Studio now carries two presentation themes sharing one 15 second spine: Machine, the retro computer boot with the member's services on the tube, and Clean, the classic bold list, switchable live with the choice remembered. Both themes proven to render end to end on production. Stamp 5286e5f verified green.
+
+---
+Task ID: 106b
+Agent: main (Z.ai ops run)
+Task: Boss: "yess, that and per member theme defaults set from their profile." (on top of the shipped Machine / Clean switcher)
+
+Work Log:
+- Per member default added on an additive spine: new nullable User.videoTheme column (machine / clean, null = never set). The Vercel build synced it to prod through the standard prisma db push step in build.mjs; no data path touched, no backfill needed.
+- Profile page now carries a Default video theme control in the save card, two cards (Machine, your services boot up inside a retro computer / Clean, bold text on the dark stage, the classic look), tap the chosen card again to clear it. Saved through the existing PATCH /api/profile which got a strict whitelist: only machine or clean ever lands, empty clears to null, anything unexpected leaves the saved value untouched. Old callers that never send videoTheme cannot disturb it.
+- Delivery channel: publicUser now exposes videoTheme, so GET /api/auth/me carries it to the client session fresh from the DB on every load (no JWT staleness for existing sessions), and ProfileView's existing loadSession after save refreshes it immediately.
+- VideoStudioDialog v5: defaults.videoTheme rides in from MailView, and a new effect applies the profile default every time the studio OPENS, overriding the per device localStorage memory. Switching inside the studio stays a per video choice and never writes back to the profile. Members without a saved default see a hint pointing at the profile page; with one, the hint says the profile default decides where the studio starts.
+- Copy law held: no hyphens, no emoji, no dashes in any new user facing string.
+- Typecheck clean in src (same 2 known errors outside src), local build green in 38.8s (dbPush SOFT FAILED is the known local pattern).
+- Deployed 759f7ff, health verified: db ping true, integrations green, build sha matches.
+- Browser QA on prod (agent-browser, ops seat, one login): the control renders on the profile card, choosing Clean and Save changes returned videoTheme clean from /api/auth/me (proof the column landed and the whitelist works). Studio opened on Clean with the profile default hint. DISCRIMINATING TEST: poisoned localStorage to machine, reopened the studio, it STILL opened on Clean, so the profile default beats stale device memory. Switched to Machine for one video (Machine card highlighted, preview swapped to the retro computer), closed and reopened, Clean won again, so a per video switch never hijacks the next open. One full render on Machine at Light ran to completion, result probed at 960x540 dur 15.00, 1.4 MB, zero page errors. Screenshots kept in scripts/qa_profile_theme.png, qa_studio_machine.png, qa_member_default_render.png.
+- Master account ZERO logins, ZERO writes this run. Ops seat only. Master password rotation STILL outstanding. Task 97 WhatsApp bot still parked on the boss's three Meta values.
+
+Stage Summary:
+- Video themes are now a real member setting: Machine or Clean set from the profile page, the studio always opens on the member's default, the switcher still works for any single video, and the choice survives devices because it lives on the account. Stamp 759f7ff verified green.
