@@ -664,6 +664,7 @@ export default function MailView() {
                   city: session.user.city || '',
                   phone: session.user.phone || '',
                   industry: session.user.industry || '',
+                  videoTheme: session.user.videoTheme,
                 }}
               />
             )}

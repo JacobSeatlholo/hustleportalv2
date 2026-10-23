@@ -55,7 +55,7 @@ export default function ProfileView() {
   const { session, loadSession, logout, activeProjectId, setActiveProject, bumpRefresh } = useHp()
   const { toast } = useToast()
   const [form, setForm] = useState({
-    name: '', businessName: '', industry: '', city: '', phone: '',
+    name: '', businessName: '', industry: '', city: '', phone: '', videoTheme: '',
   })
   const [saving, setSaving] = useState(false)
   const [customIndustry, setCustomIndustry] = useState('')
@@ -156,6 +156,7 @@ export default function ProfileView() {
         industry: session.user.industry || '',
         city: session.user.city || '',
         phone: session.user.phone || '',
+        videoTheme: session.user.videoTheme || '',
       })
     }
   }, [session])
@@ -588,6 +589,30 @@ export default function ProfileView() {
               <div className="space-y-1.5">
                 <Label>WhatsApp number</Label>
                 <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+27 …" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Default video theme</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, videoTheme: form.videoTheme === 'machine' ? '' : 'machine' })}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${form.videoTheme === 'machine' ? 'border-brand bg-brand/10' : 'hover:border-muted-foreground/40'}`}
+                  >
+                    <span className="block text-sm font-medium">Machine</span>
+                    <span className="block text-[11px] text-muted-foreground">Your services boot up inside a retro computer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, videoTheme: form.videoTheme === 'clean' ? '' : 'clean' })}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${form.videoTheme === 'clean' ? 'border-brand bg-brand/10' : 'hover:border-muted-foreground/40'}`}
+                  >
+                    <span className="block text-sm font-medium">Clean</span>
+                    <span className="block text-[11px] text-muted-foreground">Bold text on the dark stage, the classic look</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  The look every pitch video starts on. Tap the chosen card again to clear it, then Save changes. You can still switch themes inside the Video Studio for any single video.
+                </p>
               </div>
               <Button onClick={save} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save changes'}

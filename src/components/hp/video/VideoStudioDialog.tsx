@@ -7,6 +7,10 @@
  * @remotion/web-renderer, so the platform pays zero render cost and runs no
  * video servers. The only server side piece is the mail attachment itself.
  *
+ * v5: the member default. Machine or Clean is set from the profile page and
+ * the studio opens on it every time; the switcher below is for this one
+ * video. Members without a saved default keep the per device memory.
+ *
  * v4: theme switcher. Machine (default, the retro computer) or Clean (the
  * classic bold services list from v2). The choice is remembered per device.
  *
@@ -56,7 +60,7 @@ interface VideoStudioDialogProps {
   open: boolean
   onOpenChange: (o: boolean) => void
   onAttach: (a: VideoAttach) => void
-  defaults: { businessName: string; city: string; phone: string; industry: string }
+  defaults: { businessName: string; city: string; phone: string; industry: string; videoTheme?: string | null }
 }
 
 /** Draw the uploaded image to a max 512px canvas and detect real transparency. */
@@ -149,6 +153,17 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
       // Private mode or storage blocked, the choice just lives for this visit
     }
   }, [theme])
+
+  // The profile default wins every time the studio opens: the member set it
+  // on the profile page as the look their videos start on, so it replaces
+  // the device memory here. Switching below stays a per video choice and
+  // never writes back to the profile.
+  useEffect(() => {
+    if (!open) return
+    const saved = defaults.videoTheme
+    if (saved === 'machine' || saved === 'clean') setTheme(saved)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const accent = ACCENT_PRESETS.find((a) => a.key === accentKey)?.color || '#f97316'
   const preset = QUALITY_PRESETS.find((q) => q.key === qualityKey) || QUALITY_PRESETS[0]
@@ -499,6 +514,15 @@ export default function VideoStudioDialog({ open, onOpenChange, onAttach, defaul
                   <span className="block text-[11px] text-muted-foreground">Bold text on the dark stage, the classic look</span>
                 </button>
               </div>
+              {defaults.videoTheme === 'machine' || defaults.videoTheme === 'clean' ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Your profile default decides where the studio starts. Switch here any time for this one video.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Set a default theme from your profile page and the studio will always open on it.
+                </p>
+              )}
             </div>
             <div className="rounded-xl border bg-black/40 overflow-hidden">
               <Player

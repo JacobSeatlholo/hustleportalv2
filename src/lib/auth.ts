@@ -130,6 +130,7 @@ export function publicUser(u: {
   industry?: string | null
   city?: string | null
   phone?: string | null
+  videoTheme?: string | null
   role: string
   xp: number
   persona?: string | null
@@ -145,6 +146,7 @@ export function publicUser(u: {
     industry: u.industry || null,
     city: u.city || null,
     phone: u.phone || null,
+    videoTheme: u.videoTheme || null,
     role: u.role,
     xp: u.xp,
     persona: u.persona || null,

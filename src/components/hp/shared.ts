@@ -6,6 +6,7 @@ export interface SessionUser {
   industry: string | null
   city: string | null
   phone: string | null
+  videoTheme: string | null // machine | clean, the member's default pitch video theme
   role: string
   xp: number
   persona: string | null // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING

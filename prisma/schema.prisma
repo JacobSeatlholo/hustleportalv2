@@ -18,6 +18,10 @@ model User {
   industry     String?
   city         String?
   phone        String?
+  // Default pitch video theme for the Video Studio: machine = the retro
+  // computer boot, clean = the classic bold services list. Null = never set,
+  // the studio then falls back to the per device memory.
+  videoTheme   String?
   role         String   @default("MEMBER") // ADMIN | MEMBER
   accountStatus String  @default("ACTIVE") // ACTIVE | SUSPENDED (exec can pause an account; suspended = locked out everywhere)
   suspendedAt  DateTime?

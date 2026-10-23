@@ -11,6 +11,14 @@ export async function PATCH(req: NextRequest) {
   for (const k of ['name', 'businessName', 'industry', 'city', 'phone']) {
     if (k in body) data[k] = body[k] || null
   }
+  // Default pitch video theme for the Video Studio. Strict whitelist, only
+  // machine or clean ever lands in the column; an empty value clears it back
+  // to not set and anything unexpected leaves the saved choice untouched.
+  if ('videoTheme' in body) {
+    const v = String(body.videoTheme || '')
+    if (v === 'machine' || v === 'clean') data.videoTheme = v
+    else if (v === '') data.videoTheme = null
+  }
   if ('password' in body && body.password) {
     const me = await db.user.findUnique({ where: { id: userId } })
     if (!me) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
