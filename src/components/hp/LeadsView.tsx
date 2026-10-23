@@ -885,7 +885,7 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
 function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, projects }: {
   lead: Lead | null
   onOpenChange: (o: boolean) => void
-  onReveal: () => void
+  onReveal: () => void | Promise<void>
   onMoved: (stage: string) => void
   onChanged: () => void
   projects: { id: string; name: string; isDefault: boolean }[]
@@ -914,6 +914,11 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
   useEffect(() => {
     setInfo(null)
     setTaskOpen(false)
+    // Safety net: the reveal flag must never survive a lead swap. The reveal
+    // handler below also clears it in a finally, but if any path ever leaves
+    // it stuck, opening another lead must still give a live button, not a
+    // dead one that forces a screen reset.
+    setRevealing(false)
     if (!leadId) return
     setForm({
       company: lead?.company || '',
@@ -1116,7 +1121,22 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
               <Lock className="h-5 w-5 mx-auto text-brand" />
               <p className="text-sm font-medium">Contact details locked</p>
               <p className="text-xs text-muted-foreground">Reveal email &amp; phone using wallet credits. CSV/manual leads are always free.</p>
-              <Button onClick={() => { setRevealing(true); onReveal() }} disabled={revealing} size="sm" className="bg-sidebar hover:bg-sidebar/90 text-white">
+              <Button
+                onClick={async () => {
+                  setRevealing(true)
+                  try {
+                    await onReveal()
+                  } finally {
+                    // THE FIX: this flag used to stick true forever after the
+                    // first reveal, so every next locked lead opened with a
+                    // permanently disabled button until a full screen reset.
+                    setRevealing(false)
+                  }
+                }}
+                disabled={revealing}
+                size="sm"
+                className="bg-sidebar hover:bg-sidebar/90 text-white"
+              >
                 {revealing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <HandCoins className="h-4 w-4 mr-1" />}
                 Reveal contact
               </Button>
