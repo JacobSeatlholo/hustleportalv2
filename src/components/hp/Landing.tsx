@@ -175,7 +175,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen hp-gradient-bg flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
-        <div className="font-display text-2xl tracking-wide">
+        <div className="font-display font-medium text-2xl tracking-wide">
           HUSTLE<span className="text-brand">PORTAL</span>
           <span className="text-[10px] align-super">™</span>
         </div>
@@ -195,12 +195,12 @@ export default function Landing() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 pb-16 space-y-20">
       {/* ===== Hero: short pitch + auth ===== */}
       <div className="grid lg:grid-cols-2 gap-10 items-center">
-        <div className="space-y-7">
+        <div className="space-y-7 hp-rise">
           <div>
-            <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase text-brand">
+            <div className="inline-flex items-center gap-2 hp-eyebrow text-brand">
               <Zap className="h-3 w-3 text-brand" /> The Business OS for South African businesses
             </div>
-            <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-3">
+            <h1 className="font-display text-5xl md:text-6xl leading-[1.04] tracking-[-0.02em] mt-3">
               Tell us what you do.<br />
               <span className="text-brand">We find your customers.</span>
             </h1>
@@ -392,8 +392,8 @@ export default function Landing() {
       {/* ===== Infographic: the money flow ===== */}
       <section id="how-it-works" className="space-y-8">
         <div className="text-center">
-          <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">How it works</div>
-          <h2 className="font-display text-3xl mt-1">Three moves. Five minutes.</h2>
+          <div className="hp-eyebrow text-brand">How it works</div>
+          <h2 className="font-display text-3xl md:text-4xl mt-2">Three moves. Five minutes.</h2>
         </div>
         <div className="grid md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-stretch">
           {FLOW_STEPS.map((s, i) => (
@@ -431,8 +431,8 @@ export default function Landing() {
       {/* ===== The problem ===== */}
       <section id="problem" className="space-y-5">
         <div>
-          <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">The problem</div>
-          <h2 className="font-display text-3xl mt-1">Disorganisation is expensive</h2>
+          <div className="hp-eyebrow text-brand">The problem</div>
+          <h2 className="font-display text-3xl md:text-4xl mt-2">Disorganisation is expensive</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             Leads buried in WhatsApp. Invoices in Word. Expenses in your head and a shoebox of slips.
             By the time you catch up, the month is gone. And so is the money.
@@ -457,8 +457,8 @@ export default function Landing() {
       <section id="solutions" className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Our Solutions</div>
-            <h2 className="font-display text-3xl mt-1">Everything your business needs</h2>
+            <div className="hp-eyebrow text-brand">Our Solutions</div>
+            <h2 className="font-display text-3xl md:text-4xl mt-2">Everything your business needs</h2>
           </div>
           <a
             href="https://app.businesshustle.co.za/shop"
@@ -493,8 +493,8 @@ export default function Landing() {
       {/* ===== Services by Business Hustle (like hustleportal.online Services page) ===== */}
       <section id="services" className="space-y-5">
         <div>
-          <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Services</div>
-          <h2 className="font-display text-3xl mt-1">Expert services, done for you</h2>
+          <div className="hp-eyebrow text-brand">Services</div>
+          <h2 className="font-display text-3xl md:text-4xl mt-2">Expert services, done for you</h2>
           <p className="text-sm text-muted-foreground mt-1">Quoted per project and delivered by <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a>.</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -521,8 +521,8 @@ export default function Landing() {
       </section>
       {/* ===== Pipeline promise ===== */}
       <section id="trust" className="rounded-2xl border border-brand/25 bg-brand/5 p-6 md:p-8 space-y-3">
-        <div className="text-xs font-semibold tracking-[0.22em] uppercase text-brand">Your pipeline, handled</div>
-        <h2 className="font-display text-3xl">We feed your pipeline. You run your business.</h2>
+        <div className="hp-eyebrow text-brand">Your pipeline, handled</div>
+        <h2 className="font-display text-3xl md:text-4xl mt-2">We feed your pipeline. You run your business.</h2>
         <p className="text-sm text-muted-foreground max-w-3xl">
           HustlePortal is <span className="text-brand font-medium">not another leads database</span>. It is your Business OS:
           CRM, invoicing, calendar, mail, reports and an AI co-founder that knows your numbers, with verified leads
@@ -592,8 +592,8 @@ export default function Landing() {
       </section>
 
       <section className="text-center space-y-4 py-6">
-        <h2 className="font-display text-4xl md:text-5xl">Start free. Get organised. Get paid.</h2>
-        <p className="text-brand font-display text-xl tracking-wide">Free to start. Ready when you are.</p>
+        <h2 className="font-display text-4xl md:text-5xl tracking-[-0.02em]">Start free. Get organised. Get paid.</h2>
+        <p className="text-brand font-display text-xl">Free to start. Ready when you are.</p>
         <div className="flex flex-wrap justify-center gap-3 pt-1">
           <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:bg-brand/90 transition">
             Start free <ArrowRight className="h-4 w-4 ml-1.5" />

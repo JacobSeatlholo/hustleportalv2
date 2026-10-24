@@ -248,7 +248,7 @@ export default function AppShell() {
             <Button variant="ghost" size="icon" className="md:hidden h-11 w-11" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
-            <div className="font-display text-lg md:hidden">
+            <div className="font-display font-medium text-base md:hidden">
               HUSTLE<span className="text-brand">PORTAL</span>
             </div>
             <ProjectSwitcher />
@@ -607,7 +607,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
   return (
     <>
       <div className="p-5">
-        <div className="font-display text-2xl tracking-wide text-white">
+        <div className="font-display font-medium text-2xl tracking-wide text-white">
           HUSTLE<span className="text-brand">PORTAL</span>
           <span className="text-[9px] align-super">™</span>
         </div>

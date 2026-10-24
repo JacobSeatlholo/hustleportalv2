@@ -53,38 +53,39 @@
 :root {
   /* Google console geometry: 8px cards, 6px controls, 4px chips. */
   --radius: 0.5rem;
-  /* HustlePortal black & yellow on a cool slate surface ladder — the flat,
-     layered calm of a pro console. Solid panels, hairline borders, no glow. */
-  --background: #0b0c0f;
-  --foreground: #e8eaed;
-  --card: #14161b;
-  --card-foreground: #e8eaed;
-  --popover: #14161b;
-  --popover-foreground: #e8eaed;
+  /* HustlePortal black & yellow on a WARM ink ladder — every gray leans amber,
+     never blue. Print-shop blacks, hairline borders, no glow. The warm tint is
+     the human tell; cool slate is the machine tell. */
+  --background: #0d0c0a;
+  --foreground: #ece9e1;
+  --card: #151310;
+  --card-foreground: #ece9e1;
+  --popover: #151310;
+  --popover-foreground: #ece9e1;
   --primary: #f5c518;
-  --primary-foreground: #0b0c0f;
-  --secondary: #1c1f26;
-  --secondary-foreground: #e8eaed;
-  --muted: #181a20;
-  --muted-foreground: #9aa0a6;
-  --accent: #22262f;
+  --primary-foreground: #0d0c0a;
+  --secondary: #1e1b17;
+  --secondary-foreground: #ece9e1;
+  --muted: #1a1815;
+  --muted-foreground: #a8a294;
+  --accent: #262219;
   --accent-foreground: #f5c518;
-  --destructive: #ff4444;
-  --border: #262a33;
-  --input: #2b303b;
+  --destructive: #ff5247;
+  --border: #2b2822;
+  --input: #332f27;
   --ring: #f5c518;
   --chart-1: #f5c518;
   --chart-2: #34d399;
   --chart-3: #fb923c;
   --chart-4: #a78bfa;
   --chart-5: #44aadd;
-  --sidebar: #0e1014;
-  --sidebar-foreground: #e8eaed;
+  --sidebar: #100f0d;
+  --sidebar-foreground: #ece9e1;
   --sidebar-primary: #f5c518;
-  --sidebar-primary-foreground: #0b0c0f;
-  --sidebar-accent: #1c1f26;
+  --sidebar-primary-foreground: #0d0c0a;
+  --sidebar-accent: #1e1b17;
   --sidebar-accent-foreground: #f5c518;
-  --sidebar-border: #20242c;
+  --sidebar-border: #24211b;
   --sidebar-ring: #f5c518;
 }
 
@@ -129,13 +130,54 @@
   body {
     @apply bg-background text-foreground;
   }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
 }
 
 
 /* ===== HustlePortal custom ===== */
+/* Editorial display: light serif, tight cut, balanced lines (illos-style).
+   Wordmark spots opt up to font-medium; headlines ride the 300 default. */
 .font-display {
-  font-family: var(--font-display), var(--font-geist-sans), sans-serif;
-  letter-spacing: 0.02em;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 300;
+  letter-spacing: -0.015em;
+}
+
+/* Mono eyebrow — the technical kicker label above sections. */
+.hp-eyebrow {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Hairline chip — metadata the quiet way. */
+.hp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+/* Entrance that plays once, then rests. Honors reduced motion. */
+@keyframes hp-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.hp-rise { animation: hp-rise 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hp-rise { animation: none; }
 }
 
 /* Flat console ground follows the theme (console = deep black, calm = soft charcoal). */
@@ -153,31 +195,31 @@ html.calm {
   --color-brand: #e3c368;
   --color-brand-soft: #d9bc70;
   --color-brand-deep: #b39445;
-  --background: #101113;
-  --foreground: #c4c8cd;
-  --card: #17191d;
-  --card-foreground: #c4c8cd;
-  --popover: #17191d;
-  --popover-foreground: #c4c8cd;
+  --background: #121110;
+  --foreground: #c9c4b8;
+  --card: #191713;
+  --card-foreground: #c9c4b8;
+  --popover: #191713;
+  --popover-foreground: #c9c4b8;
   --primary: #e3c368;
   --primary-foreground: #16130a;
-  --secondary: #1e2126;
-  --secondary-foreground: #c4c8cd;
-  --muted: #1a1c21;
-  --muted-foreground: #868d95;
-  --accent: #23272e;
+  --secondary: #201d18;
+  --secondary-foreground: #c9c4b8;
+  --muted: #1c1a16;
+  --muted-foreground: #8f897c;
+  --accent: #26221c;
   --accent-foreground: #e3c368;
   --destructive: #e07070;
-  --border: #23262c;
-  --input: #292d35;
+  --border: #262320;
+  --input: #2d2925;
   --ring: #e3c368;
-  --sidebar: #131518;
-  --sidebar-foreground: #c4c8cd;
+  --sidebar: #141210;
+  --sidebar-foreground: #c9c4b8;
   --sidebar-primary: #e3c368;
   --sidebar-primary-foreground: #16130a;
-  --sidebar-accent: #1e2126;
+  --sidebar-accent: #201d18;
   --sidebar-accent-foreground: #e3c368;
-  --sidebar-border: #202329;
+  --sidebar-border: #232019;
   --sidebar-ring: #e3c368;
 }
 
