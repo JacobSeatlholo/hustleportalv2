@@ -2259,3 +2259,19 @@ Stage Summary:
 - Production runs d94a853. Site now leads with editorial serif display + warm ink neutrals + mono eyebrows — the three strongest anti-slop signals from illos.dev — while keeping black & yellow brand identity.
 - Deliberately NOT copied: their teal accent, illustrations (paid assets), code. Design principles only, fully legal.
 - Cheap follow-ups if boss wants to go further: swap lead-card metadata to .hp-chip, add serif italic accent option, scroll-triggered hp-rise via IntersectionObserver, Schibsted Grotesk as body sans (currently Geist).
+
+---
+Task ID: 114
+Agent: Super Z (main)
+Task: Boss verdict on Task 113 font experiment — "I like the previous font, it was bold & confident. Which look is better?"
+
+Work Log:
+- Gave honest design opinion: Bebas wins for THIS brand — HustlePortal sells closing/money/momentum (poster energy is the voice); illos's serif suits their calm design-tool audience. Brand voice > generic elegance.
+- Key insight recorded: the AI-slop fix never came from the font swap — it comes from the warm ink neutrals + mono eyebrows + restraint. So: font reverted surgically, ALL other Task 113 wins kept.
+- Reverted: layout.tsx Newsreader -> Bebas_Neue 400; .font-display back to 0.02em tracking, no font-weight override; hero h1 leading 0.95, serif -0.02em tracking removed (h1 + final CTA); wordmark font-medium removed (Bebas is single-weight, faux-bold is sloppy); AppShell mobile wordmark back to text-lg.
+- Kept: warm ink ladder (both themes), hp-eyebrow, hp-chip, hp-rise + reduced-motion, h1-h3 balance, warm themeColor, mobile header Questions? fix, section h2 md:text-4xl bumps.
+- Build OK, deployed b1cff84, health verified. QA: download/qa_bebas_restore.png — bold caps headline on warm ink ground with mono eyebrow.
+
+Stage Summary:
+- Production runs b1cff84: Bebas display + warm editorial execution. Best of both — boss's brand voice intact, de-slop gains retained.
+- Lesson: with a strong brand voice, de-slop the SURFACE SYSTEM (palette, labels, motion), not the personality.
