@@ -2202,3 +2202,22 @@ Work Log:
 
 Stage Summary:
 - The leads engine is a Tinder grade matcher now: every face carries a composite match score, every card is a swipe that teaches the engine, dismissed faces never return, below bar faces never ship, and thin decks say so honestly. The moat the boss named is real and running: a per member taste profile that compounds with every scan and cannot be bought or copied. Stamp 501a2b2 verified green.
+
+---
+Task ID: 112
+Agent: main (Z.ai ops run)
+Task: Boss: "Heres another sheet of contacts" (Jacob Database.xlsx, uploaded directly)
+
+Work Log:
+- Engine state check first: Task 111 (Tinder grade leads engine) is LIVE on production, health green at build df1f447 (a later run rolled after 501a2b2). No engine work needed this run.
+- Extracted the upload: 1,403 rows, single sheet, no header, 16 columns. Column map confirmed (complex, unit, email, fname, lname, phone, area, agent, size, idnum, three dates, balance, notes, last contact). Raw preserved at scripts/jacob_contacts_raw.tsv (gitignored, verified).
+- WHAT THE DATA ACTUALLY IS: a residential property owner call book from a 2019 to 2020 estate agency prospecting campaign, 48 apartment complexes across the Rondebosch southern suburbs (Rondebosch Oaks 326 rows, Ambleside 125, Devonshire Hill 81...), per unit, with agent initials (Rico, Matthew, Michele, T) and rich call notes. NOT an SME book. It contains 1,165 South African national ID numbers.
+- POPIA posture enforced: ID numbers stripped at cleaning, never exported anywhere. scripts/ is gitignored, raw TSV stays local.
+- Two pass cleaning (scripts/jacob_clean.py) after catching a real leak: the same person appears on multiple rows (one normal, one UNSUBSCRIBE or DO NOT CALL), so pass A collects refusal keys (email, phone, name) from every row, pass B hard matches before any contact is created. 41 suppression entries.
+- Deliverables in download/: jacob_contacts_clean.csv (1,242 deduped contacts, no IDs: 558 with email, 917 with phone, 502 with both), jacob_suppression_list.csv (41 hard refusals: opted out, deceased, DO NOT CALL, cross row matches), jacob_warm_followups.csv (27 warm: valuation requests, would love our emails, might need our services, happy to talk about selling).
+- Status split on the clean book: 1,068 standard, 114 declined (kept but flagged), 27 warm, 17 sold, 16 bad number. Email domains are heavily consumer (gmail 154, mweb 60, telkomsa 41, iafrica 36), vintage 2019/2020, so decay is expected.
+- DECISION TAKEN (default, reversible in one word): did NOT import into the product leads pool. Reasons: the pool feeds the seller deck and this is consumer data, not SME leads, so it would poison the relevance engine we just shipped (the exact thing the Reddit user complained about); and marketing to natural persons without consent is a POPIA section 69 line the platform should not cross. Recommended home: boss's own call book (CRM when Task 104c lands), phone call first for the 27 warm.
+- Master account ZERO logins, ZERO writes this run. Ops seat unused (no production writes needed). DNS records still waiting on the boss's paste actions. Master password rotation STILL outstanding.
+
+Stage Summary:
+- Jacob Database fully profiled, cleaned, suppressed and staged as three CSVs in download/. Nothing imported anywhere by default. One word from the boss flips any of: import warm 27 to his CRM, load the 41 into platform suppression, or archive the rest. Stamp: no deploy (no code changed).
