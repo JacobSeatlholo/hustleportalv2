@@ -185,9 +185,9 @@ export default function Landing() {
             href="https://wa.me/27744815163"
             target="_blank"
             rel="noreferrer"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="text-sm text-muted-foreground hover:text-foreground text-right leading-snug"
           >
-            Questions? WhatsApp us
+            <span className="hidden sm:inline">Questions? </span>WhatsApp us
           </a>
         </div>
       </header>
