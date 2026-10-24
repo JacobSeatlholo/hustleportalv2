@@ -2238,3 +2238,24 @@ Work Log:
 
 Stage Summary:
 - The legality instruction is now structural: refusals recorded once are enforced by the send path itself on every lane forever, ID numbers never survived the run, the book never touched the product, and the posture is written down where an Information Officer can point at it. Stamp f4effa3 verified green (health rolled, anon walls hold).
+
+---
+Task ID: 113
+Agent: Super Z (main)
+Task: De-slop the UI using illos.dev as reference ("look at illos.dev and see what elements we can copy from there so the site does not look like AI slop").
+
+Work Log:
+- Extracted illos.dev design DNA (site blocked headless browser via Cloudflare; curl'd raw HTML + all 4 CSS bundles): Newsreader 300 display serif at clamp sizes with -0.045em tracking + text-wrap balance; Schibsted Grotesk UI sans; JetBrains Mono technical labels; WARM-tinted neutral ladder (ink #1f1c17 / paper #121110 / hairlines #e5e2dc — every gray leans warm); single accent; small radii (6px controls, 8-12px cards); ~3 box-shadows on the whole site; 0.15s restrained hovers; rise/fade entrances that "play then rest" + reduced-motion respect; short declarative sentence-case copy.
+- STEAL-LIST applied (principles, not assets — kept our black & yellow brand):
+  1. layout.tsx: Bebas Neue (the #1 template-font tell) OUT, Newsreader 300/400/500 IN as --font-display. themeColor warmed to #0d0c0a.
+  2. globals.css: entire neutral ladder hue-shifted cool slate -> warm ink (bg #0d0c0a, fg #ece9e1, card #151310, borders #2b2822, muted-fg #a8a294; calm mode warmed to match #121110 paper). .font-display = serif 300, -0.015em tracking. New primitives: .hp-eyebrow (Geist Mono kicker), .hp-chip (hairline chip), .hp-rise (once-and-rest entrance + prefers-reduced-motion guard), h1-h3 text-wrap balance.
+  3. Landing.tsx: hero serif treatment (leading 1.04, -0.02em, hp-rise entrance), all 6 section eyebrows -> hp-eyebrow, section h2s bumped to md:text-4xl, wordmark font-medium, mobile header drops "Questions?" prefix under sm.
+  4. AppShell.tsx: wordmarks font-medium; mobile topbar wordmark text-base (serif is wider than condensed Bebas).
+- Every font-display headline across all ~30 views auto-transformed (60+ usages) — zero changes needed in feature views.
+- tsc clean (src/; skills/ noise pre-existing), next build OK, deployed 4febb1e then d94a853 (mobile header fix). Health verified both shas.
+- QA screenshots: download/qa_deslop_desktop.png (hero), qa_deslop_flow.png (sections/numerals/stats), qa_deslop_mobile.png + qa_deslop_mobile2.png (mobile fix), qa_deslop_calm.png (calm mode OK).
+
+Stage Summary:
+- Production runs d94a853. Site now leads with editorial serif display + warm ink neutrals + mono eyebrows — the three strongest anti-slop signals from illos.dev — while keeping black & yellow brand identity.
+- Deliberately NOT copied: their teal accent, illustrations (paid assets), code. Design principles only, fully legal.
+- Cheap follow-ups if boss wants to go further: swap lead-card metadata to .hp-chip, add serif italic accent option, scroll-triggered hp-rise via IntersectionObserver, Schibsted Grotesk as body sans (currently Geist).
