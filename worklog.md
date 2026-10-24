@@ -2275,3 +2275,23 @@ Work Log:
 Stage Summary:
 - Production runs b1cff84: Bebas display + warm editorial execution. Best of both — boss's brand voice intact, de-slop gains retained.
 - Lesson: with a strong brand voice, de-slop the SURFACE SYSTEM (palette, labels, motion), not the personality.
+
+---
+Task ID: 115
+Agent: Super Z (main)
+Task: Close the wallet-integrity gap from the 50-point backend audit (boss: "go ahead").
+
+Work Log:
+- wallet.ts rewritten, three races closed, zero caller changes (contracts preserved):
+  (1) spendCredits: balance claim + ledger write now ONE interactive $transaction — a crash mid-reveal can no longer leave money spent with no ledger line; conditional updateMany stays the double-spend guard; lock order (wallet row -> creditTx) matches addCredits so the paths cannot deadlock.
+  (2) addCredits: atomic increment replaces read-then-write — found during the fix: stale `balance + amount` landing after a concurrent spend would resurrect spent cents (lost-update race). Ledger row joins the tx; balanceAfter read from the row the increment produced.
+  (3) ensureWallet: upsert instead of find-then-create — two concurrent first-touches would P2002 on the unique constraint.
+- ENV INCIDENT mid-task: sandbox reset wiped .env (AUTH_SECRET gone -> auth module fail-fast refused build; DATABASE_URL replaced by file: artifact) AND wiped /home/z/.venv (paramiko gone -> first deploy push failed). Restored: local build-safe AUTH_SECRET + postgres URL in .env (gitignored, prod secrets untouched on Vercel), paramiko reinstalled into /home/z/.venv via pip --target matching the shim's sys.path. NOTE for future resets: restore BOTH .env vars and paramiko before build/push.
+- Deployed 38f821a, health verified.
+- Live smoke (scripts/wallet_smoke.mjs) on QA seat, iterative hardening: (a) learned charged:false is the honest no-charge path (empty pool rows / AI allowance stretched — "You were NOT charged" — the honesty rules held up under test); (b) deterministic charged path = synthetic lead created WITH contact details + unlocked:false (skips AI lookup, charges directly); RESULT: SMOKE-PASS — spent 1800c, delta -1800, newest tx LEAD_REVEAL amount -1800 balanceAfter 7300 == final wallet balance. Books == money, one transaction, in production.
+- Node lesson: process.exit truncates piped stdout — smoke scripts log via console.error.
+- Cleanup: scripts/wallet_smoke_cleanup.mjs removed the 2 synthetic smoke leads from the QA seat.
+
+Stage Summary:
+- Production runs 38f821a with fully ACID money paths: double-spend, lost-update, get-or-create, and debit-without-ledger all closed. The one item I said I wouldn't sleep easy about is now the best-defended code in the repo.
+- Audit follow-ups still open (non-urgent): webhook eventId dedupe store (state guards already make money paths safe), request-ID tracing, confirm prod DATABASE_URL uses pooler endpoint.
