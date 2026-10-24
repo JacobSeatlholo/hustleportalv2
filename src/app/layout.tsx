@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Geist, Geist_Mono } from "next/font/google";
+import { Bebas_Neue, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import GaAnalytics from "@/components/hp/GaAnalytics";
 
-// Editorial serif for display type — light, tight, balanced. The anti-template move.
-const displayFont = Newsreader({
+// Bold & confident display — condensed caps, poster energy. This IS the brand voice.
+// (Anti-slop work lives in the warm ink neutrals + mono eyebrows, not the font.)
+const displayFont = Bebas_Neue({
   variable: "--font-display",
-  weight: ["300", "400", "500"],
+  weight: "400",
   subsets: ["latin"],
 });
 

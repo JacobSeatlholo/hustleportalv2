@@ -175,7 +175,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen hp-gradient-bg flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
-        <div className="font-display font-medium text-2xl tracking-wide">
+        <div className="font-display text-2xl tracking-wide">
           HUSTLE<span className="text-brand">PORTAL</span>
           <span className="text-[10px] align-super">™</span>
         </div>
@@ -200,7 +200,7 @@ export default function Landing() {
             <div className="inline-flex items-center gap-2 hp-eyebrow text-brand">
               <Zap className="h-3 w-3 text-brand" /> The Business OS for South African businesses
             </div>
-            <h1 className="font-display text-5xl md:text-6xl leading-[1.04] tracking-[-0.02em] mt-3">
+            <h1 className="font-display text-5xl md:text-6xl leading-[0.95] mt-3">
               Tell us what you do.<br />
               <span className="text-brand">We find your customers.</span>
             </h1>
@@ -592,7 +592,7 @@ export default function Landing() {
       </section>
 
       <section className="text-center space-y-4 py-6">
-        <h2 className="font-display text-4xl md:text-5xl tracking-[-0.02em]">Start free. Get organised. Get paid.</h2>
+        <h2 className="font-display text-4xl md:text-5xl">Start free. Get organised. Get paid.</h2>
         <p className="text-brand font-display text-xl">Free to start. Ready when you are.</p>
         <div className="flex flex-wrap justify-center gap-3 pt-1">
           <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="rounded-lg bg-brand px-6 h-11 inline-flex items-center font-semibold text-black hover:bg-brand/90 transition">

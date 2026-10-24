@@ -137,12 +137,11 @@
 
 
 /* ===== HustlePortal custom ===== */
-/* Editorial display: light serif, tight cut, balanced lines (illos-style).
-   Wordmark spots opt up to font-medium; headlines ride the 300 default. */
+/* Display type: Bebas Neue — bold, confident, condensed caps (brand voice).
+   The de-slop levers are the warm ink ladder + mono eyebrows + restraint below. */
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 300;
-  letter-spacing: -0.015em;
+  font-family: var(--font-display), var(--font-geist-sans), sans-serif;
+  letter-spacing: 0.02em;
 }
 
 /* Mono eyebrow — the technical kicker label above sections. */
