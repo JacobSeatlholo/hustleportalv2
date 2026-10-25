@@ -161,15 +161,23 @@ export function resolveTrades(text: string | null | undefined): string[] {
  * accountant rarely buys plumbing.
  */
 export function taxonomyFit(sellerKeys: string[], leadKey: string | null | undefined): number {
-  if (!leadKey) return 45 // unknown trade: neutral, the rest of the score decides
+  // The seller's own trade resolves but the lead's trade cannot: the graph has
+  // nothing to say, and that is NOT neutral, it is unproven. Neutral 45 is for
+  // when the seller side is the vague one.
+  const UNKNOWN_SELLER_KNOWN = 40
+  if (!leadKey) return sellerKeys.length > 0 ? UNKNOWN_SELLER_KNOWN : 45
   const lead = BY_KEY.get(leadKey)
-  if (!lead) return 45
+  if (!lead) return sellerKeys.length > 0 ? UNKNOWN_SELLER_KNOWN : 45
   if (sellerKeys.length === 0) return 45
   let best = 0
   for (const sk of sellerKeys) {
     const seller = BY_KEY.get(sk)
     if (!seller) continue
-    if (sk === leadKey) best = Math.max(best, 82) // same trade: peers sometimes buy, mostly not
+    // SAME TRADE = a peer, not a client by default: a coin laundrette does not
+    // buy contract cleaning, a mechanic does not buy panel beating. 45 says
+    // "no graph path", the ranker's opinion decides from there. Sellers who
+    // genuinely sell to their own trade still win on the ranker's score.
+    if (sk === leadKey) best = Math.max(best, 45)
     else if (lead.buys.includes(sk)) best = 100 // the lead buys exactly what the seller sells
     else if (seller.buys.includes(leadKey)) best = Math.max(best, 42) // the lead supplies the seller
     else if (seller.group === lead.group) best = Math.max(best, 30) // same family, loose

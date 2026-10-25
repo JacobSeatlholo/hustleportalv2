@@ -13,6 +13,12 @@ import { resolveTrade, taxonomyFit, sellerTradeKeys } from '@/lib/taxonomy'
 /** The relevance bar. A face below it never reaches a seller. */
 export const FIT_THRESHOLD = 55
 
+/** The relevance floor: the fit verdict alone must clear this before the
+ * plumbing (verification, freshness, contact richness) is allowed to carry a
+ * face over the bar. A coin laundrette with a verified phone and a live
+ * website is still a coin laundrette, not a cleaning client. */
+export const RELEVANCE_FLOOR = 45
+
 /** Where the composite parts sit when we simply do not know. */
 const NEUTRAL_VERIFY = 45
 const NEUTRAL_FRESH = 85
@@ -34,6 +40,7 @@ export interface ScoreableLead {
 export interface ScoredLead extends ScoreableLead {
   categoryKey?: string | null
   fitScore?: number // the composite, 0..100
+  relevanceFit?: number // the fit verdict alone (graph + ranker), before verify/fresh/richness stack in
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
@@ -94,6 +101,7 @@ export function scoreLead(l: ScoreableLead, ctx: ScoreContext): ScoredLead {
     ...l,
     categoryKey: cat?.key ?? null,
     fitScore: Math.round(clamp(composite, 5, 100)),
+    relevanceFit: Math.round(clamp(fit, 0, 100)),
   }
 }
 
@@ -113,7 +121,12 @@ export function curate<T extends ScoredLead>(
   cap: number,
   area: string
 ): { deck: T[]; scarcity?: string } {
-  const strong = scored.filter((l) => (l.fitScore || 0) >= FIT_THRESHOLD).slice(0, cap)
+  // Two locks on the door: the composite bar AND the relevance floor. The
+  // composite can be carried over 55 by verification and freshness alone; the
+  // floor says the fit verdict itself must also earn its place.
+  const strong = scored
+    .filter((l) => (l.fitScore || 0) >= FIT_THRESHOLD && (l.relevanceFit ?? 0) >= RELEVANCE_FLOOR)
+    .slice(0, cap)
   if (strong.length >= cap || scored.length === 0) return { deck: strong }
   if (strong.length === 0) {
     return {

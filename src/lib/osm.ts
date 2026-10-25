@@ -92,8 +92,8 @@ export function buildTagFilters(definition: string): { tags: { key: string; rege
     { match: /law|attorney|legal|conveyanc/, key: 'office', values: ['lawyer'] },
     { match: /account|bookkeep|tax|audit/, key: 'office', values: ['accountant', 'tax_advisor'] },
     { match: /insurance/, key: 'office', values: ['insurance'] },
-    { match: /it|tech|software|web|computer/, key: 'shop', values: ['computer', 'mobile_phone', 'electronics'] },
-    { match: /car|panel|mechanic|tyre|spare/, key: 'shop', values: ['car_repair', 'car_parts', 'tyres', 'car'] },
+    { match: /\bit\b|tech|software|web|computer/, key: 'shop', values: ['computer', 'mobile_phone', 'electronics'] },
+    { match: /\bcars?\b|panel beat|mechanic|tyre|spare/, key: 'shop', values: ['car_repair', 'car_parts', 'tyres', 'car'] },
   ]
   for (const m of map) {
     if (m.match.test(d)) {
@@ -129,7 +129,7 @@ export function buildNominatimQuery(definition: string): { kv?: { key: string; v
     { match: /account|bookkeep|tax_|audit/, key: 'office', values: ['accountant'] },
     { match: /insurance/, key: 'office', values: ['insurance'] },
     { match: /\bit\b|tech|software|web|computer|phone repair/, key: 'shop', values: ['computer', 'mobile_phone', 'electronics'] },
-    { match: /car|panel|mechanic|tyre|spare/, key: 'shop', values: ['car_repair', 'car_parts', 'tyres'] },
+    { match: /\bcars?\b|panel beat|mechanic|tyre|spare/, key: 'shop', values: ['car_repair', 'car_parts', 'tyres'] },
   ]
   for (const m of kvMap) {
     if (m.match.test(d)) {

@@ -409,6 +409,16 @@ export async function serveFromPool(opts: {
     // Region gate: a foreign face captured before the gate existed never
     // serves again. The pool wears the same lens the scan answers do.
     .filter((p) => isSouthAfricanLead(p))
+    // LOCATION IS THE PROMISE: when the seller named a city, a row with a
+    // KNOWN city that sits somewhere else never serves (the Cape Town suburb
+    // answering a Johannesburg ask is exactly the junk sellers rage about).
+    // Rows with no city on file still serve, the scan prompt and the local
+    // flag carry the honesty there.
+    .filter((p) => {
+      if (!opts.city) return true
+      if (!p.city || !p.city.trim()) return true
+      return cityMatches(p.city, opts.city)
+    })
     .slice(0, cap)
   if (serve.length === 0) return []
   try {

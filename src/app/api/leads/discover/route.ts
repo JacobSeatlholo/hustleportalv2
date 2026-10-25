@@ -234,6 +234,7 @@ function rankingPrompt(definition: string, raw: AiLead[], cap: number) {
       `Rules:\n` +
       `- company: copy the name EXACTLY as it appears in the list.\n` +
       `- score: 1 to 5 fit for the seller. 5 = exactly the business type this seller dreams of as a client, its kind of business directly buys what they sell. 4 = clearly buys it. 3 = plausible but unproven. 2 = a stretch. 1 = wrong industry entirely. Reserve 5 for direct consumers of the offering.\n` +
+      `- A business that DOES the same thing the seller does is a peer, not a client: it serves itself. Score it 1 or 2 unless the seller's description explicitly says they sell to their own trade.\n` +
       `- why: one short line grounded in the type and area shown in the list.\n` +
       `- never output phone, website or email. Those stay attached from the source automatically.\n` +
       `- drop businesses that clearly do not fit. Fewer, better leads win.\n` +
@@ -677,6 +678,7 @@ export async function POST(req: NextRequest) {
       `- CONTACT DETAILS ARE THE PRIZE: for every business include its website, and include its phone number and email address whenever they appear in the results you saw (Google Business listings, directory pages, the business's own site). Prefer businesses whose phone or email is actually visible over ones with none.\n` +
       `- NEVER construct an address from a pattern, if the phone/email is not in the results, omit the field.\n` +
       `- "why" = one line on why THIS business likely needs the seller (reference what you saw).\n` +
+      `- A business that offers the same service the seller offers is NOT a buyer (it serves itself). Score it 1 or 2, unless the seller's description explicitly says they sell to their own trade.\n` +
       `- score = 1 to 5 fit for the seller: 5 means this type of business directly buys what the seller sells, 1 means wrong industry. When unsure, score low, the deck only serves what clears the relevance bar.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
       `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","role":"","profileUrl":"","why":"","score":3}]}`,
