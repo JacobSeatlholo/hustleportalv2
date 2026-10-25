@@ -2338,3 +2338,20 @@ Stage Summary:
 - Production runs 8b8bf47 with a print law that is structural instead of element-by-element: printing while the invoice sheet is mounted can never show app chrome again, including chrome that does not exist yet. The Reddit reply's point 3 "Fixed" claim is now literally true before the boss posts it.
 - One soft call made on the boss's behalf and flagged: powered-by line removed from printed invoices. One word reverses it.
 - Lesson recorded: a probe that checks the root cause you FIXED is not a probe of the experience the user HAS. The boss is the print user; his "still broken" outranked the Task 102 probe pass.
+
+---
+Task ID: 118
+Agent: Super Z (main)
+Task: Boss sent two artifacts: the current print PDF (leaking app footer, tutorial link, browser URL header, Page 1 of 2 furniture) and a phone screenshot of the print PREVIEW as the desired state. "The png image is how I desire it to be when you click print. Simple."
+
+Work Log:
+- READ THE EVIDENCE FIRST, three findings: (1) his PDF ran the OLD bundle — it shows the powered by line and the tutorial that Task 117 (live 15:52 SAST) already removed, while he printed at 15:55; the service worker is push only and caches NOTHING (public/sw.js has no fetch handler), so this was not SW cache, it was the still open PWA window executing pre deploy JS in memory. Close and reopen picks up the new build. (2) The browser's OWN print furniture (page URL, timestamp, Page N of M) was still live even on the new build — no @page rule existed. (3) My Task 117 removal of the powered by line OVERRREACHED: his desired PNG carries "Powered by Business Hustle · www.businesshustle.co.za" on the sheet. It is his product's brand line and he wants it. Restored.
+- FIX (commit 1437a63, two files): (a) powered by line restored on the printed sheet exactly as the preview shows it; (b) @page { margin: 0 } inside the print block — no margin box means the browser cannot draw its URL/date/page furniture, and it eliminates the junk second page; the sheet keeps its own 40px paper padding so content never touches the edge; (c) print law v2 fallback: InvoicePrint adds an invoice-printing class to body while mounted (removed on unmount) and globals.css keys the same kill rule on that class, so browsers WITHOUT :has() support still get sheet only printing. Two doors, one outcome.
+- Build green 40.3s, tsc clean, deployed 8b8bf47..1437a63, health verified sha 1437a636, db ping true, integrations green.
+- THE QA THAT MATCHES THE USER EXPERIENCE THIS TIME: agent-browser pdf command generates a REAL PDF through the print pipeline (print media emulation, @page rules respected) while the sheet was mounted on a fresh QA invoice. Verdict, 10 of 10 PASS: 1 page; INVOICE, line item, correct ZAR math (2 x R1 500, subtotal R3 000, VAT R450, total R3 450 in excl mode); Powered by Business Hustle PRESENT; Tutorial ABSENT; Terms of Service ABSENT; SIMPLE ETERNITY footer ABSENT; Page 1 of ABSENT; pwa URL header ABSENT. One test string lesson: randsPlain renders thousands with a non breaking space (R3\xa0000), my literal space assertion was the only red herring. Artifacts: download/qa_print_desired.pdf (the actual print output) + qa_printlaw_overlay.png from Task 117.
+- Cleanup: overlay closed, QA invoice deleted, seat verified 0 rows, browser closed. Master account ZERO logins, ZERO writes. Ops seat only.
+
+Stage Summary:
+- Clicking print now produces exactly the preview the boss drew: the sheet, the powered by line he wants, nothing else, no browser furniture, one page. Verified by generating the actual PDF rather than trusting DOM checks.
+- Standing correction recorded: my instinct to strip platform branding from the member's sheet overruled by the boss's explicit desired state — his product, his footer.
+- For the boss: his PWA window needs one close and reopen (not a cache problem, the SW caches nothing) before his next print, or he will keep executing the old bundle.
