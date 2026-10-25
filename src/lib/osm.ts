@@ -65,9 +65,27 @@ async function geocodePlace(area: string): Promise<{ areaId?: number; lat?: numb
 }
 
 /**
+ * The definition usually names a TARGET ("offices, medical practices and gyms")
+ * and an OFFERING ("that need contract cleaning"). The directory query must
+ * describe the TARGET, not the offering: a contract cleaner wants offices on
+ * the map, not laundries. Split on the need phrase when one exists and the
+ * clause before it has meat, fall back to the whole text. The AI ranking pass
+ * always sees the full definition, only the directory filter narrows.
+ */
+export function targetClause(definition: string): string {
+  const d = definition.toLowerCase()
+  const m = d.match(/^(.*?)(?:\bthat needs?\b|\bwho needs?\b|\bwhich needs?\b|\bneeding\b|\blooking for\b|\bwanting\b|\bwant to buy\b)/)
+  const clause = ((m && m[1]) || '').trim()
+  return clause.length >= 6 ? clause : definition
+}
+
+/**
  * Translate the seller's need into OSM tag filters AND a human category term for
  * Nominatim's category search (which works from datacenter IPs where Overpass
  * mirrors refuse traffic).
+ *
+ * THE TEXT THAT REACHES HERE MUST DESCRIBE THE TARGET (see targetClause):
+ * "offices that need cleaning" maps to offices, never to laundries.
  */
 export function buildTagFilters(definition: string): { tags: { key: string; regex: string }[]; term?: string } {
   const d = definition.toLowerCase()
@@ -355,7 +373,10 @@ export async function searchOsmLeads(
       : await geocodePlace(area)
   if (!place) return { leads: [], note: `Could not map "${area}" to a map area, check the spelling.` }
 
-  const tagFilters = buildTagFilters(definition).tags
+  // Directory filters read the TARGET clause: "offices that need cleaning"
+  // queries offices. The offering stays in the definition for the AI ranker.
+  const target = targetClause(definition)
+  const tagFilters = buildTagFilters(target).tags
   const runOverpass = async (query: string, phaseCapMs = 12_000): Promise<{ ok: boolean; data?: { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }; status?: number }> => {
     // Phase cap: the mirrors answer fast when they answer at all, and hang
     // when they do not (datacenter traffic gets refused silently more often
@@ -408,11 +429,11 @@ export async function searchOsmLeads(
       // before we admit defeat. Low gates: they answer in 1 to 3 seconds when
       // they answer at all, so they get their turn even late in the scan.
       if (remaining() > 10_000) {
-        const nom = await searchNominatimLeads(area, definition, limit, place)
+        const nom = await searchNominatimLeads(area, target, limit, place)
         if (nom.leads.length > 0) return nom
       }
       if (remaining() > 5_000) {
-        const ph = await searchPhotonLeads(area, definition, limit, place)
+        const ph = await searchPhotonLeads(area, target, limit, place)
         if (ph.leads.length > 0) return ph
       }
       return { leads: [], note: remaining() > 0 ? 'The map directory is handling other scans right now. Give it a minute and scan again.' : 'The map directory ran out of its time budget for this scan. Try again in a minute, or narrow the area.' }
@@ -449,10 +470,10 @@ export async function searchOsmLeads(
       // (same OSM data) gets one more shot, then Photon, before we admit defeat.
       // Same low gates as the failure path, they only run while there is real
       // runway, and they answer fast when they answer at all.
-      const nom = remaining() > 10_000 ? await searchNominatimLeads(area, definition, limit, place) : { leads: [] }
+      const nom = remaining() > 10_000 ? await searchNominatimLeads(area, target, limit, place) : { leads: [] }
       if (nom.leads.length > 0) return nom
       if (remaining() > 5_000) {
-        const ph = await searchPhotonLeads(area, definition, limit, place)
+        const ph = await searchPhotonLeads(area, target, limit, place)
         if (ph.leads.length > 0) return ph
       }
     }
