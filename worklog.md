@@ -2311,3 +2311,8 @@ Work Log:
 Stage Summary:
 - The boss's Reddit reply is noted verbatim in download/ and every factual claim in it now traces to a shipped commit. 5 of 6 numbered points are code-true as drafted; point 3 (invoice print) should claim the fix instead of hunting a dead blob that belongs to the video renderer. Boss decides the wording, posts from his account; if the critic retests, his findings become the next triage input (the Task 102 loop that worked).
 - Queue after this: BH Leads 2024 pipeline (paused, legality red lines), DNS records waiting on boss paste, Jacob one-word decisions, master password rotation, Task 97 WhatsApp parked on Meta values.
+
+Task 116 follow-up (same run):
+- Boss asked for a suggested response. Wrote v2 in his voice with every fact-check fix applied: "self-hosted GLM" replaced (contradicted the Gemini key path mentioned in point 1; prod AI is Gemini), point 3 claims the FIXED print bug instead of hunting the video renderer's dead blob, credits narrowed to the true guarantee (no charge on failed/empty scans), added the allowance-wall exits (own Gemini key or 09:00 reset), the reveal fix, and optional point 7 (CRM timeline shipped Task 104). Typos cleaned, zero em dashes in the reply itself.
+- SANDBOX RESET hit again mid-task: download/ wiped (second time this project). Record recreated at download/reddit_reply_noted_2026-10-25.md now including the v2 text. Future resets: assume download/ is volatile, keep deliverable content recoverable from worklog/chat.
+- Full v2 text lives in the record file section 6 and in the chat transcript. No code changes, no deploy. Master account ZERO logins, ZERO writes.
