@@ -667,6 +667,13 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
     : bankFallback
       ? bankLines(bankFallback).join('\n')
       : ''
+  // Print law v2, no :has() dependency: announce on body while the sheet is
+  // mounted so browsers WITHOUT :has() still get sheet only printing. The class
+  // leaves with the sheet, so ordinary printing is untouched.
+  useEffect(() => {
+    document.body.classList.add('invoice-printing')
+    return () => document.body.classList.remove('invoice-printing')
+  }, [])
   // Portal to document.body so the sheet is a DIRECT child of body: the print law
   // in globals.css (body:has(#invoice-print-root) > *:not(#invoice-print-root))
   // then hides the ENTIRE app tree on print. Tutorial, toasts, tours and any
@@ -741,6 +748,9 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
             </div>
           )}
           {invoice.notes && <div className="mt-6 text-xs text-neutral-500 whitespace-pre-line">{invoice.notes}</div>}
+          <p className="mt-8 text-center text-[10px] text-neutral-400">
+            Powered by Business Hustle · www.businesshustle.co.za
+          </p>
         </div>
       </div>
       <div className="max-w-[820px] mx-auto flex justify-end gap-2 py-3 print:hidden">

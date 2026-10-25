@@ -250,4 +250,19 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
   body:has(#invoice-print-root) {
     background: #ffffff !important;
   }
+  /* v2: same law keyed on the body class the sheet adds while mounted, for
+     browsers without :has(). Two doors, one outcome: sheet only. */
+  body.invoice-printing > *:not(#invoice-print-root) {
+    display: none !important;
+  }
+  body.invoice-printing {
+    background: #ffffff !important;
+  }
+  /* Margin zero pulls the rug from under the browser's own print furniture
+     (page URL, timestamp, Page N of M) — no margin box, no furniture. The
+     sheet carries its own generous paper padding, and the app's main padding
+     keeps ordinary page prints off the paper edge. */
+  @page {
+    margin: 0;
+  }
 }
