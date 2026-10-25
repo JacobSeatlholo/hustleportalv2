@@ -2355,3 +2355,22 @@ Stage Summary:
 - Clicking print now produces exactly the preview the boss drew: the sheet, the powered by line he wants, nothing else, no browser furniture, one page. Verified by generating the actual PDF rather than trusting DOM checks.
 - Standing correction recorded: my instinct to strip platform branding from the member's sheet overruled by the boss's explicit desired state — his product, his footer.
 - For the boss: his PWA window needs one close and reopen (not a cache problem, the SW caches nothing) before his next print, or he will keep executing the old bundle.
+
+---
+Task ID: 120
+Agent: Super Z (main)
+Task: Boss: "now lets respond to" the Reddit report: 5 leads for a JHB business were "absolute garbage, not related to my business or in need of our products."
+
+Work Log:
+- FACT-CHECK BY EXPERIENCE, not by code reading alone: read the whole engine chain (discover route 962 lines, osm.ts, leadscore.ts, leadpool.ts, taxonomy.ts, LeadsView dialog), then ran LIVE JHB scans on prod from a fresh free seat (qa.leads.1025@hustleqa.example.com, the exact new user path). Verdict: criticism ACCURATE. The critic-shaped ask ("Businesses that need cleaning services", city JHB) served five coin laundrettes ("The Cleaning Brothers", "Lydia's Laundrette", "Pro Wash", "Laundry Queen", "Dirty"), one in "The Gardens" (a Cape Town suburb), all match 56-62%, all "Reconfirmed on scans". Reproduced word for word.
+- FOUR ROOT CAUSES in code: (1) taxonomyFit gave same-trade peers 82/100 and the ranker prompt never said a peer is not a client, so laundrettes carried ranker 4/5 for a cleaning seller; (2) the composite bar (55) could be cleared by verify+fresh+richness (55% of the weight) with a junk fit; (3) unknown lead trade rode as neutral 45; (4) cityMatches only flagged local, never excluded, and the OSM tag filter mapped the OFFERING word (cleaning -> shop=laundry), the actual laundrette factory, instead of the TARGET.
+- FIX (commits d17e48e + bed168a, live): peer 82->45 and unknown->40 when seller trades resolve (taxonomy.ts); relevanceFit exposed and a RELEVANCE_FLOOR 45 the plumbing cannot buy past (leadscore.ts curate); pool serve excludes rows whose known city sits outside the requested metro (leadpool.ts); anti-peer rule in both ranker prompts (discover route); targetClause() splits target from offering so the directory hunts "offices, medical practices and gyms", not laundries; OSM regexes word bounded (\\bit\\b, panel beat).
+- RETEST ON PROD (health sha bed168a, db ping true, integrations green): vague JHB ask now returns 0 leads + the honest scarcity note (a later run showed the honest 09:00 allowance wall note with the two exits); the well-formed ask returns FIVE REAL Johannesburg medical centres (Village Medical Centre Parktown North 78%, Carecross Brixton 70%, Rosebank Medical Parkwood 70%, Mondeor Winchester Hills 60%, Northcliff GPs Risidale 60%), the trade that actually buys contract cleaning. Deck flipped from junk to correct without padding.
+- QA HYGIENE: one new QA seat created (free plan), ZERO reveals, 0 pipeline rows left, logged out, browser closed. Ops seat (ops@hustleqa.example.com) returned 401 on login this run: flagged to boss, likely rotated. Evidence: download/qa_leads_relevance.png + JSON verdicts quoted in the record.
+- Deliverable: download/reddit_reply_leads_2026-10-25.md (criticism verbatim, reproduction table, 4 root causes, retest tables, boss notes, suggested public reply v1 in his voice, dash free).
+- Scan allowance cooldown bit twice during testing (429, the breath gate): waited it out, no code change needed. CDP Runtime.evaluate times out on 40s+ scans: switched to fire-and-forget fetch into window.__var + polling.
+- Master account ZERO logins, ZERO writes. Ops path only (one fresh free seat).
+
+Stage Summary:
+- The leads engine had a relevance law on paper (55 bar, taxonomy graph, region gate) but three leaks and one backwards directory query let junk sail through with earned badges. All four holes closed structurally and proven by running the critic's own experiment before and after: five laundrettes became five medical centres. The reply draft claims only what the retest showed and invites him to retest.
+- For the boss: reply v1 is in section 6 of the record, post from his account when happy. Ops seat 401 needs his word. Old laundromat pool rows stop serving under the city gate and age out in <= 21 days.
