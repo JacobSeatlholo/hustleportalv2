@@ -299,12 +299,17 @@ export default function AppShell() {
           {content}
         </main>
 
-        <Onboarding />
-        <WelcomeTour />
-        <SectionTutorial />
-        <TaskReminders />
-        <PushInAppRelay />
-        <UpgradeListener />
+        {/* Floating overlay UI. NEVER print (belt and braces with the print law
+            in globals.css): a printout must never carry tours, tutorials,
+            reminders or upgrade nudges. */}
+        <div className="print:hidden">
+          <Onboarding />
+          <WelcomeTour />
+          <SectionTutorial />
+          <TaskReminders />
+          <PushInAppRelay />
+          <UpgradeListener />
+        </div>
 
         {/* Thumb-reach bottom navigation (phones only), the fix for top-bar buttons
             being out of comfortable reach on tall screens. */}

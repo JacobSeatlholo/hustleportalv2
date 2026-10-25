@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -666,8 +667,12 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
     : bankFallback
       ? bankLines(bankFallback).join('\n')
       : ''
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:text-black print:p-0 print:z-auto">
+  // Portal to document.body so the sheet is a DIRECT child of body: the print law
+  // in globals.css (body:has(#invoice-print-root) > *:not(#invoice-print-root))
+  // then hides the ENTIRE app tree on print. Tutorial, toasts, tours and any
+  // future chrome physically cannot reach the paper. Only the invoice prints.
+  return createPortal(
+    <div id="invoice-print-root" className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:text-black print:p-0 print:z-auto">
       <div className="max-w-[820px] mx-auto bg-white text-black rounded-lg shadow-2xl print:shadow-none print:rounded-none print:max-w-none">
         <div className="p-8 md:p-10">
           <div className="flex items-start justify-between gap-6 border-b pb-6">
@@ -684,7 +689,7 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
               <div className="font-display text-3xl">INVOICE</div>
               <p className="text-sm font-semibold">{invoice.number}</p>
               <p className="text-xs text-neutral-500">Issued {new Date(invoice.issuedAt).toLocaleDateString('en-ZA')}</p>
-              <p className="text-xs text-neutral-500">Due {invoice.dueAt ? new Date(invoice.dueAt).toLocaleDateString('en-ZA') : '—'}</p>
+              {invoice.dueAt && <p className="text-xs text-neutral-500">Due {new Date(invoice.dueAt).toLocaleDateString('en-ZA')}</p>}
               <p className={`text-xs font-bold mt-1 ${invoice.status === 'PAID' ? 'text-emerald-700' : invoice.status === 'OVERDUE' ? 'text-rose-700' : 'text-neutral-700'}`}>
                 {invoice.status}
               </p>
@@ -736,15 +741,13 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
             </div>
           )}
           {invoice.notes && <div className="mt-6 text-xs text-neutral-500 whitespace-pre-line">{invoice.notes}</div>}
-          <p className="mt-8 text-center text-[10px] text-neutral-400">
-            Powered by Business Hustle · www.businesshustle.co.za
-          </p>
         </div>
       </div>
       <div className="max-w-[820px] mx-auto flex justify-end gap-2 py-3 print:hidden">
         <Button variant="outline" onClick={onDone}>Close</Button>
         <Button onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

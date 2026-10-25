@@ -234,3 +234,20 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
 .hp-scroll::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 0.22); }
 
 .kanban-col { min-width: 17rem; width: 17rem; }
+
+/*
+ * PRINT LAW (Task 117) — printing must never look like the app.
+ * The invoice sheet portals itself to document.body as #invoice-print-root.
+ * While that sheet exists, print output is EXACTLY the sheet: the whole app
+ * tree (tutorial, toasts, tours, banners, anything added later) dies wholesale.
+ * No sheet mounted, print behaves as before. This replaces the whack-a-mole
+ * of stamping print:hidden on every chrome element forever.
+ */
+@media print {
+  body:has(#invoice-print-root) > *:not(#invoice-print-root) {
+    display: none !important;
+  }
+  body:has(#invoice-print-root) {
+    background: #ffffff !important;
+  }
+}
