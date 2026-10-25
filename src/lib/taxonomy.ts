@@ -86,6 +86,8 @@ export const TRADES: TradeCategory[] = [
   // ---------- health & personal ----------
   C('hairsalon', 'Hair Salons & Barbers', 'personal', ['hair', 'salon', 'barber', 'locs', 'braiding', 'weaves'], ['accounting', 'marketing', 'wholesale']),
   C('beauty', 'Beauty & Wellness', 'personal', ['beauty', 'nail', 'spa', 'massage', 'laser', 'eyelash', 'brow', 'aesthetic'], ['accounting', 'marketing', 'wholesale']),
+  C('tattoo', 'Tattoo & Piercing Studios', 'personal', ['tattoo', 'piercing', 'permanent makeup', 'pmu'], ['tattoosupply', 'wholesale', 'accounting', 'marketing']),
+  C('tattoosupply', 'Tattoo & Body Art Supply', 'retail', ['tattoo suppl', 'tattoo equip', 'tattoo ink', 'tattoo machine', 'piercing suppl', 'body jewel'], ['accounting', 'marketing', 'transport', 'courier']),
   C('medical', 'Medical & Dental', 'health', ['medical', 'doctor', 'dental', 'dentist', 'clinic', 'optom', 'physio', 'chiropract', 'practice'], ['cleaning', 'accounting', 'security', 'wholesale']),
   C('fitness', 'Fitness & Sport', 'personal', ['gym', 'fitness', 'personal train', 'crossfit', 'yoga', 'martial art', 'boxing', 'soccer academy', 'sport'], ['marketing', 'accounting', 'cleaning']),
   C('vet', 'Veterinary & Pet', 'health', ['vet', 'animal hospital', 'pet groom', 'pet care', 'dog walk', 'kennel'], ['cleaning', 'wholesale']),

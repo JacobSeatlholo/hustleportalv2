@@ -74,7 +74,7 @@ async function geocodePlace(area: string): Promise<{ areaId?: number; lat?: numb
  */
 export function targetClause(definition: string): string {
   const d = definition.toLowerCase()
-  const m = d.match(/^(.*?)(?:\bthat needs?\b|\bwho needs?\b|\bwhich needs?\b|\bneeding\b|\blooking for\b|\bwanting\b|\bwant to buy\b)/)
+  const m = d.match(/^(.*?)(?:\bthat needs?\b|\bwho needs?\b|\bwhich needs?\b|\bthat buys?\b|\bwho buys?\b|\bneeding\b|\blooking for\b|\bwanting\b|\bwant to buy\b)/)
   const clause = ((m && m[1]) || '').trim()
   return clause.length >= 6 ? clause : definition
 }
@@ -92,6 +92,7 @@ export function buildTagFilters(definition: string): { tags: { key: string; rege
   const map: { match: RegExp; key: string; values: string[] }[] = [
     { match: /tavern|bar|pub|shebeen|liquor/, key: 'amenity', values: ['bar', 'pub', 'biergarten'] },
     { match: /restaurant|food|kota|catering|kitchen|takeaway|fast/, key: 'amenity', values: ['restaurant', 'fast_food', 'cafe', 'food_court'] },
+    { match: /\btattoo\b|\bpiercing\b|\bpermanent makeup\b|\bpmu\b/, key: 'shop', values: ['tattoo', 'piercing'] },
     { match: /salon|beauty|hair|nail|spa/, key: 'shop', values: ['hairdresser', 'beauty', 'massage', 'nails', 'cosmetics'] },
     { match: /massage|wellness|float|sauna|rehab|physio|therapy/, key: 'shop', values: ['massage', 'beauty', 'spa', 'cosmetics', 'nails'] },
     { match: /clothing|fashion|boutique|sneaker|retail shop|spaza|grocery|shop|store|supermarket/, key: 'shop', values: ['clothes', 'supermarket', 'convenience', 'general', 'variety_store', 'boutique', 'shoes'] },
@@ -129,6 +130,7 @@ export function buildNominatimQuery(definition: string): { kv?: { key: string; v
     { match: /\bbar\b|\bpub\b/, key: 'amenity', values: ['bar', 'pub'] },
     { match: /restaurant|food|kota|catering|kitchen|takeaway/, key: 'amenity', values: ['restaurant', 'fast_food', 'cafe'] },
     { match: /cafe|coffee/, key: 'amenity', values: ['cafe'] },
+    { match: /\btattoo\b|\bpiercing\b|\bpermanent makeup\b|\bpmu\b/, key: 'shop', values: ['tattoo', 'piercing'] },
     { match: /salon|beauty|hair|nail|spa/, key: 'shop', values: ['hairdresser', 'beauty'] },
     { match: /massage|wellness|float|sauna|rehab|physio|therapy/, key: 'shop', values: ['massage', 'beauty'] },
     { match: /spaza|grocery|supermarket|store|shop|retail/, key: 'shop', values: ['supermarket', 'convenience', 'clothes'] },
