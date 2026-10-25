@@ -2295,3 +2295,19 @@ Work Log:
 Stage Summary:
 - Production runs 38f821a with fully ACID money paths: double-spend, lost-update, get-or-create, and debit-without-ledger all closed. The one item I said I wouldn't sleep easy about is now the best-defended code in the repo.
 - Audit follow-ups still open (non-urgent): webhook eventId dedupe store (state guards already make money paths safe), request-ID tracing, confirm prod DATABASE_URL uses pooler endpoint.
+
+---
+Task ID: 116
+Agent: Super Z (main)
+Task: Boss: "Lets go back to the reddit comment and note my response" (the r/ "30 minute honest review" critique; boss drafted the public reply himself and wants it noted/verified).
+
+Work Log:
+- Established the timeline first: this SAME critique was already triaged in Task 102 (2833d36, live probe 12/12 PASS), leftovers closed Task 104 (f15a212) and Task 108 (305dcb5 "Reddit plan closed with proof"). Also confirmed Task 115 (wallet $transaction) landed as 38f821a, so the approved queue item is done.
+- Fact-checked EVERY claim in the boss's draft reply against shipped code before he posts publicly: (1) dash sweep TRUE (888 swept in 173 files; fresh grep today shows prose clean, 7 empty-cell glyphs + functional regexes deliberately kept); (2) inventory TRUE (SKU/supplier/location + typed qty in 102, product photos in 104, verified live on prod in 108); (3) invoice print STALE in the draft: boss says "in process, dead blob" but 102 FIXED it (printable was inside print:hidden = blank page; template now a sibling outside; InvoicesView untouched since) and the dead blob was the VIDEO renderer; (4) VAT TRUE (incl mode pulls VAT out via gross x rate/(100+rate), probe R100 line returned 86.96/100.00); (5) email de-pedaling TRUE (buildSignature + referral code deleted from mailer.ts, member sends carry nothing); (6) own Zoom/Meet/Teams links TRUE (optional meetLink input, honest toast, backup fallback).
+- Flagged for the boss before posting: point 3 underclaims (print is fixed, suggested reword drafted); credits sentence should be narrowed to the code guarantee (no charge on failed/empty scans, reveals of served leads do charge per Task 115 smoke); "self-hosted GLM" disclosure may not survive probing since prod AI runs Gemini (gemini.ts, the 09:00 SAST allowance the critic quoted); 6 typo fixes listed (it's/Its, "use.,", comma splice, Re: spacing). Zero-dash option offered: 7 empty-cell glyph swaps = one small deploy on his word.
+- Deliverable: download/reddit_reply_noted_2026-10-25.md (critique verbatim, reply verbatim, 9-row fact-check table with commit receipts, advisory section, posting checklist).
+- No code changes, no deploy this run. Master account ZERO logins, ZERO writes.
+
+Stage Summary:
+- The boss's Reddit reply is noted verbatim in download/ and every factual claim in it now traces to a shipped commit. 5 of 6 numbered points are code-true as drafted; point 3 (invoice print) should claim the fix instead of hunting a dead blob that belongs to the video renderer. Boss decides the wording, posts from his account; if the critic retests, his findings become the next triage input (the Task 102 loop that worked).
+- Queue after this: BH Leads 2024 pipeline (paused, legality red lines), DNS records waiting on boss paste, Jacob one-word decisions, master password rotation, Task 97 WhatsApp parked on Meta values.
