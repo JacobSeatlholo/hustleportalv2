@@ -121,7 +121,10 @@ export async function resolveFreeModels(): Promise<string[]> {
         // families that refuse plain API calls outright (thinkingmachines models
         // answer 403 to every normal request, they serve agent harnesses only;
         // a 403 here would bench the whole KEY for a MODEL level refusal).
-        if (/tts|image|video|embed|moderation|safety|guard|rerank|transcribe|whisper|vision-only|omni|lyria|music|thinkingmachines|-reasoning|reasoning-only|thinking-only/i.test(id)) return false
+        // -vl families ride the same hard no: they are vision language models,
+        // this chain never sends pixels, and on a text only ranking prompt they
+        // answer slow or time out (the live scan evidence, Oct 2026).
+        if (/tts|image|video|embed|moderation|safety|guard|rerank|transcribe|whisper|vision-only|omni|lyria|music|thinkingmachines|-reasoning|reasoning-only|thinking-only|-vl(?=$|:)/i.test(id)) return false
         return true
       })
       const ranked = free
@@ -239,7 +242,13 @@ export async function openrouterGenerate(
     let attempts = 0
     for (const model of pool) {
       const remaining = deadline - Date.now()
-      if (remaining < 4_000 || attempts >= 3) break
+      // THE GUARANTEED LAST RUNG: the openrouter/free auto-router picks any
+      // healthy free model server side, so it is the one knock that must never
+      // be crowded out by dead discovery slugs. It rides OUTSIDE the three
+      // knock budget (the deadline still rules); every other slug keeps the
+      // failed attempts burn the daily allowance discipline.
+      if (remaining < 4_000) break
+      if (model !== 'openrouter/free' && attempts >= 3) break
       attempts += 1
       const at = Date.now()
       try {
@@ -259,7 +268,10 @@ export async function openrouterGenerate(
             // structured outputs and a 400 burns a daily attempt; callers
             // demand JSON in the prompt and parse loosely instead.
           }),
-          signal: AbortSignal.timeout(Math.min(16_000, remaining)),
+          // 10s per knock: free models that answer a 1400 token JSON ranking
+          // do it well inside this, and a fat 16s timeout once ate the whole
+          // walk's deadline before the router rung ever got its turn.
+          signal: AbortSignal.timeout(Math.min(10_000, remaining)),
         })
         if (!res.ok) {
           const raw = await res.text().catch(() => '')
@@ -327,6 +339,9 @@ export async function openrouterGenerate(
         const msg = e instanceof Error ? e.message : 'request failed'
         const timedOut = /abort|timeout|timed out/i.test(msg)
         opts.trace?.push(`or/${model} → ${timedOut ? 'TIMEOUT' : 'NETWORK'} (${Date.now() - at}ms)`)
+        // A slug that just ate the clock rides the short bench, the next scan
+        // goes straight to rungs that can actually answer.
+        if (timedOut) bench(model, RATE_BENCH_MS)
         const f = { error: friendly(timedOut ? 'BUSY' : 'OTHER', 0), reason: (timedOut ? 'BUSY' : 'OTHER') as OpenrouterErrorReason, status: 0 }
         if (!worst || rank(f.reason) > rank(worst.reason)) worst = f
       }
