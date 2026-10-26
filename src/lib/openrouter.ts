@@ -139,16 +139,6 @@ export async function resolveFreeModels(): Promise<string[]> {
         })
         .slice(0, 8)
         .map((m) => m.id)
-      // THE ROUTER RIDES LAST: openrouter/free picks any healthy free model
-      // server side, so it is the walk's guaranteed final rung, never a mid
-      // pool slug that a three knock budget can die before reaching. The
-      // knock cap exemption in the walk only lands if the loop ever GETS to
-      // it, and the live Kimberley scans proved position decides that.
-      const routerIdx = ranked.indexOf('openrouter/free')
-      if (routerIdx !== -1 && routerIdx !== ranked.length - 1) {
-        ranked.splice(routerIdx, 1)
-        ranked.push('openrouter/free')
-      }
       if (ranked.length > 0) {
         discovery = { models: ranked, at: now }
         return ranked
@@ -250,13 +240,15 @@ export async function openrouterGenerate(
   for (const { key, source } of keys) {
     if (keyBenched(key)) continue
     let attempts = 0
-    for (const model of pool) {
+    // THE ROUTER GOES FIRST: openrouter/free picks any healthy free model
+    // server side, so leading with it is the most reliable zero cost knock
+    // there is. The discovery slugs then serve as the fallback walk under the
+    // three knock budget. (The live Kimberley scans proved a mid pool or tail
+    // router dies behind dead slugs before its turn ever comes: three 429s
+    // and a timeout eat the knock cap or the deadline first.)
+    const walk = [...pool.filter((m) => m === 'openrouter/free'), ...pool.filter((m) => m !== 'openrouter/free')]
+    for (const model of walk) {
       const remaining = deadline - Date.now()
-      // THE GUARANTEED LAST RUNG: the openrouter/free auto-router picks any
-      // healthy free model server side, so it is the one knock that must never
-      // be crowded out by dead discovery slugs. It rides OUTSIDE the three
-      // knock budget (the deadline still rules); every other slug keeps the
-      // failed attempts burn the daily allowance discipline.
       if (remaining < 4_000) break
       if (model !== 'openrouter/free' && attempts >= 3) break
       attempts += 1
