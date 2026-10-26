@@ -2565,3 +2565,7 @@ Work Log:
 
 Stage Summary:
 - The kloofstreet promo draft is in the boss's hands in chat, grounded in the site's own live copy and links, with subject options and a WhatsApp bonus for phone-only rows. Awaiting: (1) copy approval or edits, (2) the send list. Nothing imports or sends until both arrive.
+
+Task ID: 128 (continued)
+- Boss returned his own copy ("something like...") which now supersedes v1: warmer, prouder tone, no visitor-number claim, sign-off "Kloofstreet.online Team". Finalized as v2 in download/kloofstreet_promo_email_2026-10-26.md with his wording verbatim; mechanical additions only: recommended subject "The world has discovered Kloof Street" + 2 alternates, preview text, real CTA URL (kloofstreet.online/get-listed), bolded claim/get-listed paths, and the honest opt-out line (Task 123 standing law). Flagged the I vs Team voice mismatch for his one-word call (sign "Ian" or ship as-is). WhatsApp bonus opener from v1 still on the shelf for phone-only rows.
+- Still gated: awaiting the boss's list and nod. Nothing imported or sent.
