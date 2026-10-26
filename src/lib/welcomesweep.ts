@@ -178,15 +178,19 @@ function sweepRankPrompt(definition: string, raw: { company: string; industry?: 
   }
 }
 
-async function rankForSweep(userId: string, definition: string, raw: { company: string; industry?: string; city?: string; phone?: string; website?: string }[]): Promise<RankVerdict[]> {
+async function rankForSweep(userId: string, definition: string, raw: { company: string; industry?: string; city?: string; phone?: string; website?: string }[]): Promise<{ verdicts: RankVerdict[]; trace: string }> {
   const { system, prompt } = sweepRankPrompt(definition, raw)
   const r = await openrouterGenerate(userId, { system, prompt, temperature: 0.2, maxTokens: 900, timeoutMs: RANK_TIMEOUT_MS })
-  if (!r.ok || !r.text) return []
+  if (!r.ok) return { verdicts: [], trace: `engine: ${r.reason || 'error'}` }
   const parsed = parseJsonLoose<RankVerdict[]>(r.text)
-  if (!Array.isArray(parsed)) return []
-  return parsed
+  if (!Array.isArray(parsed)) {
+    const head = String(r.text || '').replace(/\s+/g, ' ').slice(0, 120)
+    return { verdicts: [], trace: `parse: ${head || 'empty answer'}` }
+  }
+  const verdicts = parsed
     .filter((v) => Number.isFinite(v?.index) && Number.isFinite(v?.score))
     .map((v) => ({ index: Number(v.index), score: Math.max(1, Math.min(5, Number(v.score))), why: typeof v.why === 'string' ? v.why.slice(0, 300) : undefined }))
+  return { verdicts, trace: `ok via ${r.model}` }
 }
 
 const normKey = (s: unknown): string => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -199,7 +203,7 @@ export interface SweepResult {
   companies?: string[]
   /** Where the gates cut: raw directory records -> ranker verdicts -> after
    *  the composite floors -> shipped. The boss's law made visible. */
-  stats?: { raw: number; ranked: number; afterFloors: number; shipped: number }
+  stats?: { raw: number; ranked: number; afterFloors: number; shipped: number; ranker?: string }
 }
 
 /**
@@ -232,7 +236,11 @@ export async function runWelcomeSweep(userId: string, opts: { force?: boolean } 
     const ageH = (Date.now() - latest.createdAt.getTime()) / 3_600_000
     const ageDays = ageH / 24
     if (ageDays > NEW_USER_WINDOW_HOURS / 24) return { ok: true, shipped: 0, skipped: 'ineligible', reason: 'past the new-account window' }
-    if (ageH < ZERO_RETRY_AFTER_HOURS) return { ok: true, shipped: 0, skipped: 'already_swept', reason: 'zero sweep too recent, cron will retry' }
+    if (ageH < ZERO_RETRY_AFTER_HOURS) {
+      // A deliberate exec force may bypass the zero-retry cooldown (never the
+      // shipped relock above) so verification runs are not gated by the clock.
+      if (!opts.force) return { ok: true, shipped: 0, skipped: 'already_swept', reason: 'zero sweep too recent, cron will retry' }
+    }
   }
 
   const existing = await db.lead.count({ where: { userId } })
@@ -253,7 +261,7 @@ export async function runWelcomeSweep(userId: string, opts: { force?: boolean } 
   }
 
   // 3. The relevance brain: rank what is real, cut what is not a buyer.
-  const verdicts = await rankForSweep(userId, definition, raw)
+  const { verdicts, trace: rankerTrace } = await rankForSweep(userId, definition, raw)
   const byIndex = new Map(verdicts.map((v) => [v.index - 1, v]))
 
   // 4. The hard gates. curate enforces FIT_THRESHOLD + RELEVANCE_FLOOR; the
@@ -317,7 +325,7 @@ export async function runWelcomeSweep(userId: string, opts: { force?: boolean } 
     })
   }
   await logScanRun(userId, topicFp, 'WELCOME', ship.length, false)
-  return { ok: true, shipped: ship.length, companies: ship.map((l) => l.company), stats: { raw: raw.length, ranked: verdicts.length, afterFloors: passing.length, shipped: ship.length } }
+  return { ok: true, shipped: ship.length, companies: ship.map((l) => l.company), stats: { raw: raw.length, ranked: verdicts.length, afterFloors: passing.length, shipped: ship.length, ranker: rankerTrace } }
 }
 
 /** The nightly safety net: brand-new accounts whose signup sweep came back
