@@ -2431,3 +2431,18 @@ Work Log:
 Stage Summary:
 - The street is now a number: 150 businesses, 82 of them invisible or locked on the boss's own site. The list, the import CSV and four gated drafts are ready; one approval starts phase one with the seven emails already in hand and the hunt for the rest.
 - For the boss: read the campaign doc sections 6 and 8, correct the "verify" rows if he knows the street better than the map, confirm the WhatsApp number, then say go. Pending from earlier: win-back draft approval (Task 122), shane reply v2 posting (Task 121), ops seat 401 reset.
+
+---
+Task ID: 124
+Agent: Super Z (main)
+Task: Boss paused Task 123 ("we will get back to it") and asked: can we use AIs like Grok or Kimi to improve lead-gen search results, and perhaps go through X looking for leads? Advisory question — research + recommendation, no code.
+
+Work Log:
+- Web research for current (Oct 2026) facts: xAI docs/pricing, Moonshot/Kimi pricing, X API post-Feb-2026 pay-per-use model.
+- KEY FACTS: (a) xAI API has first-party licensed X Search tool at $5/1K calls ($10/1K profiles), Web Search $5/1K, Code Exec $5/1K — vs official X API pay-per-use ~$0.005/POST read ($50/mo per 10K posts, 3M/mo cap then Enterprise; old $100/$5k tiers gone, writes $0.015, $0.20 with links). Grok route ≈ 100x cheaper for search-driven mining and fully licensed, no scraping. (b) Grok models: 4.7 flagship $2/$6 per M; 4.1 Fast $0.20/$0.50 (2M ctx); up to $175/mo free credits via data-sharing program. (c) Kimi: K2.5 $0.49/$2.50 per M (262K ctx), K3 flagship $3/$15 (1M ctx, open weights), K2 line ~40% off — cheap bulk workhorse, but no licensed X feed.
+- Recommendation delivered in chat: Grok = the X unlock (demand-side intent mining to complement OSM supply-side), Kimi = cheap enrichment/classification workhorse to take per-lead load off the Gemini daily allowance + second-opinion scorer. Three phases: (1) provider router + BYO-key extension (Gemini→Kimi→Grok fallback chain), (2) X mining as a new source pushed through the SAME trade dictionary + relevance floor with "from X" source badges + post links, (3) cross-verification (Kimi reads candidate sites; two-source confidence). Guardrails: licensed routes only, daily tool-budget caps, nothing promised publicly until live-retested (shane lesson).
+- Ballpark: ~$25–50/mo platform spend for a materially smarter engine; ~zero on BYO keys.
+- NO code written, NO deploy, NO platform changes. Awaiting boss greenlight (Phase 1 + xAI key funding decision: platform-paid vs BYO only).
+
+Stage Summary:
+- Answer to the boss: yes to both, they solve different halves — Grok gives licensed cheap X access for intent mining; Kimi gives near-free bulk enrichment. Decision needed: greenlight Phase 1 router and whether platform funds an xAI key or BYO-keys only. Task 123 kloofstreet is parked complete and gated (list + campaign + drafts ready for his review).
