@@ -57,6 +57,13 @@ export async function createSession(userId: string) {
     path: '/',
     maxAge: MAX_AGE,
   })
+  // The login stamp: the win-back engine's only honest "when were they last
+  // here". Best effort, a failed stamp must never block a successful login.
+  try {
+    await db.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } })
+  } catch (e) {
+    console.error('[auth] lastLoginAt stamp failed:', e instanceof Error ? e.message : e)
+  }
 }
 
 export async function destroySession() {

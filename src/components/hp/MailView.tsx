@@ -57,6 +57,8 @@ export default function MailView() {
   const [videoAttach, setVideoAttach] = useState<VideoAttach | null>(null)
   const [mailStatus, setMailStatus] = useState<MailStatus | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  // Read view: click a row in the log, read the whole email as it went out.
+  const [reading, setReading] = useState<EmailLogRow | null>(null)
 
   // compose state
   const [leadId, setLeadId] = useState('')
@@ -712,11 +714,16 @@ export default function MailView() {
           ) : (
             <div className="space-y-2 max-h-[32rem] overflow-y-auto hp-scroll">
               {emails.map((e) => (
-                <div key={e.id} className="group rounded-lg border p-2.5 text-sm">
+                <div
+                  key={e.id}
+                  onClick={() => setReading(e)}
+                  className="group rounded-lg border p-2.5 text-sm cursor-pointer hover:border-brand/40 hover:bg-brand/5 transition"
+                  role="button" aria-label={`Read: ${e.subject}`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{e.subject}</p>
-                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail}</p>
+                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge
@@ -729,7 +736,11 @@ export default function MailView() {
                       >
                         {e.status}
                       </Badge>
-                      <button onClick={() => remove(e.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition" aria-label="Delete">
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); remove(e.id) }}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition"
+                        aria-label="Delete"
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -743,6 +754,29 @@ export default function MailView() {
           )}
         </div>
       </div>
+
+      {/* Read view: the whole email, exactly as it went out. */}
+      <Dialog open={!!reading} onOpenChange={(o) => { if (!o) setReading(null) }}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto hp-scroll">
+          {reading && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base leading-snug">{reading.subject || '(no subject)'}</DialogTitle>
+                <DialogDescription>
+                  to {reading.toEmail} · {new Date(reading.createdAt).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </DialogDescription>
+              </DialogHeader>
+              <Badge variant="outline" className={`w-fit text-[10px] ${reading.status === 'SENT' ? 'border-emerald-500/40 text-emerald-500' : reading.status === 'FAILED' ? 'border-rose-500/40 text-rose-500' : 'border-yellow-500/40 text-yellow-500'}`}>
+                {reading.status}
+              </Badge>
+              {reading.status === 'FAILED' && reading.error && (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{reading.error}</div>
+              )}
+              <div className="rounded-lg border bg-card px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed break-words">{reading.body || '(empty body)'}</div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <Mail className="h-4 w-4 text-brand shrink-0 mt-0.5" />

@@ -31,6 +31,11 @@ model User {
   persona     String? // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
   profession  String? // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
   onboardedAt DateTime?
+  // Last successful login (signup counts). JWT sessions leave no DB rows, so this
+  // stamp is the only honest signal for win-back: who has gone quiet and for how
+  // long. Null on every account that last logged in before this shipped; the
+  // win-back audience then falls back to the account's latest activity rows.
+  lastLoginAt DateTime?
   xp           Int      @default(0)
   refCode      String?  @unique // personal invite code (lazy-generated)
   platformAdmin Boolean @default(false)
