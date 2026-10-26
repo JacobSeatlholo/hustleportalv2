@@ -619,6 +619,14 @@ export default function IntegrationsView() {
       setSettings((rows) => rows.filter((r) => r.key !== key))
       toast({ title: 'Cleared', description: `${key} removed.` })
       if (key === 'GMAIL_APP_PASSWORD') setMailVerdict(null)
+      // A cleared engine key must not keep showing its old save time warning.
+      if (key === 'DEEPSEEK_API_KEY' || key === 'OPENROUTER_API_KEY') {
+        setEngineVerdicts((v) => {
+          const next = { ...v }
+          delete next[key]
+          return next
+        })
+      }
     } catch {
       // non-fatal
     }
