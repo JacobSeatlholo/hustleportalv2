@@ -2465,3 +2465,20 @@ Work Log:
 Stage Summary:
 - The AI chain now has a zero cost bottom rung end to end: whenever Google's free tier drains (09:00 SAST refill) or a member has no keys at all, the OpenRouter free engine carries ranking, drafting and classification at R0, with the same honesty laws (no fabricated contacts, thin beats junk, original errors stay actionable). Grounded web search stays Gemini/z.ai only, by law: free models cannot browse and we never let them pretend.
 - For the boss: paste your OpenRouter key under Integrations (the card shows your REAL remaining free requests the minute you save), or drop OPENROUTER_API_KEY into Vercel env for platform wide coverage. Honest ceiling on your fresh account: 50 free requests/day, 20/min; it refills at midnight UTC; users can paste their own keys for their own caps. X mining remains parked (xAI's $150/mo needs a $5 unlock, ruled out under strict zero) — the $0 stand-in is Gemini grounded discovery which already reads indexed public X pages.
+
+---
+Task ID: 126
+Agent: main (Z.ai)
+Task: Boss added OPENROUTER_API_KEY to Vercel env and redeployed; question — would a Vercel Agent / his own deployed agent help the project?
+
+Work Log:
+- Read worklog tail: Task 125 chain (OpenRouter free backup engine end-to-end) was already built and deployed at 35309b8; the only missing piece was the boss's key.
+- Health check on live prod: ok, db ping true, build.sha 35309b8, integrations.openrouterPlatformKey TRUE — his env var is wired server-side; platform-wide zero-cost bottom rung is armed.
+- Web-verified Vercel Agent (Oct 2026): dashboard ops agent (diagnoses failed builds, opens fix PRs). Pricing since Jun 2026 is pay-per-use — $0.25/M Vercel tokens ON TOP of raw provider inference. No meaningful free tier → ruled out under strict zero. It does build-ops, not lead-gen.
+- Web-verified Vercel Cron on Hobby: free, once-per-day per job (timing ±59 min), 2 cron jobs per project; cron-job.org free tier available as $0 external scheduler for tighter cadence.
+- Answered boss: skip Vercel Agent; his "own agent deployed" instinct maps to a $0 nightly lead sweep (Vercel Cron → our API route → Gemini free → OpenRouter fallback → scored leads overnight). Sequencing: real before/after lead test first, then nightly sweep.
+- NO code written this turn, NO deploy, NO platform changes.
+
+Stage Summary:
+- OPENROUTER_API_KEY confirmed live in prod (health flag true on 35309b8): AI chain now runs Gemini free → OpenRouter free (boss's key) end to end at R0, platform-wide. Layer 1 fully armed.
+- Vercel Agent ruled out under strict zero ($0.25/M tokens + inference, ops-only value). Roadmap: boss-chosen-city before/after lead deck → then $0 nightly cron lead agent.
