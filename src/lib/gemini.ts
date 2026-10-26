@@ -16,6 +16,7 @@
  *    (a bad user key beats a platform problem; "model retired" is never blamed on the user's key).
  */
 import { db } from '@/lib/db'
+import { openrouterFromGeminiBody } from '@/lib/openrouter'
 
 /**
  * Preference order, alias first (tracks Google's current stable Flash), then numbered
@@ -356,6 +357,12 @@ async function callGemini(
   const platformKey = getPlatformGeminiKey()
   if (platformKey && platformKey !== userKey) keys.push({ key: platformKey, ownKey: false })
   if (keys.length === 0) {
+    // No Gemini key anywhere does NOT mean no AI: the $0 backup rung may still
+    // carry a plain text call (platform OpenRouter key or the seller's own).
+    const or = await openrouterFromGeminiBody(userId, body, Math.min(timeoutMs, 16_000), trace)
+    if (or && or.ok) {
+      return { ok: true, text: or.text, notice: 'Heads up: the usual AI engine is not switched on for this account yet, so the free backup engine answered. Everything else works the same.' }
+    }
     return {
       ok: false,
       error:
@@ -496,6 +503,24 @@ async function callGemini(
       }
     }
     if (timedOut) break // connectivity problem, don't hammer the chain
+  }
+
+  // $0 BACKUP RUNG (OpenRouter free models): the whole Gemini walk failed, but a
+  // PLAIN TEXT, ungrounded call can still be carried at zero cost by the free
+  // engine inside the caller's remaining deadline. Vision and search grounded
+  // bodies are refused by the bridge itself (no pixels, no browsing on free
+  // models, the anti fabrication law holds), and when the bridge also fails the
+  // ORIGINAL Gemini error stays the final word: Google's cause is the actionable
+  // one, the backup's noise never buries it.
+  const left = deadline - Date.now()
+  if (left > 5_000) {
+    const or = await openrouterFromGeminiBody(userId, body, Math.min(left, 16_000), trace)
+    if (or && or.ok) {
+      const notice = userKeyFailure
+        ? `Heads up: your own Gemini key was ${userKeyFailure.cls === 'PERMISSION' ? 'blocked by Google' : userKeyFailure.cls === 'KEY_INVALID' ? 'rejected as invalid' : 'rate limited'}. This answer came from the free backup engine, so nothing stopped.`
+        : 'Heads up: the daily AI allowance was out, so the free backup engine answered this one. It refills around 09:00 South African time.'
+      return { ok: true, text: or.text, notice }
+    }
   }
 
   return { ok: false, error: bestError(failures) }

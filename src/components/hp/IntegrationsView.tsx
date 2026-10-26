@@ -53,6 +53,14 @@ const INTEGRATIONS: {
     secret: true,
   },
   {
+    key: 'OPENROUTER_API_KEY',
+    title: 'OpenRouter key (free backup engine, zero cost)',
+    icon: <Brain className="h-4 w-4 text-brand" />,
+    placeholder: 'sk-or-v1-…',
+    helper: 'STRICTLY FREE: whenever the daily AI allowance runs dry, free open models (Kimi, DeepSeek, Llama and friends via openrouter.ai) finish the ranking and drafting at R0. Paste a key from openrouter.ai/settings/keys and the free engine covers your scans, no card, no credits, no quota walls on our side.',
+    secret: true,
+  },
+  {
     key: 'GCAL_OAUTH_TOKEN',
     title: 'Google Calendar token (optional)',
     icon: <CalendarCheck2 className="h-4 w-4 text-brand" />,
@@ -552,7 +560,7 @@ export default function IntegrationsView() {
     const value = (drafts[key] ?? '').trim()
     setSaving(key)
     if (key === 'GEMINI_API_KEY') setGeminiVerdict(null)
-    if (key === 'DEEPSEEK_API_KEY') {
+    if (key === 'DEEPSEEK_API_KEY' || key === 'OPENROUTER_API_KEY') {
       setEngineVerdicts((v) => ({ ...v, [key]: undefined as never }))
     }
     try {
@@ -582,6 +590,15 @@ export default function IntegrationsView() {
           title: res.validation.ok ? `${engine} key verified ✓` : `Key saved, but ${engine} flagged something`,
           description: res.validation.ok
             ? 'Scans now run on your own credits.'
+            : 'See the note under the key for the fix. Nothing breaks meanwhile.',
+          variant: res.validation.ok ? 'default' : 'destructive',
+        })
+      } else if (key === 'OPENROUTER_API_KEY' && res.validation) {
+        setEngineVerdicts((v) => ({ ...v, [key]: { ok: res.validation!.ok, msg: res.validation!.message } }))
+        toast({
+          title: res.validation.ok ? 'OpenRouter key verified ✓' : 'Key saved, but OpenRouter flagged something',
+          description: res.validation.ok
+            ? 'The free backup engine is armed at zero cost.'
             : 'See the note under the key for the fix. Nothing breaks meanwhile.',
           variant: res.validation.ok ? 'default' : 'destructive',
         })

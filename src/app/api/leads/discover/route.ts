@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
+import { openrouterGenerate } from '@/lib/openrouter'
 import { zaiGenerate, getUserZaiKey } from '@/lib/zai'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
@@ -308,6 +309,41 @@ async function enrichOsmWithDeepseek(
 }
 
 /**
+ * Free engine ranking (OpenRouter :free models, STRICT $0): the same ranking
+ * contract, zero cost, no Google quota and no GLM token needed. The seller's
+ * own OpenRouter key leads, the platform key follows. The free engine cannot
+ * browse: it only ranks the REAL records handed to it, contact facts stay
+ * verbatim from the directory, the anti fabrication law holds.
+ */
+async function enrichOsmWithOpenrouter(
+  userId: string,
+  definition: string,
+  raw: AiLead[],
+  cap: number,
+  t0: number,
+  trace?: string[]
+): Promise<{ leads: (AiLead & { company: string })[] } | null> {
+  if (raw.length === 0) return null
+  const remaining = t0 + 54_000 - Date.now()
+  if (remaining < 8_000) return null
+  const { system, prompt } = rankingPrompt(definition, raw, cap)
+  const res = await openrouterGenerate(userId, {
+    system,
+    prompt,
+    temperature: 0.3,
+    maxTokens: 1400,
+    timeoutMs: Math.max(8_000, Math.min(18_000, remaining - 1_000)),
+    trace,
+  })
+  // Any refusal (no key, daily cap, pacing) simply lets the next rung take it:
+  // raw real records still flow, the noise stays out of the seller's answer.
+  if (!res.ok) return null
+  const leads = matchRankedToSource(res.text, raw, cap)
+  if (!leads) return null
+  return { leads }
+}
+
+/**
  * GLM enrichment of REAL map records: the same ranking contract, carried by
  * the GLM engine on PLAIN generation (no web search tool, no Google, no
  * DeepSeek key). The token pack behind the platform key already pays for this,
@@ -359,6 +395,8 @@ async function enrichOsmWithAi(
 ): Promise<{ leads: (AiLead & { company: string })[]; notice?: string; engine: string } | null> {
   const ds = await enrichOsmWithDeepseek(userId, definition, raw, cap, t0)
   if (ds && ds.leads.length > 0) return { ...ds, engine: 'DeepSeek' }
+  const or = await enrichOsmWithOpenrouter(userId, definition, raw, cap, t0, trace)
+  if (or && or.leads.length > 0) return { ...or, engine: 'the HustlePortal matching engine' }
   const glm = await enrichOsmWithGlm(userId, definition, raw, cap, t0, trace)
   if (glm && glm.leads.length > 0) return { ...glm, engine: 'the HustlePortal matching engine' }
   // DeepSeek's actionable complaint (the seller's own key out of credits or

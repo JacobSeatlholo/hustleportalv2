@@ -4,12 +4,14 @@ import { getUserId } from '@/lib/auth'
 import { validateGeminiKey } from '@/lib/gemini'
 import { validateDeepseekKey } from '@/lib/deepseek'
 import { validateZaiKey } from '@/lib/zai'
+import { validateOpenrouterKey } from '@/lib/openrouter'
 
 const ALLOWED_KEYS = [
   'GMAIL_USER',
   'GMAIL_APP_PASSWORD',
   'GEMINI_API_KEY',
   'DEEPSEEK_API_KEY',
+  'OPENROUTER_API_KEY',
   'ZAI_API_KEY',
   'EXPLEE_API_KEY',
   'GCAL_OAUTH_TOKEN',
@@ -23,7 +25,7 @@ const ALLOWED_KEYS = [
   'ICS_FEED_URL', // read-only calendar feed for the Calendar sync button
 ]
 
-const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'ZAI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
+const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY', 'ZAI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
 
 function mask(v: string) {
   if (v.length <= 4) return '••••'
@@ -87,6 +89,12 @@ export async function PUT(req: NextRequest) {
   // saved: a rejected key is flagged HERE, not three screens later when a scan fails.
   if (key === 'ZAI_API_KEY') {
     validation = await validateZaiKey(value)
+  }
+  // A pasted OpenRouter key is probed against OpenRouter's own key meter the
+  // moment it is saved, so the seller sees their REAL free tier ceiling (the
+  // day's remaining free requests) in the same minute the key is pasted.
+  if (key === 'OPENROUTER_API_KEY') {
+    validation = await validateOpenrouterKey(value)
   }
 
   return NextResponse.json({

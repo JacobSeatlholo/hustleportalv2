@@ -104,6 +104,7 @@ export async function GET() {
     db: { ping: dbPing, ...detail },
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      openrouterPlatformKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
       emailPlatformKey: Boolean(process.env.RESEND_API_KEY?.trim()),
       // Truthful by design: RESEND_FROM is an optional operator override. The
       // mailer always resolves a from address (branded per user identity or
