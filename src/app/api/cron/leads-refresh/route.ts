@@ -4,6 +4,7 @@ import { pingWebsite, hostOf, scoreFor, parseChecksSource, ingestVerifiedContact
 import { expleeHotLeads, projectLabelForCampaign } from '@/lib/explee'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { globalCooldown } from '@/lib/ratelimit'
+import { sweepPendingWelcome } from '@/lib/welcomesweep'
 
 export const maxDuration = 60
 
@@ -174,6 +175,19 @@ export async function GET(req: NextRequest) {
     /* the sweep never blocks the freshness work */
   }
 
+  // 4) WELCOME SWEEP SAFETY NET: brand-new accounts whose signup-time sweep
+  //    came back empty (drained engines, refusing mirrors) get one more turn
+  //    while the engines are fresh. Bounded (3 accounts), self-guarded
+  //    (eligibility, idempotence and the relevance gates all live inside the
+  //    sweep). A failure here never breaks the freshness work above.
+  let welcomeSwept: Array<{ email: string; shipped: number; reason?: string }> = []
+  try {
+    const results = await sweepPendingWelcome(3)
+    welcomeSwept = results.map((r) => ({ email: r.email, shipped: r.result.shipped, reason: r.result.reason || r.result.skipped }))
+  } catch (e) {
+    console.error('[leads-refresh] welcome sweep net failed', e)
+  }
+
   return NextResponse.json({
     ok: true,
     demoted: demoted.count,
@@ -182,6 +196,7 @@ export async function GET(req: NextRequest) {
     dead,
     prunedScans: pruned.count,
     whitelabelSwept: swept,
+    welcomeSwept,
     ...(feed ? { feed } : {}),
   })
 }

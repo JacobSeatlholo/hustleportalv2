@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'node:crypto'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, verifyPassword } from '@/lib/auth'
@@ -10,6 +10,14 @@ import { isEmail } from '@/lib/quality'
 import { attributeSignup } from '@/lib/referral'
 import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 import { ensureExecAdmin } from '@/lib/admin'
+import { runWelcomeSweep } from '@/lib/welcomesweep'
+
+// The welcome sweep runs after the response ships (Vercel keeps the function
+// alive for after() work): a fresh signup should wake up to real,
+// relevance-gated leads already in the pipeline. The sweep is guarded end to
+// end and must never delay or break registration, so the budget here is
+// generous while the response itself stays fast.
+export const maxDuration = 60
 
 const RESET_TTL_MS = 30 * 60 * 1000
 
@@ -142,6 +150,16 @@ export async function POST(req: NextRequest) {
           await db.teamInvite.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } })
         }
       } catch { /* team attach must never block registration */ }
+      // THE WELCOME SWEEP: real, relevance-gated leads already waiting. Fires
+      // after the response; bench accounts skip themselves inside the sweep.
+      after(async () => {
+        try {
+          const r = await runWelcomeSweep(user.id)
+          console.log('[welcome-sweep]', normalized, JSON.stringify(r))
+        } catch (e) {
+          console.error('[welcome-sweep] failed for', normalized, e)
+        }
+      })
       return NextResponse.json({ ok: true, joinedTeams })
     }
 
