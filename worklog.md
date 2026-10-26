@@ -2482,3 +2482,25 @@ Work Log:
 Stage Summary:
 - OPENROUTER_API_KEY confirmed live in prod (health flag true on 35309b8): AI chain now runs Gemini free → OpenRouter free (boss's key) end to end at R0, platform-wide. Layer 1 fully armed.
 - Vercel Agent ruled out under strict zero ($0.25/M tokens + inference, ops-only value). Roadmap: boss-chosen-city before/after lead deck → then $0 nightly cron lead agent.
+
+---
+Task ID: 126-cont
+Agent: main (Z.ai)
+Task: Real before/after lead test on a thin-OSM town (Kimberley), boss greenlit with "Ok."
+
+Work Log:
+- Read discover route end to end (engine chain: personal z.ai → Gemini grounded → z.ai grounded → OSM lane with DeepSeek→OpenRouter→GLM ranking + Gemini People Pass → Explee; pool serves by topic fingerprint; debug:true returns engine traces).
+- Wrote scripts/task126_kimberley_deck.mjs: fresh throwaway QA account per run (clean slate, free plan 5 leads/scan, 25 scans/day), 3 seller topics (cleaning / signage / POS) × Kimberley, 14s cooldowns, full JSON artifacts per run.
+- RUN 1 (11:58 SAST, before fixes): caught the midday dead zone LIVE — Gemini 429 RESOURCE_EXHAUSTED (free tier drained), GLM 429 balance empty, OpenRouter rung burned its 3 knocks on gemma 429s + a 16s nemotron VL timeout and never reached openrouter/free. Decks: raw unranked directory records (5/1/0).
+- Catalog probe (public GET, no key): 14 free text models, ZERO moonshotai (no Kimi free right now), openrouter/free router present. Families: google×2 nvidia×4 openrouter×1 + misc.
+- FIX 1 (c60e857): VL slugs excluded from the text pool, timeout benching (65s), 10s per-knock cap, router exempt from the 3-knock cap. Deployed, health green.
+- RUN 2: scan 3 proves the rung — or/openrouter/free → 200 (7364ms) ok via the boss's platform key; ranked deck of 4 bars at score 5 for a POS seller. Scans 1-2 still died before reaching the router (mid pool position).
+- FIX 2 (fbcfa74, tail position): proved WRONG — the loop breaks at the knock cap mid pool, never reaches the tail (run 3: same failure mode).
+- FIX 3 (45b44e8, router FIRST, discovery slugs become the fallback walk): RUN 4 scan 3 shows the complete designed behavior — router TIMEOUT → bench → fallback slug google/gemma-4-26b-a4b-it:free → 200 (4185ms) ok → ranked deck. Mechanics verified end to end.
+- Merged scripts/task126_merge_csv.mjs: 12-scan comparison table + kimberley_leads_merged.csv (10 unique companies).
+- Artifacts: download/task126/run1-before-fix … run4-router-first/, kimberley_leads_merged.csv. Prod on 45b44e8, health green, openrouterPlatformKey true.
+
+Stage Summary:
+- The midday dead zone is REAL and now has a working $0 answer: Gemini drained + GLM empty + whenever ANY OpenRouter free provider is alive, the deck gets AI-ranked at R0 through the boss's key; when none are alive, the honest OSM floor ships real directory records instead of fabrications.
+- Known residuals, queued not hidden: (1) OpenRouter free pool is thin (14 models, saturates at peak; no Kimi free exists right now — expectation to correct with boss); (2) Gemini midday drain means no grounded web discovery / People Pass names until the daily refill — OSM directory is the honest floor; (3) empty GLM pack burns ~15-20s wall time per scan on dead zhipu/z.ai rungs (balance-aware benching in zai.ts is the next small fix); (4) today's testing consumed a chunk of the boss's 50/day free allowance (failed attempts burn it — refills midnight UTC).
+- Recommended re-test 09:30 SAST (engines fresh) for the "engines healthy" half of the story; then the nightly cron sweep build.
