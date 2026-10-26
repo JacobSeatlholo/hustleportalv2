@@ -2578,3 +2578,11 @@ Task ID: 128 (continued, the list arrived)
 - LIVE on prod via ops seat: import 59/59 created under ceo@businesshustle.co.za (project "Kloof Street Campaign", team "Business Hustle" reused, 0 skipped, notes carry each row's outreach history); queue 59/59 QUEUED under kloofstreet-2026-11, all 59 leadIds linked (opens will move pipeline stages), 0 suppressed 0 dup 0 invalid. State verified by read-back: PAUSED, perHour 45, provider RESEND, estimated clear ~1.3h once started.
 - Scripts/task128_kloof_promo_queue.mjs (DRY default, KLOOF_LIVE=1 gated, NEVER starts the queue); download/kloofstreet_promo_recipients_2026-10-26.csv (59 + 6 excluded with reasons).
 - NOTHING SENT. The Start button belongs to the boss on his Mail screen.
+
+Task ID: 128 (continued, SEND)
+- Boss supplied the missing addresses (kloofkonbini@gmail.com, info@vanhunks.co.za, admin@smokinjoesburgers.com for Smokey Treats, info@kloofstreethouse.co.za, jessica@unframed.co.za OR icecream@unframed.co.za) and ordered "Send away.. I also want to see if it's been read."
+- Honest address triage: never@home refused (no domain, cannot send); Born High and Mixa's still blank; Tiger's Milk = info@lifeandbrand.co.za which was ALREADY queued with the 59 (same shop, covered); Unframed went to jessica@ (the owner he already spoke to, one shop one touch). 5 additions imported (59 -> 64 pipeline contacts) and queued with proper greetings (Jessica named, 4 x Hi there).
+- STARTED at 13:45 UTC per the boss's order (scripts/task128b_kloof_promo_send.mjs, ops seat): state ACTIVE, perHour 45, provider RESEND. Tick 1 sent 29, tick 2 sent 16; the DB pacing law then held the rest (45/hr ceiling working exactly as built).
+- ONE FAILURE: info@studburger.com died on a Resend burst 429 (10 req/sec), not a bad address. Requeued via the same-tag POST (the dedupe only guards QUEUED/SENT, so the fresh row queues cleanly); it rides with the remaining batch.
+- Read back at 13:47 UTC: 65 total, 45 SENT, 19 QUEUED (clear when the hour window slides), 1 FAILED (the dead 429 row), 13 OPENED within two minutes of launch. Opens move the contacts NEW -> CONTACTED on the boss's pipeline via the linked leadIds.
+- Where the boss watches reads: Mail -> Campaigns card shows "X% read so far" plus per-row read receipts; the Sent mail archive holds every body as sent.
