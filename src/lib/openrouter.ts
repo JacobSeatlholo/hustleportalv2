@@ -139,6 +139,16 @@ export async function resolveFreeModels(): Promise<string[]> {
         })
         .slice(0, 8)
         .map((m) => m.id)
+      // THE ROUTER RIDES LAST: openrouter/free picks any healthy free model
+      // server side, so it is the walk's guaranteed final rung, never a mid
+      // pool slug that a three knock budget can die before reaching. The
+      // knock cap exemption in the walk only lands if the loop ever GETS to
+      // it, and the live Kimberley scans proved position decides that.
+      const routerIdx = ranked.indexOf('openrouter/free')
+      if (routerIdx !== -1 && routerIdx !== ranked.length - 1) {
+        ranked.splice(routerIdx, 1)
+        ranked.push('openrouter/free')
+      }
       if (ranked.length > 0) {
         discovery = { models: ranked, at: now }
         return ranked
