@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!user) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
   const now = Date.now()
-  const [topups, creditTxs, projects, stageGroups, clientsCount, invoices, leadsTotal, poolRows, poolCounts, campaigns] = await Promise.all([
+  const [topups, creditTxs, projects, stageGroups, pipelineRows, clientsCount, invoices, leadsTotal, poolRows, poolCounts, campaigns] = await Promise.all([
     db.topUp.findMany({
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
@@ -53,6 +53,15 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       select: { id: true, name: true, isDefault: true, industry: true, createdAt: true, _count: { select: { leads: true, clients: true, invoices: true } } },
     }),
     db.lead.groupBy({ by: ['stage'], where: { userId: id }, _count: { _all: true } }),
+    // The client's actual lead rows: the exec sees the names, not just the
+    // stage counts (dedup checks across clients, quality reads, the boss's
+    // "is this pipeline real" question). Read only, newest first.
+    db.lead.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { id: true, company: true, contactName: true, city: true, industry: true, stage: true, score: true, source: true, createdAt: true },
+    }),
     db.client.count({ where: { userId: id } }),
     db.invoice.findMany({
       where: { userId: id },
@@ -96,6 +105,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     pipeline: {
       stages: Object.fromEntries(stageGroups.map((g) => [g.stage, g._count._all])),
       total: leadsTotal,
+      rows: pipelineRows,
     },
     pool: {
       rows: poolRows,
