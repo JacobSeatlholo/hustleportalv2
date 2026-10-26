@@ -2550,3 +2550,18 @@ Work Log:
 
 Stage Summary:
 - Fresh signups now wake to relevance-gated leads automatically: signup fires the sweep, the ranker (boss's key, R0) is the relevance brain, the gates ship only real buyers, and zero-result sweeps retry overnight. The exec dashboard gained a run-now control with visible gate math. Prod-proven end to end at $0.
+
+---
+Task ID: 128
+Agent: Super Z (main)
+Task: Boss: "Okay, let us now do the kloofstreet promo.. I want the store owner to check out kloofstreet.online and have an easy way to sign on. They must also know about the merchant backoffice(hustleportal) we have designed to support members on kloofstreet.online.. Email must read exciting, use high conversion words and it must be human like courteous and not read like AI.. Let me see the draft here first and I'll give you the list to send to."
+
+Work Log:
+- Grounded the copy in verified facts before writing a word: fetched kloofstreet.online live (Time Out #22 coolest street in the world 2025, coolest in Africa; 12K+ monthly visitors claim; ~68 unclaimed Claim Profile cards; Street Pass R199/R499/R999). Probed routes: /get-listed /claim /join /partners /signup all 200 on www. Extracted the site's own merchant wiring: "KloofStreet is your storefront on the street. Your backoffice ... lives on HustlePortal" with link https://www.hustleportal.online/?utm_source=kloofstreet&utm_medium=referral&utm_campaign=kloofv2, plus the Street Pass join WhatsApp wa.me/27744815163.
+- Reused Task 123 ground truth (150 businesses: 14 partners, 68 unclaimed, 68 off-site; 7 emails, 30 phones, 38 websites; campaign doc + four gated drafts parked). This promo is the flagship send for that campaign once the list arrives.
+- Wrote the promo email in the boss's voice, dash free, ONE cta (kloofstreet.online/get-listed), honest claims only: Time Out ranking true, the 12K number is the site's own claim and flagged for veto, "I'll add you personally" matches how he really runs imports, backoffice benefits limited to shipped features (clients, mail, invoices, appointments, lead pipeline). Packaged: recommended subject + 2 alternates, preview text, body with a P.S. aimed at the 68 unclaimed, honest opt-out line, {firstName} merge with fallback guidance. Bonus: 3-line WhatsApp opener for the phone-only rows (23 of 30 phones in the list).
+- Deliverable: download/kloofstreet_promo_email_2026-10-26.md. Draft presented in chat as ordered.
+- NOTHING SENT, nothing imported. Send path on approval: exec campaign import under project "Kloof Street Campaign", tag kloofstreet-2026-11, queue born PAUSED, kanban New > Contacted > Claimed > Partner, one touch per tag, suppression law, every send lands in the Task 122 Sent mail archive.
+
+Stage Summary:
+- The kloofstreet promo draft is in the boss's hands in chat, grounded in the site's own live copy and links, with subject options and a WhatsApp bonus for phone-only rows. Awaiting: (1) copy approval or edits, (2) the send list. Nothing imports or sends until both arrive.
