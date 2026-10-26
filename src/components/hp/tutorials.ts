@@ -43,6 +43,7 @@ export const SECTION_TUTORIALS: Partial<Record<ViewKey, SectionTutorialDef>> = {
       { icon: 'Sparkles', title: 'The AI scouts the real web', body: 'HustlePortal AI searches live web results and the map directory, only businesses that actually exist, with websites, phones and emails when they\u2019re public. No made-up leads, ever.' },
       { icon: 'Users', title: 'Results land in your pipeline', body: 'Pick the good fits and they become pipeline cards: Contacted → Qualified → Quote Sent → Won. Use the stage filter up top to focus on what\u2019s hot.' },
       { icon: 'Unlock', title: 'Reveal contact details', body: 'Some leads hide their email/phone until revealed, reveals use your plan credits and are always real, checked details.' },
+      { icon: 'ThumbsUp', title: 'Rate your leads, teach the machine', body: 'Honest talk: this finder is young, and it gets sharper every single day. Every search teaches it, and so do you: one tap on any lead, Good fit or Not a fit. A not-a-fit goes back to the pool to find a better-suited seller and never wastes your time again. Reveals stay what they always were, real checked contacts or your credits stay put. The more you rate, the better your leads get.' },
     ],
   },
   clients: {

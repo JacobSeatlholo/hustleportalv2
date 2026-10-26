@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { GraduationCap, ArrowRight, Zap, LayoutDashboard, Target, Sparkles, Users, Unlock, MessageSquare, Plus, Building2, Camera, Package, AlertTriangle, FileText, Wallet, Bell, TrendingUp, PieChart, FileDown, Send, Repeat, Bot, ShieldCheck, CalendarDays, Video, Plug, Stethoscope, Globe, RotateCcw, ShoppingCart, Store, Share2, CreditCard, Gift, Pause, BarChart3, BookOpen } from 'lucide-react'
+import { GraduationCap, ArrowRight, Zap, LayoutDashboard, Target, Sparkles, Users, Unlock, MessageSquare, Plus, Building2, Camera, Package, AlertTriangle, FileText, Wallet, Bell, TrendingUp, PieChart, FileDown, Send, Repeat, Bot, ShieldCheck, CalendarDays, Video, Plug, Stethoscope, Globe, RotateCcw, ShoppingCart, Store, Share2, CreditCard, Gift, Pause, BarChart3, BookOpen, ThumbsUp } from 'lucide-react'
 import { useHp, type ViewKey } from './store'
 import { SECTION_TUTORIALS, type SectionTutorialDef } from './tutorials'
 
@@ -56,6 +56,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Pause: <Pause className="h-7 w-7 text-brand" />,
   BarChart3: <BarChart3 className="h-7 w-7 text-brand" />,
   BookOpen: <BookOpen className="h-7 w-7 text-brand" />,
+  ThumbsUp: <ThumbsUp className="h-7 w-7 text-brand" />,
 }
 
 function seenKey(view: ViewKey) {

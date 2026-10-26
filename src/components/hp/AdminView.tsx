@@ -29,7 +29,7 @@ import {
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
   Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare,
-  Mail, MailOpen, Send,
+  Mail, MailOpen, Send, ThumbsUp, ThumbsDown, Gauge,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -1806,6 +1806,209 @@ function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
   )
 }
 
+// =================== Lead quality lens ===================
+// "Are the leads actually any good?" answered with the members' own verdicts:
+// good fit %, the reasons behind every reject, WHICH source ships quality,
+// and the freshest verdicts in the members' own words. This is the read side
+// of the pool's feedback loop, the write side lives on the pipeline card.
+
+interface LeadQualityData {
+  rated: number
+  good: number
+  bad: number
+  goodPct: number
+  rated30: number
+  good30: number
+  bad30: number
+  released: number
+  poolFacesJudged: number
+  reasons: { reason: string; count: number }[]
+  bySource: { source: string; rated: number; good: number; bad: number }[]
+  recent: {
+    id: string
+    company: string
+    city: string | null
+    source: string
+    verdict: string
+    reason: string | null
+    note: string | null
+    member: string
+    memberBusiness: string | null
+    at: string
+  }[]
+}
+
+function sourceName(s: string): string {
+  switch (String(s || '').toUpperCase()) {
+    case 'TEAM':
+    case 'EXPLEE':
+      return 'Team verified'
+    case 'POOL':
+      return 'Verified pool'
+    case 'OSM':
+      return 'Map listed'
+    case 'MANUAL':
+      return 'Manual'
+    case 'CSV':
+      return 'CSV import'
+    default:
+      return 'Web found'
+  }
+}
+
+function LeadQualityCard() {
+  const [data, setData] = useState<LeadQualityData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    setLoading(true)
+    try {
+      setData(await api<LeadQualityData>('/api/admin/exec/lead-quality'))
+    } catch {
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const srcRows = data?.bySource.filter((s) => s.rated > 0) ?? []
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            <Gauge className="h-4 w-4 text-brand" /> Lead quality
+            {data && data.rated > 0 && (
+              <Badge className={`text-[10px] border-0 ${data.goodPct >= 70 ? 'bg-emerald-500/15 text-emerald-600' : data.goodPct >= 40 ? 'bg-amber-500/15 text-amber-600' : 'bg-red-500/15 text-red-600'}`}>
+                {data.goodPct}% rated good fit
+              </Badge>
+            )}
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {!data && loading && (
+          <div className="px-4 py-4 space-y-2">
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+          </div>
+        )}
+        {data && data.rated === 0 && (
+          <div className="px-4 py-4 text-sm text-muted-foreground">
+            No verdicts yet. Members rate leads Good fit / Not a fit right on the contact card, and the numbers land here the moment they do.
+          </div>
+        )}
+        {data && data.rated > 0 && (
+          <div className="px-4 pb-4 pt-1 space-y-4">
+            {/* the headline numbers */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-lg border bg-card p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Verdicts</div>
+                <div className="font-display text-2xl mt-0.5">{data.rated}</div>
+                <div className="text-[10px] text-muted-foreground">{data.rated30} in the last 30 days</div>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><ThumbsUp className="h-3 w-3 text-emerald-500" /> Good fits</div>
+                <div className="font-display text-2xl mt-0.5 text-emerald-600">{data.goodPct}%</div>
+                <div className="text-[10px] text-muted-foreground">{data.good30} of {data.rated30} this month</div>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><ThumbsDown className="h-3 w-3 text-amber-500" /> Not a fit</div>
+                <div className="font-display text-2xl mt-0.5 text-amber-600">{data.rated > 0 ? Math.round((data.bad / data.rated) * 100) : 0}%</div>
+                <div className="text-[10px] text-muted-foreground">{data.reasons[0] ? `top reason: ${data.reasons[0].reason.replace(/_/g, ' ').toLowerCase()}` : 'no reasons yet'}</div>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Back in the pool</div>
+                <div className="font-display text-2xl mt-0.5">{data.released}</div>
+                <div className="text-[10px] text-muted-foreground">{data.poolFacesJudged} pool faces carry verdicts</div>
+              </div>
+            </div>
+
+            {/* which door ships quality */}
+            {srcRows.length > 0 && (
+              <div>
+                <div className="text-xs font-medium mb-1.5">Quality by source</div>
+                <div className="rounded-lg border divide-y">
+                  {srcRows.map((s) => {
+                    const pct = Math.round((s.good / s.rated) * 100)
+                    return (
+                      <div key={s.source} className="flex items-center gap-3 px-3 py-2">
+                        <span className="text-xs font-medium w-28 shrink-0">{sourceName(s.source)}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className={`h-full rounded-full ${pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400'}`} style={{ width: `${Math.max(4, pct)}%` }} />
+                        </div>
+                        <span className="text-[11px] text-muted-foreground w-28 text-right shrink-0">{pct}% of {s.rated} good</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* why the rejects: the fix knows where to aim */}
+            {data.reasons.length > 0 && (
+              <div>
+                <div className="text-xs font-medium mb-1.5">Why leads get rejected</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {data.reasons.map((r) => (
+                    <Badge key={r.reason} variant="outline" className="text-[11px] font-normal">
+                      {(FEEDBACK_LABELS[r.reason] || r.reason.toLowerCase())} · {r.count}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* the freshest verdicts, in the members' own words */}
+            {data.recent.length > 0 && (
+              <div>
+                <div className="text-xs font-medium mb-1.5">Latest verdicts</div>
+                <div className="rounded-lg border divide-y max-h-72 overflow-y-auto hp-scroll">
+                  {data.recent.map((r) => (
+                    <div key={r.id} className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {r.verdict === 'GOOD_FIT' ? (
+                          <ThumbsUp className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <ThumbsDown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        )}
+                        <span className="text-sm font-medium truncate">{r.company}</span>
+                        <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{timeAgo(r.at)}</span>
+                      </div>
+                      <div className="mt-0.5 ml-6 text-[11px] text-muted-foreground">
+                        {r.verdict === 'GOOD_FIT' ? 'Good fit' : (r.reason ? FEEDBACK_LABELS[r.reason] || r.reason : 'Not a fit')}
+                        {' · '}{r.member}{r.memberBusiness ? ` · ${r.memberBusiness}` : ''} · {sourceName(r.source)}
+                      </div>
+                      {r.note && <p className="mt-1 ml-6 text-xs italic text-muted-foreground border-l-2 border-brand/30 pl-2 line-clamp-2">&ldquo;{r.note}&rdquo;</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const FEEDBACK_LABELS: Record<string, string> = {
+  GOOD: 'Great fit',
+  WRONG_INDUSTRY: 'Wrong industry',
+  TOO_FAR: 'Too far away',
+  TOO_BIG: 'Too big for me',
+  TOO_SMALL: 'Too small for me',
+  ALREADY_CLIENT: 'Already a client',
+  BAD_CONTACT: 'Dead contact details',
+  NOT_NOW: 'Just not now',
+}
+
 // =================== Executive Dashboard (main) ===================
 
 interface AdminData {
@@ -1960,6 +2163,9 @@ export default function AdminView() {
 
       {/* Hot leads: live replies from the Explee campaigns */}
       <HotLeadsCard />
+
+      {/* Lead quality: the members' own verdicts on the leads we ship them */}
+      <LeadQualityCard />
 
       {/* Verified pool: the owner's hand pick, straight into any member's pipeline */}
       <VerifiedPoolCard roster={roster} />

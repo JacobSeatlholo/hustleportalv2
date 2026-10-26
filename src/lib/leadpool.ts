@@ -391,7 +391,14 @@ export async function serveFromPool(opts: {
   // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.
   const drop = await suppressedNameKeys()
   const rows = hits.map((h) => h.pool).filter((p) => !opts.excludeKeys.has(normKey(p.company)) && !drop.has(normKey(p.company)))
-  rows.sort((a, b) => {
+  // Verdicts first (cheap partition), THEN the rotation sort inside each half:
+  // clean faces keep their least-recently-served order, penalized faces keep
+  // theirs at the back of the line.
+  const cleanRows: typeof rows = []
+  const judgedRows: typeof rows = []
+  for (const p of rows) (verdictPenalty(p) < 0 ? judgedRows : cleanRows).push(p)
+  const sorted = [...cleanRows, ...judgedRows]
+  sorted.sort((a, b) => {
     const sa = a.lastServedAt ? a.lastServedAt.getTime() : 0
     const sb = b.lastServedAt ? b.lastServedAt.getTime() : 0
     if (sa !== sb) return sa - sb // never served faces first, then least recently served
@@ -400,7 +407,7 @@ export async function serveFromPool(opts: {
   // One company can exist under two fingerprints (seen once with a city, once
   // without). A single serve must never hand the seller the same face twice.
   const seenCompanies = new Set<string>()
-  const serve = rows.filter((p) => {
+  const serve = sorted.filter((p) => {
     const key = normKey(p.company)
     if (!key || seenCompanies.has(key)) return false
     seenCompanies.add(key)
@@ -419,6 +426,13 @@ export async function serveFromPool(opts: {
       if (!p.city || !p.city.trim()) return true
       return cityMatches(p.city, opts.city)
     })
+    // THE POOL'S VERDICTS: a face the field keeps rejecting stops wasting
+    // every seller's time. Members' "not a fit" verdicts pool on the face,
+    // and this is where they bite, including faces RELEASED by a seller as a
+    // bad fit: they stay available, but they drift to the back of the line
+    // and a face with three straight rejects never serves again. That drift
+    // toward sellers who keep such faces is "reassigned to a better fit".
+    .filter((p) => !fieldRejected(p))
     .slice(0, cap)
   if (serve.length === 0) return []
   try {
@@ -500,6 +514,19 @@ function metroOf(norm: string): string | null {
     for (const a of aliases) if (norm.includes(a)) return metro
   }
   return null
+}
+
+/**
+ * The pool's verdicts, read as one number: negative when the field has
+ * rejected this face more than it embraced it.
+ */
+function verdictPenalty(p: { feedbackGood: number; feedbackBad: number }): number {
+  return p.feedbackBad - p.feedbackGood
+}
+
+/** A face with a string of rejects behind it stops serving entirely: the field has spoken three times with no counter-vote. */
+function fieldRejected(p: { feedbackGood: number; feedbackBad: number }): boolean {
+  return p.feedbackBad >= 3 && p.feedbackBad > p.feedbackGood * 2
 }
 
 export function cityMatches(rowCity: string | null | undefined, wantCity: string | null | undefined): boolean {
@@ -608,9 +635,15 @@ export async function serveExpleeBoost(opts: {
   const seen = new Set<string>()
   // WHO TO ASK FOR is a promise: inside every niche + city class, faces that
   // carry a real contact name meet the seller first. Unnamed faces only step
-  // in when the named ones run short, never ahead of them.
-  const named = ordered.filter((r) => r.contactName)
-  ordered = [...named, ...ordered.filter((r) => !r.contactName)]
+  // in when the named ones run short, never ahead of them. The pool's own
+  // verdicts ride the same law with priority: clean faces first (named, then
+  // unnamed), faces the field rejected sink behind them, and three straight
+  // rejects with no counter-vote stop serving entirely.
+  const cleanNamed = ordered.filter((r) => r.contactName && !fieldRejected(r))
+  const cleanUnnamed = ordered.filter((r) => !r.contactName && !fieldRejected(r))
+  const judgedNamed = ordered.filter((r) => r.contactName && fieldRejected(r))
+  const judgedUnnamed = ordered.filter((r) => !r.contactName && fieldRejected(r))
+  ordered = [...cleanNamed, ...cleanUnnamed, ...judgedNamed, ...judgedUnnamed]
   // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.
   const drop = await suppressedNameKeys()
   for (const r of ordered) {

@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { api, rands, randsPlain, STAGES, type Lead, type LeadEmailLog, type Task, type TopUpPack } from './shared'
+import { api, rands, randsPlain, STAGES, FEEDBACK_REASON_LABELS, type Lead, type LeadEmailLog, type Task, type TopUpPack } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
@@ -25,6 +25,7 @@ import { consumePendingLead } from './leadBus'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
+  ThumbsUp, ThumbsDown, RotateCcw,
 } from 'lucide-react'
 
 // Where a lead came from, in words a member understands. Internal tooling
@@ -118,6 +119,28 @@ export default function LeadsView() {
     }
   }
 
+  // The quality verdict, the loop's one tap. Optimistic on the board, truth
+  // from the server wins: the row may come back released (sent back to the
+  // pool) and the toast carries the loop's own words.
+  async function rateLead(lead: Lead, payload: { feedback: string; reason?: string | null; note?: string | null }) {
+    try {
+      const res = await api<{ lead: Lead; released: boolean; poolMatched: boolean; message: string }>('/api/leads/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ leadId: lead.id, ...payload }),
+      })
+      setLeads((prev) => prev.map((l) => (l.id === lead.id ? res.lead : l)))
+      setDetail((d) => (d && d.id === lead.id ? res.lead : d))
+      toast({
+        title: payload.feedback === 'GOOD_FIT' ? 'Good fit logged' : payload.feedback === 'CLEAR' ? 'Verdict cleared' : 'Reported',
+        description: res.message,
+      })
+      return res
+    } catch (e) {
+      toast({ title: 'Could not save that verdict', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      return null
+    }
+  }
+
   async function reveal(lead: Lead) {
     try {
       const res = await api<{ lead: Lead; spent: number; charged?: boolean; message?: string; sourceNote?: string }>('/api/leads/reveal', {
@@ -195,6 +218,14 @@ export default function LeadsView() {
           <p className="text-sm text-muted-foreground">
             {leads.length} leads · {randsPlain(pipelineValue)} in play
           </p>
+          {/* Expectations, in one honest line: the finder is young, it learns
+              from every search and every verdict, and the seller's one tap is
+              the tuition. Same message the tutorial carries, for members who
+              already saw the walkthrough. */}
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-brand/40 text-brand shrink-0">EARLY ACCESS</Badge>
+            <span className="truncate">The finder learns from every search and every lead you rate — rate them and it sharpens its aim.</span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}><Upload className="h-4 w-4 mr-1" /> Import CSV</Button>
@@ -291,6 +322,14 @@ export default function LeadsView() {
                     <div className="text-xs text-muted-foreground truncate">{l.city || 'SA'} · {l.industry || 'Business'} · {sourceLabel(l.source)}</div>
                   </div>
                   <Badge variant="outline" className="text-xs hidden sm:inline-flex">{STAGES.find((s) => s.key === l.stage)?.label}</Badge>
+                  {l.qualityFeedback === 'GOOD_FIT' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 shrink-0" title="You rated this a good fit"><ThumbsUp className="h-3.5 w-3.5" /> fit</span>
+                  )}
+                  {l.qualityFeedback === 'BAD_FIT' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 shrink-0" title={l.releasedAt ? 'Back in the pool, your scans skip it' : 'Reported not-a-fit'}>
+                      <ThumbsDown className="h-3.5 w-3.5" /> {FEEDBACK_REASON_LABELS[l.feedbackReason || ''] || 'reported'}
+                    </span>
+                  )}
                   {opens[l.id] && (
                     <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 shrink-0" title={`Email opened ${new Date(opens[l.id].openedAt).toLocaleString('en-ZA')}${opens[l.id].openCount > 1 ? ` · ${opens[l.id].openCount} times` : ''}`}>
                       <MailCheck className="h-4 w-4" /> read
@@ -310,7 +349,7 @@ export default function LeadsView() {
       <AddLeadDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { load(); bumpRefresh() }} />
       <DiscoverDialog open={showDiscover} onOpenChange={setShowDiscover} onSaved={() => { load(); bumpRefresh() }} />
       <ImportDialog open={showImport} onOpenChange={setShowImport} onSaved={() => { load(); bumpRefresh() }} />
-      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onChanged={() => { load(); bumpRefresh() }} projects={session?.projects ?? []} />
+      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onVerdict={rateLead} onChanged={() => { load(); bumpRefresh() }} projects={session?.projects ?? []} />
     </div>
   )
 }
@@ -331,6 +370,17 @@ const LeadCard = memo(function LeadCard({ lead, onOpen, read }: { lead: Lead; on
       <div className="mt-2 flex items-center gap-1 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{sourceLabel(lead.source)}</Badge>
         {lead.industry && <Badge variant="secondary" className="text-[10px]">{lead.industry}</Badge>}
+        {lead.qualityFeedback === 'GOOD_FIT' && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium"><ThumbsUp className="h-3 w-3" /> good fit</span>
+        )}
+        {lead.qualityFeedback === 'BAD_FIT' && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-medium"
+            title={lead.releasedAt ? 'Reported not-a-fit: back in the pool, your scans skip it' : 'Reported not-a-fit'}
+          >
+            <ThumbsDown className="h-3 w-3" /> {FEEDBACK_REASON_LABELS[lead.feedbackReason || ''] || 'reported'}
+          </span>
+        )}
         {read && (
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><MailCheck className="h-3 w-3" /> read</span>
         )}
@@ -962,11 +1012,143 @@ function ImportDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCh
   )
 }
 
-function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, projects }: {
+// ---------------- the lead quality loop, card face ----------------
+// Two taps max: a good fit files itself on the spot, a not-a-fit opens one
+// tap reasons (+ an optional word in the seller's own voice) and hands the
+// lead back to the shared pool on submit when the platform sourced it. The
+// seller's own captures stay in their pipeline: their data stays theirs.
+const BAD_REASONS = ['WRONG_INDUSTRY', 'TOO_FAR', 'TOO_BIG', 'TOO_SMALL', 'ALREADY_CLIENT', 'BAD_CONTACT', 'NOT_NOW']
+const PLATFORM_SOURCES = ['POOL', 'TEAM', 'EXPLEE', 'WEB', 'OSM', 'ZAI', 'GEMINI']
+
+function FeedbackBlock({ lead, onVerdict }: {
+  lead: Lead
+  onVerdict: (lead: Lead, payload: { feedback: string; reason?: string | null; note?: string | null }) => Promise<unknown>
+}) {
+  const [phase, setPhase] = useState<'idle' | 'reasons'>('idle')
+  const [reason, setReason] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  // The dialog swaps leads in place: the flow must reset with the cursor.
+  useEffect(() => { setPhase('idle'); setReason(''); setNote('') }, [lead.id])
+
+  async function send(payload: { feedback: string; reason?: string | null; note?: string | null }) {
+    if (payload.feedback === 'BAD_FIT' && !reason) return
+    setBusy(true)
+    try {
+      await onVerdict(lead, payload)
+      setPhase('idle')
+      setReason('')
+      setNote('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const platformLead = PLATFORM_SOURCES.includes(String(lead.source || '').toUpperCase())
+  const rated = lead.qualityFeedback === 'GOOD_FIT' || lead.qualityFeedback === 'BAD_FIT'
+
+  if (rated) {
+    const good = lead.qualityFeedback === 'GOOD_FIT'
+    return (
+      <div className="rounded-lg border bg-card p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs text-muted-foreground">Your verdict</Label>
+          <button
+            className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition"
+            onClick={() => send({ feedback: 'CLEAR' })}
+            disabled={busy}
+          >
+            <RotateCcw className="h-3 w-3" /> Undo
+          </button>
+        </div>
+        <div className={`flex items-center gap-2 text-sm font-medium ${good ? 'text-emerald-600' : 'text-amber-600'}`}>
+          {good ? <ThumbsUp className="h-4 w-4" /> : <ThumbsDown className="h-4 w-4" />}
+          {good ? 'Good fit' : (lead.feedbackReason && FEEDBACK_REASON_LABELS[lead.feedbackReason]) || 'Not a fit'}
+        </div>
+        {lead.feedbackNote && <p className="text-xs text-muted-foreground italic">“{lead.feedbackNote}”</p>}
+        {!good && lead.releasedAt && (
+          <p className="text-[11px] text-muted-foreground">
+            Back in the pool since {new Date(lead.releasedAt).toLocaleDateString('en-ZA')} — it will meet sellers it suits better, and your scans skip it from here.
+          </p>
+        )}
+        {!good && !lead.releasedAt && (
+          <p className="text-[11px] text-muted-foreground">
+            Logged. This one stays in your pipeline (your own capture, your data) — the finder still learned from it.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2">
+      <Label className="text-xs text-muted-foreground">Rate this lead — it trains your finder</Label>
+      {phase === 'idle' ? (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => send({ feedback: 'GOOD_FIT', reason: 'GOOD' })}
+            className="flex-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+          >
+            <ThumbsUp className="h-3.5 w-3.5 mr-1" /> Good fit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => setPhase('reasons')}
+            className="flex-1 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+          >
+            <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Not a fit
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {BAD_REASONS.map((r) => (
+              <button
+                key={r}
+                onClick={() => setReason(r)}
+                aria-pressed={reason === r}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition ${reason === r ? 'border-brand bg-brand/10 text-brand font-medium' : 'border-muted-foreground/30 text-muted-foreground hover:border-brand/50'}`}
+              >
+                {FEEDBACK_REASON_LABELS[r]}
+              </button>
+            ))}
+          </div>
+          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="One word for us (optional)" maxLength={300} />
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={busy || !reason}
+              onClick={() => send({ feedback: 'BAD_FIT', reason, note })}
+              className="flex-1 bg-sidebar hover:bg-sidebar/90 text-white"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <ThumbsDown className="h-3.5 w-3.5 mr-1" />}
+              {platformLead ? 'Report & send back to pool' : 'Report it'}
+            </Button>
+            <button className="text-[11px] text-muted-foreground hover:text-foreground transition" onClick={() => setPhase('idle')}>
+              Cancel
+            </button>
+          </div>
+          {platformLead && (
+            <p className="text-[10px] text-muted-foreground">Reported leads go back to the shared pool for a better-fit seller. Yours never resurface.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, onChanged, projects }: {
   lead: Lead | null
   onOpenChange: (o: boolean) => void
   onReveal: () => void | Promise<void>
   onMoved: (stage: string) => void
+  onVerdict: (lead: Lead, payload: { feedback: string; reason?: string | null; note?: string | null }) => Promise<unknown>
   onChanged: () => void
   projects: { id: string; name: string; isDefault: boolean }[]
 }) {
@@ -1222,6 +1404,9 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onChanged, pr
               </Button>
             </div>
           )}
+
+          {/* the quality verdict: one tap feeds the whole loop */}
+          <FeedbackBlock lead={lead} onVerdict={onVerdict} />
 
           {/* email activity: read receipts straight from the tracking pixel */}
           <div className="space-y-1.5">

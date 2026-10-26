@@ -255,6 +255,16 @@ model Lead {
   unlocked    Boolean  @default(false) // contact details revealed (paid)
   score       Int?
   externalId  String? // Explee dedup
+  // ---- Lead quality feedback (the seller's verdict, the loop's fuel) ----
+  // One tap on the contact card: "Good fit" or "Not a fit" with a reason.
+  // The verdict trains three things at once: the seller's own taste profile
+  // (LeadSignal), the shared pool's quality counters (LeadPool.feedbackGood/
+  // feedbackBad), and the owner's quality lens on the Executive Dashboard.
+  qualityFeedback String?   // GOOD_FIT | BAD_FIT (null = not rated yet)
+  feedbackReason  String?   // GOOD | WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | BAD_CONTACT | NOT_NOW
+  feedbackNote    String?   // optional one-liner in the seller's own words
+  feedbackAt      DateTime?
+  releasedAt      DateTime? // bad-fit PLATFORM lead handed back to the shared pool, ready to serve a better-fit seller. Never set on MANUAL/CSV rows (the seller's own data stays theirs).
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -776,6 +786,13 @@ model LeadPool {
   timesServed    Int       @default(0)
   lastServedAt   DateTime?
   active         Boolean   @default(true)
+  // The humans' verdicts, pooled. Every "good fit" raises a face, every
+  // "not a fit" with a reason sinks it (serving keeps penalized faces at the
+  // back of the rotation, and a face the field keeps rejecting stops serving
+  // entirely). This is how released leads get "reassigned to a better fit":
+  // the verdicts steer who meets them next.
+  feedbackGood   Int       @default(0)
+  feedbackBad    Int       @default(0)
 
   hits LeadPoolHit[]
 

@@ -142,7 +142,28 @@ export interface Lead {
   unlocked: boolean
   score: number | null
   projectId: string | null
+  // The seller's verdict on this lead's quality, one tap on the contact card.
+  qualityFeedback: string | null // GOOD_FIT | BAD_FIT | null
+  feedbackReason: string | null
+  feedbackNote: string | null
+  feedbackAt: string | null
+  releasedAt: string | null // bad-fit platform lead handed back to the shared pool
   createdAt: string
+}
+
+// The lead quality loop's one tap reasons, shared by the pipeline card, the
+// detail dialog and the owner's quality lens. BAD_CONTACT is the pipeline's
+// own addition: a lead whose details were dead is a data verdict, not a
+// taste one, and it speaks loudest to the verification side of the house.
+export const FEEDBACK_REASON_LABELS: Record<string, string> = {
+  GOOD: 'Great fit',
+  WRONG_INDUSTRY: 'Wrong industry',
+  TOO_FAR: 'Too far away',
+  TOO_BIG: 'Too big for me',
+  TOO_SMALL: 'Too small for me',
+  ALREADY_CLIENT: 'Already a client',
+  BAD_CONTACT: 'Contact details were dead',
+  NOT_NOW: 'Just not now',
 }
 
 // One email tied to a contact, as shown on the detail dialog.
