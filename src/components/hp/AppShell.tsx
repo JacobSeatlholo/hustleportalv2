@@ -38,7 +38,7 @@ import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid, Flame,
+  Boxes, LayoutGrid, Flame, Twitter, Instagram,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { LEVELS } from '@/lib/levels'
@@ -382,6 +382,12 @@ export default function AppShell() {
               <a href="https://businesshustle.co.za/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Privacy &amp; POPIA</a>
               <a href="/remove-listing" className="hover:text-foreground hover:underline">Remove my business</a>
               <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
+              <a href="https://x.com/hustlebusiness" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline" aria-label="Business Hustle on Twitter/X">
+                <Twitter className="h-3 w-3" /> @hustlebusiness
+              </a>
+              <a href="https://www.instagram.com/businesshustleworldwide" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline" aria-label="Business Hustle on Instagram">
+                <Instagram className="h-3 w-3" /> @businesshustleworldwide
+              </a>
             </div>
           </div>
         </footer>

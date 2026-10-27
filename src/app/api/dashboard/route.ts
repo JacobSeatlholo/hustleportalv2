@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     db.xpEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 8 }),
     db.aiPlan.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } }),
     db.client.count({ where: { userId } }),
-    db.invoice.count({ where: { userId } }),
+    db.invoice.count({ where: { userId, kind: 'INVOICE' } }), // quotes are paper, not invoices — the dashboard label stays truthful
   ])
 
   const pipeline = leads.filter((l) => !['WON', 'LOST'].includes(l.stage))

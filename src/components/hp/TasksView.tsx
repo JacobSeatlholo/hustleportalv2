@@ -18,7 +18,28 @@ import { api, PRIORITIES, type Task, type TaskCommentRow, type TaskEventRow } fr
 import { useHp } from './store'
 import ScanDiaryDialog from './ScanDiaryDialog'
 import { useVoiceInput } from './useVoiceInput'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft, Search } from 'lucide-react'
+
+// Task list ordering. CREATED_DESC (date added, newest first) is the default view;
+// PRIORITY sorts by importance; DUE keeps no-date tasks at the bottom, never the top.
+const TASK_SORTS = [
+  { key: 'CREATED_DESC', label: 'Date added (newest)' },
+  { key: 'CREATED_ASC', label: 'Date added (oldest)' },
+  { key: 'PRIORITY', label: 'Importance (high first)' },
+  { key: 'DUE', label: 'Due date (soonest)' },
+] as const
+
+const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+
+function sortTasks(list: Task[], sortBy: string): Task[] {
+  const arr = [...list]
+  const ts = (d: string | null) => (d ? new Date(d).getTime() : Infinity)
+  if (sortBy === 'PRIORITY') arr.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1) || ts(b.createdAt) - ts(a.createdAt))
+  else if (sortBy === 'DUE') arr.sort((a, b) => ts(a.dueDate) - ts(b.dueDate) || (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1))
+  else if (sortBy === 'CREATED_ASC') arr.sort((a, b) => ts(a.createdAt) - ts(b.createdAt))
+  else arr.sort((a, b) => ts(b.createdAt) - ts(a.createdAt))
+  return arr
+}
 
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
@@ -40,6 +61,9 @@ export default function TasksView() {
   const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
+  // Find and order: search across title + notes, sort by date added, importance or due date.
+  const [q, setQ] = useState('')
+  const [sortBy, setSortBy] = useState<string>('CREATED_DESC')
 
   // Voice dictation, title mic and description mic write straight into the fields
   const titleVoice = useVoiceInput(setTitle)
@@ -127,8 +151,11 @@ export default function TasksView() {
     }
   }
 
-  const open = tasks.filter((t) => t.status !== 'DONE')
-  const done = tasks.filter((t) => t.status === 'DONE')
+  const needle = q.trim().toLowerCase()
+  const matchesQ = (t: Task) =>
+    !needle || t.title.toLowerCase().includes(needle) || (t.notes || '').toLowerCase().includes(needle)
+  const open = sortTasks(tasks.filter((t) => t.status !== 'DONE' && matchesQ(t)), sortBy)
+  const done = sortTasks(tasks.filter((t) => t.status === 'DONE' && matchesQ(t)), sortBy)
   const teamMembers = teams.find((t) => t.id === dest)?.members || []
 
   return (
@@ -279,6 +306,22 @@ export default function TasksView() {
         </CardContent>
       </Card>
 
+      {/* Find and order */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks… title or description" className="pl-9" aria-label="Search tasks" />
+        </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-[210px]" aria-label="Sort tasks"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {TASK_SORTS.map((s) => (
+              <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Lists */}
       {loading ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
@@ -287,7 +330,9 @@ export default function TasksView() {
           {open.length === 0 && done.length === 0 && (
             <Card>
               <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                No tasks yet. Add your first task above and start earning XP. 💪
+                {needle
+                  ? `No tasks match “${q.trim()}”. Try another word or clear the search.`
+                  : 'No tasks yet. Add your first task above and start earning XP. 💪'}
               </CardContent>
             </Card>
           )}

@@ -4,11 +4,21 @@ import { getUserId } from '@/lib/auth'
 
 type Params = { params: Promise<{ id: string }> }
 
-const TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ['SENT'],
-  SENT: ['PAID', 'OVERDUE'],
-  OVERDUE: ['PAID', 'SENT'],
-  PAID: [],
+// Status ladders per document kind. Invoices walk to money; quotes walk to a
+// decision. DECLINED quotes can be re-sent (a revised quote goes out again).
+const TRANSITIONS: Record<string, Record<string, string[]>> = {
+  INVOICE: {
+    DRAFT: ['SENT'],
+    SENT: ['PAID', 'OVERDUE'],
+    OVERDUE: ['PAID', 'SENT'],
+    PAID: [],
+  },
+  QUOTE: {
+    DRAFT: ['SENT'],
+    SENT: ['ACCEPTED', 'DECLINED'],
+    DECLINED: ['SENT'],
+    ACCEPTED: [],
+  },
 }
 
 // GET /api/invoices/[id]
@@ -31,9 +41,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({}))
   const data: Record<string, unknown> = {}
   if (typeof body.status === 'string') {
-    const allowed = TRANSITIONS[existing.status] || []
+    const ladder = TRANSITIONS[existing.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE']
+    const allowed = ladder[existing.status] || []
     if (!allowed.includes(body.status)) {
-      return NextResponse.json({ error: `Can't move a ${existing.status} invoice to ${body.status}.` }, { status: 400 })
+      return NextResponse.json({ error: `Can't move a ${existing.status} ${existing.kind === 'QUOTE' ? 'quote' : 'invoice'} to ${body.status}.` }, { status: 400 })
     }
     data.status = body.status
     if (body.status === 'PAID') data.paidAt = new Date()

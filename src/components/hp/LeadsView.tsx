@@ -25,7 +25,7 @@ import { consumePendingLead } from './leadBus'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
-  ThumbsUp, ThumbsDown, RotateCcw,
+  ThumbsUp, ThumbsDown, RotateCcw, Pencil,
 } from 'lucide-react'
 
 // Where a lead came from, in words a member understands. Internal tooling
@@ -76,6 +76,57 @@ export default function LeadsView() {
   const [showDiscover, setShowDiscover] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [detail, setDetail] = useState<Lead | null>(null)
+
+  // Notion-style stage names: the KEYS never move (every lead keeps its stage,
+  // reports stay comparable), only the words on the board are yours.
+  const [stageLabels, setStageLabels] = useState<Record<string, string>>({})
+  const [renamingStage, setRenamingStage] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+
+  const stageLabel = useCallback((key: string) => {
+    const custom = stageLabels[key]
+    if (custom && custom.trim()) return custom.trim()
+    return STAGES.find((s) => s.key === key)?.label || key
+  }, [stageLabels])
+
+  useEffect(() => {
+    api<{ settings: { key: string; value: string }[] }>('/api/settings')
+      .then((r) => {
+        const row = r.settings.find((s) => s.key === 'PIPELINE_STAGES')
+        if (row?.value) {
+          try { setStageLabels(JSON.parse(row.value) as Record<string, string>) } catch { /* junk setting reads as defaults */ }
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  async function saveStageLabel(key: string, raw: string) {
+    const label = raw.trim().slice(0, 24)
+    const def = STAGES.find((s) => s.key === key)?.label || key
+    const next = { ...stageLabels }
+    if (!label || label === def) delete next[key]
+    else next[key] = label
+    setStageLabels(next)
+    setRenamingStage(null)
+    setRenameDraft('')
+    if (!label || label === def) {
+      // clearing the field resets to the platform name
+    } else {
+      toast({ title: 'Stage renamed', description: `“${def}” is now “${label}” on your pipeline.` })
+    }
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key: 'PIPELINE_STAGES', value: JSON.stringify(next) }) })
+      bumpRefresh()
+    } catch {
+      toast({ title: 'Could not save the stage name', description: 'Try again in a moment.', variant: 'destructive' })
+      setStageLabels((prev) => {
+        const roll = { ...prev }
+        if (!label || label === def) delete roll[key]
+        else roll[key] = label
+        return roll
+      })
+    }
+  }
 
   async function load() {
     // Soft refresh: only show skeletons on a cold board. With data on screen the
@@ -271,7 +322,7 @@ export default function LeadsView() {
           <SelectContent>
             <SelectItem value="ALL">All stages</SelectItem>
             {STAGES.map((s) => (
-              <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+              <SelectItem key={s.key} value={s.key}>{stageLabel(s.key)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -285,15 +336,43 @@ export default function LeadsView() {
         <div className="flex gap-3 overflow-x-auto hp-scroll pb-3">
           {visibleStages.map((s) => {
             const items = filteredLeads.filter((l) => l.stage === s.key)
+            const stageTotal = items.reduce((a, l) => a + (l.value || 0), 0)
             return (
               <div key={s.key} className="kanban-col shrink-0">
-                <div className="flex items-center justify-between px-1 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${s.color}`} />
-                    <span className="text-sm font-medium">{s.label}</span>
+                <div className="flex items-center justify-between px-1 py-2 gap-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${s.color}`} />
+                    {renamingStage === s.key ? (
+                      <Input
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onBlur={() => saveStageLabel(s.key, renameDraft)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveStageLabel(s.key, renameDraft)
+                          if (e.key === 'Escape') { setRenamingStage(null); setRenameDraft('') }
+                        }}
+                        maxLength={24}
+                        aria-label={`Rename stage ${s.label}`}
+                        className="h-7 w-32 text-sm"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setRenamingStage(s.key); setRenameDraft(stageLabels[s.key] || s.label) }}
+                        className="text-sm font-medium truncate group/rename flex items-center gap-1"
+                        title="Click to rename this stage"
+                      >
+                        <span className="truncate group-hover/rename:underline decoration-dotted underline-offset-4">{stageLabel(s.key)}</span>
+                        <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/rename:opacity-100 transition shrink-0" />
+                      </button>
+                    )}
                   </div>
-                  <Badge variant="secondary" className="text-xs">{items.length}</Badge>
+                  <Badge variant="secondary" className="text-xs shrink-0">{items.length}</Badge>
                 </div>
+                <p className={`px-1 pb-1.5 text-[11px] ${stageTotal > 0 ? 'font-medium text-brand' : 'text-muted-foreground/60'}`} title="Deal value total in this stage">
+                  {randsPlain(stageTotal)} in stage
+                </p>
                 <div className="space-y-2 min-h-[120px] max-h-[62vh] overflow-y-auto hp-scroll pr-1">
                   {items.map((l) => (
                     <LeadCard key={l.id} lead={l} onOpen={openLead} read={Boolean(opens[l.id])} />
@@ -321,7 +400,7 @@ export default function LeadsView() {
                     <div className="font-medium text-sm">{l.company}</div>
                     <div className="text-xs text-muted-foreground truncate">{l.city || 'SA'} · {l.industry || 'Business'} · {sourceLabel(l.source)}</div>
                   </div>
-                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">{STAGES.find((s) => s.key === l.stage)?.label}</Badge>
+                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">{stageLabel(l.stage)}</Badge>
                   {l.qualityFeedback === 'GOOD_FIT' && (
                     <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 shrink-0" title="You rated this a good fit"><ThumbsUp className="h-3.5 w-3.5" /> fit</span>
                   )}
@@ -349,7 +428,7 @@ export default function LeadsView() {
       <AddLeadDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { load(); bumpRefresh() }} />
       <DiscoverDialog open={showDiscover} onOpenChange={setShowDiscover} onSaved={() => { load(); bumpRefresh() }} />
       <ImportDialog open={showImport} onOpenChange={setShowImport} onSaved={() => { load(); bumpRefresh() }} />
-      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onVerdict={rateLead} onChanged={() => { load(); bumpRefresh() }} projects={session?.projects ?? []} />
+      <LeadDetailDialog lead={detail} onOpenChange={(o) => !o && setDetail(null)} onReveal={() => reveal(detail!)} onMoved={(s) => detail && moveStage(detail, s)} onVerdict={rateLead} onChanged={() => { load(); bumpRefresh() }} projects={session?.projects ?? []} stageLabels={stageLabels} />
     </div>
   )
 }
@@ -1143,7 +1222,7 @@ function FeedbackBlock({ lead, onVerdict }: {
   )
 }
 
-function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, onChanged, projects }: {
+function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, onChanged, projects, stageLabels }: {
   lead: Lead | null
   onOpenChange: (o: boolean) => void
   onReveal: () => void | Promise<void>
@@ -1151,6 +1230,7 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
   onVerdict: (lead: Lead, payload: { feedback: string; reason?: string | null; note?: string | null }) => Promise<unknown>
   onChanged: () => void
   projects: { id: string; name: string; isDefault: boolean }[]
+  stageLabels?: Record<string, string>
 }) {
   const { toast } = useToast()
   const { session, bumpRefresh } = useHp()
@@ -1346,6 +1426,10 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
 
   if (!lead) return null
   const stageIdx = STAGES.findIndex((s) => s.key === lead.stage)
+  const customLabel = (key: string) => {
+    const c = stageLabels?.[key]
+    return c && c.trim() ? c.trim() : STAGES.find((s) => s.key === key)?.label || key
+  }
 
   return (
     <Dialog open={Boolean(lead)} onOpenChange={onOpenChange}>
@@ -1450,13 +1534,13 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
                 <button
                   key={s.key}
                   onClick={() => onMoved(s.key)}
-                  title={s.label}
+                  title={customLabel(s.key)}
                   className={`h-2 flex-1 rounded-full transition ${i <= stageIdx ? s.color : 'bg-muted'} hover:opacity-80`}
                 />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>New</span><span>Won</span>
+              <span>{customLabel('NEW')}</span><span>{customLabel('WON')}</span>
             </div>
           </div>
 

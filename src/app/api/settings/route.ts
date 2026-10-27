@@ -20,6 +20,7 @@ const ALLOWED_KEYS = [
   'WA_VERIFY_TOKEN',
   'WA_DISPLAY_NUMBER',
   'INVOICE_BANK',
+  'PIPELINE_STAGES', // JSON {stageKey: customLabel} — Notion-style pipeline stage renames, per user
   'NAV_ORDER', // JSON ViewKey[], the user's personal sidebar menu order
   'MODULES', // JSON string[], disabled module keys (the tailored workspace)
   'ICS_FEED_URL', // read-only calendar feed for the Calendar sync button

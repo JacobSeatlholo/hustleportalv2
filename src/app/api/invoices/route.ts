@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/invoices → create with auto number + ZAR totals (15% VAT default)
+// kind=QUOTE creates a quote instead: QT- numbering (own series), same money math,
+// and a quote's life ends in ACCEPTED / DECLINED — never in the money reports until
+// it becomes a real invoice.
 // VAT works BOTH ways, correctly:
 //   pricesIncludeVat=false → prices are EXCLUDING VAT. VAT = subtotal × rate. Total = subtotal + VAT.
 //   pricesIncludeVat=true  → prices already INCLUDE VAT. VAT = gross × rate/(100+rate). Total stays gross.
@@ -68,6 +71,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Add at least one line item with a description.' }, { status: 400 })
   }
   const project = await resolveProject(userId, body.projectId)
+  const kind = body.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE'
 
   const gross = money(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))
   const taxRate = Number(body.taxRate) >= 0 ? Number(body.taxRate) : 15
@@ -83,15 +87,17 @@ export async function POST(req: NextRequest) {
     total = money(subtotal * (1 + taxRate / 100))
   }
 
-  // Auto number: INV-0001 style, per user, retry on collision
+  // Auto number: INV-0001 / QT-0001 style, per user, per kind, retry on collision.
+  // Two series so quoting ten times never burns an invoice number — the books stay clean.
+  const prefix = kind === 'QUOTE' ? 'QT' : 'INV'
   let number = ''
   for (let i = 0; i < 5; i++) {
-    const count = await db.invoice.count({ where: { userId } })
-    const candidate = `INV-${String(count + 1 + i).padStart(4, '0')}`
+    const count = await db.invoice.count({ where: { userId, kind } })
+    const candidate = `${prefix}-${String(count + 1 + i).padStart(4, '0')}`
     const clash = await db.invoice.findUnique({ where: { number: candidate } })
     if (!clash) { number = candidate; break }
   }
-  if (!number) number = `INV-${Date.now().toString().slice(-6)}`
+  if (!number) number = `${prefix}-${Date.now().toString().slice(-6)}`
 
   const dueAt = body.dueAt ? new Date(body.dueAt) : new Date(Date.now() + 14 * 86400000)
   const invoice = await db.invoice.create({
@@ -99,6 +105,7 @@ export async function POST(req: NextRequest) {
       userId,
       projectId: project.id,
       number,
+      kind,
       clientName,
       clientEmail: body.clientEmail || null,
       items: JSON.stringify(items),

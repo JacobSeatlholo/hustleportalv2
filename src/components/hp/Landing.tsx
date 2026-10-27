@@ -15,7 +15,7 @@ import {
   Target, Zap, Wallet, BrainCircuit, Loader2, ArrowRight, Check,
   TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket, MailCheck,
   MessageSquareText, Timer, BookOpen, BadgeCheck, MessageCircleOff, Calculator, Clock,
-  Hammer, MonitorSmartphone, Compass,
+  Hammer, MonitorSmartphone, Compass, Twitter, Instagram,
 } from 'lucide-react'
 import { BH_SERVICES } from '@/data/services'
 
@@ -620,6 +620,12 @@ export default function Landing() {
             <a href="https://app.businesshustle.co.za/wp-content/uploads/2025/12/BHW-PAIA-Manual-Integrated-with-POPIA.pdf" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">PAIA Manual</a>
             <a href="/remove-listing" className="hover:text-foreground hover:underline">Remove my business</a>
             <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">www.businesshustle.co.za</a>
+            <a href="https://x.com/hustlebusiness" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline" aria-label="Business Hustle on Twitter/X">
+              <Twitter className="h-3 w-3" /> @hustlebusiness
+            </a>
+            <a href="https://www.instagram.com/businesshustleworldwide" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline" aria-label="Business Hustle on Instagram">
+              <Instagram className="h-3 w-3" /> @businesshustleworldwide
+            </a>
           </div>
           <p className="text-[11px] text-muted-foreground/80">
             We measure anonymous usage of the app to make it better. Analytics data is processed under our Privacy &amp; POPIA notice and never sold.

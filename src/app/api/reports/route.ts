@@ -11,7 +11,7 @@ export async function GET() {
     db.lead.findMany({ where: { userId }, select: { stage: true, value: true, source: true, createdAt: true } }),
     db.client.findMany({ where: { userId }, select: { monthlyValue: true, status: true } }),
     db.financeEntry.findMany({ where: { userId }, select: { type: true, amount: true, occurredAt: true, category: true } }),
-    db.invoice.findMany({ where: { userId }, select: { status: true, total: true, issuedAt: true } }),
+    db.invoice.findMany({ where: { userId }, select: { status: true, total: true, issuedAt: true, kind: true } }),
   ])
 
   // Funnel
@@ -45,14 +45,17 @@ export async function GET() {
   const totalIncome = finance.filter((f) => f.type === 'INCOME').reduce((s, f) => s + f.amount, 0)
   const totalExpense = finance.filter((f) => f.type === 'EXPENSE').reduce((s, f) => s + f.amount, 0)
 
-  // Invoice stats
+  // Invoice stats — quotes (kind=QUOTE) are PAPER until accepted, never money:
+  // a sent quote is not outstanding cash, so only real invoices count here.
+  const moneyDocs = invoices.filter((i) => i.kind !== 'QUOTE')
   const invoiceStats = {
-    total: invoices.length,
-    paid: invoices.filter((i) => i.status === 'PAID').length,
-    outstanding: invoices.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE').length,
-    overdue: invoices.filter((i) => i.status === 'OVERDUE').length,
-    valuePaid: invoices.filter((i) => i.status === 'PAID').reduce((s, i) => s + i.total, 0),
-    valueOutstanding: invoices.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE').reduce((s, i) => s + i.total, 0),
+    total: moneyDocs.length,
+    paid: moneyDocs.filter((i) => i.status === 'PAID').length,
+    outstanding: moneyDocs.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE').length,
+    overdue: moneyDocs.filter((i) => i.status === 'OVERDUE').length,
+    valuePaid: moneyDocs.filter((i) => i.status === 'PAID').reduce((s, i) => s + i.total, 0),
+    valueOutstanding: moneyDocs.filter((i) => i.status === 'SENT' || i.status === 'OVERDUE').reduce((s, i) => s + i.total, 0),
+    quotes: invoices.filter((i) => i.kind === 'QUOTE').length,
   }
 
   // Top expense categories

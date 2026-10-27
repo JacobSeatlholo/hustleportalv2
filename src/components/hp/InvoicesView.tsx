@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, rands, randsPlain, type Invoice, type ProjectFull, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Plus, ReceiptText, Printer, Send, Trash2, Upload, X, Lock } from 'lucide-react'
+import { Loader2, Plus, ReceiptText, FileText, Printer, Send, Trash2, Upload, X, Lock, Check, Ban } from 'lucide-react'
 import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
@@ -67,6 +67,12 @@ const STATUS_STYLES: Record<string, string> = {
   SENT: 'border-yellow-500/40 text-yellow-500',
   PAID: 'border-emerald-500/40 text-emerald-500',
   OVERDUE: 'border-rose-500/40 text-rose-500',
+  ACCEPTED: 'border-emerald-500/40 text-emerald-500',
+  DECLINED: 'border-rose-500/40 text-rose-500',
+}
+
+export function kindOf(inv: Pick<Invoice, 'kind'>): 'INVOICE' | 'QUOTE' {
+  return inv.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE'
 }
 
 export default function InvoicesView() {
@@ -77,6 +83,9 @@ export default function InvoicesView() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  // Quotes share the invoice book: same math, QT- numbers, accept/decline instead of paid.
+  const [docKind, setDocKind] = useState<'INVOICE' | 'QUOTE'>('INVOICE')
+  const [kindFilter, setKindFilter] = useState<'ALL' | 'INVOICE' | 'QUOTE'>('ALL')
   const [printable, setPrintable] = useState<Invoice | null>(null)
   const [profile, setProfile] = useState<ProjectFull | null>(null)
   const [bank, setBank] = useState<BankDetails>({ ...EMPTY_BANK })
@@ -253,6 +262,7 @@ export default function InvoicesView() {
       const res = await api<{ invoice: Invoice }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
+          kind: docKind,
           clientName, clientEmail, items, taxRate, pricesIncludeVat: vatMode === 'incl', notes, logoUrl,
           status, projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
           bankDetails: bankLines(bank).join('\n'),
@@ -270,7 +280,7 @@ export default function InvoicesView() {
     }
   }
 
-  async function setStatus(inv: Invoice, status: 'SENT' | 'PAID') {
+  async function setStatus(inv: Invoice, status: 'SENT' | 'PAID' | 'ACCEPTED' | 'DECLINED') {
     const isFirstPaid = status === 'PAID' && inv.status !== 'PAID' && invoices.filter((i) => i.status === 'PAID').length === 0
     try {
       await api(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
@@ -322,7 +332,7 @@ export default function InvoicesView() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl">Invoices</h2>
-          <p className="text-sm text-muted-foreground">VAT-ready ZAR invoices with your logo, print, PDF via the browser, or mark as sent.</p>
+          <p className="text-sm text-muted-foreground">VAT-ready ZAR invoices and quotes with your logo — print, PDF via the browser, or mark as sent.</p>
         </div>
         <div className="flex items-center gap-2">
           {(session?.projects?.length ?? 0) > 1 && (
@@ -336,7 +346,21 @@ export default function InvoicesView() {
               </SelectContent>
             </Select>
           )}
-          <Button onClick={() => setShowCreate((s) => !s)}>
+          <Select value={kindFilter} onValueChange={(v) => setKindFilter(v as 'ALL' | 'INVOICE' | 'QUOTE')}>
+            <SelectTrigger className="w-[150px]" aria-label="Document type"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All documents</SelectItem>
+              <SelectItem value="INVOICE">Invoices</SelectItem>
+              <SelectItem value="QUOTE">Quotes</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => { setDocKind('QUOTE'); setShowCreate((s) => !s || docKind !== 'QUOTE') }}
+          >
+            <FileText className="h-4 w-4" /> New quote
+          </Button>
+          <Button onClick={() => { setDocKind('INVOICE'); setShowCreate((s) => !s || docKind !== 'INVOICE') }}>
             <Plus className="h-4 w-4" /> New invoice
           </Button>
         </div>
@@ -450,7 +474,25 @@ export default function InvoicesView() {
       {showCreate && (
         <div className="rounded-lg border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-sm">New invoice</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-sm">New {docKind === 'QUOTE' ? 'quote' : 'invoice'}</h3>
+              <div className="flex rounded-md border overflow-hidden text-xs" role="group" aria-label="Document type">
+                <button
+                  type="button"
+                  onClick={() => setDocKind('INVOICE')}
+                  className={`px-2.5 py-1 transition ${docKind === 'INVOICE' ? 'bg-brand text-black font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Invoice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocKind('QUOTE')}
+                  className={`px-2.5 py-1 transition border-l ${docKind === 'QUOTE' ? 'bg-brand text-black font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Quote
+                </button>
+              </div>
+            </div>
             <label
               className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground"
               onClick={(e) => {
@@ -553,8 +595,10 @@ export default function InvoicesView() {
 
           <div className="flex gap-2">
             <Button onClick={() => create(sendAfter ? 'SENT' : 'DRAFT')} disabled={creating}>
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ReceiptText className="h-4 w-4" />}
-              Create {sendAfter ? '& send' : 'draft'}
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : docKind === 'QUOTE' ? <FileText className="h-4 w-4" /> : <ReceiptText className="h-4 w-4" />}
+              {docKind === 'QUOTE'
+                ? `Create quote${sendAfter ? ' & send' : ' draft'}`
+                : `Create ${sendAfter ? '& send' : 'draft'}`}
             </Button>
             <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
           </div>
@@ -609,42 +653,73 @@ export default function InvoicesView() {
       <div className="rounded-lg border bg-card overflow-hidden">
         {loading ? (
           <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
-        ) : invoices.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">No invoices yet, create your first one above.</p>
-        ) : (
-          <div className="divide-y">
-            {invoices.map((inv) => (
-              <div key={inv.id} className="p-3.5 flex flex-wrap items-center gap-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{inv.number} · {inv.clientName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {itemsOf(inv).length} item{itemsOf(inv).length === 1 ? '' : 's'} · due {inv.dueAt ? new Date(inv.dueAt).toLocaleDateString('en-ZA') : '—'}
-                  </p>
-                </div>
-                <span className="font-display text-brand text-lg">{rands(inv.total * 100)}</span>
-                <Badge variant="outline" className={STATUS_STYLES[inv.status] ?? ''}>{inv.status}</Badge>
-                <div className="flex items-center gap-1.5">
-                  {inv.status === 'DRAFT' && (
-                    <button onClick={() => setStatus(inv, 'SENT')} title="Mark as sent" className="rounded-full border p-1.5 hover:border-brand transition">
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {(inv.status === 'SENT' || inv.status === 'OVERDUE') && (
-                    <button onClick={() => setStatus(inv, 'PAID')} title="Mark as paid" className="rounded-full border p-1.5 hover:border-emerald-500 transition text-emerald-500">
-                      ✓
-                    </button>
-                  )}
-                  <button onClick={() => printInvoice(inv)} title="Print / save PDF" className="rounded-full border p-1.5 hover:border-brand transition">
-                    <Printer className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => remove(inv.id)} title="Delete" className="rounded-full border p-1.5 hover:border-rose-500 hover:text-rose-400 transition">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+        ) : (() => {
+            const shown = kindFilter === 'ALL' ? invoices : invoices.filter((i) => kindOf(i) === kindFilter)
+            if (shown.length === 0) {
+              return (
+                <p className="text-sm text-muted-foreground py-12 text-center">
+                  {kindFilter === 'QUOTE' ? 'No quotes yet, create your first one above.' : kindFilter === 'INVOICE' ? 'No invoices yet, create your first one above.' : 'Nothing here yet, create your first invoice or quote above.'}
+                </p>
+              )
+            }
+            return (
+              <div className="divide-y">
+                {shown.map((inv) => {
+                  const isQuote = kindOf(inv) === 'QUOTE'
+                  return (
+                    <div key={inv.id} className="p-3.5 flex flex-wrap items-center gap-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">
+                          {inv.number} · {inv.clientName}
+                          {isQuote && (
+                            <Badge variant="outline" className="ml-2 text-[10px] h-4 border-brand/50 text-brand align-middle">QUOTE</Badge>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {itemsOf(inv).length} item{itemsOf(inv).length === 1 ? '' : 's'} · {isQuote ? 'valid until' : 'due'} {inv.dueAt ? new Date(inv.dueAt).toLocaleDateString('en-ZA') : '—'}
+                        </p>
+                      </div>
+                      <span className="font-display text-brand text-lg">{rands(inv.total * 100)}</span>
+                      <Badge variant="outline" className={STATUS_STYLES[inv.status] ?? ''}>{inv.status}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        {inv.status === 'DRAFT' && (
+                          <button onClick={() => setStatus(inv, 'SENT')} title="Mark as sent" className="rounded-full border p-1.5 hover:border-brand transition">
+                            <Send className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {!isQuote && (inv.status === 'SENT' || inv.status === 'OVERDUE') && (
+                          <button onClick={() => setStatus(inv, 'PAID')} title="Mark as paid" className="rounded-full border p-1.5 hover:border-emerald-500 transition text-emerald-500">
+                            ✓
+                          </button>
+                        )}
+                        {isQuote && inv.status === 'SENT' && (
+                          <>
+                            <button onClick={() => setStatus(inv, 'ACCEPTED')} title="Mark as accepted" className="rounded-full border p-1.5 hover:border-emerald-500 transition text-emerald-500">
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setStatus(inv, 'DECLINED')} title="Mark as declined" className="rounded-full border p-1.5 hover:border-rose-500 transition text-rose-400">
+                              <Ban className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                        {isQuote && inv.status === 'DECLINED' && (
+                          <button onClick={() => setStatus(inv, 'SENT')} title="Send again (revised quote)" className="rounded-full border p-1.5 hover:border-brand transition">
+                            <Send className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => printInvoice(inv)} title="Print / save PDF" className="rounded-full border p-1.5 hover:border-brand transition">
+                          <Printer className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => remove(inv.id)} title="Delete" className="rounded-full border p-1.5 hover:border-rose-500 hover:text-rose-400 transition">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        )}
+            )
+          })()}
       </div>
 
       {/* Direct line to the team, shared with every touchpoint on the platform */}
@@ -661,6 +736,7 @@ export default function InvoicesView() {
 function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; onDone: () => void }) {
   const items = itemsOf(invoice)
   const vat = invoice.total - invoice.subtotal
+  const isQuote = kindOf(invoice) === 'QUOTE'
   // Prefer the snapshot saved on the invoice; fall back to current settings for older invoices.
   const bankBlock = invoice.bankDetails?.trim()
     ? invoice.bankDetails.trim()
@@ -693,18 +769,18 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
               {profile?.contactPhone && <p className="text-xs text-neutral-500">{profile.contactPhone}</p>}
             </div>
             <div className="text-right">
-              <div className="font-display text-3xl">INVOICE</div>
+              <div className="font-display text-3xl">{isQuote ? 'QUOTE' : 'INVOICE'}</div>
               <p className="text-sm font-semibold">{invoice.number}</p>
               <p className="text-xs text-neutral-500">Issued {new Date(invoice.issuedAt).toLocaleDateString('en-ZA')}</p>
-              {invoice.dueAt && <p className="text-xs text-neutral-500">Due {new Date(invoice.dueAt).toLocaleDateString('en-ZA')}</p>}
-              <p className={`text-xs font-bold mt-1 ${invoice.status === 'PAID' ? 'text-emerald-700' : invoice.status === 'OVERDUE' ? 'text-rose-700' : 'text-neutral-700'}`}>
-                {invoice.status}
+              {invoice.dueAt && <p className="text-xs text-neutral-500">{isQuote ? 'Valid until' : 'Due'} {new Date(invoice.dueAt).toLocaleDateString('en-ZA')}</p>}
+              <p className={`text-xs font-bold mt-1 ${invoice.status === 'PAID' || invoice.status === 'ACCEPTED' ? 'text-emerald-700' : invoice.status === 'OVERDUE' || invoice.status === 'DECLINED' ? 'text-rose-700' : 'text-neutral-700'}`}>
+                {isQuote && invoice.status === 'ACCEPTED' ? 'ACCEPTED' : invoice.status}
               </p>
             </div>
           </div>
 
           <div className="py-6">
-            <p className="text-[10px] uppercase tracking-widest text-neutral-400">Billed to</p>
+            <p className="text-[10px] uppercase tracking-widest text-neutral-400">{isQuote ? 'Prepared for' : 'Billed to'}</p>
             <p className="font-semibold">{invoice.clientName}</p>
             {invoice.clientEmail && <p className="text-sm text-neutral-500">{invoice.clientEmail}</p>}
           </div>
@@ -746,6 +822,9 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
               <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1.5">Banking details</p>
               <div className="text-xs text-neutral-700 whitespace-pre-line font-mono">{bankBlock}</div>
             </div>
+          )}
+          {isQuote && (
+            <p className="mt-4 text-xs text-neutral-500">Quote valid until the valid-until date above. Accept to kick off the work — an invoice follows.</p>
           )}
           {invoice.notes && <div className="mt-6 text-xs text-neutral-500 whitespace-pre-line">{invoice.notes}</div>}
           <p className="mt-8 text-center text-[10px] text-neutral-400">

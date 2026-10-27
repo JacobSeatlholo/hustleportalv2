@@ -87,6 +87,7 @@ export interface InvoiceItem {
 export interface Invoice {
   id: string
   number: string
+  kind?: string // INVOICE | QUOTE — quotes share the book, QT- numbers, accepted/declined instead of paid
   clientName: string
   clientEmail: string | null
   status: string
@@ -235,6 +236,8 @@ export interface Task {
   team?: { id: string; name: string } | null
   _count?: { comments: number } // Prisma _count include on the list payload
   _openedAt?: string | null // first time the assigned person opened the record
+  createdAt: string // date added — the Tasks list sorts on this
+  updatedAt?: string
 }
 
 export interface TaskEventRow {

@@ -438,9 +438,10 @@ model Invoice {
   userId      String
   projectId   String?
   number      String    @unique
+  kind        String    @default("INVOICE") // INVOICE | QUOTE (quotes live in the same book, QT- numbers, accept/decline instead of paid)
   clientName  String
   clientEmail String?
-  status      String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE
+  status      String    @default("DRAFT") // invoices: DRAFT | SENT | PAID | OVERDUE · quotes: DRAFT | SENT | ACCEPTED | DECLINED
   items       String    @default("[]") // JSON [{description, quantity, unitPrice}]
   currency    String    @default("ZAR")
   subtotal    Float     @default(0) // EXCLUDING VAT (computed from the prices below)
@@ -460,6 +461,7 @@ model Invoice {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
+  @@index([userId, kind])
   @@index([projectId])
 }
 
