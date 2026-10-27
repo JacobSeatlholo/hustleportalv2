@@ -24,6 +24,8 @@ export interface LookupContact {
   phone?: string
   contactName?: string
   source: string
+  /** The cache row this answer actually came from (may differ from the asked key on a stem match). */
+  cacheKey?: string
 }
 
 /** Normalised business identity: same business, same key, across every member. */
@@ -52,13 +54,30 @@ function hostOf(url?: string | null): string | null {
 
 /** Read the memory. A hit still passes the sane + reach gates at the call site. */
 export async function cacheGetContact(companyKey: string): Promise<LookupContact | null> {
-  const row = await db.leadLookupCache.findUnique({ where: { companyKey } })
+  let row = await db.leadLookupCache.findUnique({ where: { companyKey } }).catch(() => null)
+  if (!row) {
+    // The SAME business often sits in two shapes across members' pipelines: one
+    // row carries its website, another (a web-found lead) has none, and the two
+    // identities key differently ("spar|observatory|" vs "spar|observatory|spar.co.za").
+    // A verified answer paid by the first must still rescue the second, so on an
+    // exact miss fall back to the name+city stem, most-verified answer first.
+    // Still one real public answer for that name+city — nothing is invented here.
+    const stem = companyKey.split('|').slice(0, 2).join('|')
+    if (stem && stem !== '||') {
+      row = await db.leadLookupCache
+        .findFirst({
+          where: { companyKey: { startsWith: `${stem}|` } },
+          orderBy: [{ hits: 'desc' }, { updatedAt: 'desc' }],
+        })
+        .catch(() => null)
+    }
+  }
   if (!row || (!row.email && !row.phone)) return null
   // Hit counting is best effort: a failed counter write must never fail a reveal.
   db.leadLookupCache
     .update({ where: { id: row.id }, data: { hits: { increment: 1 } } })
     .catch(() => {})
-  return { email: row.email || undefined, phone: row.phone || undefined, contactName: row.contactName || undefined, source: row.source }
+  return { email: row.email || undefined, phone: row.phone || undefined, contactName: row.contactName || undefined, source: row.source, cacheKey: row.companyKey }
 }
 
 /** Write the memory. Additive upsert; existing verified facts are never blanked. */
@@ -200,7 +219,8 @@ export async function siteContactDoor(website?: string | null): Promise<LookupCo
 // ---------- The exec counter: what did the doors actually do today ----------
 
 type RevealDoor = 'lookups' | 'memory' | 'site' | 'gemini' | 'fail'
-const STATS_KEY = 'REVEAL_STATS'
+export const REVEAL_STATS_KEY = 'REVEAL_STATS'
+const STATS_KEY = REVEAL_STATS_KEY
 const STATS_DAYS = 30
 
 /** Best-effort per-day counter, SAST stamped like every other meter. */

@@ -109,9 +109,10 @@ export async function POST(req: NextRequest) {
         await bumpRevealStats('memory')
       } else {
         // The remembered answer rotted (nothing sane survives the gates).
-        // Drop it so the next member goes fresh instead of tripping twice.
+        // Drop it so the next member goes fresh instead of tripping twice —
+        // by the row's OWN key: a stem match may live under a sibling identity.
         await db.leadLookupCache
-          .delete({ where: { companyKey } })
+          .delete({ where: { companyKey: remembered.cacheKey || companyKey } })
           .catch(() => {})
       }
     }

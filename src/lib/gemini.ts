@@ -220,6 +220,14 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
           ? 'Your saved Gemini key is pacing its free requests this minute. It refills on its own in about a minute, so one more try usually lands.'
           : 'The AI engine is pacing its free requests this minute. One more try usually lands.'
       }
+      if (quotaZeroLimit(detail)) {
+        // A ZERO limit is not a drain: this model has NO free tier on this
+        // project, it never refills at 09:00. Telling a member to "wait for
+        // the reset" pointed at a wall that never moves — say the real fix.
+        return own
+          ? 'Your saved Gemini key is on a Google project whose free search tier for this model reads zero, so it will not refill on its own. Fastest fix: create a brand new key in a brand new project at aistudio.google.com/apikey and save it under Integrations.'
+          : 'The platform AI project currently has no free search tier for this model. A fresh project key is needed. You can add your own free Gemini key under Integrations to go live instantly.'
+      }
       return own
         ? 'Your saved Gemini key has used its free daily search allowance for today. Google refills it around 09:00 South African time. Need more now? A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
         : 'The free AI search allowance is used up for today. It refills around 09:00 South African time. Two faster options: add your own free Gemini key under Integrations for an instant fresh allowance, or try again after the reset.'
