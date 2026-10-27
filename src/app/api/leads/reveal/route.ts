@@ -115,9 +115,18 @@ export async function POST(req: NextRequest) {
     if (!found) {
       // The lookup itself failing (daily search allowance drained, key trouble,
       // network) must never read as "no contact exists". Different message, same
-      // promise: nothing was charged.
+      // promise: nothing was charged. And the engine's OWN reason rides along —
+      // a per-minute wall, a day drain and busy-hour shedding each have a
+      // different fix, and one blanket "allowance may be stretched" hides which.
+      if (!lookup.ok) {
+        console.warn('[reveal] grounded lookup failed:', {
+          leadId,
+          company: lead.company,
+          reason: lookup.error,
+        })
+      }
       const searchMessage = !lookup.ok
-        ? `The contact search could not run just now (the daily AI search allowance may be stretched). You were NOT charged. Try ${lead.company} again in a minute.`
+        ? `The live contact search could not run just now. ${lookup.error} You were NOT charged.`
         : `No verified public contact found for ${lead.company}, you were NOT charged.` +
           (lead.website ? ` Try their website directly: ${lead.website}` : ' Try searching for them directly.')
       return NextResponse.json({
