@@ -92,3 +92,4 @@ tool-results/
 /src/components/hustle/
 /src/lib/api.ts
 /src/lib/hooks.ts
+.qaenv/

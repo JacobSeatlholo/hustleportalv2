@@ -919,6 +919,27 @@ model AiUsage {
   @@index([day])
 }
 
+// ============ LEAD LOOKUP MEMORY ============
+
+// One verified contact answer per business, shared by every member. The first
+// reveal of "Spar, Observatory" pays the search (AI grounded lookup or the
+// business's own website); every later reveal of the same business reads this
+// row and burns ZERO quota. Same honesty contract as ever: only details that
+// actually appear in a public source ever land here, the reach gate still
+// applies at read time, and the member pays the normal reveal price for the
+// delivered contact. Additive table, no existing row is ever touched.
+model LeadLookupCache {
+  id          String   @id @default(cuid())
+  companyKey  String   @unique // normalised "company|city[|host]"
+  email       String?
+  phone       String?
+  contactName String?
+  source      String // where it was verified, e.g. "site: https://..." or the grounded source text
+  hits        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 // ============ POPIA LISTING SUPPRESSION ============
 
 // A business that asked to stay out of the lead index ("remove my listing").

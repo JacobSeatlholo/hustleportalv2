@@ -7,6 +7,7 @@ import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { bumpChallenge } from '@/lib/gamification'
 import { emailReach } from '@/lib/reach'
+import { companyKeyFor, cacheGetContact, cachePutContact, siteContactDoor, bumpRevealStats } from '@/lib/leadlookup'
 
 export const maxDuration = 60
 
@@ -79,11 +80,70 @@ export async function POST(req: NextRequest) {
     deadEmailStripped = true
   }
 
-  // No stored contact → grounded public lookup (real or nothing). Charged only on success.
+  // No stored contact → three doors, cheapest first, charged only on success.
+  // Door 1 is the shared lookup MEMORY: the first member who verified this
+  // business paid the search, every member after them reads the answer free.
+  // Door 2 is the business's OWN website, read with a plain fetch — no AI, no
+  // quota, no model rotation, the same public-source standard as always.
+  // Door 3 is the grounded AI lookup, exactly as before. Google being drained
+  // or moody now costs members only the rare third door instead of every
+  // reveal — the steady wall between new users and their first paid win.
   if (!contact.email && !contact.phone) {
+    const companyKey = companyKeyFor(lead.company, lead.city, lead.website)
+    await bumpRevealStats('lookups')
+
+    // DOOR 1: memory. Same gates as everything else: sane shapes, reach check.
+    const remembered = await cacheGetContact(companyKey)
+    if (remembered) {
+      let memEmail = saneEmail(remembered.email)
+      if (memEmail && (await emailReach(memEmail)) === 'dead') memEmail = undefined
+      const memPhone = sanePhone(remembered.phone)
+      if (memEmail || memPhone) {
+        contact = {
+          ...contact,
+          email: memEmail || contact.email,
+          phone: memPhone || contact.phone,
+          contactName: remembered.contactName || contact.contactName,
+        }
+        viaSource = remembered.source
+        await bumpRevealStats('memory')
+      } else {
+        // The remembered answer rotted (nothing sane survives the gates).
+        // Drop it so the next member goes fresh instead of tripping twice.
+        await db.leadLookupCache
+          .delete({ where: { companyKey } })
+          .catch(() => {})
+      }
+    }
+
+    // DOOR 2: their own website. A dead or guarded site just returns null and
+    // the chain moves on; the found email wears the same reach gate.
+    if (!contact.email && !contact.phone) {
+      const site = await siteContactDoor(lead.website)
+      if (site) {
+        let siteEmail = saneEmail(site.email)
+        if (siteEmail && (await emailReach(siteEmail)) === 'dead') siteEmail = undefined
+        const sitePhone = sanePhone(site.phone)
+        if (siteEmail || sitePhone) {
+          contact = {
+            ...contact,
+            email: siteEmail || contact.email,
+            phone: sitePhone || contact.phone,
+          }
+          viaSource = site.source
+          await bumpRevealStats('site')
+          await cachePutContact(companyKey, { email: siteEmail, phone: sitePhone, source: site.source })
+        }
+      }
+    }
+
+    // DOOR 3: grounded public lookup (real or nothing). 40s budget so the
+    // whole chain of doors always fits inside the 60s function ceiling.
+    if (!contact.email && !contact.phone) {
     const lookup = await geminiGenerate(userId, {
       search: true,
       json: true,
+      timeoutMs: 40_000,
       system:
         'You find publicly listed contact details for businesses, grounded in live Google Search results. Report ONLY details that actually appear in a source you saw (official website, directory, Google Business listing, news, Facebook page). NEVER guess, NEVER construct an email from a name@domain pattern. If you cannot verify real details, say so.',
       prompt:
@@ -109,7 +169,7 @@ export async function POST(req: NextRequest) {
           contactName: (parsed.contactName || '').trim() || contact.contactName,
         }
         found = true
-        via = (parsed.source || '').trim()
+        via = (parsed.source || '').trim() || 'public web'
       }
     }
     if (!found) {
@@ -125,6 +185,7 @@ export async function POST(req: NextRequest) {
           reason: lookup.error,
         })
       }
+      await bumpRevealStats('fail')
       const searchMessage = !lookup.ok
         ? `The live contact search could not run just now. ${lookup.error} You were NOT charged.`
         : `No verified public contact found for ${lead.company}, you were NOT charged.` +
@@ -135,7 +196,17 @@ export async function POST(req: NextRequest) {
         message: searchMessage,
       })
     }
+    // A fresh verified answer becomes everyone's memory: the next member never
+    // pays Google for this business again.
+    await bumpRevealStats('gemini')
+    await cachePutContact(companyKey, {
+      email: contact.email,
+      phone: contact.phone,
+      contactName: contact.contactName,
+      source: via,
+    })
     viaSource = via
+    }
   }
 
   const result = await spendCredits(userId, price, `Lead reveal: ${lead.company}`)
