@@ -2630,3 +2630,18 @@ Work Log:
 Stage Summary:
 - Lead quality is now enforced on BOTH axes systemically, without touching a single daily limit: RELEVANT was already a gate (taxonomy + ranker + deck floor + taste + verdicts); REACHABLE is now a fact at every checkpoint — dead addresses never enter the pool, never serve, never ride a card and never cost a reveal; a face nobody can reach by any door stops wasting serves; and the mail providers' own bounce verdicts flow straight into the loop. Members keep every scan their plan allows; the AI lead gen budgets are exactly as they were.
 - Awaiting deploy ride (platform snapshot channel) — on the next /api/health read-back showing sha 96d4fb8, prod runs the reachable promise. If the channel does not fire, a session restart restores the push path (known recovery) and the commit is safe on local main.
+
+---
+Task ID: 131
+Agent: Super Z (main)
+Task: Boss screenshot (11:48 SAST) — "What's with this? I cannot reveal a contact." (Spar · Observatory · web-found; toast "Nothing charged — The contact search could not run just now...")
+
+Work Log:
+- Traced the toast: LeadsView 'Nothing charged' = /api/leads/reveal returning charged:false. Spar is a web-found lead with NO stored email/phone, so reveal runs the grounded public lookup (Gemini + Google Search). lookup.ok came back false → failure branch. Charge happens only AFTER verified details return, so the wallet was never touched — the honesty contract held, R15 never left.
+- Why the lookup failed: Gemini free-tier availability on the shared platform key (per-minute pacing, per-day drain, or busy-hour traffic shedding; day buckets refill ~09:00 SAST). Task 130's reach gate is NOT involved on this path (no stored email → no reach call; the lookup died before any found-email gate). Prod read-back shows b5ca100 = Task 130 is live via the snapshot channel.
+- ROOT DEFECT fixed: the reveal route discarded the engine's detailed, actionable error (friendlyError already distinguishes minute-wall vs day-drain vs shedding) and replaced it with one blanket "the daily AI search allowance may be stretched" — the exact reason the boss had to ask what's going on. Now the engine's own reason rides in the toast ("The live contact search could not run just now. <real reason> You were NOT charged.") plus a console.warn('[reveal] grounded lookup failed', {leadId, company, reason}) for Vercel log diagnosis.
+- tsc clean on src (only unrelated skills/ scratch noise). Committed ff53436. Direct git push still impossible from the sandbox (no ssh binary — known); the commit rides the proven platform snapshot channel like 96d4fb8/b5ca100 did.
+
+Stage Summary:
+- Money contract held (nothing charged); what was broken was the TRUTH contract — the toast now names the real cause and its fix (retry in a minute, own free Gemini key under Integrations, or the ~09:00 SAST day reset).
+- Awaiting snapshot ride for ff53436; verify on the next /api/health read-back.
