@@ -2697,3 +2697,20 @@ Work Log:
 Stage Summary:
 - Prod daabb08: a drained-Google day no longer blocks a reveal that shares an identity with any verified answer or any business with a live website. The boss's exact lead reveals free in under half a second now. Next watch: lens memory+site share should collapse fail; if a member's saved key shows zero-limit, the toast now says the real fix.
 - Boss actions that still help: fresh Gemini key in a FRESH project (his current one may be zero-limit, never refills); platform allowance self-refills ~09:00 SAST; win-back send decision on the 29-member quiet list.
+
+---
+Task ID: 134
+Agent: Super Z (main)
+Task: Boss: "The lead quality is quite bad for users. We need to fix this workflow so that there is a product that works for the users. ALWAYS."
+
+Work Log:
+- DATA FIRST (scripts/task134_quality_probe.mjs + the lens): only 12 verdicts ever (10 good / 2 bad, both TOO_FAR, 83% goodPct), bounced=0, reachFlagged=0 — the feedback LOOP is nearly unused, so "bad quality" lives elsewhere. Extended the lens (qualitySummary.bySource30): per-source door coverage over the last 30 days — WEB saved=104 withDoor=62%, MANUAL 54%, TEAM 78%, CSV 97%, POOL 83%, historical source='AI_SEARCH' rows 16 at 0%. VERDICT: ~2 in 5 web-found/manual rows land with NO working contact door — that is the "bad lead" feeling, and it compounds when a shape-valid but DEAD email bakes in unlocked and bounces on first send.
+- HOLE FOUND: the reachable promise (Task 130) guarded pool serving and reveal, but NOT the deck lane or the save till — engine emails rode scan cards unfiltered, and saveLeads auto-unlocked any email/phone shape-valid card. Also CSV import and the exec TEAM hand-pick lane had no reach gate.
+- FIX (commit 3068bd7, LIVE): ONE law at EVERY door into a pipeline — (1) discover deck: rememberScanResults now returns the dead-email set, stripDeadDeck removes provably dead addresses from the served cards themselves (web/osm/explee lanes); (2) POST /api/leads save till: emailReach gate strips dead addresses, a stripped card never lands unlocked, honest notice rides the response; (3) CSV import: one batched deadEmailMap over the whole file, deadStripped + samples in the report, unlocked recomputed after the gate; (4) exec client inject (TEAM lane): same batch gate, message reports the strip. Zero quota (DNS only, cached), zero limit changes.
+- QA 6/6 on prod (scripts/task134_qa.mjs): dead email stripped + unlocked downgraded + notice present; good email kept + unlocked honoured; bySource30 present with real numbers. Live smoke scan (Soweto car wash) fell through the drained Gemini day to OSM and answered an HONEST SCARCE with 0 rows — the chain runs, honesty beats padding.
+- SIDE FINDING: ops-seat scripts intermittently 401 — cause was Node fetch merging multiple set-cookie headers; browsers unaffected (login emits exactly one hp_session). Scripts now parse headers.getSetCookie(). Also: tsc flood of pre-existing template dead-code errors (expenses/goals routes vs schema) surfaced after a local prisma generate; masked on Vercel by ignoreBuildErrors, untouched.
+- Push path hiccup: sandbox reset wiped paramiko from /home/z/.venv mid-session AGAIN; rebuilt, pushed, verified health 3068bd7.
+
+Stage Summary:
+- Prod 3068bd7: no pipeline door can bake in a guaranteed bounce or sell a dead address as an unlocked contact any more; quality per source is now a countable number on the exec lens. Watch: withDoor% on new saves should climb; verdicts should grow with the reveal-moment prompt (next lever, needs the boss's UX nod).
+- The "works ALWAYS" stack as of today: three reveal doors + 196-business shared memory + stem matching (133), reachable promise at every capture door (134), honest SCARCE instead of junk padding, and a lens that shows the truth per source.
