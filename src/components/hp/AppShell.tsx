@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -38,7 +38,7 @@ import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid, Flame, Twitter, Instagram,
+  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { LEVELS } from '@/lib/levels'
@@ -78,9 +78,13 @@ const TILT_TIP_KEY = 'hp_tilt_tip_dismissed'
 const CARD_LINK_XP_LEVEL = 3 // Operator level @ 300 XP
 const CARD_BANNER_KEY = 'hp_card_banner_dismissed'
 
+// Desktop slide-away menu (z.ai-style): the choice is remembered per browser.
+const SIDEBAR_COLLAPSED_KEY = 'hp_sidebar_collapsed'
+
 export default function AppShell() {
   const { session, view, setView, logout, loadSession } = useHp()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [cardBannerDismissed, setCardBannerDismissed] = useState(true)
   const [showTiltTip, setShowTiltTip] = useState(false)
   // The tailored workspace: module keys the user switched off (UserSetting MODULES).
@@ -115,6 +119,33 @@ export default function AppShell() {
       setCardBannerDismissed(localStorage.getItem(CARD_BANNER_KEY) === '1')
     })
   }, [])
+
+  // Restore the slide-away choice, then remember every change (per browser).
+  useEffect(() => {
+    queueMicrotask(() => {
+      try { setSidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') } catch { /* private mode */ }
+    })
+  }, [])
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((c) => {
+      const next = !c
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0') } catch { /* private mode */ }
+      return next
+    })
+  }, [])
+
+  // Ctrl/Cmd + B slides the menu away or back, same muscle memory as z.ai.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleSidebar])
 
   // Push notifications: register the service worker once per session.
   useEffect(() => {
@@ -204,8 +235,13 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen hp-gradient-bg flex">
-      {/* Sidebar, desktop */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground fixed inset-y-0 z-40 print:hidden">
+      {/* Sidebar, desktop — slides away (z.ai-style) so the dashboard can take the full width */}
+      <aside
+        aria-hidden={sidebarCollapsed}
+        className={`hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground fixed inset-y-0 z-40 print:hidden transition-[transform,visibility] duration-300 ease-in-out motion-reduce:transition-none ${
+          sidebarCollapsed ? '-translate-x-full invisible' : 'translate-x-0 visible'
+        }`}
+      >
         <SidebarContent
           view={view}
           setView={setView}
@@ -240,14 +276,34 @@ export default function AppShell() {
         </div>
       )}
 
-      {/* Main */}
-      <div className="flex-1 md:ml-60 min-w-0 flex flex-col">
+      {/* Main — the left margin follows the menu so content glides to full width */}
+      <div
+        className={`flex-1 min-w-0 flex flex-col transition-[margin-left] duration-300 ease-in-out motion-reduce:transition-none ${
+          sidebarCollapsed ? 'md:ml-0' : 'md:ml-60'
+        }`}
+      >
         {/* Topbar, taller touch targets + safe-area padding so nothing hides under a notch */}
         <header className="sticky top-0 z-30 bg-background border-b print:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center gap-2 px-3 py-2.5 min-h-[56px]">
             <Button variant="ghost" size="icon" className="md:hidden h-11 w-11" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
+            {/* Slide the menu away / bring it back (desktop), z.ai-style */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden md:inline-flex h-9 w-9 text-muted-foreground hover:text-foreground"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? 'Show menu' : 'Hide menu'}
+              title={`${sidebarCollapsed ? 'Show' : 'Hide'} menu · Ctrl+B`}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </Button>
+            {sidebarCollapsed && (
+              <div className="hidden md:block font-display text-lg leading-none">
+                HUSTLE<span className="text-brand">PORTAL</span>
+              </div>
+            )}
             <div className="font-display text-lg md:hidden">
               HUSTLE<span className="text-brand">PORTAL</span>
             </div>
@@ -275,7 +331,7 @@ export default function AppShell() {
           {/* XP-threshold → link your Yoco card */}
           {showCardBanner && (
             <div className="bg-brand/10 border-t border-brand/30">
-              <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center gap-2 text-sm">
+              <div className={`mx-auto px-4 py-2 flex flex-wrap items-center gap-2 text-sm ${sidebarCollapsed ? 'md:max-w-none' : 'max-w-6xl'}`}>
                 <CreditCard className="h-4 w-4 text-brand shrink-0" />
                 <span className="flex-1 min-w-[16rem]">
                   <span className="font-medium">{session.level.icon} {session.level.name} level unlocked.</span>{' '}
@@ -295,7 +351,7 @@ export default function AppShell() {
           )}
         </header>
 
-        <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto pb-24 md:pb-6">
+        <main className={`flex-1 p-4 md:p-6 w-full mx-auto pb-24 md:pb-6 ${sidebarCollapsed ? 'md:max-w-none' : 'max-w-6xl'}`}>
           {content}
         </main>
 
@@ -372,7 +428,7 @@ export default function AppShell() {
         </Dialog>
 
         <footer className="mt-auto border-t bg-background">
-          <div className="max-w-6xl mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5">
+          <div className={`mx-auto px-6 py-3 text-[11px] text-muted-foreground space-y-1.5 ${sidebarCollapsed ? 'md:max-w-none' : 'max-w-6xl'}`}>
             <div className="flex flex-wrap justify-between gap-2">
               <span>BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD</span>
               <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-brand" /> HustlePortal™, <span className="text-brand font-medium tracking-wide">We feed your pipeline. You run your business.</span></span>
