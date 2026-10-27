@@ -28,6 +28,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { planState } from '@/lib/limits'
 import { suppressedNameKeys, suppressedOsmIds } from '@/lib/suppression'
+import { deadEmailMap } from '@/lib/reach'
 import type { LeadPool as LeadPoolRow } from '@prisma/client'
 
 // ---------- identity helpers ----------
@@ -240,6 +241,61 @@ export async function userSavedKeys(userId: string): Promise<Set<string>> {
   return new Set(rows.map((r) => normKey(r.company)))
 }
 
+// ---------- the reachable promise (serving side) ----------
+
+/**
+ * Reachability was an assumption; this pass makes it a fact, at $0.
+ *
+ * Two hard sources of "this address cannot receive mail":
+ *  1. THE PROVIDER SAID SO: bounceCount / emailDeadAt on the face, written
+ *     by the mail webhooks. A bounce is the mail system's own verdict.
+ *  2. THE DNS GATE: the domain does not exist or announces no mail path
+ *     (no MX, no A fallback). Bounded and cached in reach.ts, zero AI quota.
+ *
+ * What the serve laws do with it:
+ *  - a dead address is stripped from the served card (never sold as a fact),
+ *  - a face left with NO door at all (no live email, no phone, no named
+ *    human, no website, no public profile) never ships — the seller could
+ *    do literally nothing with it. It stays in the pool: the next scan that
+ *    re-sees it can still enrich it with a live door.
+ */
+async function reachPass(rows: LeadPoolRow[]): Promise<{ deadEmails: Set<string>; unreachable: Set<string> }> {
+  const deadEmails = new Set<string>()
+  const withEmail = rows.filter((p) => (p.email || '').includes('@'))
+  // The providers' own verdicts first — free, no resolver roundtrip.
+  for (const p of withEmail) {
+    if (p.emailDeadAt || p.bounceCount > 0) deadEmails.add((p.email || '').trim().toLowerCase())
+  }
+  // The DNS gate on the rest, bounded (worst case one parallel batch).
+  const rest = withEmail.filter((p) => !deadEmails.has((p.email || '').trim().toLowerCase()))
+  if (rest.length > 0) {
+    const dnsDead = await deadEmailMap(rest.map((p) => p.email), 16)
+    for (const p of rest) {
+      const e = (p.email || '').trim().toLowerCase()
+      if (dnsDead.has(e)) deadEmails.add(e)
+    }
+  }
+  const unreachable = new Set<string>()
+  for (const p of rows) {
+    const emailDead = p.email ? deadEmails.has(p.email.trim().toLowerCase()) : false
+    const door =
+      Boolean(p.contactName?.trim()) ||
+      Boolean(p.phone) ||
+      Boolean(p.phoneRaw) ||
+      Boolean(p.website) ||
+      Boolean(p.profileUrl) ||
+      (Boolean(p.email) && !emailDead)
+    if (!door) unreachable.add(p.id)
+  }
+  return { deadEmails, unreachable }
+}
+
+/** Copy of a pool row with a provably dead address removed from its facts. */
+function stripDeadEmail(p: LeadPoolRow, deadEmails: Set<string>): LeadPoolRow {
+  const email = (p.email || '').trim().toLowerCase()
+  return email && deadEmails.has(email) ? { ...p, email: null } : p
+}
+
 // ---------- serving ----------
 
 export interface PoolLead {
@@ -407,12 +463,13 @@ export async function serveFromPool(opts: {
   // One company can exist under two fingerprints (seen once with a city, once
   // without). A single serve must never hand the seller the same face twice.
   const seenCompanies = new Set<string>()
-  const serve = sorted.filter((p) => {
-    const key = normKey(p.company)
-    if (!key || seenCompanies.has(key)) return false
-    seenCompanies.add(key)
-    return true
-  })
+  const eligible = sorted
+    .filter((p) => {
+      const key = normKey(p.company)
+      if (!key || seenCompanies.has(key)) return false
+      seenCompanies.add(key)
+      return true
+    })
     // Region gate: a foreign face captured before the gate existed never
     // serves again. The pool wears the same lens the scan answers do.
     .filter((p) => isSouthAfricanLead(p))
@@ -433,7 +490,12 @@ export async function serveFromPool(opts: {
     // and a face with three straight rejects never serves again. That drift
     // toward sellers who keep such faces is "reassigned to a better fit".
     .filter((p) => !fieldRejected(p))
-    .slice(0, cap)
+  // THE REACHABLE PROMISE, the serving law: a face nobody can reach by any
+  // door never ships (the seller could do nothing with it), and a provably
+  // dead address never rides a served card. The face stays in the pool —
+  // the next scan that re-sees it can still hand it a live door.
+  const reach = await reachPass(eligible)
+  const serve = eligible.filter((p) => !reach.unreachable.has(p.id)).slice(0, cap)
   if (serve.length === 0) return []
   try {
     await db.leadPool.updateMany({
@@ -444,7 +506,7 @@ export async function serveFromPool(opts: {
     /* rotation bookkeeping must never break a serve */
   }
   const want = opts.city || ''
-  return serve.map((p) => poolToLead(p, cityMatches(p.city, want)))
+  return serve.map((p) => poolToLead(stripDeadEmail(p, reach.deadEmails), cityMatches(p.city, want)))
 }
 
 /**
@@ -644,6 +706,11 @@ export async function serveExpleeBoost(opts: {
   const judgedNamed = ordered.filter((r) => r.contactName && fieldRejected(r))
   const judgedUnnamed = ordered.filter((r) => !r.contactName && fieldRejected(r))
   ordered = [...cleanNamed, ...cleanUnnamed, ...judgedNamed, ...judgedUnnamed]
+  // THE REACHABLE PROMISE, same law as the topic serve: the team's contacts
+  // ship only when the seller can actually reach them, and a provably dead
+  // address is stripped from the card instead of sold as a fact.
+  const reach = await reachPass(ordered)
+  ordered = ordered.filter((r) => !reach.unreachable.has(r.id))
   // Suppressed names (POPIA opt-outs) never serve, whatever their fingerprint.
   const drop = await suppressedNameKeys()
   for (const r of ordered) {
@@ -662,7 +729,7 @@ export async function serveExpleeBoost(opts: {
   } catch {
     /* rotation bookkeeping must never break a serve */
   }
-  return picked.map((p) => poolToLead(p, inCityIds.has(p.id)))
+  return picked.map((p) => poolToLead(stripDeadEmail(p, reach.deadEmails), inCityIds.has(p.id)))
 }
 
 // ---------- ingesting the team's verified outreach contacts ----------
@@ -705,6 +772,12 @@ export async function ingestVerifiedContacts(opts: {
   summary.total = rows.length
   if (rows.length === 0) return summary
   const now = new Date()
+  // Same reachable gate as every capture door: a dead address never lands.
+  const deadEmails = await deadEmailMap(rows.map((l) => l.email), 24)
+  const reachOk = (l: RememberLead) => {
+    const e = (l.email || '').trim().toLowerCase()
+    return e ? !deadEmails.has(e) : true
+  }
 
   const fps = rows.map((l) => `${normKey(l.company)}|${normKey(l.city || opts.area)}`)
   let existing: LeadPoolRow[] = []
@@ -776,7 +849,7 @@ export async function ingestVerifiedContacts(opts: {
             verifyChecks: JSON.stringify({ ...checks, checkedAt: now.toISOString() }),
             phone: prev.phone || phone.e164 || null,
             phoneRaw: prev.phoneRaw || l.phone || null,
-            email: prev.email || l.email || null,
+            email: prev.email || (reachOk(l) ? l.email || null : null),
             website: prev.website || l.website || null,
             contactName: prev.contactName || l.contactName || null,
             role: prev.role || l.role || null,
@@ -811,7 +884,7 @@ export async function ingestVerifiedContacts(opts: {
           areaLabel: opts.area?.slice(0, 160) || null,
           phone: phone.e164 || null,
           phoneRaw: l.phone || null,
-          email: l.email || null,
+          email: reachOk(l) ? l.email || null : null,
           website: l.website || null,
           contactName: l.contactName || null,
           role: l.role || null,
@@ -902,6 +975,17 @@ export async function rememberScanResults(opts: {
   if (rows.length === 0) return stamps
   const now = new Date()
 
+  // THE REACHABLE GATE AT CAPTURE: an address the mail system can never
+  // deliver to is not stored, so junk never enters the pool and never
+  // resurfaces for any seller afterwards. The face still lands (phone,
+  // website and the story remain); only the dead address is dropped.
+  // Bounded DNS, cached, $0 — no AI quota is touched.
+  const deadEmails = await deadEmailMap(rows.map((l) => l.email), 16)
+  const reachOk = (l: RememberLead) => {
+    const e = (l.email || '').trim().toLowerCase()
+    return e ? !deadEmails.has(e) : true
+  }
+
   const canPing = !opts.budgetUntil || Date.now() < opts.budgetUntil - 6_000
   const pingList = canPing ? rows.filter((l) => l.website).slice(0, 8) : []
   const siteOk = new Map<string, boolean>()
@@ -961,7 +1045,7 @@ export async function rememberScanResults(opts: {
           verifyChecks: JSON.stringify({ ...checks, checkedAt: now.toISOString() }),
           phone: prev.phone || phone.e164 || null,
           phoneRaw: prev.phoneRaw || l.phone || null,
-          email: prev.email || l.email || null,
+          email: prev.email || (reachOk(l) ? l.email || null : null),
           website: prev.website || l.website || null,
           contactName: prev.contactName || l.contactName || null,
           role: prev.role || l.role || null,
@@ -1013,7 +1097,7 @@ export async function rememberScanResults(opts: {
           areaLabel: opts.area?.slice(0, 160) || null,
           phone: phone.e164 || null,
           phoneRaw: l.phone || null,
-          email: l.email || null,
+          email: reachOk(l) ? l.email || null : null,
           website: l.website || null,
           contactName: l.contactName || null,
           role: l.role || null,

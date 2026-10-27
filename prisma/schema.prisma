@@ -265,6 +265,7 @@ model Lead {
   feedbackNote    String?   // optional one-liner in the seller's own words
   feedbackAt      DateTime?
   releasedAt      DateTime? // bad-fit PLATFORM lead handed back to the shared pool, ready to serve a better-fit seller. Never set on MANUAL/CSV rows (the seller's own data stays theirs).
+  emailBouncedAt  DateTime? // the provider told us this address bounced (hard fact, not a seller verdict). The reachable promise starts here.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -793,6 +794,12 @@ model LeadPool {
   // the verdicts steer who meets them next.
   feedbackGood   Int       @default(0)
   feedbackBad    Int       @default(0)
+  // The reachable promise, fed by two hard facts: the mail providers' bounce
+  // webhooks (bounceCount / emailDeadAt) and the DNS mail-exchanger gate at
+  // capture. A face whose email is provably dead serves without the email,
+  // and a face nobody can reach by any door stops serving entirely.
+  bounceCount    Int       @default(0)
+  emailDeadAt    DateTime?
 
   hits LeadPoolHit[]
 

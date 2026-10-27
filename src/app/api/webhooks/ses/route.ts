@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { recordBounce } from '@/lib/leadfeedback'
 
 /**
  * Amazon SES feedback, the SES lane's ears. SNS posts bounce and complaint
@@ -102,6 +103,10 @@ export async function POST(req: NextRequest) {
       update: {},
       create: { email, reason: isComplaint ? 'COMPLAINT' : 'BOUNCE', note: log.campaign || 'SES lane' },
     })
+    // The lead quality loop hears it too (hard bounces only: a complaint is
+    // not a reachability fact): the dead address is marked on the pipeline
+    // row and the shared pool face, so it never serves or reveals again.
+    if (!isComplaint) await recordBounce(email, { leadId: log.leadId })
     handled++
   }
 

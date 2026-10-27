@@ -252,6 +252,8 @@ export interface QualitySummary {
   bad30: number
   released: number
   poolFacesJudged: number
+  bounced: number // lead rows whose address the provider bounced
+  reachFlagged: number // pool faces wearing a provably dead address
   reasons: { reason: string; count: number }[]
   bySource: { source: string; rated: number; good: number; bad: number }[]
   recent: {
@@ -269,6 +271,49 @@ export interface QualitySummary {
 }
 
 /**
+ * The provider's verdict, the loop's fifth feed: the address BOUNCED. This
+ * is not an opinion (a seller's taste) and not a guess (the ranker's read),
+ * it is a hard fact from the mail provider's own webhook. One bounce marks
+ * every copy of that address (the Lead rows that carry it) and the shared
+ * pool face it lives on, so the reachable promise acts on reality: the dead
+ * address stops serving and never costs a seller a reveal. Never throws.
+ */
+export async function recordBounce(
+  email: string,
+  opts?: { leadId?: string | null }
+): Promise<{ leadMarked: boolean; poolMatched: boolean }> {
+  const addr = String(email || '').trim().toLowerCase()
+  if (!addr || !addr.includes('@')) return { leadMarked: false, poolMatched: false }
+  const now = new Date()
+  let leadMarked = false
+  try {
+    if (opts?.leadId) {
+      await db.lead.update({ where: { id: opts.leadId }, data: { emailBouncedAt: now } })
+      leadMarked = true
+    } else {
+      const r = await db.lead.updateMany({
+        where: { email: { equals: addr, mode: 'insensitive' } },
+        data: { emailBouncedAt: now },
+      })
+      leadMarked = r.count > 0
+    }
+  } catch {
+    /* the lead mark must never break the webhook */
+  }
+  let poolMatched = false
+  try {
+    const r = await db.leadPool.updateMany({
+      where: { email: { equals: addr, mode: 'insensitive' } },
+      data: { bounceCount: { increment: 1 }, emailDeadAt: now },
+    })
+    poolMatched = r.count > 0
+  } catch {
+    /* the pool mark must never break the webhook */
+  }
+  return { leadMarked, poolMatched }
+}
+
+/**
  * The Executive Dashboard's quality lens: is the finder shipping fits?
  * Verdicts read raw (humans only would need the probe filter, but probes
  * never file verdicts — they never reach a pipeline they feel about), per
@@ -277,11 +322,13 @@ export interface QualitySummary {
  */
 export async function qualitySummary(): Promise<QualitySummary> {
   const d30 = new Date(Date.now() - 30 * 86_400_000)
-  const [all, recent30, releasedCount, poolJudged, reasonRows, sourceRows, recentRows] = await Promise.all([
+  const [all, recent30, releasedCount, poolJudged, bouncedCount, reachFlagged, reasonRows, sourceRows, recentRows] = await Promise.all([
     db.lead.groupBy({ by: ['qualityFeedback'], where: { qualityFeedback: { not: null } }, _count: { _all: true } }),
     db.lead.groupBy({ by: ['qualityFeedback'], where: { qualityFeedback: { not: null }, feedbackAt: { gte: d30 } }, _count: { _all: true } }),
     db.lead.count({ where: { releasedAt: { not: null } } }),
     db.leadPool.count({ where: { OR: [{ feedbackGood: { gt: 0 } }, { feedbackBad: { gt: 0 } }] } }),
+    db.lead.count({ where: { emailBouncedAt: { not: null } } }),
+    db.leadPool.count({ where: { emailDeadAt: { not: null } } }),
     db.lead.groupBy({ by: ['feedbackReason'], where: { qualityFeedback: 'BAD_FIT', feedbackReason: { not: null } }, _count: { _all: true } }),
     db.lead.groupBy({ by: ['source', 'qualityFeedback'], where: { qualityFeedback: { not: null } }, _count: { _all: true } }),
     db.lead.findMany({
@@ -325,6 +372,8 @@ export async function qualitySummary(): Promise<QualitySummary> {
     bad30,
     released: releasedCount,
     poolFacesJudged: poolJudged,
+    bounced: bouncedCount,
+    reachFlagged,
     reasons: reasonRows
       .map((r) => ({ reason: r.feedbackReason as string, count: r._count._all }))
       .sort((a, b) => b.count - a.count),

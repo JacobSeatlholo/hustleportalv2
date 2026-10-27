@@ -6,6 +6,7 @@ import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { bumpChallenge } from '@/lib/gamification'
+import { emailReach } from '@/lib/reach'
 
 export const maxDuration = 60
 
@@ -67,6 +68,17 @@ export async function POST(req: NextRequest) {
   }
   let viaSource: string | undefined
 
+  // THE REACHABLE CONTRACT AT THE TILL: an address the mail system can
+  // provably never deliver to (the domain does not exist or announces no
+  // mail path) is not a contact fact, it is a trap. It is stripped BEFORE
+  // anything is charged, and the sale rides on the doors that actually
+  // work (phone, grounded lookup). DNS only: free, cached, no AI quota.
+  let deadEmailStripped = false
+  if (contact.email && (await emailReach(contact.email)) === 'dead') {
+    contact.email = undefined
+    deadEmailStripped = true
+  }
+
   // No stored contact → grounded public lookup (real or nothing). Charged only on success.
   if (!contact.email && !contact.phone) {
     const lookup = await geminiGenerate(userId, {
@@ -84,7 +96,10 @@ export async function POST(req: NextRequest) {
     let via = ''
     if (lookup.ok) {
       const parsed = parseJsonLoose<{ found?: boolean; contactName?: string; email?: string; phone?: string; source?: string }>(lookup.text)
-      const email = saneEmail(parsed?.email)
+      let email = saneEmail(parsed?.email)
+      // The lookup must never sell back a dead address either: a found email
+      // that cannot receive mail does not count as found.
+      if (email && (await emailReach(email)) === 'dead') email = undefined
       const phone = sanePhone(parsed?.phone)
       if (parsed?.found && (email || phone)) {
         contact = {
@@ -126,7 +141,9 @@ export async function POST(req: NextRequest) {
     where: { id: leadId },
     data: {
       unlocked: true,
-      email: contact.email || lead.email,
+      // a provably dead address is removed from the row, not kept to trap
+      // the seller's first campaign send
+      email: contact.email || (deadEmailStripped ? null : lead.email),
       phone: contact.phone || lead.phone,
       website: contact.website || lead.website,
       contactName: contact.contactName || lead.contactName,
@@ -138,5 +155,11 @@ export async function POST(req: NextRequest) {
     wallet: result.wallet,
     spent: price,
     ...(typeof viaSource !== 'undefined' && viaSource ? { sourceNote: `Found via: ${viaSource}` } : {}),
+    ...(deadEmailStripped
+      ? {
+          notice:
+            'The email address on file was removed: its mail domain is dead, every send to it would have bounced. You were charged only for the doors that work.',
+        }
+      : {}),
   })
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { recordBounce } from '@/lib/leadfeedback'
 
 export const maxDuration = 30
 
@@ -39,12 +40,12 @@ export async function POST(req: NextRequest) {
   const to = Array.isArray(toRaw) ? toRaw[0] : toRaw
 
   const log = providerId
-    ? await db.emailLog.findFirst({ where: { providerId }, select: { id: true, toEmail: true, campaign: true } })
+    ? await db.emailLog.findFirst({ where: { providerId }, select: { id: true, toEmail: true, campaign: true, leadId: true } })
     : to
       ? await db.emailLog.findFirst({
           where: { toEmail: String(to).toLowerCase(), status: 'SENT', sentAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
           orderBy: { sentAt: 'desc' },
-          select: { id: true, toEmail: true, campaign: true },
+          select: { id: true, toEmail: true, campaign: true, leadId: true },
         })
       : null
 
@@ -60,5 +61,11 @@ export async function POST(req: NextRequest) {
     create: { email: log.toEmail, reason: type === 'email.complained' ? 'COMPLAINT' : 'BOUNCE', note: log.campaign || undefined },
   })
 
-  return NextResponse.json({ ok: true, handled: 1, email: log.toEmail })
+  // The lead quality loop hears it too: the bounced address is marked on the
+  // pipeline row (and every copy of it) and on the shared pool face, so a
+  // provably dead address never serves again and never costs a reveal.
+  // A spam complaint is not a reachability fact, only real bounces mark it.
+  const reach = type === 'email.bounced' ? await recordBounce(log.toEmail, { leadId: log.leadId }) : { leadMarked: false, poolMatched: false }
+
+  return NextResponse.json({ ok: true, handled: 1, email: log.toEmail, leadMarked: reach.leadMarked, poolMatched: reach.poolMatched })
 }

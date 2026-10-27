@@ -29,7 +29,7 @@ import {
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
   Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare,
-  Mail, MailOpen, Send, ThumbsUp, ThumbsDown, Gauge,
+  Mail, MailOpen, MailX, Send, ThumbsUp, ThumbsDown, Gauge,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -1822,6 +1822,8 @@ interface LeadQualityData {
   bad30: number
   released: number
   poolFacesJudged: number
+  bounced: number
+  reachFlagged: number
   reasons: { reason: string; count: number }[]
   bySource: { source: string; rated: number; good: number; bad: number }[]
   recent: {
@@ -1927,6 +1929,11 @@ function LeadQualityCard() {
                 <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Back in the pool</div>
                 <div className="font-display text-2xl mt-0.5">{data.released}</div>
                 <div className="text-[10px] text-muted-foreground">{data.poolFacesJudged} pool faces carry verdicts</div>
+              </div>
+              <div className="rounded-lg border bg-card p-3 md:col-span-2">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1"><MailX className="h-3 w-3 text-red-500" /> Undeliverable caught</div>
+                <div className="font-display text-2xl mt-0.5">{data.bounced}</div>
+                <div className="text-[10px] text-muted-foreground">bounced addresses auto-marked · {data.reachFlagged} pool face{data.reachFlagged === 1 ? '' : 's'} wear one, they serve without it</div>
               </div>
             </div>
 

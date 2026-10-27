@@ -25,6 +25,7 @@ import {
 } from '@/lib/leadpool'
 import { categoryWeights, userDismissedKeys } from '@/lib/leadsignal'
 import { curate, scoreLeads } from '@/lib/leadscore'
+import { deadEmailMap } from '@/lib/reach'
 import { sellerTradeKeys, TRADES } from '@/lib/taxonomy'
 
 export const maxDuration = 60
@@ -153,10 +154,9 @@ async function readSellerSite(raw: string): Promise<{ url: string; text: string 
 }
 
 /** Shared landing for AI answers: strict cleanup so no fabricated contact survives. */
-function parseLeadList(text: string, cap: number, city: string) {
+async function parseLeadList(text: string, cap: number, city: string) {
   const parsed = parseJsonLoose<{ leads?: AiLead[] }>(text)
-  const seen = new Set<string>()
-  return (parsed?.leads || [])
+  const pre = (parsed?.leads || [])
     .map((l) => ({
       company: clean(l.company),
       contactName: sanePersonName(l.contactName),
@@ -177,6 +177,13 @@ function parseLeadList(text: string, cap: number, city: string) {
     // REGION GATE: a foreign footprint never reaches an answer (the Italy lesson)
     .filter((l) => isSouthAfricanLead(l))
     .map((l) => ({ ...l, city: l.city || (city || undefined) }))
+  // REACHABILITY GATE ON THE ANSWER: an address the mail system can provably
+  // never deliver to (dead domain) never reaches the seller's screen, the
+  // save or the till. DNS only, bounded, cached — $0 and no AI quota.
+  const deadEmails = await deadEmailMap(pre.map((l) => l.email), 16)
+  const seen = new Set<string>()
+  return pre
+    .filter((l) => !l.email || !deadEmails.has(l.email.toLowerCase()))
     .filter((l) => {
       const key = l.company.toLowerCase().replace(/[^a-z0-9]/g, '')
       if (!key || seen.has(key)) return false
@@ -757,7 +764,7 @@ export async function POST(req: NextRequest) {
   }
 
   const aiSearchResponse = async (
-    leads: ReturnType<typeof parseLeadList>,
+    leads: Awaited<ReturnType<typeof parseLeadList>>,
     engine: 'gemini' | 'zai',
     notice?: string,
     zaiEndpoint?: 'z.ai' | 'zhipu'
@@ -827,14 +834,14 @@ export async function POST(req: NextRequest) {
     //    spends the seller's own credits; the platform key spends the
     //    operator's pool. Either way a grounded scan costs about two cents.
     zai = await runZaiScan()
-    let leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
+    let leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai', undefined, zai.endpoint)
 
     // 2) BACKUP, Gemini with Google Search grounding when the z.ai engine could
     //    not answer. If the z.ai cause is money or the key, say so once, gently:
     //    the user can act on that, and it explains why the scan ran on Google.
     ai = await runGeminiScan()
-    leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
+    leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) {
       return aiSearchResponse(leads, 'gemini', zaiWhy('Google') || ai.notice)
     }
@@ -843,14 +850,14 @@ export async function POST(req: NextRequest) {
     //    when its free tier is in the mood). Deadline trimmed to 22s so a second
     //    engine still gets its turn inside the 60s function budget.
     ai = await runGeminiScan()
-    let leads = ai.ok ? parseLeadList(ai.text, cap, city) : []
+    let leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
 
     // 2) SECOND, z.ai GLM with live Web Search grounding (the platform pool:
     //    a saved key would have taken the lead spot above). Google was tried
     //    first and could not answer, say so once, gently.
     zai = await runZaiScan()
-    leads = zai?.ok ? parseLeadList(zai.text, cap, city) : []
+    leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) {
       const engineNotice = !ai.ok
         ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the backup live search engine. Everything below is still real, search grounded results.'
