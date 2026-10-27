@@ -2660,3 +2660,22 @@ Work Log:
 Stage Summary:
 - GitHub == prod == 4f446ca. The deploy no longer depends on the snapshot pipeline: GIT_SSH shim works, key authorized. Standing command: GIT_SSH=/home/z/my-project/.git/hp-deploy/git_ssh_paramiko.py git push origin main (rebuild /home/z/.venv with paramiko first if the sandbox reset).
 - Learned: /api/health must be read on www. (apex 308-redirects); parse the JSON build.sha, never eyeball mixed output.
+
+---
+Task ID: 132
+Agent: Super Z (main)
+Task: Boss two-parter: (1) members going days without opening the app; (2) reveal toast screenshot at 13:06 SAST: own-key day-drain + "(Google is also rotating its models right now)" — "This is obviously affecting new users checking out the site? no?"
+
+Work Log:
+- Read the toast precisely: "Your saved Gemini key has used its free daily search allowance" = ownKey true (boss has a key under Integrations) AND the other-clause showed the platform path failing MODEL-class. Both engines down for search at that moment. Confirmed the boss's suspicion: new users have no saved key, they ride the platform key, and the platform path was also failing this request — so yes, a new user's first paid action was hitting the same wall. The free search tier is a shared ceiling: every member's scans + every reveal lookup burn it, so "stretched" becomes a midday state as members grow.
+- THE FIX (task132, commit 809f1c8): three doors in front of Google's quota, cheapest first — DOOR 1 shared lookup MEMORY (new additive model LeadLookupCache, keyed by normalised company|city|host; first member pays the search, every member after reads the verified answer at ZERO quota; rotten answers self-delete; hits counter), DOOR 2 the business's OWN WEBSITE (plain fetch of homepage + /contact + /contact-us, mailto/tel/SA-phone extraction, noise-filtered: sentry/example/.png; no AI, no quota, no model rotation; the site is already a named approved source in the grounded contract), DOOR 3 the grounded AI lookup as before (40s budget so the chain fits the 60s ceiling). Reach gate (emailReach) applies at every door; saneEmail/sanePhone everywhere; charge still happens exactly once and only when a real door comes back; the honesty contract is untouched.
+- OBSERVABILITY: PlatformConfig REVEAL_STATS per SAST day {lookups, memory, site, gemini, fail}, 30-day window, best-effort writes that can never fail a reveal. The real door mix becomes visible instead of being diagnosed from the boss's screenshots.
+- LIMITS LAW honoured: ZERO changes to DAILY_SCAN_CAP, discover caps, cooldowns, LEAD_PRICE, wallet rules. The doors REPLACE quota burn, they do not add spend.
+- QA: scripts/task132_reveal_doors_qa.mjs (committed with -f, scripts/ is gitignored) — self-contained embedded postgres in isolated .qaenv/ (gitignored, app lockfile untouched; bun blocked postinstall needed bun pm trust --all). 12/12 PASS after two fixes: (1) fallback-paths rule now only skips when the stored page IS a contact page (/about still earns /contact fallbacks); (2) test expectation hits=1 with a 100ms wait for the fire-and-forget counter. tsc clean on src. Prod verified: health sha 809f1c8 within ~90s of push.
+- WIN-BACK half answered without code: the exec win-back desk already computes the quiet list (User.lastLoginAt, WINBACK_QUIET_DAYS) — GET /api/admin/exec/winback shows who has gone quiet and the exact draft; the send still waits on the boss's explicit confirm, standing since Task 122. Told the boss where to click.
+- Note: boss's toast proves the Task 131 truth contract works — the message itself named both real causes.
+
+Stage Summary:
+- Live in prod (809f1c8): a new user's first reveal now has three chances instead of one Google-shaped chance; most reveals will never touch the AI search again once memory warms. The performance wall between new users and their first paid win is gone, limits untouched.
+- Watch next: REVEAL_STATS door mix over the next days (memory+site should dwarf gemini; fail rate should collapse). If fail still spikes, the next lever is pre-warming memory from the verified pool, not more quota.
+- Win-back: boss to open the exec desk, read the quiet list, decide on the send. WhatsApp bot remains the long-term notification answer (parked on Meta values).
