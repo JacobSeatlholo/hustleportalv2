@@ -2679,3 +2679,21 @@ Stage Summary:
 - Live in prod (809f1c8): a new user's first reveal now has three chances instead of one Google-shaped chance; most reveals will never touch the AI search again once memory warms. The performance wall between new users and their first paid win is gone, limits untouched.
 - Watch next: REVEAL_STATS door mix over the next days (memory+site should dwarf gemini; fail rate should collapse). If fail still spikes, the next lever is pre-warming memory from the verified pool, not more quota.
 - Win-back: boss to open the exec desk, read the quiet list, decide on the send. WhatsApp bot remains the long-term notification answer (parked on Meta values).
+
+---
+Task ID: 133
+Agent: Super Z (main)
+Task: Boss: "I still cannot reveal any contacts.. do a live test through my profile and see for yourself.." — reproduce, diagnose, fix.
+
+Work Log:
+- LIVE TEST (scripts/task133_reveal_live_test.mjs, ops seat ceo-roster read): boss seat found (ceo@businesshustle.co.za, wallet R21 797, lastActive 13:06 SAST today, 198 leads). Mirrored his screenshot lead "Spar · Observatory" under the ops seat both shapes: A without website → FAILED exactly like the boss: "The free AI search allowance is used up for today… refills around 09:00" (platform key drained, probed 13:45 SAST); B with website spar.co.za → SUCCESS 1.8s via Door 2 ("Found via: their own website"), R18 charged, real public contact. Pipeline code is healthy; the hole is: websiteless leads + both Gemini allowances drained = no door left (the OpenRouter $0 rung refuses grounded/search bodies BY DESIGN — anti-fabrication).
+- ROOT CAUSE of "still cannot reveal ANY": most of his web-found rows carry no website → Door 2 never fires; Door 1 empty; Door 3 = his saved key (quota-class 429 at 13:06 — suspiciously AFTER the 09:00 reset, pointing at a ZERO-limit bucket that never refills) + platform key (drained, proven). Zero-limit was misreported as "refills at 09:00" — a wall that never moves.
+- FIX (commit daabb08, LIVE verified): (1) BACKFILL — new exec route POST /api/admin/exec/lookup-memory pre-warms the shared LeadLookupCache from facts members ALREADY paid to verify: 196 businesses cached, 17 dead emails stripped at the MX door, 71 already known, existing rows never overwritten, cursor-paged idempotent; (2) STEM MEMORY — cacheGetContact falls back to the name|city stem on exact miss, so a websiteless row reads the verified answer paid under the same business's with-website identity (rot-delete now uses the row's OWN cacheKey); (3) TRUTH — friendlyError now names zero-limit buckets honestly (fresh key in fresh project) instead of promising a 09:00 refill that never comes; (4) LENS — GET /api/admin/exec/lookup-memory surfaces REVEAL_STATS (the task132 "exec lens" gap: counters existed, no reader) — today reads lookups=6 memory=0 site=1 gemini=0 fail=5, the outage's exact fingerprint.
+- PROOF ON PROD: websiteless "Spar · Observatory" mirror revealed in 0.4s, R18 once, sourceNote from the shared memory, ZERO Google quota. Anon wall verified (401/401). tsc clean. Health sha daabb08.
+- LIMITS LAW: zero changes to caps, cooldowns, price. The backfill REPLACES quota burn (reads of facts already paid for), it adds no spend and no send.
+- Money note: two R18 charges on the OPS seat during live tests (real public contacts, kept/notes explain) — boss wallet untouched, honesty contract held everywhere (charged only after a real verified answer).
+- Inactivity half (data for the parked question): 29 non-QA/internal members quiet >= 3 days; top: hayleyrm 15.8d, abigailachilles 15.7d, franck 13.0d, michaelddewet 12.9d (wallet R3 899), maxvonmarz 12.9d, slkprojects 12.8d, tyron@exposolutions 12.8d. Win-back desk list is live; send still waits on the boss's word (standing since Task 122).
+
+Stage Summary:
+- Prod daabb08: a drained-Google day no longer blocks a reveal that shares an identity with any verified answer or any business with a live website. The boss's exact lead reveals free in under half a second now. Next watch: lens memory+site share should collapse fail; if a member's saved key shows zero-limit, the toast now says the real fix.
+- Boss actions that still help: fresh Gemini key in a FRESH project (his current one may be zero-limit, never refills); platform allowance self-refills ~09:00 SAST; win-back send decision on the 29-member quiet list.
