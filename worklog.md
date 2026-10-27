@@ -2732,3 +2732,21 @@ Work Log:
 Stage Summary:
 - Prod 9cd75ae + 1dc0db7: Tasks are findable and orderable; quotes are first-class documents sharing the invoice book without polluting money truth; the pipeline shows money per stage and speaks the owner's words; the brand's socials are one click away on every page. Limits law untouched, money contract untouched, zero sends.
 - Boss deferral noted: he will test the reveal chain changes (133/134) and these four features himself — no chase needed beyond the summary.
+
+---
+Task ID: 136
+Agent: Super Z (main)
+Task: Boss: "Let me be able to slide away the menu on the left just like here on z.ai... get the full screen of whatever dashboard I'd be on if I choose so."
+
+Work Log:
+- AppShell.tsx only, additive: desktop sidebar (fixed w-60) gained a 300ms slide-away — collapsed = -translate-x-full + invisible (visibility transition keeps the slide visible while leaving, then drops it from the tab order; aria-hidden rides along). Main wrapper's md:ml-60/md:ml-0 became mutually exclusive states with a margin-left transition, so content glides to the freed space instead of jumping.
+- FULL SCREEN is real: when collapsed, main + card banner + footer escape the max-w-6xl cap (md:max-w-none) — measured 1440px content on a 1440px viewport, and the Leads kanban shows MORE pipeline columns full-width. That was the point of the feature, not just hiding pixels.
+- Toggle: PanelLeftClose/PanelLeftOpen button at the top-left of the topbar (hidden md:inline-flex — phones keep their drawer untouched), label/icon flips with state, tooltip shows "Ctrl+B". Bonus: the HUSTLEPORTAL wordmark appears in the topbar while collapsed so the brand never disappears. Ctrl/Cmd+B keyboard shortcut added (z.ai/ChatGPT muscle memory).
+- Choice persists per browser (localStorage hp_sidebar_collapsed, try/catch for private mode, hydrated post-microtask like the card banner — no hydration mismatch). Respect for reduced motion: motion-reduce:transition-none on both animated elements.
+- QA ON PROD (ops seat, agent-browser, 1440x900): expanded aside x=0/margin 240px/cap 1152px → click "Hide menu" → aside x=-240 visibility:hidden aria-hidden=true, margin 0px, mainW 1440px, saved=1; reload → still collapsed (persists); Ctrl+B → restored (margin 240px, cap 1152px, saved=0); screenshots download/qa_sidebar_collapsed.png + qa_sidebar_expanded.png + qa_leads_fullwidth.png. Mobile 390x844: toggle display:none, aside display:none, drawer opens+closes, main 390px — phones exactly as before.
+- Deploy: bf663dd pushed via the paramiko shim (carried local snapshot 29a7ece), /api/health build.sha read-back verified on www. tsc: only the documented pre-existing noise (examples/, scripts/, skills/, expenses/goals routes) — zero new errors.
+- LIMITS LAW untouched: zero API/schema/prisma changes, pure client UI. Money contract untouched. Mobile drawer, drag-to-sort menu, print law (aside already print:hidden, toggle lives in the print:hidden header) all preserved.
+
+Stage Summary:
+- Prod bf663dd: desktop users can slide the whole menu away and any dashboard takes the true full screen; one tap (or Ctrl+B) brings it back; the choice sticks. Phones unaffected.
+- Reminder owed to the boss (he said "remind me later"): his own test of the Task 133/134 reveal fixes on prod — stem-memory + backfill means his websiteless leads should now reveal in under a second; plus Task 135's four features (tasks search/sort, quotes, pipeline totals+rename, socials) are all live for his hands-on.
