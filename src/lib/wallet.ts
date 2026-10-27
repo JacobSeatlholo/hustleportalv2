@@ -19,8 +19,17 @@ export async function ensureWallet(userId: string) {
  * can never both spend the same cents), and the ledger line now commits or
  * rolls back WITH the debit — a crash mid-reveal can no longer leave money
  * spent with nothing on the books. Lock order (wallet row, then creditTx
- * insert) matches addCredits, so the two paths cannot deadlock each other. */
-export async function spendCredits(userId: string, amountCents: number, description: string) {
+ * insert) matches addCredits, so the two paths cannot deadlock each other.
+ *
+ * `type` labels the ledger line: LEAD_REVEAL (the original till) or
+ * FEATURE_SPEND (airtime metered feature actions — emails today, more
+ * tomorrow; see src/lib/spend.ts for the ONE price list). */
+export async function spendCredits(
+  userId: string,
+  amountCents: number,
+  description: string,
+  type: 'LEAD_REVEAL' | 'FEATURE_SPEND' = 'LEAD_REVEAL'
+) {
   await ensureWallet(userId)
   return db.$transaction(async (tx) => {
     const claim = await tx.wallet.updateMany({
@@ -30,7 +39,7 @@ export async function spendCredits(userId: string, amountCents: number, descript
     if (claim.count === 0) return null
     const wallet = await tx.wallet.findUnique({ where: { userId } })
     const record = await tx.creditTx.create({
-      data: { userId, type: 'LEAD_REVEAL', amount: -amountCents, description, balanceAfter: wallet?.balance ?? 0 },
+      data: { userId, type, amount: -amountCents, description, balanceAfter: wallet?.balance ?? 0 },
     })
     return { wallet, tx: record }
   })

@@ -577,7 +577,7 @@ model Wallet {
 model CreditTx {
   id           String   @id @default(cuid())
   userId       String
-  type         String // TOPUP | LEAD_REVEAL | BONUS | ADJUSTMENT
+  type         String // TOPUP | LEAD_REVEAL | FEATURE_SPEND | BONUS | ADJUSTMENT
   amount       Int // cents, negative = spend
   description  String
   balanceAfter Int

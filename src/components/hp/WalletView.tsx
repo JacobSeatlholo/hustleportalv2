@@ -7,8 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, type CreditTx, type TopUpPack } from './shared'
+import { SPEND_ACTIONS } from '@/lib/spend'
+import { LEAD_REVEAL_PRICE_CENTS } from '@/lib/plans'
 import { useHp } from './store'
-import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift } from 'lucide-react'
+import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift, Coins } from 'lucide-react'
 
 interface WalletData {
   wallet: { balance: number }
@@ -101,8 +103,25 @@ export default function WalletView() {
           </div>
         </div>
         <div className="text-xs text-sidebar-foreground/50 max-w-xs">
-          Credits reveal verified contact details (email + phone) on leads. Your own imported contacts are always free.
+          Your airtime: load once, spend it on the things that grow the business, reload when you run dry. Failed deliveries never cost a cent.
         </div>
+      </div>
+
+      {/* What your credits buy — the airtime price list, outcome-led. Prices come
+          from the ONE catalog (src/lib/spend.ts) the server also charges from. */}
+      <div className="rounded-xl border bg-card p-4">
+        <h2 className="font-medium mb-1 flex items-center gap-2"><Coins className="h-4 w-4 text-brand" /> What your credits buy</h2>
+        <p className="text-xs text-muted-foreground mb-3">Loaded once, spent only when something actually happens for your business.</p>
+        <ul className="space-y-2.5 text-sm">
+          <li className="flex gap-3">
+            <span className="font-display text-brand shrink-0 w-16">{rands(SPEND_ACTIONS.EMAIL_SEND.cents)}</span>
+            <span><span className="font-medium">Outreach email</span> — {SPEND_ACTIONS.EMAIL_SEND.outcome}</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="font-display text-brand shrink-0 w-16">{rands(LEAD_REVEAL_PRICE_CENTS)}</span>
+            <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free.</span>
+          </li>
+        </ul>
       </div>
 
       {/* Packs */}

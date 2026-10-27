@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { api, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
+import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
@@ -23,7 +23,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -44,6 +44,16 @@ interface MailStatus {
   gmailConfigured: boolean
 }
 
+/** Live airtime quote from /api/emails/status — what the next send costs RIGHT NOW. */
+interface SpendQuote {
+  action: string
+  priceCents: number
+  mode: 'ALLOWANCE' | 'AIRTIME' | 'EMPTY'
+  allowance: number
+  allowanceRemaining: number
+  balanceCents: number
+}
+
 export default function MailView() {
   const { activeProjectId, bumpRefresh, setView, session } = useHp()
   const { toast } = useToast()
@@ -57,6 +67,8 @@ export default function MailView() {
   const [videoAttach, setVideoAttach] = useState<VideoAttach | null>(null)
   const [mailStatus, setMailStatus] = useState<MailStatus | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  // Airtime: the price chip state, refreshed with every load + after every send.
+  const [spendQuote, setSpendQuote] = useState<SpendQuote | null>(null)
   // Read view: click a row in the log, read the whole email as it went out.
   const [reading, setReading] = useState<EmailLogRow | null>(null)
 
@@ -283,11 +295,12 @@ export default function MailView() {
       const [mail, leadData, status] = await Promise.all([
         api<{ emails: EmailLogRow[] }>('/api/emails'),
         api<{ leads: Lead[] }>('/api/leads'),
-        api<{ status: MailStatus }>('/api/emails/status').catch(() => null),
+        api<{ status: MailStatus; spend?: SpendQuote | null }>('/api/emails/status').catch(() => null),
       ])
       setEmails(mail.emails)
       setLeads(leadData.leads.filter((l) => l.unlocked && l.email))
       if (status?.status) setMailStatus(status.status)
+      setSpendQuote(status?.spend ?? null)
     } catch (e) {
       toast({ title: 'Could not load mail', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -333,7 +346,7 @@ export default function MailView() {
     setSending(true)
     setSendError(null)
     try {
-      const res = await api<{ email: EmailLogRow; notice?: string | null; freeRemaining?: number | null }>('/api/emails', {
+      const res = await api<{ email: EmailLogRow; notice?: string | null; freeRemaining?: number | null; bundleRemaining?: number | null; spend?: { chargedCents: number; balanceAfter: number } | null }>('/api/emails', {
         method: 'POST',
         body: JSON.stringify({
           draftId,
@@ -347,10 +360,14 @@ export default function MailView() {
       toast({
         title: 'Sent ✓',
         description:
-          res.notice ||
-          (typeof res.freeRemaining === 'number' && !paid
-            ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. Operator sends unlimited.`
-            : `${subject} → ${to}`),
+          (res.spend?.chargedCents
+            ? `${rands(res.spend.chargedCents)} airtime spent · ${rands(res.spend.balanceAfter)} left in the wallet.`
+            : res.notice) ||
+          (typeof res.bundleRemaining === 'number' && paid
+            ? `${res.bundleRemaining} included send${res.bundleRemaining === 1 ? '' : 's'} left this cycle.`
+            : typeof res.freeRemaining === 'number' && !paid
+              ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. After that, airtime keeps you sending.`
+              : `${subject} → ${to}`),
       })
       setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null)
       load()
@@ -671,10 +688,32 @@ export default function MailView() {
               />
             )}
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
-                <span>{statusText}</span>
-              </p>
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                  <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
+                  <span>{statusText}</span>
+                </p>
+                {spendQuote && (
+                  <p className="text-[11px] mt-0.5 flex items-center gap-1.5 pl-3 min-w-0">
+                    <Coins className="h-3 w-3 text-brand shrink-0" />
+                    {spendQuote.mode === 'ALLOWANCE' ? (
+                      <span className="text-muted-foreground truncate">
+                        {!paid
+                          ? `${spendQuote.allowanceRemaining} free send${spendQuote.allowanceRemaining === 1 ? '' : 's'} left, then ${rands(spendQuote.priceCents)} each`
+                          : `${spendQuote.allowanceRemaining} of ${spendQuote.allowance} included sends left this cycle`}
+                      </span>
+                    ) : spendQuote.mode === 'AIRTIME' ? (
+                      <span className="text-brand font-medium truncate">
+                        {rands(spendQuote.priceCents)} per send · {rands(spendQuote.balanceCents)} airtime left
+                      </span>
+                    ) : (
+                      <button onClick={() => setView('wallet')} className="text-amber-500 hover:underline font-medium text-left">
+                        Airtime empty — load credits to keep sending
+                      </button>
+                    )}
+                  </p>
+                )}
+              </div>
               <Button onClick={send} disabled={sending || !subject || !body}>
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Send
