@@ -2714,3 +2714,21 @@ Work Log:
 Stage Summary:
 - Prod 3068bd7: no pipeline door can bake in a guaranteed bounce or sell a dead address as an unlocked contact any more; quality per source is now a countable number on the exec lens. Watch: withDoor% on new saves should climb; verdicts should grow with the reveal-moment prompt (next lever, needs the boss's UX nod).
 - The "works ALWAYS" stack as of today: three reveal doors + 196-business shared memory + stem matching (133), reachable promise at every capture door (134), honest SCARCE instead of junk padding, and a lens that shows the truth per source.
+
+---
+Task ID: 135
+Agent: Super Z (main)
+Task: Boss batch of four: (1) Tasks search + sorting; (2) Quotes in the invoices section; (3) Business Hustle socials in the footer; (4) Pipeline per-stage totals + Notion-style stage renaming. Boss deferred his reveal test ("remind me later.. will test out the new changes").
+
+Work Log:
+- TASKS: search box (title + notes, case-insensitive) + sort control with 4 orders — Date added newest/oldest (default newest), Importance (HIGH→MEDIUM→LOW, newest tie-break), Due date (no-date sinks to the bottom). Applies to open and completed sections; search-aware empty state. Task type gained createdAt (the API always shipped it; the interface now says so).
+- QUOTES: Invoice.kind (INVOICE|QUOTE, default INVOICE, indexed — prisma db push runs in the Vercel build so prod self-migrated). Quotes get their own QT-0001 series (per user, per kind — quoting never burns invoice numbers), the same VAT math, and their own status ladder DRAFT→SENT→ACCEPTED/DECLINED with DECLINED→SENT re-send for revised quotes; PAID/OVERDUE are rejected on quotes with a truthful message. UI: "New quote" + "New invoice" buttons, in-form Invoice/Quote switcher, All documents/Invoices/Quotes filter, QUOTE badge + "valid until" wording, accept (✓)/decline (✕)/re-send row actions, print sheet renders QUOTE / Prepared for / Valid until / ACCEPTED. MONEY TRUTH: reports' invoiceStats counts only kind=INVOICE (a sent quote is paper, never outstanding cash; quote count rides alongside) and the dashboard invoices counter counts only invoices.
+- PIPELINE: every kanban column now shows its deal-value total ("R45 000 in stage") under the header, live from the board. Stage renaming Notion-style: click a column title (dotted underline + pencil on hover) → inline input, Enter/blur saves, Esc cancels, clearing resets to the platform name. Keys NEVER move (Lead.stage data + reports stay comparable) — only labels, per user, stored in UserSetting PIPELINE_STAGES (new ALLOWED_KEYS entry). Labels apply to kanban headers, stage filter, list badges and the detail-dialog stepper.
+- FOOTER: socials on BOTH footers (app AppShell + public Landing): X @hustlebusiness (x.com/hustlebusiness) and Instagram @businesshustleworldwide, lucide Twitter/Instagram icons, aria-labelled.
+- DEPLOY: 9cd75ae live (health build.sha verified), then QA script commit 1dc0db7. Sandbox had wiped .env DATABASE_URL again — local db push impossible, prod build ran the migration as designed.
+- QA: scripts/task135_features_qa.mjs on prod = 22/22 PASS — QT-0001 created, full quote ladder incl. both invalid-transition rejections (400 "Can't move a SENT quote to PAID."), invoice INV series independent, kind roundtrips through list, reports quotes=1/total excludes it, PIPELINE_STAGES PUT/GET/reset roundtrip, task rows carry createdAt, both socials present in landing HTML. All QA rows cleaned up.
+- KNOWN QUIRK (pre-existing, noted not fixed): Invoice.number is GLOBALLY unique but counters are per-user, so occasional collisions fall to the timestamp fallback (saw INV-677154 on the shared ops seat). Kind-scoped counting makes first-ever numbers cleaner (QT-0001). If the boss ever wants strict per-user sequences, the counter needs a per-user series table — left out of this batch.
+
+Stage Summary:
+- Prod 9cd75ae + 1dc0db7: Tasks are findable and orderable; quotes are first-class documents sharing the invoice book without polluting money truth; the pipeline shows money per stage and speaks the owner's words; the brand's socials are one click away on every page. Limits law untouched, money contract untouched, zero sends.
+- Boss deferral noted: he will test the reveal chain changes (133/134) and these four features himself — no chase needed beyond the summary.
