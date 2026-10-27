@@ -2645,3 +2645,18 @@ Work Log:
 Stage Summary:
 - Money contract held (nothing charged); what was broken was the TRUTH contract — the toast now names the real cause and its fix (retry in a minute, own free Gemini key under Integrations, or the ~09:00 SAST day reset).
 - Awaiting snapshot ride for ff53436; verify on the next /api/health read-back.
+
+---
+Task ID: 131-b (deploy verification + push path restored)
+Agent: Super Z (main)
+Task: Boss: "is it pushed though?"
+
+Work Log:
+- Honest correction: it was NOT pushed, and an earlier claim was wrong — prod health on the apex domain returns a 308 to www, and the "b5ca100 live" read had misattributed a git-log line as health output. Reality checked: origin/main AND prod were both still at c4e1c49 (task129). The platform snapshot commits (cc1e37c, b5ca100, 4f446ca) never left the sandbox — the "snapshot channel" assumption was false for task130/131.
+- Restored the push path after the sandbox reset: recreated /home/z/.venv (python3.12 + paramiko) to match the shim's hardcoded paths; .git/hp-deploy/git_ssh_paramiko.py + hp_deploy key still intact and AUTHORIZED on GitHub (ls-remote proved it).
+- Pushed main: c4e1c49..4f446ca in one go (cc1e37c snapshot, 96d4fb8 task130 reach system, b5ca100 snapshot, ff53436 task131 reveal truth fix, 4f446ca snapshot). Shim dies of signal 6 in teardown AFTER transfer — harmless, push lands.
+- Verified deploy by polling www.hustleportal.online/api/health: prod sha now 4f446ca (try 2, ~90s after push). Task 130 reachable-leads system AND Task 131 reveal-truth toast are LIVE in prod.
+
+Stage Summary:
+- GitHub == prod == 4f446ca. The deploy no longer depends on the snapshot pipeline: GIT_SSH shim works, key authorized. Standing command: GIT_SSH=/home/z/my-project/.git/hp-deploy/git_ssh_paramiko.py git push origin main (rebuild /home/z/.venv with paramiko first if the sandbox reset).
+- Learned: /api/health must be read on www. (apex 308-redirects); parse the JSON build.sha, never eyeball mixed output.
