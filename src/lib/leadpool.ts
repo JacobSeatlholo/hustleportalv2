@@ -960,7 +960,7 @@ export async function rememberScanResults(opts: {
   source: 'GEMINI' | 'ZAI' | 'OSM' | 'EXPLEE'
   leads: RememberLead[]
   budgetUntil?: number
-}): Promise<Map<string, VerifyStamp>> {
+}): Promise<{ stamps: Map<string, VerifyStamp>; deadEmails: Set<string> }> {
   const stamps = new Map<string, VerifyStamp>()
   // POPIA opt-outs never enter the pool: name matches and exact map ids drop
   // before a single row is written.
@@ -972,7 +972,7 @@ export async function rememberScanResults(opts: {
     .filter((l) => isSouthAfricanLead(l))
     .filter((l) => !dropKeys.has(normKey(l.company)) && !(l.externalId && dropOsm.has(l.externalId)))
     .slice(0, 30)
-  if (rows.length === 0) return stamps
+  if (rows.length === 0) return { stamps, deadEmails: new Set<string>() }
   const now = new Date()
 
   // THE REACHABLE GATE AT CAPTURE: an address the mail system can never
@@ -1000,7 +1000,7 @@ export async function rememberScanResults(opts: {
   try {
     existing = await db.leadPool.findMany({ where: { fingerprint: { in: fps } } })
   } catch {
-    return stamps // pool down: the engines' answer already went out unharmed
+    return { stamps, deadEmails: new Set(deadEmails) } // pool down: the engines' answer already went out unharmed
   }
   const byFp = new Map(existing.map((p) => [p.fingerprint, p]))
   const toCreate: RememberLead[] = []
@@ -1143,5 +1143,5 @@ export async function rememberScanResults(opts: {
       /* hit links are sugar: never fatal */
     }
   }
-  return stamps
+  return { stamps, deadEmails: new Set(deadEmails) }
 }

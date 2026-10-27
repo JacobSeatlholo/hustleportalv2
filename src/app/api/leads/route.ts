@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { resolveProject } from '@/lib/workspace'
+import { emailReach } from '@/lib/reach'
 
 // GET /api/leads?stage=&team=&q=&projectId=  → list leads (own + team)
 // projectId narrows the list to one workspace; projectId=ALL (or omitted) keeps the classic mixed view.
@@ -81,6 +82,16 @@ export async function POST(req: NextRequest) {
     })
     if (!member) return NextResponse.json({ error: 'Not a member of that team.' }, { status: 403 })
   }
+  // THE REACHABLE PROMISE AT CAPTURE, the same law the pool and the reveal obey:
+  // an address the mail system can provably never deliver to is not stored.
+  // The row still lands (phone, website, the story); only the junk fact goes.
+  // DNS only, cached, $0 — no AI quota and no noticeable latency on a save.
+  let deadEmailStripped = false
+  let cleanEmail: string | null = email || null
+  if (cleanEmail && (await emailReach(cleanEmail)) === 'dead') {
+    cleanEmail = null
+    deadEmailStripped = true
+  }
   const lead = await db.lead.create({
     data: {
       userId,
@@ -90,7 +101,7 @@ export async function POST(req: NextRequest) {
       contactName: contactName || null,
       role: (role || null) as string | null,
       profileUrl: (profileUrl || null) as string | null,
-      email: email || null,
+      email: cleanEmail,
       phone: phone || null,
       website: website || null,
       industry: industry || null,
@@ -100,10 +111,20 @@ export async function POST(req: NextRequest) {
       value: Number(value) || 0,
       notes: notes || why || null, // AI scout's "why they need you" lands as the first note
       externalId: externalId || null,
-      unlocked: Boolean(unlocked),
+      // A card unlocks only when a REAL contact door survived the reach gate:
+      // a stripped dead address never masquerades as an unlocked contact.
+      unlocked: Boolean(unlocked) && Boolean(cleanEmail || phone),
       score: score ?? null,
     },
   })
   await bumpChallenge(userId, 'add_lead')
-  return NextResponse.json({ lead })
+  return NextResponse.json({
+    lead,
+    ...(deadEmailStripped
+      ? {
+          notice:
+            'The email on this capture was removed: its mail domain is dead, every send to it would have bounced. The lead itself is saved with the doors that work.',
+        }
+      : {}),
+  })
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { resolveProject } from '@/lib/workspace'
+import { deadEmailMap } from '@/lib/reach'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -105,12 +106,27 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ ok: true, created: 0, skipped, message: 'All of these are already in their pipeline, nothing double loaded.' })
   }
 
+  // THE REACHABLE PROMISE ON THE HAND-PICKED LANE: the team's promise is the
+  // strongest one, it must be the truest. Shape-valid addresses the mail
+  // system can never deliver to are stripped before the batch lands, so a
+  // member never receives a "hand picked" lead that can only bounce.
+  const dead = await deadEmailMap(rows.map((r) => r.email), 16)
+  let deadStripped = 0
+  for (const r of rows) {
+    const e = (r.email || '').trim().toLowerCase()
+    if (e && dead.has(e)) {
+      r.email = null
+      deadStripped++
+    }
+  }
+
   const result = await db.lead.createMany({ data: rows })
   return NextResponse.json({
     ok: true,
     created: result.count,
     skipped,
+    ...(deadStripped ? { deadStripped } : {}),
     projectName: project.name,
-    message: `${result.count} lead${result.count === 1 ? '' : 's'} loaded into ${target.name}'s pipeline (${project.name}).${skipped ? ` ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped.` : ''}`,
+    message: `${result.count} lead${result.count === 1 ? '' : 's'} loaded into ${target.name}'s pipeline (${project.name}).${skipped ? ` ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped.` : ''}${deadStripped ? ` ${deadStripped} dead email${deadStripped === 1 ? '' : 's'} stripped so nothing lands that can only bounce.` : ''}`,
   })
 }

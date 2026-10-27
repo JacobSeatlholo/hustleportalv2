@@ -5,6 +5,7 @@ import { bumpChallenge } from '@/lib/gamification'
 import { resolveProject } from '@/lib/workspace'
 import { isEmail, normEmail, normCompanyKey, cleanNumber } from '@/lib/quality'
 import { normalizePhone } from '@/lib/whatsapp'
+import { deadEmailMap } from '@/lib/reach'
 
 interface CsvRow {
   [key: string]: string
@@ -117,6 +118,23 @@ export async function POST(req: NextRequest) {
   const skipped: string[] = []
   const duplicateSamples: string[] = []
   const invalidSamples: string[] = []
+  const deadSamples: string[] = []
+  type PendingLead = {
+    userId: string
+    projectId: string
+    teamId: string | null
+    company: string
+    contactName: string | null
+    email: string | null
+    phone: string | null
+    website: string | null
+    industry: string | null
+    city: string | null
+    country: string
+    notes: string | null
+    value: number
+  }
+  const pending: PendingLead[] = []
 
   for (const row of rows) {
     const company = pick(row, 'company')
@@ -162,24 +180,44 @@ export async function POST(req: NextRequest) {
     seenCompanies.add(companyKey)
 
     const value = cleanNumber(pick(row, 'value'))
+    pending.push({
+      userId,
+      projectId: project.id,
+      teamId: teamId || null,
+      company,
+      contactName: pick(row, 'contactName') || null,
+      email,
+      phone,
+      website: pick(row, 'website') || null,
+      industry: pick(row, 'industry') || null,
+      city: pick(row, 'city') || null,
+      country: pick(row, 'country') || 'South Africa',
+      notes: pick(row, 'notes') || null,
+      value,
+    })
+  }
+
+  // THE REACHABLE PROMISE ON IMPORTED DATA: the same law the pool, the deck
+  // and the single save obey. Shape-valid addresses that the mail system can
+  // provably never deliver to are stripped before a row is written, so an
+  // import can never bake in guaranteed bounces and auto-unlock them. One
+  // bounded DNS batch for the whole file — no AI quota, no per-row cost.
+  const dead = await deadEmailMap(pending.map((r) => r.email), 16)
+  let deadStripped = 0
+  for (const r of pending) {
+    const e = (r.email || '').trim().toLowerCase()
+    if (e && dead.has(e)) {
+      r.email = null
+      deadStripped++
+      if (deadSamples.length < 5) deadSamples.push(`${r.company}: ${e.slice(0, 40)}`)
+    }
     await db.lead.create({
       data: {
-        userId,
-        projectId: project.id,
-        teamId: teamId || null,
-        company,
-        contactName: pick(row, 'contactName') || null,
-        email,
-        phone,
-        website: pick(row, 'website') || null,
-        industry: pick(row, 'industry') || null,
-        city: pick(row, 'city') || null,
-        country: pick(row, 'country') || 'South Africa',
-        notes: pick(row, 'notes') || null,
-        value,
+        ...r,
         source: 'CSV',
-        // CSV leads bring their own contact data → already unlocked
-        unlocked: Boolean(email || phone),
+        // CSV leads bring their own contact data → already unlocked, but a
+        // row whose only door was a dead address lands locked and honest.
+        unlocked: Boolean(r.email || r.phone),
       },
     })
     imported++
@@ -189,9 +227,11 @@ export async function POST(req: NextRequest) {
     imported,
     duplicates,
     invalid,
+    deadStripped,
     skipped: skipped.length,
     total: rows.length,
     duplicateSamples,
     invalidSamples,
+    ...(deadSamples.length ? { deadSamples } : {}),
   })
 }

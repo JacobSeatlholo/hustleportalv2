@@ -256,6 +256,10 @@ export interface QualitySummary {
   reachFlagged: number // pool faces wearing a provably dead address
   reasons: { reason: string; count: number }[]
   bySource: { source: string; rated: number; good: number; bad: number }[]
+  // The quality floor, counted not felt: of the leads captured in the last
+  // 30 days per source, how many carry at least one real contact door, a
+  // website, a paid unlock, and how many already bounced.
+  bySource30: { source: string; saved: number; withDoor: number; withWebsite: number; unlocked: number; bounced: number }[]
   recent: {
     id: string
     company: string
@@ -322,7 +326,7 @@ export async function recordBounce(
  */
 export async function qualitySummary(): Promise<QualitySummary> {
   const d30 = new Date(Date.now() - 30 * 86_400_000)
-  const [all, recent30, releasedCount, poolJudged, bouncedCount, reachFlagged, reasonRows, sourceRows, recentRows] = await Promise.all([
+  const [all, recent30, releasedCount, poolJudged, bouncedCount, reachFlagged, reasonRows, sourceRows, recentRows, doorRows] = await Promise.all([
     db.lead.groupBy({ by: ['qualityFeedback'], where: { qualityFeedback: { not: null } }, _count: { _all: true } }),
     db.lead.groupBy({ by: ['qualityFeedback'], where: { qualityFeedback: { not: null }, feedbackAt: { gte: d30 } }, _count: { _all: true } }),
     db.lead.count({ where: { releasedAt: { not: null } } }),
@@ -340,6 +344,14 @@ export async function qualitySummary(): Promise<QualitySummary> {
         qualityFeedback: true, feedbackReason: true, feedbackNote: true, feedbackAt: true, updatedAt: true,
         user: { select: { name: true, businessName: true } },
       },
+    }),
+    // The quality floor per source over the last 30 days. Bounded read, plain
+    // aggregation: the lens answers "is the finder shipping reachable leads"
+    // with counts instead of vibes.
+    db.lead.findMany({
+      where: { createdAt: { gte: d30 } },
+      select: { source: true, email: true, phone: true, website: true, unlocked: true, emailBouncedAt: true },
+      take: 5000,
     }),
   ])
 
@@ -362,6 +374,18 @@ export async function qualitySummary(): Promise<QualitySummary> {
     srcMap.set(s, e)
   }
 
+  const doorMap = new Map<string, { saved: number; withDoor: number; withWebsite: number; unlocked: number; bounced: number }>()
+  for (const l of doorRows) {
+    const s = l.source || 'MANUAL'
+    const e = doorMap.get(s) || { saved: 0, withDoor: 0, withWebsite: 0, unlocked: 0, bounced: 0 }
+    e.saved++
+    if (l.email || l.phone) e.withDoor++
+    if (l.website) e.withWebsite++
+    if (l.unlocked) e.unlocked++
+    if (l.emailBouncedAt) e.bounced++
+    doorMap.set(s, e)
+  }
+
   return {
     rated,
     good,
@@ -380,6 +404,9 @@ export async function qualitySummary(): Promise<QualitySummary> {
     bySource: [...srcMap.entries()]
       .map(([source, v]) => ({ source, ...v }))
       .sort((a, b) => b.rated - a.rated),
+    bySource30: [...doorMap.entries()]
+      .map(([source, v]) => ({ source, ...v }))
+      .sort((a, b) => b.saved - a.saved),
     recent: recentRows.map((r) => ({
       id: r.id,
       company: r.company,

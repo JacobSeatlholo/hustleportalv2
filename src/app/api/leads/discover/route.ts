@@ -511,6 +511,20 @@ type OutLead = {
   categoryKey?: string | null
 }
 
+/**
+ * The reachable promise on the SERVED card itself: an address the mail system
+ * can never deliver to is stripped from the deck exactly as it is stripped from
+ * the pool face at capture. The card stays (phone, website, the story), the
+ * junk fact goes — a saved row can never bake in a guaranteed bounce, and the
+ * save till's unlock logic never fires on a dead address.
+ */
+function stripDeadDeck<T extends OutLead>(leads: T[], dead: Set<string>): T[] {
+  if (dead.size === 0) return leads
+  return leads.map((l) =>
+    l.email && dead.has(l.email.trim().toLowerCase()) ? { ...l, email: undefined } : l
+  )
+}
+
 /** Attach the pool's verification chips, known humans and the area mark to what the engines just found. */
 function decorateLeads<T extends OutLead>(
   leads: T[],
@@ -772,14 +786,14 @@ export async function POST(req: NextRequest) {
     // Capture + verify: what the engines found lands in the shared pool
     // (deduped, phones normalized, websites pinged while budget allows), then
     // the answer tops up with fresh pool faces the seller has never saved.
-    const stamps = await rememberScanResults({
+    const { stamps, deadEmails } = await rememberScanResults({
       topicFp,
       area: areaLabel,
       source: engine === 'zai' ? 'ZAI' : 'GEMINI',
       leads: leads as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(leads, stamps, city || undefined)
+    let final: OutLead[] = stripDeadDeck(decorateLeads(leads, stamps, city || undefined), deadEmails)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
@@ -897,14 +911,14 @@ export async function POST(req: NextRequest) {
     // shared pool (deduped, phones normalized, websites pinged while budget
     // allows), then the answer keeps its ranking order and tops up with fresh
     // pool faces never saved before.
-    const stamps = await rememberScanResults({
+    const { stamps, deadEmails } = await rememberScanResults({
       topicFp,
       area: areaLabel,
       source: 'OSM',
       leads: saLeads as unknown as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
-    let final: OutLead[] = decorateLeads(saLeads, stamps, city || undefined)
+    let final: OutLead[] = stripDeadDeck(decorateLeads(saLeads, stamps, city || undefined), deadEmails)
     const have = new Set(final.map((l) => normKey(l.company || '')))
     if (final.length < cap) {
       const topUp = await serveFromPool({ topicFp, cap: cap - final.length, excludeKeys: new Set([...excludeKeys, ...have]), city: city || undefined })
@@ -962,15 +976,20 @@ export async function POST(req: NextRequest) {
     if (saEx.length === 0) {
       await logScanRun(userId, topicFp, 'EXPLEE', 0, false)
     } else {
-      const stamps = await rememberScanResults({
+      const { stamps, deadEmails } = await rememberScanResults({
         topicFp,
         area: areaLabel,
         source: 'EXPLEE',
         leads: saEx as unknown as RememberLead[],
         budgetUntil: t0 + 54_000,
       })
-      const final = decorateLeads(saEx, stamps, city || undefined)
-      const { deck, scarcity } = buildDeck(final, definition, weights, cap, areaLabel)
+      const { deck, scarcity } = buildDeck(
+        stripDeadDeck(decorateLeads(saEx, stamps, city || undefined), deadEmails),
+        definition,
+        weights,
+        cap,
+        areaLabel
+      )
       await logScanRun(userId, topicFp, 'EXPLEE', deck.length, false)
       if (!deck.length && scarcity) {
         return NextResponse.json({ leads: [], mode: 'SCARCE', source: 'TEAM', note: scarcity })
