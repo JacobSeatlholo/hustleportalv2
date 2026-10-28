@@ -5,6 +5,7 @@ import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
+import { zaiGenerate } from '@/lib/zai'
 import { bumpChallenge } from '@/lib/gamification'
 import { emailReach } from '@/lib/reach'
 import { companyKeyFor, cacheGetContact, cachePutContact, siteContactDoor, bumpRevealStats } from '@/lib/leadlookup'
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
   // reveal — the steady wall between new users and their first paid win.
   if (!contact.email && !contact.phone) {
     const companyKey = companyKeyFor(lead.company, lead.city, lead.website)
+    const tChain = Date.now() // the whole door chain shares the 60s function ceiling
     await bumpRevealStats('lookups')
 
     // DOOR 1: memory. Same gates as everything else: sane shapes, reach check.
@@ -140,18 +142,23 @@ export async function POST(req: NextRequest) {
 
     // DOOR 3: grounded public lookup (real or nothing). 40s budget so the
     // whole chain of doors always fits inside the 60s function ceiling.
+    // purpose 'reveal' rides the dedicated reveal key first when the operator
+    // has set one, so drained free scans never starve the paid feature.
     if (!contact.email && !contact.phone) {
+    const lookupSystem =
+      'You find publicly listed contact details for businesses, grounded in live web search results. Report ONLY details that actually appear in a source you saw (official website, directory, Google Business listing, news, Facebook page). NEVER guess, NEVER construct an email from a name@domain pattern. If you cannot verify real details, say so.'
+    const lookupPrompt =
+      `Find the publicly listed contact details for the business "${lead.company}"` +
+      (lead.city ? ` in ${lead.city}` : '') +
+      (lead.website ? ` (website: ${lead.website})` : '') +
+      `, South Africa. Return ONLY JSON: {"found":true|false,"contactName":"","email":"","phone":"","source":"where you found it"}`
     const lookup = await geminiGenerate(userId, {
       search: true,
       json: true,
       timeoutMs: 40_000,
-      system:
-        'You find publicly listed contact details for businesses, grounded in live Google Search results. Report ONLY details that actually appear in a source you saw (official website, directory, Google Business listing, news, Facebook page). NEVER guess, NEVER construct an email from a name@domain pattern. If you cannot verify real details, say so.',
-      prompt:
-        `Find the publicly listed contact details for the business "${lead.company}"` +
-        (lead.city ? ` in ${lead.city}` : '') +
-        (lead.website ? ` (website: ${lead.website})` : '') +
-        `, South Africa. Return ONLY JSON: {"found":true|false,"contactName":"","email":"","phone":"","source":"where you found it"}`,
+      purpose: 'reveal',
+      system: lookupSystem,
+      prompt: lookupPrompt,
     })
     let found = false
     let via = ''
@@ -185,7 +192,51 @@ export async function POST(req: NextRequest) {
           company: lead.company,
           reason: lookup.error,
         })
+        await bumpRevealStats('engineFail')
+        // DOOR 3b: the GLM engine's own web search, a DIFFERENT index and a
+        // different quota pocket from Google's. When Google's search day is
+        // drained the paid reveal does not have to die with it. The seller's
+        // own z.ai key rides first (their credits, their control), the platform
+        // GLM pool second the day its search balance is funded. Same grounded
+        // contract, same sane + reach gates, or nothing is charged.
+        const left = 55_000 - (Date.now() - tChain)
+        if (left > 9_000) {
+          const glm = await zaiGenerate(userId, {
+            search: true,
+            json: true,
+            maxTokens: 900,
+            timeoutMs: Math.min(22_000, left),
+            system: lookupSystem,
+            prompt: lookupPrompt,
+          })
+          if (glm.ok) {
+            const parsed = parseJsonLoose<{ found?: boolean; contactName?: string; email?: string; phone?: string; source?: string }>(glm.text)
+            let gEmail = saneEmail(parsed?.email)
+            if (gEmail && (await emailReach(gEmail)) === 'dead') gEmail = undefined
+            const gPhone = sanePhone(parsed?.phone)
+            if (parsed?.found && (gEmail || gPhone)) {
+              contact = {
+                ...contact,
+                email: gEmail || contact.email,
+                phone: gPhone || contact.phone,
+                contactName: (parsed?.contactName || '').trim() || contact.contactName,
+              }
+              found = true
+              viaSource = (parsed?.source || '').trim() || 'GLM web search'
+              await bumpRevealStats('glm')
+              await cachePutContact(companyKey, {
+                email: contact.email,
+                phone: contact.phone,
+                contactName: contact.contactName,
+                source: viaSource,
+              })
+            }
+          } else {
+            console.warn('[reveal] glm fallback failed:', { leadId, company: lead.company, reason: glm.error })
+          }
+        }
       }
+      if (!found) {
       await bumpRevealStats('fail')
       const searchMessage = !lookup.ok
         ? `The live contact search could not run just now. ${lookup.error} You were NOT charged.`
@@ -196,9 +247,12 @@ export async function POST(req: NextRequest) {
         charged: false,
         message: searchMessage,
       })
+      }
     }
     // A fresh verified answer becomes everyone's memory: the next member never
-    // pays Google for this business again.
+    // pays Google for this business again. (The GLM door records itself where
+    // it succeeded; `via` is only non-empty for the Gemini find.)
+    if (via) {
     await bumpRevealStats('gemini')
     await cachePutContact(companyKey, {
       email: contact.email,
@@ -207,6 +261,7 @@ export async function POST(req: NextRequest) {
       source: via,
     })
     viaSource = via
+    }
     }
   }
 

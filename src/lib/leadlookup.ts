@@ -218,7 +218,7 @@ export async function siteContactDoor(website?: string | null): Promise<LookupCo
 
 // ---------- The exec counter: what did the doors actually do today ----------
 
-type RevealDoor = 'lookups' | 'memory' | 'site' | 'gemini' | 'fail'
+type RevealDoor = 'lookups' | 'memory' | 'site' | 'gemini' | 'glm' | 'fail' | 'engineFail'
 export const REVEAL_STATS_KEY = 'REVEAL_STATS'
 const STATS_KEY = REVEAL_STATS_KEY
 const STATS_DAYS = 30
@@ -238,12 +238,16 @@ export async function bumpRevealStats(door: RevealDoor): Promise<void> {
     for (const k of Object.keys(stats)) {
       if (k < addDays(day, -(STATS_DAYS - 1))) delete stats[k]
     }
-    const today = stats[day] || { lookups: 0, memory: 0, site: 0, gemini: 0, fail: 0 }
+    const today = stats[day] || { lookups: 0, memory: 0, site: 0, gemini: 0, glm: 0, fail: 0, engineFail: 0 }
     today.lookups += door === 'lookups' ? 1 : 0
     today.memory += door === 'memory' ? 1 : 0
     today.site += door === 'site' ? 1 : 0
     today.gemini += door === 'gemini' ? 1 : 0
     today.fail += door === 'fail' ? 1 : 0
+    // New doors on days first touched before they existed: guard the zero so
+    // yesterday's rows never read NaN when today's door fires on them.
+    today.glm = (today.glm || 0) + (door === 'glm' ? 1 : 0)
+    today.engineFail = (today.engineFail || 0) + (door === 'engineFail' ? 1 : 0)
     stats[day] = today
     await db.platformConfig.upsert({
       where: { key: STATS_KEY },

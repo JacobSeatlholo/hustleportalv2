@@ -213,7 +213,7 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
       // Google names the drained bucket in the 429 body: a PER MINUTE wall
       // recovers in about a minute, everything else (a per DAY drain or a bare
       // project level wall) waits for the daily reset at midnight Pacific,
-      // around 09:00 South African time. Saying "try again in a minute" to a
+      // early morning South African time. Saying "try again in a minute" to a
       // drained day sent the seller retrying against a wall for hours.
       if (/PerMinute/i.test(detail)) {
         return own
@@ -229,8 +229,8 @@ function friendlyError(cls: ErrorClass, status: number, detail: string, ownKey: 
           : 'The platform AI project currently has no free search tier for this model. A fresh project key is needed. You can add your own free Gemini key under Integrations to go live instantly.'
       }
       return own
-        ? 'Your saved Gemini key has used its free daily search allowance for today. Google refills it around 09:00 South African time. Need more now? A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
-        : 'The free AI search allowance is used up for today. It refills around 09:00 South African time. Two faster options: add your own free Gemini key under Integrations for an instant fresh allowance, or try again after the reset.'
+        ? 'Your saved Gemini key has used its free daily search allowance for today. Google refills it in the early morning, South African time. Need more now? A brand new key in a brand new project at aistudio.google.com/apikey starts a fresh allowance right away.'
+        : 'The free AI search allowance is used up for now. It refills in the early morning, South African time. Two faster options: add your own free Gemini key under Integrations for an instant fresh allowance, or try again after the reset.'
     case 'MODEL':
       // A retired model is NEVER the user's key's fault, no "YOUR key" suffix here.
       return 'Google is rotating its AI models right now and our fallbacks were momentarily unavailable. HustlePortal updates its model list automatically. Please try again in a minute.'
@@ -349,20 +349,30 @@ async function resolveModels(key: string): Promise<string[]> {
 }
 
 /**
- * One hardened request: walks (user key → platform key) × (discovered model chain),
- * retries only on HTTP-status failures, returns the most actionable error.
+ * One hardened request: walks (user key → reveal key? → platform key) × (discovered
+ * model chain), retries only on HTTP-status failures, returns the most actionable
+ * error.
+ *
+ * revealKey: a DEDICATED platform-side key (env GEMINI_API_KEY_REVEAL, ideally its
+ * own Google project) that rides in front of the shared platform key. The paid
+ * reveal must not die with the free scans that share the platform project's
+ * search bucket: scans can drain the shared pool to zero by mid morning while
+ * the reveal pool still has its full day. Absent env, the chain is exactly as
+ * before — this is purely additive capacity.
  */
 async function callGemini(
   userId: string,
   body: Record<string, unknown>,
   timeoutMs: number,
   speed = false,
-  trace?: string[]
+  trace?: string[],
+  revealKey?: string
 ): Promise<GeminiResult> {
   const keys: { key: string; ownKey: boolean }[] = []
   const userKey = await getUserGeminiKey(userId)
   if (userKey) keys.push({ key: userKey, ownKey: true })
   const platformKey = getPlatformGeminiKey()
+  if (revealKey && revealKey !== userKey && revealKey !== platformKey) keys.push({ key: revealKey, ownKey: false })
   if (platformKey && platformKey !== userKey) keys.push({ key: platformKey, ownKey: false })
   if (keys.length === 0) {
     // No Gemini key anywhere does NOT mean no AI: the $0 backup rung may still
@@ -526,7 +536,7 @@ async function callGemini(
     if (or && or.ok) {
       const notice = userKeyFailure
         ? `Heads up: your own Gemini key was ${userKeyFailure.cls === 'PERMISSION' ? 'blocked by Google' : userKeyFailure.cls === 'KEY_INVALID' ? 'rejected as invalid' : 'rate limited'}. This answer came from the free backup engine, so nothing stopped.`
-        : 'Heads up: the daily AI allowance was out, so the free backup engine answered this one. It refills around 09:00 South African time.'
+        : 'Heads up: the daily AI allowance was out, so the free backup engine answered this one. It refills in the early morning, South African time.'
       return { ok: true, text: or.text, notice }
     }
   }
@@ -536,7 +546,7 @@ async function callGemini(
 
 export async function geminiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number; maxOutputTokens?: number; trace?: string[] },
+  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; history?: GeminiHistoryTurn[]; timeoutMs?: number; maxOutputTokens?: number; trace?: string[]; purpose?: 'reveal' },
 ): Promise<GeminiResult> {
   const history = (opts.history || []).slice(-10).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
@@ -558,7 +568,11 @@ export async function geminiGenerate(
     // Real-world grounding: Google Search results the model actually saw (real businesses).
     ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
   }
-  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000), Boolean(opts.search), opts.trace)
+  // The paid reveal rides the dedicated key first (its own Google project's
+  // search bucket), so drained free scans never starve the feature members
+  // actually pay for. Every other surface walks the classic chain.
+  const revealKey = opts.purpose === 'reveal' ? process.env.GEMINI_API_KEY_REVEAL?.trim() || undefined : undefined
+  return callGemini(userId, body, opts.timeoutMs ?? (opts.search ? 55_000 : 30_000), Boolean(opts.search), opts.trace, revealKey)
 }
 
 /**

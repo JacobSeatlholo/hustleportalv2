@@ -28,6 +28,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { planState } from '@/lib/limits'
 import { suppressedNameKeys, suppressedOsmIds } from '@/lib/suppression'
+import { companyKeyFor, cachePutContact } from '@/lib/leadlookup'
 import { deadEmailMap } from '@/lib/reach'
 import type { LeadPool as LeadPoolRow } from '@prisma/client'
 
@@ -1143,5 +1144,40 @@ export async function rememberScanResults(opts: {
       /* hit links are sugar: never fatal */
     }
   }
+
+  // THE MEMORY PRE-WARM, the free ride: contact facts this scan just verified
+  // enter the shared lookup memory, so the FIRST member who reveals any of
+  // these businesses opens Door 1 — no search engine touched, no wait, no
+  // extra charge. Fire and forget: the scan's answer never waits on it, and
+  // the reveal's read-time gates (sane shapes, mail reach) still apply.
+  void (async () => {
+    for (const l of rows) {
+      const email = reachOk(l) ? saneEmailLoose(l.email) : undefined
+      const phone = sanePhoneLoose(normalizeSaPhone(l.phone).e164 || l.phone || undefined)
+      if (!email && !phone) continue
+      await cachePutContact(companyKeyFor(l.company, l.city || opts.area, l.website), {
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+        ...(l.contactName ? { contactName: l.contactName } : {}),
+        source: `verified pool (${opts.source} scan)`,
+      })
+    }
+  })().catch(() => {})
+
   return { stamps, deadEmails: new Set(deadEmails) }
+}
+
+/** Shape gates for the memory pre-warm: junk never enters the shared answer book. */
+function saneEmailLoose(v?: string | null): string | undefined {
+  const s = (v || '').trim()
+  if (!s || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return undefined
+  if (/example\.(com|org|net)|your(email)?\.|domain\.com/i.test(s)) return undefined
+  return s
+}
+
+function sanePhoneLoose(v?: string | null): string | undefined {
+  const s = (v || '').trim()
+  if (!s) return undefined
+  if (s.replace(/\D/g, '').length < 9) return undefined
+  return s
 }
