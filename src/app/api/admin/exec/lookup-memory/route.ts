@@ -74,11 +74,13 @@ export async function GET(req: NextRequest) {
   }
 
   const day = aiDay()
-  const [row, cacheRows, aiSum, aiUsers] = await Promise.all([
+  const sastStart = new Date(`${day}T00:00:00+02:00`)
+  const [row, cacheRows, aiSum, aiUsers, scansToday] = await Promise.all([
     db.platformConfig.findUnique({ where: { key: REVEAL_STATS_KEY } }),
     db.leadLookupCache.count(),
     db.aiUsage.aggregate({ where: { day }, _sum: { count: true } }),
     db.aiUsage.count({ where: { day } }),
+    db.scanRun.count({ where: { createdAt: { gte: sastStart } } }),
   ])
   let days: Record<string, Record<string, number>> = {}
   if (row?.value) {
@@ -88,7 +90,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     cacheRows,
     days,
-    aiToday: { total: aiSum._sum.count || 0, users: aiUsers, day },
+    aiToday: { total: aiSum._sum.count || 0, users: aiUsers, scans: scansToday, day },
   })
 }
 
