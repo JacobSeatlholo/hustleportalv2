@@ -237,7 +237,10 @@ export async function POST(req: NextRequest) {
         }
       }
       if (!found) {
-      await bumpRevealStats('fail')
+      // Only a TRUTHFUL not-found counts as 'fail': an engine failure already
+      // counted itself as engineFail above, and one event must never sit in
+      // two buckets on the operator's lens.
+      if (lookup.ok) await bumpRevealStats('fail')
       const searchMessage = !lookup.ok
         ? `The live contact search could not run just now. ${lookup.error} You were NOT charged.`
         : `No verified public contact found for ${lead.company}, you were NOT charged.` +
