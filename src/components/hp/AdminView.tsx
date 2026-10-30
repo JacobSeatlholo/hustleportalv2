@@ -88,9 +88,38 @@ interface RosterRow {
   lastActiveAt: string | null
 }
 
+interface TregLead {
+  company: string
+  city: string | null
+  industry: string | null
+  email: string
+  phone: string | null
+  emailState: 'verified' | 'catch_all'
+  verifyScore: number
+  why: string | null
+  served: number
+}
+
+/** The mailbox gate block from GET /api/admin/exec — gate state, team balance,
+ * pool coverage and the answered leads themselves with their labels. */
+interface TregBlock {
+  enabled: boolean
+  tokenSource: string | null
+  balanceUsd: number | null
+  pool: { withEmail: number; verified: number; catchAll: number; dead: number; pending: number }
+  leads?: { verified: number; catchAll: number; sample: TregLead[] }
+  store?: { valid: number; invalid: number; catchAll: number; entries: number; spendUsd: number }
+  ledger?: { total: number; paidCalls: number; spendUsd: number; lastAt: number | null }
+  stats?: {
+    today: { verify: number; verifyDead: number; costUsd: number }
+    days30: { verify: number; verifyDead: number; costUsd: number }
+  }
+}
+
 interface ExecData {
   kpis: Kpis
   roster: RosterRow[]
+  treg?: TregBlock
   meetings?: MeetingRow[]
   meetingsKpi?: { total: number; confirmed: number; awaiting: number; declined: number }
   payments?: {
@@ -1606,6 +1635,84 @@ interface PoolBrowseRow {
   confirmCount: number
   served: number
   seenAt?: string
+  emailOk?: boolean | null
+  emailCatchAll?: boolean
+  emailState?: 'dead' | 'verified' | 'catch_all' | 'unverified' | 'none'
+}
+
+/** The mailbox gate's word on one address, as a badge the owner reads at a glance:
+ * live mailboxes green, catch-alls honestly amber, unchecked muted, dead red. */
+function MailboxBadge({ state }: { state?: string | null }) {
+  if (!state) return null
+  const map: Record<string, { label: string; cls: string }> = {
+    verified: { label: 'Mailbox live', cls: 'border-emerald-500/40 text-emerald-400' },
+    catch_all: { label: 'Reachable, unverified', cls: 'border-amber-500/40 text-amber-400' },
+    unverified: { label: 'Unchecked', cls: 'border-border text-muted-foreground' },
+    dead: { label: 'Dead', cls: 'border-red-500/40 text-red-400' },
+    none: { label: 'No email', cls: 'border-border text-muted-foreground' },
+  }
+  const m = map[state] || map.unverified
+  return <Badge variant="outline" className={`text-[9px] shrink-0 ${m.cls}`}>{m.label}</Badge>
+}
+
+/** The mailbox gate, on the owner's screen: is it lit, what is the balance, how
+ * much of the pool wears proved truth — and the leads themselves, each with its
+ * label and the relevance line that says why it fits a member. Fed from the
+ * same exec feed the rest of this dashboard reads; no extra request. */
+function MailboxGateCard({ treg }: { treg: TregBlock | null }) {
+  if (!treg) return null
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-brand" /> Mailbox gate
+          <Badge variant="outline" className={`text-[9px] ${treg.enabled ? 'border-emerald-500/40 text-emerald-400' : 'border-red-500/40 text-red-400'}`}>
+            {treg.enabled ? 'ON' : 'OFF'}
+          </Badge>
+          <span className="ml-auto text-xs text-muted-foreground font-normal">
+            balance {treg.balanceUsd === null || treg.balanceUsd === undefined ? '—' : `$${treg.balanceUsd.toFixed(2)}`}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {[
+            { n: treg.pool.verified, l: 'verified', cls: 'text-emerald-400' },
+            { n: treg.pool.catchAll, l: 'catch-all', cls: 'text-amber-400' },
+            { n: treg.pool.pending, l: 'pending', cls: 'text-foreground' },
+            { n: treg.pool.dead, l: 'dead', cls: 'text-red-400' },
+          ].map((s) => (
+            <div key={s.l} className="rounded-lg border py-2">
+              <div className={`text-lg font-semibold ${s.cls}`}>{s.n}</div>
+              <div className="text-[10px] text-muted-foreground">{s.l}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Every email we sell is proved live before credits move — about R0.03 a proof, paid once per address platform-wide.
+          Catch-all means reachable but unverified, and the member is told so.
+          {treg.ledger ? ` Spent $${treg.ledger.spendUsd} across ${treg.ledger.paidCalls} paid calls.` : ''}
+        </p>
+        {(treg.leads?.sample ?? []).length > 0 && (
+          <div className="rounded-lg border divide-y max-h-72 overflow-y-auto hp-scroll">
+            {treg.leads!.sample.map((l) => (
+              <div key={`${l.company}-${l.email}`} className="px-3 py-2 text-xs space-y-0.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium truncate">{l.company}</span>
+                  <MailboxBadge state={l.emailState} />
+                  <span className="ml-auto text-[10px] text-muted-foreground shrink-0">{l.served > 0 ? `served ${l.served}×` : 'fresh'}</span>
+                </div>
+                <div className="text-muted-foreground truncate">
+                  {[l.city, l.industry, l.email].filter(Boolean).join(' · ')}
+                </div>
+                {l.why && <div className="text-[10px] text-muted-foreground/80 italic line-clamp-2">&ldquo;{l.why}&rdquo;</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
@@ -1776,6 +1883,7 @@ function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
                 </div>
                 {r.why && <div className="text-[10px] text-muted-foreground/80 truncate italic">&ldquo;{r.why}&rdquo;</div>}
               </div>
+              <MailboxBadge state={r.emailState} />
               <Badge variant="outline" className="text-[9px] shrink-0 border-emerald-500/40 text-emerald-400">
                 {r.verifyScore >= 80 ? 'Website live' : r.confirmCount >= 2 ? 'Confirmed' : 'Verified'}
               </Badge>
@@ -2170,6 +2278,9 @@ export default function AdminView() {
 
       {/* Hot leads: live replies from the Explee campaigns */}
       <HotLeadsCard />
+
+      {/* Mailbox gate: proved-live coverage + the labelled leads themselves */}
+      <MailboxGateCard treg={exec?.treg ?? null} />
 
       {/* Lead quality: the members' own verdicts on the leads we ship them */}
       <LeadQualityCard />
