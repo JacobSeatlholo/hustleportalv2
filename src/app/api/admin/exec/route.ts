@@ -227,6 +227,9 @@ export async function GET() {
       tokenSource: tregSnap.tokenSource,
       balanceUsd: tregSnap.balanceMicro === null ? null : tregUsd(tregSnap.balanceMicro),
       pool: tregSnap.pool,
+      // The answered leads themselves, best first: the owner sees the actual
+      // contacts wearing each label (verified / catch_all), not just counts.
+      leads: tregSnap.leads,
       store: { ...tregSnap.store, spendUsd: tregUsd(tregSnap.store.spendMicro) },
       ledger: {
         total: tregSnap.ledger.total,

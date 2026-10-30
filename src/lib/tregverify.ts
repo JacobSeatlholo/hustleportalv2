@@ -353,6 +353,18 @@ function sastDay(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date())
 }
 
+/** One pool row the gate has answered, shaped for the owner's eyes. */
+export interface TregPoolLead {
+  company: string
+  city: string | null
+  industry: string | null
+  email: string
+  phone: string | null
+  /** verified = mailbox proved live; catch_all = reachable, unverified. */
+  emailState: 'verified' | 'catch_all'
+  verifyScore: number
+}
+
 export interface TregExecSnapshot {
   enabled: boolean
   /** Where the token came from — 'env' when the deployment carries it. */
@@ -372,6 +384,10 @@ export interface TregExecSnapshot {
     /** withEmail rows the gate has not answered yet. */
     pending: number
   }
+  /** The answered leads themselves — the owner sees WHO wears each label, not
+   * just how many. Verified rows first, then catch-all, strongest score first,
+   * capped so the dashboard feed stays light. */
+  leads: { verified: number; catchAll: number; sample: TregPoolLead[] }
   /** The durable verdict store (TREG_EMAIL_VERDICTS): what the platform remembers and what that memory cost. */
   store: { valid: number; invalid: number; catchAll: number; entries: number; spendMicro: number }
   /** The call-id ledger: real provider calls, real charges. */
@@ -403,6 +419,7 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
     tokenSource: tregEnabled ? 'env' : null,
     balanceMicro: null,
     pool: { withEmail: 0, verified: 0, catchAll: 0, dead: 0, pending: 0 },
+    leads: { verified: 0, catchAll: 0, sample: [] },
     store: { valid: 0, invalid: 0, catchAll: 0, entries: 0, spendMicro: 0 },
     ledger: { total: 0, paidCalls: 0, spendMicro: 0, lastAt: null, recent: [], via: {} },
     stats: { today: { verify: 0, verifyDead: 0, costMicro: 0 }, days30: { verify: 0, verifyDead: 0, costMicro: 0 } },
@@ -420,8 +437,13 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
         const { db } = await import('@/lib/db')
         const rows = await db.leadPool.findMany({
           where: { active: true },
-          select: { email: true, emailDeadAt: true, verifyChecks: true },
+          select: {
+            company: true, city: true, industry: true, email: true, phone: true,
+            verifyScore: true, emailDeadAt: true, verifyChecks: true,
+          },
         })
+        const verifiedLeads: TregPoolLead[] = []
+        const catchAllLeads: TregPoolLead[] = []
         for (const r of rows) {
           if (r.emailDeadAt) {
             snap.pool.dead++
@@ -436,10 +458,25 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
             ok = v.emailOk === true
             catchAll = v.emailCatchAll === true
           } catch {}
-          if (ok) snap.pool.verified++
-          else if (catchAll) snap.pool.catchAll++
-          else snap.pool.pending++
+          if (ok) {
+            snap.pool.verified++
+            verifiedLeads.push({
+              company: r.company, city: r.city, industry: r.industry, email: r.email,
+              phone: r.phone, emailState: 'verified', verifyScore: r.verifyScore,
+            })
+          } else if (catchAll) {
+            snap.pool.catchAll++
+            catchAllLeads.push({
+              company: r.company, city: r.city, industry: r.industry, email: r.email,
+              phone: r.phone, emailState: 'catch_all', verifyScore: r.verifyScore,
+            })
+          } else snap.pool.pending++
         }
+        snap.leads.verified = verifiedLeads.length
+        snap.leads.catchAll = catchAllLeads.length
+        snap.leads.sample = [...verifiedLeads, ...catchAllLeads]
+          .sort((a, b) => b.verifyScore - a.verifyScore)
+          .slice(0, 15)
       } catch {}
     })(),
     // The durable verdict store + the call ledger share PlatformConfig.
