@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { getYocoKeyMode, getYocoWebhookSecret } from '@/lib/yoco'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
 import { isProbeEmail, isInternalEmail } from '@/lib/probe'
+import { tregExecSnapshot } from '@/lib/tregverify'
 
 // GET /api/admin/exec, the Executive Dashboard feed: platform KPIs + the full
 // client roster (plan, account status, wallet, activity). Exec only.
@@ -180,6 +181,14 @@ export async function GET() {
   const qaAccounts = rosterRows.filter((u) => isProbeEmail(u.email)).length
   const internalAccounts = rosterRows.filter((u) => !isProbeEmail(u.email) && (isInternalEmail(u.email) || isExecEmail(u.email))).length
 
+  // The mailbox gate (Door 3c): the treg verdict engine that stands at the
+  // till and in the pool. The owner sees it right beside the revenue it
+  // protects — is it lit, the team balance, the pool's verified coverage,
+  // and what the gate has spent. Ledger detail lives on its own lens
+  // (GET /api/admin/exec/pool/verify); the dashboard carries the summary.
+  const tregSnap = await tregExecSnapshot({ ledgerTake: 0 })
+  const tregUsd = (micro: number) => Number((micro / 1e6).toFixed(4))
+
   return NextResponse.json({
     kpis: {
       members: userCount,
@@ -210,6 +219,26 @@ export async function GET() {
     meetings: meetingRows,
     meetingsKpi,
     roster,
+    // The mailbox gate: every email we sell is proved live (or honestly
+    // unverified) before credits move. Its spend rides here so the gate's
+    // R0.03s stay visible next to the R15s they protect.
+    treg: {
+      enabled: tregSnap.enabled,
+      tokenSource: tregSnap.tokenSource,
+      balanceUsd: tregSnap.balanceMicro === null ? null : tregUsd(tregSnap.balanceMicro),
+      pool: tregSnap.pool,
+      store: { ...tregSnap.store, spendUsd: tregUsd(tregSnap.store.spendMicro) },
+      ledger: {
+        total: tregSnap.ledger.total,
+        paidCalls: tregSnap.ledger.paidCalls,
+        spendUsd: tregUsd(tregSnap.ledger.spendMicro),
+        lastAt: tregSnap.ledger.lastAt,
+      },
+      stats: {
+        today: { ...tregSnap.stats.today, costUsd: tregUsd(tregSnap.stats.today.costMicro) },
+        days30: { ...tregSnap.stats.days30, costUsd: tregUsd(tregSnap.stats.days30.costMicro) },
+      },
+    },
     // Payments: gateway mode + webhook state + the money pulse. The owner sees
     // at a glance that real rands flow and that Yoco confirmations land.
     payments: {

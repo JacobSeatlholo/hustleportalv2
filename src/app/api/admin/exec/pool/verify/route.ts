@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
-import { tregVerifyEmail, tregBalanceMicro, tregEnabled } from '@/lib/tregverify'
+import { tregVerifyEmail, tregBalanceMicro, tregEnabled, tregExecSnapshot } from '@/lib/tregverify'
 import { scoreFor, parseChecksSource } from '@/lib/leadpool'
 import { bumpRevealStats } from '@/lib/leadlookup'
 
@@ -39,6 +39,49 @@ function saneEmail(v?: string | null): string | undefined {
   if (!s || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return undefined
   if (/example\.(com|org|net)|your(email)?\.|domain\.com/i.test(s)) return undefined
   return s
+}
+
+const usd = (micro: number) => Number((micro / 1e6).toFixed(4))
+
+/**
+ * GET /api/admin/exec/pool/verify — the mailbox gate's lens on the exec
+ * dashboard. One read of the whole truth: is the gate lit (token present),
+ * what the team balance stands at, how much of the active pool wears proved
+ * mailbox truth (verified / catch-all / pending / proved-dead), what the
+ * verdict store remembers, the last real provider receipts with their call
+ * ids and charges, and the REVEAL_STATS gate doors. Everything best-effort;
+ * a dead part reads zero, never a broken dashboard.
+ */
+export async function GET() {
+  const gate = await requireExec()
+  if (!gate.ok) return gate.res
+
+  const snap = await tregExecSnapshot({ ledgerTake: 25 })
+
+  return NextResponse.json({
+    ok: true,
+    treg: {
+      enabled: snap.enabled,
+      tokenSource: snap.tokenSource,
+      balanceUsd: snap.balanceMicro === null ? null : usd(snap.balanceMicro),
+      ...(snap.enabled
+        ? {}
+        : {
+            fix: 'TREG_TOKEN is not set on this deployment. Add it in Vercel (Settings → Environment Variables, name TREG_TOKEN, the treg team token) and redeploy — the gate stays a no-op until then.',
+          }),
+    },
+    pool: snap.pool,
+    store: { ...snap.store, spendUsd: usd(snap.store.spendMicro) },
+    ledger: { ...snap.ledger, spendUsd: usd(snap.ledger.spendMicro) },
+    stats: {
+      today: { ...snap.stats.today, costUsd: usd(snap.stats.today.costMicro) },
+      days30: { ...snap.stats.days30, costUsd: usd(snap.stats.days30.costMicro) },
+    },
+    sweep: {
+      floorUsd: 0.05,
+      how: 'POST here with { "take": 25 } (and "cursor" from the previous run) until nextCursor comes back null. Cached verdicts re-sweep free.',
+    },
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -90,7 +133,7 @@ export async function POST(req: NextRequest) {
       skipped++
       continue
     }
-    const result = await tregVerifyEmail(email, { timeoutMs: 15_000 })
+    const result = await tregVerifyEmail(email, { timeoutMs: 15_000, via: 'sweep' })
     costMicro += result.costMicro
     if (result.cached) skipped++
 
@@ -121,10 +164,17 @@ export async function POST(req: NextRequest) {
     } else if (result.verdict === 'catch_all') {
       catchAll++
       // The domain accepts anything, so this verdict proves nothing either
-      // way: record it, raise nothing, kill nothing.
+      // way: record it, kill nothing — but it DOES strip a stale verified
+      // bonus. A catch-all answer is not a proof of life, so a row that a
+      // previous sweep proved live loses the mailbox bonus until a provider
+      // proves the mailbox itself again. Reachable, unverified — never the
+      // verified badge.
       await db.leadPool.update({
         where: { id: row.id },
-        data: { verifyChecks: JSON.stringify({ ...checks, emailCatchAll: true }) },
+        data: {
+          verifyChecks: JSON.stringify({ ...checks, emailOk: false, emailCatchAll: true }),
+          verifyScore: scoreFor({ ...prev, emailOk: false }, row.confirmCount, Boolean(row.website)),
+        },
       })
     } else {
       // unknown: a non-answer. Never punished, never stored as fact.
@@ -136,7 +186,7 @@ export async function POST(req: NextRequest) {
     if (!result.cached) await new Promise((r) => setTimeout(r, PACING_MS))
   }
 
-  const balanceAfter = (await tregBalanceMicro()) ?? balanceBefore
+  const balanceAfter = (await tregBalanceMicro({ fresh: true })) ?? balanceBefore
   const nextCursor = rows.length === take ? rows[rows.length - 1].id : null
 
   return NextResponse.json({

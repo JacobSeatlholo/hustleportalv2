@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const q = clean(url.searchParams.get('q')).toLowerCase()
   const tag = clean(url.searchParams.get('tag'))
+  // state=verified | catchall | unverified | dead — the mailbox gate's verdict
+  // per row, so the owner can hand-pick proven-live contacts first.
+  const state = clean(url.searchParams.get('state')).toLowerCase()
   const take = Math.min(Math.max(Number(url.searchParams.get('take')) || 60, 1), 120)
 
   const where = {
@@ -47,16 +50,45 @@ export async function GET(req: NextRequest) {
         id: true, company: true, contactName: true, role: true, email: true, phone: true,
         website: true, city: true, industry: true, poolTag: true, why: true,
         verifyScore: true, confirmCount: true, verifyChecks: true, timesServed: true, lastSeenAt: true,
+        emailDeadAt: true,
       },
     }),
     db.leadPool.groupBy({ by: ['poolTag'], where: { active: true, verifyState: { not: 'stale' } }, _count: { _all: true } }),
     db.leadPool.count({ where: { active: true, verifyState: { not: 'stale' } } }),
   ])
 
+  // The mailbox gate's verdict, parsed once per row: dead beats verified beats
+  // catch-all beats unverified beats none — the same honesty ladder the
+  // sweeper writes and the reveal till enforces.
+  const withMail = rows.map((r) => {
+    let emailOk: boolean | undefined
+    let emailCatchAll: boolean | undefined
+    try {
+      const v = r.verifyChecks ? (JSON.parse(r.verifyChecks) as Record<string, unknown>) : {}
+      emailOk = v.emailOk === true ? true : v.emailOk === false ? false : undefined
+      emailCatchAll = v.emailCatchAll === true ? true : undefined
+    } catch {}
+    const emailState: 'dead' | 'verified' | 'catch_all' | 'unverified' | 'none' = r.emailDeadAt
+      ? 'dead'
+      : !r.email
+        ? 'none'
+        : emailOk
+          ? 'verified'
+          : emailCatchAll
+            ? 'catch_all'
+            : 'unverified'
+    return { r, emailOk, emailCatchAll, emailState }
+  })
+
   // The search runs in memory over the head rows: the pool is thousands, not
   // millions, and the owner searches by name, city, industry or contact.
-  const filtered = rows
-    .filter((r) => {
+  const filtered = withMail
+    .filter((m) => {
+      const r = m.r
+      if (state === 'verified' && m.emailState !== 'verified') return false
+      if (state === 'catchall' && m.emailState !== 'catch_all') return false
+      if (state === 'unverified' && m.emailState !== 'unverified') return false
+      if (state === 'dead' && m.emailState !== 'dead') return false
       if (!q) return true
       return [r.company, r.city, r.industry, r.contactName, r.email, r.poolTag]
         .some((f) => (f || '').toLowerCase().includes(q))
@@ -67,7 +99,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     total: activeTotal,
     facets: facets.map((f) => ({ tag: f.poolTag || '', count: f._count._all })),
-    rows: filtered.map((r) => ({
+    rows: filtered.map(({ r, emailOk, emailCatchAll, emailState }) => ({
       id: r.id,
       company: r.company,
       ...(r.contactName ? { contactName: r.contactName } : {}),
@@ -83,6 +115,10 @@ export async function GET(req: NextRequest) {
       confirmCount: r.confirmCount,
       served: r.timesServed,
       seenAt: r.lastSeenAt,
+      // The mailbox gate's word on this address, per row.
+      emailOk: typeof emailOk === 'boolean' ? emailOk : null,
+      emailCatchAll: Boolean(emailCatchAll),
+      emailState,
     })),
   })
 }

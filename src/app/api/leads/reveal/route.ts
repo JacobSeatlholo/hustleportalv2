@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
   // and which memory row (if any) fed this reveal — the gate may prove THAT
   // row's answer dead too, and a memory row must never outlive its proof.
   let verifyStripped = false
+  // DOOR 3C bookkeeping, honesty tier: a catch-all answer keeps the email but
+  // never claims the mailbox was confirmed — the member is told exactly that.
+  let catchAllEmail = false
   let memoryCacheKey: string | undefined
   const tReveal = Date.now() // the whole chain, doors + gate, shares the 60s ceiling
 
@@ -94,7 +97,7 @@ export async function POST(req: NextRequest) {
   // it is PROVED dead — strips it here, so the doors below go hunting for a
   // real contact instead of the till selling a guaranteed bounce.
   else if (contact.email) {
-    const stored = await tregVerifyEmail(contact.email, { timeoutMs: 8_000 })
+    const stored = await tregVerifyEmail(contact.email, { timeoutMs: 8_000, via: 'reveal' })
     await bumpRevealStats(stored.verdict === 'invalid' ? 'verifyDead' : 'verify', stored.costMicro)
     if (stored.verdict === 'invalid') {
       contact.email = undefined
@@ -299,11 +302,13 @@ export async function POST(req: NextRequest) {
   if (contact.email) {
     const left = 58_000 - (Date.now() - tReveal)
     if (left > 3_000) {
-      const gate = await tregVerifyEmail(contact.email, { timeoutMs: Math.min(8_000, left) })
+      const gate = await tregVerifyEmail(contact.email, { timeoutMs: Math.min(8_000, left), via: 'reveal' })
       await bumpRevealStats(gate.verdict === 'invalid' ? 'verifyDead' : 'verify', gate.costMicro)
       if (gate.verdict === 'invalid') {
         contact.email = undefined
         verifyStripped = true
+      } else if (gate.verdict === 'catch_all') {
+        catchAllEmail = true
       }
     }
   }
@@ -350,11 +355,13 @@ export async function POST(req: NextRequest) {
     wallet: result.wallet,
     spent: price,
     ...(typeof viaSource !== 'undefined' && viaSource ? { sourceNote: `Found via: ${viaSource}` } : {}),
-    ...(deadEmailStripped || verifyStripped
+    ...(deadEmailStripped || verifyStripped || catchAllEmail
       ? {
           notice: verifyStripped
             ? 'The email we found was removed before you paid: its mailbox no longer accepts mail, so every send to it would have bounced. You were charged only for what works.'
-            : 'The email address on file was removed: its mail domain is dead, every send to it would have bounced. You were charged only for the doors that work.',
+            : deadEmailStripped
+              ? 'The email address on file was removed: its mail domain is dead, every send to it would have bounced. You were charged only for the doors that work.'
+              : 'The email sits on a catch-all mail server: the domain accepts mail for any address, so the mailbox itself could not be independently confirmed. Reachable, unverified — you were charged for a reachable contact, and we say so.',
         }
       : {}),
   })
