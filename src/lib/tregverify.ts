@@ -37,6 +37,8 @@ export const tregEnabled = TREG_TOKEN.length > 20
 
 /** The one provider the reveal gate pins: cheapest verified-verdict per success in the catalog, misses on catch-all/unknown settle at $0. */
 const VERIFY_ENDPOINT = 'millionverifier.people.email.verify'
+/** The FREE verifier: heavily rate-limited (one call per ~30s), so it only ever runs as a slow batch drip — never on the interactive till. $0 per call. */
+export const TREG_ENDPOINT_CONTACTOUT = 'contactout.people.email.verify'
 
 export type MailVerdict = 'valid' | 'invalid' | 'catch_all' | 'unknown'
 
@@ -193,6 +195,25 @@ export async function tregCallLedger(limit = 25): Promise<TregLedgerEntry[]> {
   }
 }
 
+/**
+ * What the POOL sweeps have actually spent, read off the ledger. The paid
+ * sweep enforces its own cumulative budget against this number, so the cap
+ * survives restarts and operator memory. (The free contactout drip rides in
+ * the same ledger at $0 — included defensively in case it ever charges.)
+ * The ring holds 200 receipts ≈ $0.36 of paid calls, comfortably more than
+ * the $0.30 cap, so the oldest entries can never fall off before the cap trips.
+ */
+export async function tregSweepSpendMicro(): Promise<number> {
+  try {
+    const { db } = await import('@/lib/db')
+    const row = await db.platformConfig.findUnique({ where: { key: LEDGER_KEY } })
+    const ring = row?.value ? (JSON.parse(row.value) as TregLedgerEntry[]) : []
+    return ring.reduce((a, e) => (e.via === 'sweep' || e.via === 'drip') && e.c > 0 ? a + e.c : a, 0)
+  } catch {
+    return 0
+  }
+}
+
 // ---------- the transport: one JSON-RPC tools/call, stateless ----------
 
 interface TregReceipt {
@@ -241,7 +262,7 @@ async function mcpCall(endpointId: string, args: Record<string, unknown>, timeou
  */
 export async function tregVerifyEmail(
   email?: string | null,
-  opts?: { timeoutMs?: number; via?: 'reveal' | 'sweep' }
+  opts?: { timeoutMs?: number; via?: 'reveal' | 'sweep' | 'drip' | string; endpoint?: string }
 ): Promise<MailVerifyResult> {
   const addr = String(email || '').trim()
   if (!addr || !EMAIL_SHAPE.test(addr) || addr.length > 254) {
@@ -265,7 +286,7 @@ export async function tregVerifyEmail(
       return { verdict: durable.v, costMicro: 0, cached: true }
     }
     try {
-      const receipt = await mcpCall(VERIFY_ENDPOINT, { method: 'GET', query: { email: addr } }, opts?.timeoutMs ?? 8_000)
+      const receipt = await mcpCall(opts?.endpoint || VERIFY_ENDPOINT, { method: 'GET', query: { email: addr } }, opts?.timeoutMs ?? 8_000)
       if (!receipt) throw new Error('treg returned no receipt')
       if (receipt.status !== 200) {
         throw new Error(`treg status ${receipt.status}${receipt.whose_error ? ` (${receipt.whose_error})` : ''}`)
@@ -360,6 +381,8 @@ export interface TregExecSnapshot {
     spendMicro: number
     lastAt: number | null
     recent: TregLedgerEntry[]
+    /** Spend split by the path that paid it: till (reveal) vs pool (sweep) vs free drip. */
+    via: Record<string, { calls: number; paidCalls: number; spendMicro: number }>
   }
   /** REVEAL_STATS gate doors: verdicts delivered and proved-dead finds, today and over the 30-day window. */
   stats: {
@@ -381,7 +404,7 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
     balanceMicro: null,
     pool: { withEmail: 0, verified: 0, catchAll: 0, dead: 0, pending: 0 },
     store: { valid: 0, invalid: 0, catchAll: 0, entries: 0, spendMicro: 0 },
-    ledger: { total: 0, paidCalls: 0, spendMicro: 0, lastAt: null, recent: [] },
+    ledger: { total: 0, paidCalls: 0, spendMicro: 0, lastAt: null, recent: [], via: {} },
     stats: { today: { verify: 0, verifyDead: 0, costMicro: 0 }, days30: { verify: 0, verifyDead: 0, costMicro: 0 } },
   }
   const take = Math.max(0, Math.min(opts?.ledgerTake ?? 25, 100))
@@ -447,6 +470,10 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
             for (const e of ring) {
               snap.ledger.spendMicro += e.c || 0
               if (e.c > 0) snap.ledger.paidCalls++
+              const t = (snap.ledger.via[e.via || 'other'] ||= { calls: 0, paidCalls: 0, spendMicro: 0 })
+              t.calls++
+              if (e.c > 0) t.paidCalls++
+              t.spendMicro += e.c || 0
             }
             snap.ledger.recent = take > 0 ? ring.slice(-take).reverse() : []
           } catch {}

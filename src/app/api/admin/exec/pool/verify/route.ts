@@ -1,30 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
-import { tregVerifyEmail, tregBalanceMicro, tregEnabled, tregExecSnapshot } from '@/lib/tregverify'
+import {
+  tregVerifyEmail,
+  tregBalanceMicro,
+  tregEnabled,
+  tregExecSnapshot,
+  tregSweepSpendMicro,
+  TREG_ENDPOINT_CONTACTOUT,
+} from '@/lib/tregverify'
 import { scoreFor, parseChecksSource } from '@/lib/leadpool'
 import { bumpRevealStats } from '@/lib/leadlookup'
+import { emailReach } from '@/lib/reach'
 
 export const maxDuration = 60
 
 /**
- * POST /api/admin/exec/pool/verify  { cursor?, take? }
- *   DOOR 3C FOR THE POOL: sweep the verified lead pool's emails through the
- *   mailbox gate and write the verdicts where the pool already keeps its
- *   truth — verifyChecks { emailOk, emailCatchAll }, verifyScore, and
- *   emailDeadAt for the proved-dead. This is the pre-warm pump's twin: instead
- *   of feeding the memory, it feeds the quality promise, one row at a time.
+ * POST /api/admin/exec/pool/verify — DOOR 3C FOR THE POOL, on a budget.
  *
- *   Economics (measured on our own pool, 2026-10-31): $0.00178 per proved
- *   mailbox (R0.03); catch-all and unknown verdicts settle at $0. Verdicts
- *   are cached platform-wide by tregverify, so a re-sweep costs nothing until
- *   the cache TTLs out. The cursor makes the sweep resumable and the take cap
- *   keeps one invocation inside the function clock — run it repeatedly until
- *   nextCursor is null, like every other pump.
+ * THE $0.30 PLAN (2026-10-31): the treg top-up minimum is $10 and the owner
+ * chose not to spend that now, so the pool sweep lives under a hard, code-
+ * enforced budget instead:
  *
- *   Honest accounting: every verdict bumps the REVEAL_STATS door counters
- *   (verify / verifyDead + verifyCostMicro), so the operator sees the gate's
- *   spend on the same lens as the reveals it protects.
+ *  1. CUMULATIVE CAP, IN CODE: paid sweeps may spend at most SWEEP_BUDGET_USD
+ *     ($0.30) EVER, measured off the call ledger — not per run, in total. The
+ *     cap survives restarts and operator memory; the lens shows what remains.
+ *  2. FREE KILLS FIRST: before a paid call, the row's domain goes through the
+ *     platform's own DNS reach gate (reach.ts, $0). A domain that provably
+ *     cannot accept mail is stamped dead without spending a cent of budget —
+ *     the exact verdict millionverifier would have charged $0.00178 to say.
+ *  3. HEAD FIRST: mode "head" (the default) sweeps the same rows the owner's
+ *     picker shows — highest verifyScore first — so the budget lands on the
+ *     contacts members actually get handed, not the tail of the pool.
+ *  4. THE FREE DRIP: provider "contactout" runs the same sweep on the catalog
+ *     tool that charges $0 per call. It is heavily rate-limited, so a drip
+ *     takes at most 2 rows with 18s pacing — run it when idle, it costs
+ *     nothing, and unknowns (throttles) are never stored, just retried later.
+ *  5. THE TILL PAYS ITS OWN WAY: Door 3c at the reveal (via=reveal) is
+ *     revenue-backed — $0.00178 against a R15 sale — and does not touch the
+ *     sweep budget. A dry balance never breaks a reveal: fail-open unknown.
+ *
+ * Verdicts land in the same places as ever: verifyChecks { emailOk,
+ * emailCatchAll }, verifyScore, emailDeadAt on proof of death, REVEAL_STATS
+ * doors, and every real call leaves its call-id receipt on the ledger.
  */
 
 const BATCH_MAX = 50
@@ -33,6 +51,15 @@ const BATCH_DEFAULT = 25
 const BALANCE_FLOOR_MICRO = 5_000
 /** A polite breath between paid calls; millionverifier is generous but we are a guest. */
 const PACING_MS = 300
+/** The free drip: at most these rows per invocation, paced for the provider's rate limit. */
+const DRIP_TAKE = 2
+const DRIP_PACING_MS = 18_000
+/** The whole point of this file today: the pool sweep's lifetime spend cap, in USD. */
+const SWEEP_BUDGET_USD = 0.3
+/** Never START a call when less than this much of the 60s function clock remains — a call started at T-15s with a 15s timeout lands exactly on the kill line, never past it. */
+const CLOCK_GUARD_MS = 15_000
+/** Head mode sweeps the picker's world: this many top rows, best first. */
+const HEAD_SIZE = 300
 
 function saneEmail(v?: string | null): string | undefined {
   const s = (v || '').trim()
@@ -57,6 +84,8 @@ export async function GET() {
   if (!gate.ok) return gate.res
 
   const snap = await tregExecSnapshot({ ledgerTake: 25 })
+  const sweepSpent = (snap.ledger.via.sweep?.spendMicro || 0) + (snap.ledger.via.drip?.spendMicro || 0)
+  const budgetMicro = Math.round(SWEEP_BUDGET_USD * 1e6)
 
   return NextResponse.json({
     ok: true,
@@ -77,6 +106,20 @@ export async function GET() {
       today: { ...snap.stats.today, costUsd: usd(snap.stats.today.costMicro) },
       days30: { ...snap.stats.days30, costUsd: usd(snap.stats.days30.costMicro) },
     },
+    // The $0.30 plan, visible: the cap, what the pool sweeps have spent of it,
+    // what remains, and the two doors that spend it (paid head sweep + free drip).
+    budget: {
+      capUsd: SWEEP_BUDGET_USD,
+      spentUsd: usd(sweepSpent),
+      remainingUsd: usd(Math.max(0, budgetMicro - sweepSpent)),
+      via: snap.ledger.via,
+      paidSweep: {
+        how: 'POST { "take": 25 } — head rows first, DNS-dead domains killed free, stops itself at the cap or the clock.',
+      },
+      freeDrip: {
+        how: 'POST { "provider": "contactout", "take": 2 } whenever idle — $0 per call, pace built in, throttles just retry later.',
+      },
+    },
     sweep: {
       floorUsd: 0.05,
       how: 'POST here with { "take": 25 } (and "cursor" from the previous run) until nextCursor comes back null. Cached verdicts re-sweep free.',
@@ -96,36 +139,86 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
-  const take = Math.min(Math.max(Number(body?.take) || BATCH_DEFAULT, 1), BATCH_MAX)
+  const freeDrip = body?.provider === 'contactout'
+  const mode = body?.mode === 'all' ? 'all' : 'head'
+  const take = freeDrip
+    ? Math.min(Math.max(Number(body?.take) || DRIP_TAKE, 1), DRIP_TAKE)
+    : Math.min(Math.max(Number(body?.take) || BATCH_DEFAULT, 1), BATCH_MAX)
   const cursor = typeof body?.cursor === 'string' && body.cursor ? body.cursor : undefined
+  const budgetMicro = Math.round(SWEEP_BUDGET_USD * 1e6)
 
-  const balanceBefore = await tregBalanceMicro()
-  if (balanceBefore === null) {
-    return NextResponse.json({ error: 'Could not read the treg balance (token or network trouble). Nothing was swept.' }, { status: 502 })
-  }
-  if (balanceBefore < BALANCE_FLOOR_MICRO) {
+  // The cumulative budget, read before a cent is spent. The free drip is
+  // welcome even when the paid cap is exhausted — that is the whole design.
+  const budgetSpentBefore = await tregSweepSpendMicro()
+  if (!freeDrip && budgetSpentBefore >= budgetMicro) {
     return NextResponse.json({
       ok: true,
+      budgetReached: true,
+      capUsd: SWEEP_BUDGET_USD,
+      spentUsd: usd(budgetSpentBefore),
       swept: 0,
-      message: `treg balance $${(balanceBefore / 1e6).toFixed(2)} is under the $0.05 sweep floor. Top up the team account first.`,
+      message:
+        `The pool sweep has spent its $${SWEEP_BUDGET_USD.toFixed(2)} budget ($${usd(budgetSpentBefore)} so far). ` +
+        'Nothing was spent now. Run the free contactout drip for more coverage, or raise SWEEP_BUDGET_USD deliberately in code.',
     })
   }
 
-  const rows = await db.leadPool.findMany({
-    where: { active: true, email: { not: null }, emailDeadAt: null },
-    orderBy: { id: 'asc' },
-    take,
-    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    select: { id: true, company: true, email: true, website: true, confirmCount: true, verifyChecks: true },
-  })
+  // The drip rides the free tool: no balance floor, no budget — but the token
+  // still has to be live, and the till's provider stays millionverifier.
+  if (!freeDrip) {
+    const balanceBefore = await tregBalanceMicro()
+    if (balanceBefore === null) {
+      return NextResponse.json({ error: 'Could not read the treg balance (token or network trouble). Nothing was swept.' }, { status: 502 })
+    }
+    if (balanceBefore < BALANCE_FLOOR_MICRO) {
+      return NextResponse.json({
+        ok: true,
+        swept: 0,
+        message: `treg balance $${(balanceBefore / 1e6).toFixed(2)} is under the $0.05 sweep floor. The free contactout drip still works: { "provider": "contactout", "take": 2 }.`,
+      })
+    }
+  }
+
+  // HEAD FIRST: the picker's world — the rows the owner actually sees and
+  // hands out, best score first, already-answered rows skipped (their cached
+  // verdicts were already applied). The long tail waits for mode "all".
+  let rows: Array<{ id: string; company: string; email: string | null; website: string | null; confirmCount: number; verifyChecks: string | null }>
+  let headPendingTotal = 0
+  if (mode === 'head' || freeDrip) {
+    const head = await db.leadPool.findMany({
+      where: { active: true, verifyState: { not: 'stale' } },
+      orderBy: [{ verifyScore: 'desc' }, { lastSeenAt: 'desc' }],
+      take: HEAD_SIZE,
+      select: { id: true, company: true, email: true, website: true, confirmCount: true, verifyChecks: true, emailDeadAt: true },
+    })
+    const pending = head.filter((r) => {
+      if (!r.email || r.emailDeadAt) return false
+      const c = parseChecksSource(r.verifyChecks)
+      return c.emailOk !== true && c.emailCatchAll !== true
+    })
+    headPendingTotal = pending.length
+    rows = freeDrip ? pending.slice(0, take) : pending.slice(0, take)
+  } else {
+    rows = await db.leadPool.findMany({
+      where: { active: true, email: { not: null }, emailDeadAt: null },
+      orderBy: { id: 'asc' },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      select: { id: true, company: true, email: true, website: true, confirmCount: true, verifyChecks: true },
+    })
+  }
 
   const now = new Date()
+  const t0 = Date.now()
   let valid = 0
   let invalid = 0
   let catchAll = 0
   let unknown = 0
   let skipped = 0
+  let dnsDead = 0
   let costMicro = 0
+  let budgetHit = false
+  let clockHit = false
 
   for (const row of rows) {
     const email = saneEmail(row.email)
@@ -133,7 +226,41 @@ export async function POST(req: NextRequest) {
       skipped++
       continue
     }
-    const result = await tregVerifyEmail(email, { timeoutMs: 15_000, via: 'sweep' })
+
+    // FREE KILL FIRST: the platform's own DNS gate. A domain that provably
+    // cannot accept mail is stamped dead here for $0 — the exact verdict the
+    // paid provider would have charged to deliver.
+    if ((await emailReach(email)) === 'dead') {
+      dnsDead++
+      const prev = parseChecksSource(row.verifyChecks)
+      await db.leadPool.update({
+        where: { id: row.id },
+        data: {
+          emailDeadAt: now,
+          verifyChecks: JSON.stringify({
+            ...prev,
+            checkedAt: now.toISOString(),
+            emailOk: false,
+            emailCatchAll: false,
+          }),
+        },
+      })
+      await bumpRevealStats('verifyDead', 0)
+      continue
+    }
+
+    // CLOCK GUARD: millionverifier can take 10s on a slow domain; never start
+    // a call the function clock cannot finish. The next run picks the rest up.
+    if (Date.now() - t0 > 60_000 - CLOCK_GUARD_MS) {
+      clockHit = true
+      break
+    }
+
+    const result = await tregVerifyEmail(email, {
+      timeoutMs: 15_000,
+      via: freeDrip ? 'drip' : 'sweep',
+      ...(freeDrip ? { endpoint: TREG_ENDPOINT_CONTACTOUT, timeoutMs: 14_000 } : {}),
+    })
     costMicro += result.costMicro
     if (result.cached) skipped++
 
@@ -177,31 +304,75 @@ export async function POST(req: NextRequest) {
         },
       })
     } else {
-      // unknown: a non-answer. Never punished, never stored as fact.
+      // unknown: a non-answer. Never punished, never stored as fact — the
+      // drip's throttles land here and simply retry on a later run.
       unknown++
     }
 
     await bumpRevealStats(result.verdict === 'invalid' ? 'verifyDead' : 'verify', result.costMicro)
-    // Only an actual paid call needs the breath; cache hits were free anyway.
-    if (!result.cached) await new Promise((r) => setTimeout(r, PACING_MS))
+
+    // BUDGET GUARD: stop the moment the pool's lifetime spend touches the cap.
+    if (!freeDrip && budgetSpentBefore + costMicro >= budgetMicro) {
+      budgetHit = true
+      break
+    }
+    // The drip's only wait is the provider's rate limit; the paid sweep's is
+    // plain politeness. Cache hits were free either way — no breath needed.
+    if (!result.cached) await new Promise((r) => setTimeout(r, freeDrip ? DRIP_PACING_MS : PACING_MS))
   }
 
-  const balanceAfter = (await tregBalanceMicro({ fresh: true })) ?? balanceBefore
-  const nextCursor = rows.length === take ? rows[rows.length - 1].id : null
+  const processed = valid + invalid + catchAll + unknown + skipped + dnsDead
+  const budgetSpentAfter = budgetSpentBefore + costMicro
+
+  if (freeDrip) {
+    return NextResponse.json({
+      ok: true,
+      drip: true,
+      provider: 'contactout',
+      swept: rows.length,
+      valid,
+      invalid,
+      catchAll,
+      unknown,
+      throttled: unknown,
+      skippedCachedOrJunk: skipped,
+      dnsDead,
+      costUsd: Number((costMicro / 1e6).toFixed(5)),
+      headPendingRemaining: Math.max(0, headPendingTotal - processed),
+      message: `Free drip: ${valid} proven live, ${invalid} proved dead, ${catchAll} catch-all at $${(costMicro / 1e6).toFixed(5)}. Run it again whenever idle — it never costs anything.`,
+    })
+  }
+
+  const balanceAfter = (await tregBalanceMicro({ fresh: true })) ?? 0
+  const nextCursor = mode === 'all' && !clockHit && !budgetHit && rows.length === take ? rows[rows.length - 1].id : null
 
   return NextResponse.json({
     ok: true,
+    mode,
     swept: rows.length,
+    processed,
     valid,
     invalid,
     catchAll,
     unknown,
+    dnsDead,
     skippedCachedOrJunk: skipped,
     costUsd: Number((costMicro / 1e6).toFixed(5)),
+    budget: {
+      capUsd: SWEEP_BUDGET_USD,
+      spentUsd: usd(budgetSpentAfter),
+      remainingUsd: usd(Math.max(0, budgetMicro - budgetSpentAfter)),
+      reached: budgetHit || budgetSpentAfter >= budgetMicro,
+    },
+    clockHit,
     balanceUsd: Number((balanceAfter / 1e6).toFixed(4)),
     nextCursor,
-    message: nextCursor
-      ? `Sweep batch done: ${valid} proven live, ${invalid} proved dead, ${catchAll} catch-all. Continue with the returned cursor.`
-      : `Pool sweep complete: ${valid} proven live, ${invalid} proved dead, ${catchAll} catch-all. The whole active pool now wears its mailbox truth.`,
+    headPendingRemaining: mode === 'head' ? Math.max(0, headPendingTotal - processed) : undefined,
+    message: budgetHit
+      ? `Budget guard: this run spent $${(costMicro / 1e6).toFixed(5)} and touched the $${SWEEP_BUDGET_USD.toFixed(2)} lifetime cap. ${valid} proven live, ${invalid} proved dead, ${dnsDead} killed free by DNS.`
+      : clockHit
+        ? `Clock guard: ${processed} rows processed, ${valid} proven live, ${invalid} proved dead, ${dnsDead} killed free by DNS. Run again to continue.`
+        : `Sweep batch done: ${valid} proven live, ${invalid} proved dead, ${catchAll} catch-all, ${dnsDead} killed free by DNS.` +
+          (mode === 'head' && headPendingTotal - processed > 0 ? ` ${headPendingTotal - processed} head rows still pending.` : ''),
   })
 }
