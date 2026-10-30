@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Pick a member first.' }, { status: 400 })
   if (poolIds.length === 0) return NextResponse.json({ error: 'Pick at least one contact.' }, { status: 400 })
 
-  const target = await db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, accountStatus: true } })
+  const target = await db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, businessName: true, industry: true, accountStatus: true } })
   if (!target) return NextResponse.json({ error: 'That member is not on the platform anymore.' }, { status: 404 })
   if (target.accountStatus === 'SUSPENDED') {
     return NextResponse.json({ error: `${target.name} is paused right now. Restore their account first, then hand them leads.` }, { status: 409 })
@@ -155,6 +155,20 @@ export async function POST(req: NextRequest) {
     if (!key || seen.has(key)) { skipped++; continue }
     seen.add(key)
     try {
+      // The note now teaches the pitch: the ranking's own relevance line for
+      // this contact, plus a one-sentence starter so a member who has never
+      // cold-pitched a business still knows how to open. Long whys (campaign
+      // reply threads) truncate to one clean paragraph.
+      const whyRaw = (p.why || '').replace(/\s+/g, ' ').trim()
+      const whyLine = whyRaw.slice(0, 240)
+      const pitchBiz = (target.businessName || '').trim() || 'your business'
+      const pitchLead = (p.industry || '').trim() || 'local'
+      const note = [
+        'Hand picked for you by the Business Hustle team from our verified contact pool.',
+        whyLine ? `Why this lead: ${whyLine}${whyRaw.length > whyLine.length ? '…' : ''}` : '',
+        p.website ? `Verify them at ${p.website}.` : '',
+        `Pitch starter: open with one specific thing ${pitchBiz} can do for a ${pitchLead} business like ${p.company}, then ask for 15 minutes.`,
+      ].filter(Boolean).join(' ')
       await db.lead.create({
         data: {
           userId,
@@ -173,9 +187,10 @@ export async function POST(req: NextRequest) {
           stage: 'NEW',
           value: 0,
           unlocked: Boolean(p.email || p.phone),
-          // A clean note for the seller: who handed it over and how to check
-          // it. The team's campaign conversation stays on the dashboard.
-          notes: `Hand picked for you by the Business Hustle team from our verified contact pool.${p.website ? ` Verify them at ${p.website}` : ''}`,
+          // A clean note for the seller: who handed it over, why this lead
+          // fits them, and how to open the conversation. The team's campaign
+          // conversation stays on the dashboard.
+          notes: note,
         },
         select: { id: true },
       })
@@ -199,6 +214,17 @@ export async function POST(req: NextRequest) {
       ? `Nothing new to hand over: ${skipped === 1 ? 'that contact is' : 'those contacts are'} already in ${target.name}'s pipeline.`
       : `${added} verified contact${added === 1 ? '' : 's'} now waiting in ${target.name}'s pipeline (${project.name}).${skipped > 0 ? ` ${skipped} skipped as already there.` : ''}`
 
+  // The owner's receipt: exactly which lead went where, so the handout can be
+  // reported and audited without reopening the database.
+  const addedLeads = picks
+    .filter((p) => touched.includes(p.id))
+    .map((p) => ({
+      company: p.company,
+      ...(p.email ? { email: p.email } : {}),
+      ...(p.city ? { city: p.city } : {}),
+      ...(p.industry ? { industry: p.industry } : {}),
+    }))
+
   return NextResponse.json({
     ok: true,
     added,
@@ -206,5 +232,6 @@ export async function POST(req: NextRequest) {
     member: { id: target.id, name: target.name, email: target.email },
     projectName: project.name,
     message,
+    leads: addedLeads,
   })
 }

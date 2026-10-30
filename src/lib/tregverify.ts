@@ -363,6 +363,10 @@ export interface TregPoolLead {
   /** verified = mailbox proved live; catch_all = reachable, unverified. */
   emailState: 'verified' | 'catch_all'
   verifyScore: number
+  /** The ranking's relevance line — WHY this contact fits a member. */
+  why: string | null
+  /** How many times the pool has served this contact. */
+  served: number
 }
 
 export interface TregExecSnapshot {
@@ -439,7 +443,7 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
           where: { active: true },
           select: {
             company: true, city: true, industry: true, email: true, phone: true,
-            verifyScore: true, emailDeadAt: true, verifyChecks: true,
+            verifyScore: true, why: true, timesServed: true, emailDeadAt: true, verifyChecks: true,
           },
         })
         const verifiedLeads: TregPoolLead[] = []
@@ -463,12 +467,16 @@ export async function tregExecSnapshot(opts?: { ledgerTake?: number }): Promise<
             verifiedLeads.push({
               company: r.company, city: r.city, industry: r.industry, email: r.email,
               phone: r.phone, emailState: 'verified', verifyScore: r.verifyScore,
+              why: r.why ? r.why.replace(/\s+/g, ' ').trim().slice(0, 140) || null : null,
+              served: r.timesServed,
             })
           } else if (catchAll) {
             snap.pool.catchAll++
             catchAllLeads.push({
               company: r.company, city: r.city, industry: r.industry, email: r.email,
               phone: r.phone, emailState: 'catch_all', verifyScore: r.verifyScore,
+              why: r.why ? r.why.replace(/\s+/g, ' ').trim().slice(0, 140) || null : null,
+              served: r.timesServed,
             })
           } else snap.pool.pending++
         }
