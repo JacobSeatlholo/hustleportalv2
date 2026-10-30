@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      select: { id: true, company: true, contactName: true, city: true, industry: true, stage: true, score: true, source: true, createdAt: true },
+      select: { id: true, company: true, contactName: true, city: true, industry: true, stage: true, score: true, source: true, notes: true, createdAt: true },
     }),
     db.client.count({ where: { userId: id } }),
     db.invoice.findMany({
