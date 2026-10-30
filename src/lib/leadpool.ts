@@ -100,14 +100,20 @@ export function hostOf(w?: string): string | null {
 export interface VerifyChecks {
   phoneOk: boolean
   websiteOk?: boolean
+  /** Door 3c's verdict on the mailbox: true = the provider PROVED it accepts mail. Undefined = never asked or unknown. */
+  emailOk?: boolean
+  /** The domain accepts anything (catch-all), so a delivered mail proves nothing either way. */
+  emailCatchAll?: boolean
 }
 
-/** The score behind every badge: real source record 40, valid phone 20, live website 25, reconfirmed 15. */
+/** The score behind every badge: real source record 40, valid phone 20, live website 25,
+ * reconfirmed 15, mailbox proven live 10. */
 export function scoreFor(checks: VerifyChecks, confirmCount: number, hasWebsite: boolean): number {
   let s = 40
   if (checks.phoneOk) s += 20
   if (checks.websiteOk === true) s += 25
   if (confirmCount >= 2) s += 15
+  if (checks.emailOk === true) s += 10
   if (!hasWebsite && checks.websiteOk === undefined) s = Math.min(s, 75) // nothing to ping: never claim a website bonus
   return Math.max(0, Math.min(100, s))
 }
@@ -147,7 +153,12 @@ export async function pingWebsite(host: string): Promise<boolean> {
 export function parseChecksSource(json?: string | null): VerifyChecks {
   try {
     const v = json ? JSON.parse(json) : {}
-    return { phoneOk: Boolean(v.phoneOk), websiteOk: typeof v.websiteOk === 'boolean' ? v.websiteOk : undefined }
+    return {
+      phoneOk: Boolean(v.phoneOk),
+      websiteOk: typeof v.websiteOk === 'boolean' ? v.websiteOk : undefined,
+      emailOk: typeof v.emailOk === 'boolean' ? v.emailOk : undefined,
+      emailCatchAll: v.emailCatchAll === true ? true : undefined,
+    }
   } catch {
     return { phoneOk: false }
   }

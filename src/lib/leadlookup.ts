@@ -218,13 +218,14 @@ export async function siteContactDoor(website?: string | null): Promise<LookupCo
 
 // ---------- The exec counter: what did the doors actually do today ----------
 
-type RevealDoor = 'lookups' | 'memory' | 'site' | 'gemini' | 'glm' | 'fail' | 'engineFail'
+type RevealDoor = 'lookups' | 'memory' | 'site' | 'gemini' | 'glm' | 'verify' | 'verifyDead' | 'fail' | 'engineFail'
 export const REVEAL_STATS_KEY = 'REVEAL_STATS'
 const STATS_KEY = REVEAL_STATS_KEY
 const STATS_DAYS = 30
 
-/** Best-effort per-day counter, SAST stamped like every other meter. */
-export async function bumpRevealStats(door: RevealDoor): Promise<void> {
+/** Best-effort per-day counter, SAST stamped like every other meter.
+ * costMicro (optional) is the metered cost a Door 3c verification actually paid — sum, not max. */
+export async function bumpRevealStats(door: RevealDoor, costMicro = 0): Promise<void> {
   try {
     const day = aiDay()
     const row = await db.platformConfig.findUnique({ where: { key: STATS_KEY } })
@@ -248,6 +249,13 @@ export async function bumpRevealStats(door: RevealDoor): Promise<void> {
     // yesterday's rows never read NaN when today's door fires on them.
     today.glm = (today.glm || 0) + (door === 'glm' ? 1 : 0)
     today.engineFail = (today.engineFail || 0) + (door === 'engineFail' ? 1 : 0)
+    // Door 3c (the mailbox gate): verify counts every verdict it delivered,
+    // verifyDead the ones that proved an address dead, and the running cent-
+    // level cost of the whole gate rides in verifyCostMicro so the till's
+    // margin stays visible on the lens instead of hiding in a vendor bill.
+    today.verify = (today.verify || 0) + (door === 'verify' ? 1 : 0)
+    today.verifyDead = (today.verifyDead || 0) + (door === 'verifyDead' ? 1 : 0)
+    if (costMicro > 0) today.verifyCostMicro = (today.verifyCostMicro || 0) + costMicro
     stats[day] = today
     await db.platformConfig.upsert({
       where: { key: STATS_KEY },

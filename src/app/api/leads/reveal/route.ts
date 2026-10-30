@@ -8,6 +8,7 @@ import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { zaiGenerate } from '@/lib/zai'
 import { bumpChallenge } from '@/lib/gamification'
 import { emailReach } from '@/lib/reach'
+import { tregVerifyEmail } from '@/lib/tregverify'
 import { companyKeyFor, cacheGetContact, cachePutContact, siteContactDoor, bumpRevealStats } from '@/lib/leadlookup'
 
 export const maxDuration = 60
@@ -69,6 +70,12 @@ export async function POST(req: NextRequest) {
     contactName: lead.contactName || undefined,
   }
   let viaSource: string | undefined
+  // DOOR 3C bookkeeping: whether the mailbox gate proved an email dead here,
+  // and which memory row (if any) fed this reveal — the gate may prove THAT
+  // row's answer dead too, and a memory row must never outlive its proof.
+  let verifyStripped = false
+  let memoryCacheKey: string | undefined
+  const tReveal = Date.now() // the whole chain, doors + gate, shares the 60s ceiling
 
   // THE REACHABLE CONTRACT AT THE TILL: an address the mail system can
   // provably never deliver to (the domain does not exist or announces no
@@ -79,6 +86,20 @@ export async function POST(req: NextRequest) {
   if (contact.email && (await emailReach(contact.email)) === 'dead') {
     contact.email = undefined
     deadEmailStripped = true
+  }
+  // DOOR 3C ON THE STORED EMAIL: the DNS gate can only prove a domain dead;
+  // a live domain can still hold a mailbox that quietly stopped existing, and
+  // the test on our own pool caught exactly that (1 in 15). One treg verdict
+  // (R0.03, cached platform-wide) either clears the address for sale or — if
+  // it is PROVED dead — strips it here, so the doors below go hunting for a
+  // real contact instead of the till selling a guaranteed bounce.
+  else if (contact.email) {
+    const stored = await tregVerifyEmail(contact.email, { timeoutMs: 8_000 })
+    await bumpRevealStats(stored.verdict === 'invalid' ? 'verifyDead' : 'verify', stored.costMicro)
+    if (stored.verdict === 'invalid') {
+      contact.email = undefined
+      verifyStripped = true
+    }
   }
 
   // No stored contact → three doors, cheapest first, charged only on success.
@@ -108,6 +129,7 @@ export async function POST(req: NextRequest) {
           contactName: remembered.contactName || contact.contactName,
         }
         viaSource = remembered.source
+        memoryCacheKey = remembered.cacheKey
         await bumpRevealStats('memory')
       } else {
         // The remembered answer rotted (nothing sane survives the gates).
@@ -268,6 +290,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // DOOR 3C AT THE TILL: every email any door just found wears one last gate
+  // before money moves. The provider either PROVES the mailbox exists (the
+  // sale proceeds on solid ground) or PROVES it dead — and a proved-dead
+  // address is stripped like any dead thing at this till. A phone standing on
+  // its own still sells; an email with nothing else standing leaves the
+  // member's wallet shut and the truth on the counter: found, but dead.
+  if (contact.email) {
+    const left = 58_000 - (Date.now() - tReveal)
+    if (left > 3_000) {
+      const gate = await tregVerifyEmail(contact.email, { timeoutMs: Math.min(8_000, left) })
+      await bumpRevealStats(gate.verdict === 'invalid' ? 'verifyDead' : 'verify', gate.costMicro)
+      if (gate.verdict === 'invalid') {
+        contact.email = undefined
+        verifyStripped = true
+      }
+    }
+  }
+
+  // The gate just proved the MEMORY row's only sellable fact dead. Keep the
+  // row and every member after this one trips the same corpse; drop it and
+  // the next reveal goes fresh through the doors, same as the rot rule above.
+  if (verifyStripped && !contact.phone && memoryCacheKey) {
+    await db.leadLookupCache.delete({ where: { companyKey: memoryCacheKey } }).catch(() => {})
+  }
+  if (!contact.email && !contact.phone && verifyStripped) {
+    return NextResponse.json({
+      lead,
+      charged: false,
+      message:
+        `We found a publicly listed email for ${lead.company}, but its mailbox no longer accepts mail and no working phone was found. You were NOT charged.` +
+        (lead.website ? ` Their website: ${lead.website}` : ' Try searching for them directly.'),
+    })
+  }
+
   const result = await spendCredits(userId, price, `Lead reveal: ${lead.company}`)
   if (!result) {
     return NextResponse.json(
@@ -294,10 +350,11 @@ export async function POST(req: NextRequest) {
     wallet: result.wallet,
     spent: price,
     ...(typeof viaSource !== 'undefined' && viaSource ? { sourceNote: `Found via: ${viaSource}` } : {}),
-    ...(deadEmailStripped
+    ...(deadEmailStripped || verifyStripped
       ? {
-          notice:
-            'The email address on file was removed: its mail domain is dead, every send to it would have bounced. You were charged only for the doors that work.',
+          notice: verifyStripped
+            ? 'The email we found was removed before you paid: its mailbox no longer accepts mail, so every send to it would have bounced. You were charged only for what works.'
+            : 'The email address on file was removed: its mail domain is dead, every send to it would have bounced. You were charged only for the doors that work.',
         }
       : {}),
   })
