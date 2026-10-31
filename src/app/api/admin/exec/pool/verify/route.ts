@@ -345,7 +345,15 @@ export async function POST(req: NextRequest) {
   }
 
   const balanceAfter = (await tregBalanceMicro({ fresh: true })) ?? 0
-  const nextCursor = mode === 'all' && !clockHit && !budgetHit && rows.length === take ? rows[rows.length - 1].id : null
+  // The walk's bookmark: a completed full window hands back its last row, and
+  // a clock-cut run hands back the last row it actually answered — without
+  // this, every clock-cut restarts the walk from id 1 and re-walks answered
+  // rows (free on the verdict cache, but it eats the window and the clock).
+  const lastAnsweredId = processed > 0 ? rows[processed - 1].id : null
+  const nextCursor =
+    mode === 'all' && lastAnsweredId && (budgetHit || clockHit || (rows.length === take && !budgetHit))
+      ? lastAnsweredId
+      : null
 
   return NextResponse.json({
     ok: true,
