@@ -53,6 +53,7 @@ const SA_CITIES = [
 ]
 
 const LEAD_NOUN = /\b(lead|leads|client|clients|customer|customers|buyer|buyers|business|businesses|company|companies|seller|sellers|shop|shops|store|stores|spaza|people|someone|anyone|anybody|vendor|vendors|supplier|suppliers)\b/i
+const TRADE_HINT = /\b(plumber|plumbers|electrician|electricians|salon|salons|barber|barbers|photographer|photographers|cleaner|cleaners|cleaning|carpenter|carpenters|builder|builders|mechanic|mechanics|tutor|tutors|bakery|baker|caterer|catering|dj|djs|nail|nails|lashes|spa|shuttle|courier|tailor|landscaper|painter|painters|welder|welders|panel\s?beater|solar|geyser|pest\s?control|fitness|trainer)\b/i
 const SEARCH_VERB = /\b(find|finding|looking for|look for|get me|need|search|searching|source|show me|who is|who are|who does|who needs|any)\b/i
 const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'that', 'this', 'have', 'has', 'are', 'was', 'were', 'you', 'your', 'ours', 'our',
@@ -70,7 +71,7 @@ export interface AskHint { city?: string | null; industry?: string | null }
 export function parseLeadAsk(message: string, hint?: AskHint): { terms: string[]; city: string | null } | null {
   const m = String(message || '').slice(0, 500)
   if (!m.trim()) return null
-  if (!(SEARCH_VERB.test(m) && (LEAD_NOUN.test(m) || /\bwho\b/i.test(m)))) return null
+  if (!(SEARCH_VERB.test(m) && (LEAD_NOUN.test(m) || TRADE_HINT.test(m) || /\bwho\b/i.test(m)))) return null
 
   const low = m.toLowerCase()
   const city = SA_CITIES.find((c) => low.includes(c)) || (hint?.city ? String(hint.city).toLowerCase().trim() : null) || null
