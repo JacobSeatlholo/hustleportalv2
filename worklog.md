@@ -2820,3 +2820,16 @@ Work Log:
 Stage Summary:
 - Prod b92d91b: the Notion pattern from the pipeline now covers tasks and finance, and teams can talk inside a task with @email tags that actually reach an inbox. Boss eyeballs it on prod; the mention mail fires the first time a real teammate tags a real teammate.
 - Next on the boss's idea list, still queued: the Discord community pulse (phase 1), meeting notes recorder (phase 2), the security audit skill pilot, and the win-back mail waiting on his signature choice.
+
+---
+Task ID: 142
+Agent: Super Z (main)
+Task: Boss approved the win-back rewrite ("yeam message fne"). Load the approved copy into the engine and bump the campaign tag.
+
+Work Log:
+- buildWinbackEmail swapped to the approved humanlike copy: subject "It has been a while, {name}. Come and see what is new", body walks the lead engine hunt (describe your customer, trade filtering, verified contacts), then the tasks board, pipeline, click to fix invoices and quotes, and team @email tags that land in an inbox. Money truths kept exact: 25 searches a day free, empty search costs nothing, R15 per verified contact reveal, 50c per landed email. No card for the free plan, data never sold or shared, replies come straight to the team.
+- Zero dashes in the file (rg scan clean), tsc clean, signoff stays "The HustlePortal team" since no personal name was given.
+- Campaign tag bumped winback-2026-10 to winback-2026-11 so the new copy gets a fresh one touch per campaign guard; the old tag stays in EmailLog as archive. Quiet 7+ audience law, suppression law, 300 run cap and exec desk confirm gate all untouched.
+
+Stage Summary:
+- The approved win-back mail is the engine draft now. Nothing sends until the boss opens the Read the draft dialog on the exec desk and hits confirm; first send is capped at 300 and every send is logged.

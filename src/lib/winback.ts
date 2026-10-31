@@ -17,7 +17,7 @@ import { db } from '@/lib/db'
 import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 import { isExecEmail } from '@/lib/admin'
 
-export const WINBACK_CAMPAIGN = 'winback-2026-10'
+export const WINBACK_CAMPAIGN = 'winback-2026-11'
 export const WINBACK_QUIET_DAYS = 7
 const QUIET_MS = WINBACK_QUIET_DAYS * 86_400_000
 /** Hard ceiling per run: a first send is small, this is a runaway brake. */
@@ -55,23 +55,21 @@ function firstName(name: string, businessName: string | null): string {
 export function buildWinbackEmail(user: { name: string; businessName: string | null }): WinbackDraft {
   const hi = firstName(user.name, user.businessName)
   return {
-    subject: `We have been busy, ${hi}. Come and see`,
+    subject: `It has been a while, ${hi}. Come and see what is new`,
     body: [
       `Hi ${hi},`,
       '',
-      'It has been a while since you were last in the app, and HustlePortal has grown since then. New muscle, same idea: one login, everything your business needs to find work and get paid. Here is what is waiting for you:',
+      'You checked in a while back and I wanted you to know the app has moved since then. The idea never changed, one login for the whole hustle, but the tools got a lot better.',
       '',
-      '1. The project management system. A board for your jobs and tasks, due dates, reminders, and a calendar that shows your whole month at a glance. Move a card and your week makes sense again.',
+      'Here is what is new. The lead engine now hunts the internet for you. Tell it who your customer is, something like medical practices in Johannesburg that need contract cleaning, and it goes through directories and maps, throws out anything that has nothing to do with your trade, checks the phone numbers and websites, and drops the good ones in your pipeline. The free plan gives you 25 searches a day, and a search that comes back empty costs you nothing. When you want the contact details of a verified lead it is R15, and 50 cents lands an email in a real inbox.',
       '',
-      '2. The lead pipeline. Every lead moves from New to Won with notes, follow ups and next steps attached, so nothing slips and you always know what to chase today.',
+      'The rest of the app grew around that. A board for your jobs and tasks with due dates and a calendar for the month. A pipeline that moves every lead from New to Won with notes attached. Invoices and quotes you can fix with a click. And if you work with a team, you can tag each other inside a task and it lands in their inbox.',
       '',
-      '3. Lead search that hunts the internet for you. Describe your customer, say "medical practices in Johannesburg that need contract cleaning" or "tattoo studios that buy supplies", and the engine goes through business directories and maps, scores every result against your trade, verifies phone numbers and websites, and drops the good ones straight into your pipeline. It got a lot smarter recently: leads that have nothing to do with your trade are thrown out before you ever see them.',
-      '',
-      'How we work: you bring the hustle, we build the tools. Your leads, your clients, your invoices and your data live in one place and belong to you, never sold, never shared. The free plan costs nothing, needs no card, and everything above works on it.',
+      'Your data stays yours, never sold, never shared. The free plan needs no card, so nothing here is a gamble.',
       '',
       'Log in and have a look: https://www.hustleportal.online',
       '',
-      'Something broken, or something you hate? Reply to this email and it comes straight to the team. We would rather hear it from you than lose you quietly.',
+      'Something broken or something you hate? Reply to this mail and it comes straight to the team. We would rather hear it from you than lose you quietly.',
       '',
       'The HustlePortal team',
     ].join('\n'),
