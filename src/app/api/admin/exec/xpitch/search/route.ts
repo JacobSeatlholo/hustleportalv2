@@ -224,6 +224,10 @@ export async function POST(req: NextRequest) {
   // 2) parse candidates, keep the South Africans
   const out = (search.body as { output?: Record<string, unknown> } | null)?.output ?? {}
   type Raw = Record<string, unknown>
+  // The provider answers "nothing found" as a 200 with found:false and $0 —
+  // honest empty. Surface the reason so a dry ask is not a mystery.
+  const providerFound = out.found !== false
+  const providerReason = out.reason ? String(out.reason) : ''
   let rawRows: Raw[] = []
   if (platform === 'x') {
     rawRows = ((out as { data?: { users?: Raw[] } }).data?.users || []) as Raw[]
@@ -299,6 +303,8 @@ export async function POST(req: NextRequest) {
     ok: true,
     platform,
     ask,
+    providerFound,
+    providerReason: providerReason || undefined,
     providerRows: rawRows.length,
     southAfrican: kept.length,
     droppedNonSa: dropped,
@@ -312,6 +318,8 @@ export async function POST(req: NextRequest) {
       spentUsd: Number((spentAfter / 1e6).toFixed(4)),
       remainingUsd: Number((Math.max(0, capMicro - spentAfter) / 1e6).toFixed(4)),
     },
-    message: `${kept.length} South African candidate${kept.length === 1 ? '' : 's'} from ${rawRows.length} rows; ${r.added} new in the review queue. This search cost $${costUsd.toFixed(4)} — probe budget $${((capMicro - spentAfter) / 1e6).toFixed(2)} left. Nothing joins the pitch list until you say so.`,
+    message: !providerFound
+      ? `The ${platform} search found nothing for that ask (${providerReason || 'not_found'}) and bought nothing — $${costUsd.toFixed(4)}. Try one broad trade word ("shisanyama", "plumber") or add a city, then run it again.`
+      : `${kept.length} South African candidate${kept.length === 1 ? '' : 's'} from ${rawRows.length} rows; ${r.added} new in the review queue. This search cost $${costUsd.toFixed(4)} — probe budget $${((capMicro - spentAfter) / 1e6).toFixed(2)} left. Nothing joins the pitch list until you say so.`,
   })
 }
