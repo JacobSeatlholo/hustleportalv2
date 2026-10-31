@@ -1724,10 +1724,17 @@ interface XPitchLead {
   url: string
   phone: string
   email: string
-  platform?: 'x' | 'tiktok'
+  platform?: 'x' | 'tiktok' | 'facebook'
   lastPost?: string
   fresh?: 'fresh' | 'warm' | 'stale' | 'no-posts' | 'unknown'
+  addedAt?: string
   status: 'todo' | 'dm' | 'replied' | 'joined' | 'skip'
+}
+
+function PlatformChip({ platform }: { platform?: XPitchLead['platform'] }) {
+  if (platform === 'tiktok') return <Badge variant="outline" className="text-[9px] shrink-0 border-pink-500/40 text-pink-400">TikTok</Badge>
+  if (platform === 'facebook') return <Badge variant="outline" className="text-[9px] shrink-0 border-blue-500/40 text-blue-400">Facebook</Badge>
+  return <Badge variant="outline" className="text-[9px] shrink-0 border-sky-500/40 text-sky-400">X</Badge>
 }
 
 const FRESH_ORDER: Record<string, number> = { fresh: 0, warm: 1, unknown: 2, 'no-posts': 3, stale: 4 }
@@ -1738,7 +1745,7 @@ const FRESH_CLS: Record<string, string> = {
   'no-posts': 'border-zinc-600/50 text-zinc-500',
   unknown: 'border-zinc-600/50 text-zinc-500',
 }
-function freshLabel(l: XPitchLead): string {
+function freshLabel(l: Pick<XPitchLead, 'lastPost' | 'fresh'>): string {
   if (!l.lastPost) return l.fresh === 'no-posts' ? 'no posts' : 'activity ?'
   const d = Math.round((Date.now() - new Date(l.lastPost).getTime()) / 86_400_000)
   if (d <= 0) return 'posted today'
@@ -1812,9 +1819,27 @@ function XPitchCard() {
     } catch { /* clipboard blocked — the text stays visible in the playbook */ }
   }
 
+  // WhatsApp preset: the phone leads get a wa.me deep link with the first
+  // touch ALREADY TYPED. WhatsApp only sends when the boss taps send —
+  // nothing here ever auto-sends.
+  function waDigits(phone: string): string {
+    const d = String(phone).replace(/\D/g, '')
+    if (d.startsWith('27')) return d
+    if (d.startsWith('0')) return '27' + d.slice(1)
+    return d
+  }
+  function waLink(l: XPitchLead): string {
+    const first = l.name.split(' ')[0] || 'there'
+    const where = l.platform === 'tiktok' ? 'on TikTok' : l.platform === 'facebook' ? 'on Facebook' : 'on X'
+    const place = l.city && l.city !== 'ZA' ? `in ${l.city} ` : 'in SA '
+    const text = `Hi ${first}! Saw your ${l.trade} hustle ${place}${where}. We built HustlePortal for hustlers like you: search your trade + your city, get real people who need your service — names, numbers, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
+    return `https://wa.me/${waDigits(l.phone)}?text=${encodeURIComponent(text)}`
+  }
+
   const counts = data?.counts ?? {}
   const leads = [...(data?.leads ?? [])].sort((a, b) => XPITCH_ORDER[a.status] - XPITCH_ORDER[b.status] || (FRESH_ORDER[a.fresh ?? 'unknown'] ?? 2) - (FRESH_ORDER[b.fresh ?? 'unknown'] ?? 2) || (b.followers || 0) - (a.followers || 0))
   const ttCount = leads.filter((l) => l.platform === 'tiktok').length
+  const waCount = leads.filter((l) => l.phone).length
 
   return (
     <Card>
@@ -1836,7 +1861,7 @@ function XPitchCard() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. Fresh chips show the account&apos;s last post — work the green ones first, the grey ones are years dead. DMs go from your own accounts, a handful a day.
+          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. Fresh chips show the account&apos;s last post — work the green ones first, the grey ones are years dead. DMs go from your own accounts, a handful a day. The WhatsApp button opens the chat with the opener already typed — you still tap send yourself{waCount > 0 ? ` (${waCount} leads have numbers)` : ''}.
         </p>
         {loading ? (
           <Skeleton className="h-24 w-full" />
@@ -1850,11 +1875,7 @@ function XPitchCard() {
                   <a href={l.url} target="_blank" rel="noreferrer" className="font-medium truncate hover:underline">
                     @{l.handle}
                   </a>
-                  {l.platform === 'tiktok' ? (
-                    <Badge variant="outline" className="text-[9px] shrink-0 border-pink-500/40 text-pink-400">TikTok</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[9px] shrink-0 border-sky-500/40 text-sky-400">X</Badge>
-                  )}
+                  <PlatformChip platform={l.platform} />
                   <Badge variant="outline" className="text-[9px] shrink-0">{l.trade}</Badge>
                   {l.followers > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{l.followers.toLocaleString()} followers</span>}
                   <Badge variant="outline" className={`text-[9px] shrink-0 ${FRESH_CLS[l.fresh ?? 'unknown'] ?? FRESH_CLS.unknown}`}>{freshLabel(l)}</Badge>
@@ -1873,6 +1894,122 @@ function XPitchCard() {
                   <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => copyDm(l)}>
                     {showCopied === l.handle ? <><Check className="h-3 w-3 mr-1" /> copied</> : <><Copy className="h-3 w-3 mr-1" /> copy DM</>}
                   </Button>
+                  {l.phone && (
+                    <a href={waLink(l)} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-emerald-500/40 text-emerald-400">
+                        <MessageSquare className="h-3 w-3 mr-1" /> WhatsApp
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface ReviewLeadRow {
+  handle: string
+  name: string
+  trade: string
+  city: string
+  followers: number
+  url: string
+  phone: string
+  email: string
+  platform: 'x' | 'tiktok' | 'facebook'
+  lastPost: string
+  fresh: 'fresh' | 'warm' | 'stale' | 'no-posts' | 'unknown'
+  source?: string
+}
+
+/**
+ * Lead review gate — fresh sweep finds wait here for the owner's go/no-go
+ * before they may touch the pitch list. Good fit → "add" walks it into the
+ * pipeline as "to DM". Not a fit → "no" remembers the handle and future
+ * sweeps never resurface it. Nothing auto-adds, ever.
+ */
+function LeadReviewCard() {
+  const { toast } = useToast()
+  const [data, setData] = useState<{ queue: ReviewLeadRow[]; queueCount: number; rejectedCount: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busyHandle, setBusyHandle] = useState('')
+
+  async function load() {
+    setLoading(true)
+    try {
+      setData(await api('/api/admin/exec/xpitch/review'))
+    } catch {
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { load() }, [])
+
+  async function act(l: ReviewLeadRow, action: 'add' | 'reject') {
+    setBusyHandle(l.handle)
+    setData((d) => d ? { ...d, queue: d.queue.filter((x) => x.handle !== l.handle), queueCount: Math.max(0, d.queueCount - 1) } : d)
+    try {
+      await api('/api/admin/exec/xpitch/review', { method: 'POST', body: JSON.stringify({ action, handle: l.handle, ...(action === 'reject' ? { why: 'not a fit' } : {}) }) })
+      const tag = l.platform === 'facebook' ? l.name : `@${l.handle}`
+      if (action === 'add') toast({ title: `${tag} added to the pitch list`, description: 'It joins as "to DM" — fresh finds only move when you say so.' })
+      else toast({ title: `${tag} marked not a fit`, description: 'Future sweeps will not resurface it.' })
+    } catch {
+      toast({ title: 'Could not save that', description: 'Try again in a moment.' })
+      load()
+    } finally {
+      setBusyHandle('')
+    }
+  }
+
+  const q = data?.queue ?? []
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <ThumbsUp className="h-4 w-4 text-brand" /> Lead review
+          <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-400">{data ? `${data.queueCount} waiting` : '…'}</Badge>
+          {data && data.rejectedCount > 0 && <Badge variant="outline" className="text-[9px] border-zinc-600/50 text-zinc-500">{data.rejectedCount} rejected</Badge>}
+          <span className="ml-auto text-xs text-muted-foreground font-normal">your go / no-go gate</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Every fresh sweep find (X, TikTok, Facebook) waits here first — nothing joins the pitch list until you call it. Good fit → add; dead or wrong → no, and it never comes back.
+        </p>
+        {loading ? (
+          <Skeleton className="h-20 w-full" />
+        ) : !data ? (
+          <div className="text-sm text-muted-foreground">The review queue is not reachable right now — refresh in a moment.</div>
+        ) : q.length === 0 ? (
+          <div className="text-sm text-muted-foreground">Queue is clear. New finds from the next sweep wave will wait here for your call.</div>
+        ) : (
+          <div className="rounded-lg border divide-y max-h-80 overflow-y-auto hp-scroll">
+            {q.map((l) => (
+              <div key={l.handle} className="px-3 py-2 text-xs space-y-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <a href={l.url || '#'} target="_blank" rel="noreferrer" className="font-medium truncate hover:underline">
+                    {l.platform === 'facebook' ? l.name : `@${l.handle}`}
+                  </a>
+                  <PlatformChip platform={l.platform} />
+                  <Badge variant="outline" className="text-[9px] shrink-0">{l.trade}</Badge>
+                  {l.followers > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{l.followers.toLocaleString()} followers</span>}
+                  <Badge variant="outline" className={`text-[9px] shrink-0 ${FRESH_CLS[l.fresh] ?? FRESH_CLS.unknown}`}>{freshLabel(l)}</Badge>
+                  <span className="ml-auto shrink-0 flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-emerald-500/40 text-emerald-400" disabled={busyHandle === l.handle} onClick={() => act(l, 'add')}>
+                      <ThumbsUp className="h-3 w-3 mr-1" /> add
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-zinc-600/50 text-zinc-400" disabled={busyHandle === l.handle} onClick={() => act(l, 'reject')}>
+                      <ThumbsDown className="h-3 w-3 mr-1" /> no
+                    </Button>
+                  </span>
+                </div>
+                <div className="text-muted-foreground truncate">
+                  {[l.name !== l.handle ? l.name : '', l.city, l.phone, l.email].filter(Boolean).join(' · ')}
                 </div>
               </div>
             ))}
@@ -2447,6 +2584,8 @@ export default function AdminView() {
       {/* Hot leads: live replies from the Explee campaigns */}
       <HotLeadsCard />
 
+      {/* Lead review gate: sweep finds wait for the owner's go/no-go before the pitch list */}
+      <LeadReviewCard />
       {/* X pitch list: the owner's growth pipeline — prospects for HustlePortal itself */}
       <XPitchCard />
 

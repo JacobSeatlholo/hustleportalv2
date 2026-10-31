@@ -12,6 +12,7 @@ export const CONFIG_KEYS = {
   CAMPAIGN_AUTO_CENTS: 'campaign_auto_cents', // top-ups at or above this auto run a client campaign
   LIFECYCLE_LAST_RUN: 'lifecycle_last_run', // hourly throttle for the lifecycle sweep (epoch ms)
   XPITCH_PIPELINE: 'xpitch_pipeline_v1', // the owner's X pitch list statuses {handle: todo|dm|replied|joined|skip}
+  XPITCH_REVIEW: 'xpitch_review_v1', // the owner's lead review gate: queue of sweep finds + rejected handles
 } as const
 
 const DEFAULTS: Record<string, string> = {
