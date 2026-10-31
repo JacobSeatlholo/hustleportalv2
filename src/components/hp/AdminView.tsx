@@ -28,7 +28,7 @@ import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
-  Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare,
+  Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare, Copy,
   Mail, MailOpen, MailX, Send, ThumbsUp, ThumbsDown, Gauge,
 } from 'lucide-react'
 
@@ -1715,6 +1715,145 @@ function MailboxGateCard({ treg }: { treg: TregBlock | null }) {
   )
 }
 
+interface XPitchLead {
+  handle: string
+  name: string
+  trade: string
+  city: string
+  followers: number
+  url: string
+  phone: string
+  email: string
+  status: 'todo' | 'dm' | 'replied' | 'joined' | 'skip'
+}
+
+const XPITCH_ORDER: Record<XPitchLead['status'], number> = { todo: 0, dm: 1, replied: 2, joined: 3, skip: 4 }
+const XPITCH_NEXT: Record<XPitchLead['status'], XPitchLead['status']> = { todo: 'dm', dm: 'replied', replied: 'joined', joined: 'skip', skip: 'todo' }
+const XPITCH_LABEL: Record<XPitchLead['status'], string> = { todo: 'to DM', dm: 'DM sent', replied: 'replied', joined: 'JOINED', skip: 'skipped' }
+const XPITCH_CLS: Record<XPitchLead['status'], string> = {
+  todo: 'border-emerald-500/40 text-emerald-400',
+  dm: 'border-sky-500/40 text-sky-400',
+  replied: 'border-amber-500/40 text-amber-400',
+  joined: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300',
+  skip: 'border-zinc-500/40 text-zinc-400',
+}
+
+/**
+ * X pitch list — the owner's growth pipeline. The 28 SA sellers the sweeps
+ * found, each with one tap to walk it down the funnel: to DM → DM sent →
+ * replied → JOINED (or skipped). Lives outside the member lead pool on
+ * purpose: these are prospects for HustlePortal itself, not deliverable
+ * leads. Tapping a handle opens the profile; the copy block is the cold DM.
+ */
+function XPitchCard() {
+  const { toast } = useToast()
+  const [data, setData] = useState<{ counts: Record<string, number>; leads: XPitchLead[]; total: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busyHandle, setBusyHandle] = useState('')
+  const [showCopied, setShowCopied] = useState('')
+
+  async function load() {
+    setLoading(true)
+    try {
+      setData(await api('/api/admin/exec/xpitch'))
+    } catch {
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { load() }, [])
+
+  async function cycle(l: XPitchLead) {
+    const next = XPITCH_NEXT[l.status] ?? 'todo'
+    setBusyHandle(l.handle)
+    setData((d) => d ? { ...d, leads: d.leads.map((x) => x.handle === l.handle ? { ...x, status: next } : x) } : d)
+    try {
+      await api('/api/admin/exec/xpitch', { method: 'POST', body: JSON.stringify({ handle: l.handle, status: next }) })
+      if (next === 'joined') toast({ title: `@${l.handle} joined!`, description: 'New subscriber off the X pitch list.' })
+    } catch {
+      toast({ title: 'Could not save that', description: 'Tap it again in a moment.' })
+      load()
+    } finally {
+      setBusyHandle('')
+    }
+  }
+
+  function dmTemplate(l: XPitchLead) {
+    return `Hi ${l.name.split(' ')[0] || 'there'} — saw your ${l.trade} hustle in ${l.city}. We built HustlePortal for hustlers like you: search your trade + your city, get real businesses that need your service — names, numbers, emails, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
+  }
+
+  async function copyDm(l: XPitchLead) {
+    try {
+      await navigator.clipboard.writeText(dmTemplate(l))
+      setShowCopied(l.handle)
+      setTimeout(() => setShowCopied(''), 1600)
+    } catch { /* clipboard blocked — the text stays visible in the playbook */ }
+  }
+
+  const counts = data?.counts ?? {}
+  const leads = [...(data?.leads ?? [])].sort((a, b) => XPITCH_ORDER[a.status] - XPITCH_ORDER[b.status] || (b.followers || 0) - (a.followers || 0))
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Send className="h-4 w-4 text-brand" /> X pitch list
+          <Badge variant="outline" className="text-[9px] border-sky-500/40 text-sky-400">{data?.total ?? '…'} prospects</Badge>
+          <span className="ml-auto text-xs text-muted-foreground font-normal">{counts.joined ?? 0} joined</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {(['todo', 'dm', 'replied', 'joined'] as const).map((s) => (
+            <div key={s} className="rounded-lg border py-2">
+              <div className={`text-lg font-semibold ${s === 'todo' ? 'text-emerald-400' : s === 'joined' ? 'text-emerald-300' : s === 'replied' ? 'text-amber-400' : 'text-sky-400'}`}>{counts[s] ?? 0}</div>
+              <div className="text-[10px] text-muted-foreground">{XPITCH_LABEL[s]}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. DMs go from your own X account — keep it a handful a day.
+        </p>
+        {loading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : !data ? (
+          <div className="text-sm text-muted-foreground">The X pitch list is not reachable right now — refresh in a moment.</div>
+        ) : (
+          <div className="rounded-lg border divide-y max-h-96 overflow-y-auto hp-scroll">
+            {leads.map((l) => (
+              <div key={l.handle} className="px-3 py-2 text-xs space-y-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <a href={l.url} target="_blank" rel="noreferrer" className="font-medium truncate hover:underline">
+                    @{l.handle}
+                  </a>
+                  <Badge variant="outline" className="text-[9px] shrink-0">{l.trade}</Badge>
+                  {l.followers > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{l.followers.toLocaleString()} followers</span>}
+                  <Badge
+                    variant="outline"
+                    className={`ml-auto text-[9px] shrink-0 cursor-pointer ${XPITCH_CLS[l.status]}`}
+                    onClick={() => cycle(l)}
+                  >
+                    {busyHandle === l.handle ? '…' : XPITCH_LABEL[l.status]}
+                  </Badge>
+                </div>
+                <div className="text-muted-foreground truncate">
+                  {[l.name, l.city, l.phone, l.email].filter(Boolean).join(' · ')}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => copyDm(l)}>
+                    {showCopied === l.handle ? <><Check className="h-3 w-3 mr-1" /> copied</> : <><Copy className="h-3 w-3 mr-1" /> copy DM</>}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function VerifiedPoolCard({ roster }: { roster: RosterRow[] }) {
   const { toast } = useToast()
   const [memberId, setMemberId] = useState('')
@@ -2278,6 +2417,9 @@ export default function AdminView() {
 
       {/* Hot leads: live replies from the Explee campaigns */}
       <HotLeadsCard />
+
+      {/* X pitch list: the owner's growth pipeline — prospects for HustlePortal itself */}
+      <XPitchCard />
 
       {/* Mailbox gate: proved-live coverage + the labelled leads themselves */}
       <MailboxGateCard treg={exec?.treg ?? null} />

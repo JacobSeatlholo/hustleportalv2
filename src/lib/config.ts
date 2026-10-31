@@ -11,6 +11,7 @@ export const CONFIG_KEYS = {
   YOCO_WEBHOOK_MODE: 'yoco_webhook_mode', // 'live' | 'test', which key world the webhook was registered in
   CAMPAIGN_AUTO_CENTS: 'campaign_auto_cents', // top-ups at or above this auto run a client campaign
   LIFECYCLE_LAST_RUN: 'lifecycle_last_run', // hourly throttle for the lifecycle sweep (epoch ms)
+  XPITCH_PIPELINE: 'xpitch_pipeline_v1', // the owner's X pitch list statuses {handle: todo|dm|replied|joined|skip}
 } as const
 
 const DEFAULTS: Record<string, string> = {
