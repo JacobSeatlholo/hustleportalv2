@@ -2666,6 +2666,11 @@ export default function AdminView() {
         </div>
       )}
 
+      {/* Win-back: the quiet list and the email that brings them back. Right
+          under the KPIs so it is never buried below the fold again. Nothing
+          leaves the platform until the send button is pressed on purpose. */}
+      <WinBackCard />
+
       {/* Meetings: the business cases you set, with the one tap confirm state */}
       <MeetingsCard meetings={exec?.meetings ?? null} onChanged={() => setTick((t) => t + 1)} />
 
@@ -2808,10 +2813,6 @@ export default function AdminView() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Win-back: the quiet list and the email that brings them back. Nothing
-          leaves the platform until the send button is pressed on purpose. */}
-      <WinBackCard />
 
       {/* Sent mail: every email the platform delivered, click a row to read it. */}
       <SentMailCard />
@@ -3000,9 +3001,13 @@ function WinBackCard() {
       <CardContent className="p-0">
         {loading ? (
           <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 rounded-md bg-white/5 animate-pulse" />)}</div>
-        ) : !feed || feed.audience.length === 0 ? (
+        ) : !feed ? (
           <div className="px-4 py-6 text-sm text-muted-foreground text-center">
-            Nobody has gone quiet. Everyone has been in the app in the last {feed?.quietDays ?? 7} days.
+            The win-back feed could not load. Refresh, and if it keeps failing the session is not the owner seat.
+          </div>
+        ) : feed.audience.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground text-center">
+            Nobody has gone quiet. Everyone has been in the app in the last {feed.quietDays} days.
           </div>
         ) : (
           <div className="divide-y max-h-72 overflow-y-auto hp-scroll">
