@@ -264,7 +264,11 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await tregVerifyEmail(email, {
-      timeoutMs: 15_000,
+      // 30s: greylisting/slow SMTP probes routinely take >15s, and a timeout
+      // fail-opens to unknown that is never durably cached — the row then
+      // retries every sweep forever. 30s (the probe door's default) resolves
+      // them; the clock guard below still keeps the function inside budget.
+      timeoutMs: 30_000,
       via: freeDrip ? 'drip' : 'sweep',
       ...(freeDrip ? { endpoint: TREG_ENDPOINT_CONTACTOUT, timeoutMs: 14_000 } : {}),
     })
