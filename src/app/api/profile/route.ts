@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getUserId, hashPassword, verifyPassword } from '@/lib/auth'
+import { getUserId, hashPassword, verifyPassword, bumpSessionEpoch } from '@/lib/auth'
 
 // PATCH /api/profile, update own profile
 export async function PATCH(req: NextRequest) {
@@ -29,6 +29,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'New password must be at least 6 characters.' }, { status: 400 })
     }
     data.passwordHash = await hashPassword(String(body.password))
+    // Same law as the reset flow: a password change kills every session
+    // issued before it, so a stolen cookie cannot outlive the new password.
+    data.sessionEpoch = { increment: 1 }
   }
   const user = await db.user.update({ where: { id: userId }, data })
   return NextResponse.json({ ok: true, user: { id: user.id, name: user.name } })

@@ -203,7 +203,11 @@ export async function POST(req: NextRequest) {
     platform === 'tiktok'
       ? { method: 'POST', body: { q: ask } }
       : { method: 'POST', body: { query: ask, ...(platform === 'facebook' ? { limit: 10 } : {}) } }
-  const search = await tregProbeCall(SEARCH_ENDPOINT[platform], searchArgs, { timeoutMs: 30_000, maxCostUsd: MAX_CALL_COST_USD })
+  // Facebook's endpoint is slow (>30s observed): give it 75s, the others stay
+  // at 30s. Nothing is charged for a timeout, but a refusal-by-timeout hides
+  // results a patient call would have bought.
+  const searchTimeoutMs = platform === 'facebook' ? 75_000 : 30_000
+  const search = await tregProbeCall(SEARCH_ENDPOINT[platform], searchArgs, { timeoutMs: searchTimeoutMs, maxCostUsd: MAX_CALL_COST_USD })
   let costUsd = search.costUsd ?? 0
 
   if (!search.ok) {
