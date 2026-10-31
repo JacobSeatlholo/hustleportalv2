@@ -2786,3 +2786,19 @@ Work Log:
 
 Stage Summary:
 - The front door now speaks the way the boss talks: plain, human, no dashes, no AI tells, and it leads with what changes for the user. The bottom of the page carries a working demo built by Business Hustle and the airtime story with the exact prices the books charge. Limits law untouched, money contract untouched, zero sends.
+
+---
+Task ID: 140
+Agent: Super Z (main)
+Task: Boss: "the outreach message is terrible and looks ai generated for x tiktok and facebook.. make something better, be more humanlike and remove the '--'. let me see the messages here first to approve.." then "okay, A of each.. Vercel done." plus a screenshot asking about TREG_TOKEN showing "Needs Attention" on Vercel.
+
+Work Log:
+- Both templates live in AdminView XPitchCard: dmTemplate (copy button) and waLink (WhatsApp preset). Old copy carried 4 em dashes, a colon list, "+" signs and one skeleton shared by every platform, the exact AI tells the boss banned on the landing in Task 139. Facts inside were true, so only the voice changed.
+- Drafted 2 options per surface in chat (X, TikTok, Facebook, WhatsApp), boss approved option A of each. dmTemplate is now per platform with plain sentences, zero dashes, and the truth kept: 25 searches a day is the real free cap (leadpool.ts DAILY_SCAN_CAP_FREE), contact details checked is the door chain.
+- Two real gaps fixed while in there: Facebook leads got the X text from the copy button because dmTemplate had no facebook branch, and the city placeholder 'ZA' some sweeps leave behind could print "in ZA" to a human (cityPhrase guard on both templates, empty city drops the phrase).
+- WhatsApp preset A opens "Hi {first}, hope business is treating you well." with the platform word adapting per lead. Red line untouched: nothing auto-sends, still copy button and wa.me deep link, boss taps send.
+- Resend suppression webhook fully armed: boss added RESEND_WEBHOOK_SECRET on Vercel; this deploy baked it in. Live proof from forged probes: no key 401 (was 200 handled:0 before the secret), wrong key 401, probe carrying a wrong key also 401. Only the real webhook URL with the real key gets through, exactly the anti-poisoning contract from the QA. Deploy 89337e2 health green, db ping true.
+- TREG_TOKEN "Needs Attention": Vercel's badge for a saved value that is not part of the running production deployment yet; this deploy applies it, badge should clear on refresh, next xpitch search confirms treg auth live.
+
+Stage Summary:
+- Prod 89337e2: every surface of the pitch list speaks the boss's voice now, no dashes anywhere, Facebook branch real, ZA guard on, and the Resend webhook is sealed (forgeries 401, real events flow once the endpoint URL carries the key). Boss side: if the Resend dialog is still open, endpoint URL needs the ?key= tail and events email.bounced plus email.complained only.
