@@ -151,6 +151,14 @@ async function durableWrite(email: string, entry: DurableEntry): Promise<void> {
 
 const LEDGER_KEY = 'TREG_CALL_LEDGER'
 const LEDGER_MAX = 200 // a ring; the oldest receipts fall off first
+/** Durable lifetime sweep+drip spend, USD micros. The ring forgets; the budget
+ *  cap must not. Seen live 2026-10-31: the ring rotated through ~450 paid
+ *  calls and the reported sweep spend FELL from $0.19 to $0.02 while real
+ *  money was going out — a cap measured on a ring is not a cap. This key is
+ *  what SWEEP_BUDGET_USD is measured against from now on; it bootstraps once
+ *  from the ring's sum (entries the ring had already evicted before this fix
+ *  are gone — ~$0.62 of history, disclosed to the owner, bounded and final). */
+const SWEEP_SPEND_KEY = 'TREG_SWEEP_SPEND'
 
 export interface TregLedgerEntry {
   id?: string // treg's call id, for support and the vendor bill
@@ -178,6 +186,17 @@ async function ledgerAdd(entry: TregLedgerEntry): Promise<void> {
       update: { value: JSON.stringify(ring) },
       create: { key: LEDGER_KEY, value: JSON.stringify(ring) },
     })
+    // The durable twin of the ring for the sweep budget: same entry, the
+    // number that survives the ring's rotation.
+    if ((entry.via === 'sweep' || entry.via === 'drip') && entry.c > 0) {
+      const spendRow = await db.platformConfig.findUnique({ where: { key: SWEEP_SPEND_KEY } })
+      const prev = spendRow?.value ? (JSON.parse(spendRow.value) as { spendMicro?: number }).spendMicro || 0 : 0
+      await db.platformConfig.upsert({
+        where: { key: SWEEP_SPEND_KEY },
+        update: { value: JSON.stringify({ spendMicro: prev + entry.c, at: Date.now() }) },
+        create: { key: SWEEP_SPEND_KEY, value: JSON.stringify({ spendMicro: entry.c, at: Date.now() }) },
+      })
+    }
   } catch {
     // The ledger is an optimisation for visibility; it must never fail a call.
   }
@@ -196,22 +215,42 @@ export async function tregCallLedger(limit = 25): Promise<TregLedgerEntry[]> {
 }
 
 /**
- * What the POOL sweeps have actually spent, read off the ledger. The paid
- * sweep enforces its own cumulative budget against this number, so the cap
- * survives restarts and operator memory. (The free contactout drip rides in
- * the same ledger at $0 — included defensively in case it ever charges.)
- * The ring holds 200 receipts ≈ $0.36 of paid calls, comfortably more than
- * the $0.30 cap, so the oldest entries can never fall off before the cap trips.
+ * What the POOL sweeps have actually spent — the number SWEEP_BUDGET_USD is
+ * enforced against, so the cap survives restarts and operator memory. (The
+ * free contactout drip rides in the same ledger at $0 — included defensively
+ * in case it ever charges.)
+ * History note: this used to read the receipt ring alone. The ring holds 200
+ * receipts; at $0.00178 a call the $2.00 cap is ~1,124 calls, so the ring
+ * rotates long before the cap trips and the reported spend FELL while real
+ * money went out (seen live 2026-10-31). The durable TREG_SWEEP_SPEND counter
+ * (written by ledgerAdd on every charged sweep/drip call) is the source of
+ * truth now; the ring sum is only the bootstrap floor and a cross-check.
  */
 export async function tregSweepSpendMicro(): Promise<number> {
+  let ringSum = 0
   try {
     const { db } = await import('@/lib/db')
     const row = await db.platformConfig.findUnique({ where: { key: LEDGER_KEY } })
     const ring = row?.value ? (JSON.parse(row.value) as TregLedgerEntry[]) : []
-    return ring.reduce((a, e) => (e.via === 'sweep' || e.via === 'drip') && e.c > 0 ? a + e.c : a, 0)
+    ringSum = ring.reduce((a, e) => (e.via === 'sweep' || e.via === 'drip') && e.c > 0 ? a + e.c : a, 0)
   } catch {
     return 0
   }
+  try {
+    const { db } = await import('@/lib/db')
+    const row = await db.platformConfig.findUnique({ where: { key: SWEEP_SPEND_KEY } })
+    const durable = row?.value ? (JSON.parse(row.value) as { spendMicro?: number }).spendMicro : undefined
+    if (typeof durable === 'number') return Math.max(durable, ringSum)
+    // One-time bootstrap: the counter starts at what the ring still remembers.
+    await db.platformConfig.upsert({
+      where: { key: SWEEP_SPEND_KEY },
+      update: { value: JSON.stringify({ spendMicro: ringSum, at: Date.now() }) },
+      create: { key: SWEEP_SPEND_KEY, value: JSON.stringify({ spendMicro: ringSum, at: Date.now() }) },
+    })
+  } catch {
+    /* the durable read is an optimisation; the ring sum is still the floor */
+  }
+  return ringSum
 }
 
 // ---------- the transport: one JSON-RPC tools/call, stateless ----------

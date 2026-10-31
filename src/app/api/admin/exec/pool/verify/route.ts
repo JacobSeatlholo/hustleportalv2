@@ -13,7 +13,7 @@ import { scoreFor, parseChecksSource } from '@/lib/leadpool'
 import { bumpRevealStats } from '@/lib/leadlookup'
 import { emailReach } from '@/lib/reach'
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 /**
  * POST /api/admin/exec/pool/verify — DOOR 3C FOR THE POOL, on a budget.
@@ -57,8 +57,12 @@ const DRIP_PACING_MS = 18_000
  *  enough to clear the whole ~900-row pending backlog (~$1.61 at $0.00178/call,
  *  DNS-dead rows killed free first) with the floor and the guards unchanged. */
 const SWEEP_BUDGET_USD = 2.0
-/** Never START a call when less than this much of the 60s function clock remains — a call started at T-15s with a 15s timeout lands exactly on the kill line, never past it. */
+/** Never START a call when less than this much of the function clock remains — a call started at T-15s with a 15s timeout lands exactly on the kill line, never past it. */
 const CLOCK_GUARD_MS = 15_000
+/** The function clock this route may use (matches maxDuration above; raised
+ *  2026-10-31 from 60s so one sweep run clears ~5× the rows — the backlog
+ *  pass was spending more wall time on cold starts than on calls). */
+const CLOCK_BUDGET_MS = 285_000
 /** Head mode sweeps the picker's world: this many top rows, best first. */
 const HEAD_SIZE = 300
 
@@ -254,7 +258,7 @@ export async function POST(req: NextRequest) {
 
     // CLOCK GUARD: millionverifier can take 10s on a slow domain; never start
     // a call the function clock cannot finish. The next run picks the rest up.
-    if (Date.now() - t0 > 60_000 - CLOCK_GUARD_MS) {
+    if (Date.now() - t0 > CLOCK_BUDGET_MS - CLOCK_GUARD_MS) {
       clockHit = true
       break
     }
