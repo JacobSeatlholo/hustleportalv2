@@ -227,7 +227,7 @@ interface TregReceipt {
   detail?: string | null
 }
 
-async function mcpCall(endpointId: string, args: Record<string, unknown>, timeoutMs: number, maxCostUsd?: number): Promise<TregReceipt | null> {
+async function mcpCall(endpointId: string, args: Record<string, unknown>, timeoutMs: number, maxCostUsd?: number, tool = 'call'): Promise<TregReceipt | null> {
   const res = await fetch(TREG_MCP_URL, {
     method: 'POST',
     headers: {
@@ -245,7 +245,9 @@ async function mcpCall(endpointId: string, args: Record<string, unknown>, timeou
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
-      params: { name: 'call', arguments: { endpoint_id: endpointId, ...args } },
+      // The catalog's own discovery tools (catalog_search, catalog_get, ...)
+      // are addressed by name; provider endpoints ride the `call` tool by id.
+      params: tool === 'call' ? { name: 'call', arguments: { endpoint_id: endpointId, ...args } } : { name: tool, arguments: args },
     }),
     signal: AbortSignal.timeout(timeoutMs),
   })
@@ -457,24 +459,25 @@ export interface TregProbeResult {
 export async function tregProbeCall(
   endpointId: string,
   args: Record<string, unknown>,
-  opts?: { timeoutMs?: number; maxCostUsd?: number }
+  opts?: { timeoutMs?: number; maxCostUsd?: number; tool?: string }
 ): Promise<TregProbeResult> {
   if (!tregEnabled) return { ok: false, error: 'TREG_TOKEN not set' }
+  const tool = opts?.tool || 'call'
   try {
-    const receipt = await mcpCall(endpointId, args, opts?.timeoutMs ?? 25_000, opts?.maxCostUsd)
+    const receipt = await mcpCall(endpointId, args, opts?.timeoutMs ?? 25_000, tool === 'call' ? opts?.maxCostUsd : undefined, tool)
     if (!receipt) return { ok: false, error: 'treg returned no receipt' }
     const costMicro = Math.round((receipt.cost_usd || 0) * 1_000_000)
     if (receipt.call_id || costMicro > 0) {
       await ledgerAdd({
         id: receipt.call_id,
-        e: String((args as { query?: { email?: string } })?.query?.email || endpointId),
+        e: String((args as { query?: { email?: string } })?.query?.email || endpointId || tool),
         v: 'unknown',
         c: costMicro,
         via: 'probe',
         at: Date.now(),
       })
     }
-    await probeSpendAdd(costMicro)
+    if (costMicro > 0) await probeSpendAdd(costMicro)
     return {
       ok: receipt.status === 200,
       status: receipt.status,

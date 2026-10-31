@@ -113,9 +113,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'TREG_TOKEN is not set on this deployment.' }, { status: 400 })
   }
 
-  const body = (await req.json().catch(() => ({}))) as { endpointId?: string; args?: Record<string, unknown>; maxCostUsd?: number }
+  const body = (await req.json().catch(() => ({}))) as { endpointId?: string; args?: Record<string, unknown>; maxCostUsd?: number; tool?: string }
+  // Whitelist: provider calls ride `call` by endpoint id; the catalog's own
+  // free discovery tools are addressed by name. Anything else is refused.
+  const TOOL_NAMES = ['call', 'catalog_search', 'catalog_get', 'my_tools', 'balance'] as const
+  const tool = (TOOL_NAMES as readonly string[]).includes(String(body.tool)) ? String(body.tool) : 'call'
   const endpointId = String(body.endpointId || '').trim()
-  if (!endpointId || !/^[a-z0-9_.]+$/i.test(endpointId)) {
+  if (tool === 'call' && (!endpointId || !/^[a-z0-9_.]+$/i.test(endpointId))) {
     return NextResponse.json({ error: 'Send { endpointId } — a dotted endpoint id straight from the catalog.' }, { status: 400 })
   }
 
@@ -136,7 +140,7 @@ export async function POST(req: NextRequest) {
   const maxCostUsd = Math.min(Number(body.maxCostUsd) || remainingUsd, remainingUsd)
   const args = body.args && typeof body.args === 'object' ? body.args : {}
 
-  const r = await tregProbeCall(endpointId, args, { timeoutMs: 30_000, maxCostUsd })
+  const r = await tregProbeCall(endpointId, args, { timeoutMs: 30_000, maxCostUsd, tool })
   const spentAfter = await tregProbeSpendMicro()
 
   return NextResponse.json({
