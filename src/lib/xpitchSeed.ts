@@ -1,5 +1,6 @@
-// AUTO-SEEDED from the audited X prospect sweep (scripts/exec_x_leads.mjs, 2026-10-31).
-// 28 SA seller accounts to pitch HustlePortal to. Regenerate, never hand-edit.
+// AUTO-SEEDED from the audited X prospect sweeps (scripts/exec_x_leads.mjs).
+// SA sellers to pitch HustlePortal to — the owner's growth pipeline.
+// Regenerate via scripts/compile_x_pitch.mjs, never hand-edit.
 export interface XPitchSeedLead {
   handle: string
   name: string
@@ -113,12 +114,32 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "email": ""
   },
   {
+    "handle": "JohannesburgSa3",
+    "name": "Johannesburg Salon",
+    "trade": "beauty",
+    "city": "Johannesburg",
+    "followers": 68,
+    "url": "https://x.com/JohannesburgSa3",
+    "phone": "",
+    "email": ""
+  },
+  {
     "handle": "PlumbersJoburg",
     "name": "Plumber Johannesburg",
     "trade": "building",
     "city": "Johannesburg",
     "followers": 60,
     "url": "https://x.com/PlumbersJoburg",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "handle": "DurbanClearing",
+    "name": "Durban Clearing",
+    "trade": "transport",
+    "city": "Durban",
+    "followers": 59,
+    "url": "https://x.com/DurbanClearing",
     "phone": "",
     "email": ""
   },
@@ -203,12 +224,52 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "email": ""
   },
   {
+    "handle": "mobile_joyce",
+    "name": "Boss Braids Mobile Salon Pretoria",
+    "trade": "beauty",
+    "city": "Pretoria",
+    "followers": 11,
+    "url": "https://x.com/mobile_joyce",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "handle": "DurbanCars",
+    "name": "durban team cars, WE ARE CAR DEALERS IN TOWN",
+    "trade": "retail",
+    "city": "Durban",
+    "followers": 11,
+    "url": "https://x.com/DurbanCars",
+    "phone": "076 690 8203",
+    "email": ""
+  },
+  {
     "handle": "DurbanPlumber",
     "name": "Plumber Durban",
     "trade": "building",
     "city": "Durban",
     "followers": 9,
     "url": "https://x.com/DurbanPlumber",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "handle": "claranailsdbn",
+    "name": "Clara Nails Durban",
+    "trade": "beauty",
+    "city": "Durban",
+    "followers": 9,
+    "url": "https://x.com/claranailsdbn",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "handle": "CURTAINCLEAN",
+    "name": "On-site curtain cleaning Johannesburg",
+    "trade": "cleaning",
+    "city": "Johannesburg",
+    "followers": 9,
+    "url": "https://x.com/CURTAINCLEAN",
     "phone": "",
     "email": ""
   },
@@ -289,6 +350,26 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "city": "Durban",
     "followers": 0,
     "url": "https://x.com/cleaningdurban",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "handle": "masai_town",
+    "name": "Masai Twist salon pretoria town",
+    "trade": "beauty",
+    "city": "Pretoria",
+    "followers": 0,
+    "url": "https://x.com/masai_town",
+    "phone": "0781750442",
+    "email": ""
+  },
+  {
+    "handle": "CrewDurban",
+    "name": "Cinderella Cleaning Crew Durban",
+    "trade": "cleaning",
+    "city": "Durban",
+    "followers": 0,
+    "url": "https://x.com/CrewDurban",
     "phone": "",
     "email": ""
   }
