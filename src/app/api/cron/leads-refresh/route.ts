@@ -67,7 +67,11 @@ export async function GET(req: NextRequest) {
         if (!host) return
         const ok = await pingWebsite(host)
         const prev = parseChecksSource(r.verifyChecks)
-        const checks = { phoneOk: prev.phoneOk, websiteOk: ok, checkedAt: new Date().toISOString() }
+        // A website ping says nothing about the mailbox: carry the email
+        // verdicts forward untouched. Rebuilding this object from scratch is
+        // what silently demoted verified / catch-all rows back to pending
+        // (seen 2026-10-31: two catch-all rows lost their verdict here).
+        const checks = { ...prev, phoneOk: prev.phoneOk, websiteOk: ok, checkedAt: new Date().toISOString() }
         const score = scoreFor(checks, r.confirmCount, true)
         await db.leadPool.update({
           where: { id: r.id },

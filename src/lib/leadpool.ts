@@ -844,7 +844,10 @@ export async function ingestVerifiedContacts(opts: {
       }
       if (opts.dryRun) continue
       const prevChecks = parseChecksSource(prev.verifyChecks)
+      // A re-capture confirms the business, not the mailbox: carry the email
+      // verdicts forward so a merge never demotes a verified / catch-all row.
       const checks: VerifyChecks = {
+        ...prevChecks,
         phoneOk: prevChecks.phoneOk || phone.ok,
         ...(websiteOk !== undefined ? { websiteOk } : prevChecks.websiteOk !== undefined ? { websiteOk: prevChecks.websiteOk } : {}),
       }
@@ -1038,7 +1041,9 @@ export async function rememberScanResults(opts: {
     const fp = `${key}|${normKey(l.city || opts.area)}`
     // merge: keep the best facts on file, never erase good data with blanks
     const prevChecks = parseChecksSource(prev.verifyChecks)
+    // Same law as the other merge: email verdicts ride forward, never reset.
     const checks: VerifyChecks = {
+      ...prevChecks,
       phoneOk: prevChecks.phoneOk || phone.ok,
       ...(websiteOk !== undefined ? { websiteOk } : prevChecks.websiteOk !== undefined ? { websiteOk: prevChecks.websiteOk } : {}),
     }

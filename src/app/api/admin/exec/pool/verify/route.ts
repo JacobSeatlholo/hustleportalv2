@@ -18,25 +18,22 @@ export const maxDuration = 60
 /**
  * POST /api/admin/exec/pool/verify — DOOR 3C FOR THE POOL, on a budget.
  *
- * THE $0.30 PLAN (2026-10-31): the treg top-up minimum is $10 and the owner
- * chose not to spend that now, so the pool sweep lives under a hard, code-
- * enforced budget instead:
- *
- *  1. CUMULATIVE CAP, IN CODE: paid sweeps may spend at most SWEEP_BUDGET_USD
- *     ($0.30) EVER, measured off the call ledger — not per run, in total. The
- *     cap survives restarts and operator memory; the lens shows what remains.
- *  2. FREE KILLS FIRST: before a paid call, the row's domain goes through the
+ * THE CAP (2026-10-31, raised from $0.30 after the owner topped up): paid
+ * sweeps may spend at most SWEEP_BUDGET_USD ($2.00) EVER, measured off the
+ * call ledger — not per run, in total. The cap survives restarts and operator
+ * memory; the lens shows what remains.
+ *  1. FREE KILLS FIRST: before a paid call, the row's domain goes through the
  *     platform's own DNS reach gate (reach.ts, $0). A domain that provably
  *     cannot accept mail is stamped dead without spending a cent of budget —
  *     the exact verdict millionverifier would have charged $0.00178 to say.
- *  3. HEAD FIRST: mode "head" (the default) sweeps the same rows the owner's
+ *  2. HEAD FIRST: mode "head" (the default) sweeps the same rows the owner's
  *     picker shows — highest verifyScore first — so the budget lands on the
  *     contacts members actually get handed, not the tail of the pool.
- *  4. THE FREE DRIP: provider "contactout" runs the same sweep on the catalog
+ *  3. THE FREE DRIP: provider "contactout" runs the same sweep on the catalog
  *     tool that charges $0 per call. It is heavily rate-limited, so a drip
  *     takes at most 2 rows with 18s pacing — run it when idle, it costs
  *     nothing, and unknowns (throttles) are never stored, just retried later.
- *  5. THE TILL PAYS ITS OWN WAY: Door 3c at the reveal (via=reveal) is
+ *  4. THE TILL PAYS ITS OWN WAY: Door 3c at the reveal (via=reveal) is
  *     revenue-backed — $0.00178 against a R15 sale — and does not touch the
  *     sweep budget. A dry balance never breaks a reveal: fail-open unknown.
  *
@@ -54,8 +51,12 @@ const PACING_MS = 300
 /** The free drip: at most these rows per invocation, paced for the provider's rate limit. */
 const DRIP_TAKE = 2
 const DRIP_PACING_MS = 18_000
-/** The whole point of this file today: the pool sweep's lifetime spend cap, in USD. */
-const SWEEP_BUDGET_USD = 0.3
+/** The whole point of this file today: the pool sweep's lifetime spend cap, in USD.
+ *  History: $0.30 while the owner chose not to top up (the treg minimum is $10).
+ *  Raised to $2.00 on 2026-10-31 after the owner loaded the balance (~$10.87) —
+ *  enough to clear the whole ~900-row pending backlog (~$1.61 at $0.00178/call,
+ *  DNS-dead rows killed free first) with the floor and the guards unchanged. */
+const SWEEP_BUDGET_USD = 2.0
 /** Never START a call when less than this much of the 60s function clock remains — a call started at T-15s with a 15s timeout lands exactly on the kill line, never past it. */
 const CLOCK_GUARD_MS = 15_000
 /** Head mode sweeps the picker's world: this many top rows, best first. */
