@@ -227,7 +227,7 @@ interface TregReceipt {
   detail?: string | null
 }
 
-async function mcpCall(endpointId: string, args: Record<string, unknown>, timeoutMs: number): Promise<TregReceipt | null> {
+async function mcpCall(endpointId: string, args: Record<string, unknown>, timeoutMs: number, maxCostUsd?: number): Promise<TregReceipt | null> {
   const res = await fetch(TREG_MCP_URL, {
     method: 'POST',
     headers: {
@@ -237,8 +237,9 @@ async function mcpCall(endpointId: string, args: Record<string, unknown>, timeou
       // Hard budget ceiling on every routed call: no single verification may
       // ever cost more than one cent, whatever the waterfall tries. The pinned
       // millionverifier endpoint settles at $0.00178; this header is the
-      // guardrail for the day the route wanders.
-      'X-Treg-Route-Max-Cost': '0.01',
+      // guardrail for the day the route wanders. The probe door passes its own
+      // remaining budget so one exploratory call can never overspend.
+      'X-Treg-Route-Max-Cost': String(maxCostUsd ?? 0.01),
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -342,6 +343,149 @@ export async function tregBalanceMicro(opts?: { fresh?: boolean }): Promise<numb
     return null
   } catch {
     return null
+  }
+}
+
+// ---------- the catalog + probe doors: what else can this token do ----------
+
+/**
+ * TOOLS LIST: one metadata call to the MCP, the provider catalog falls out —
+ * every endpoint_id the team token can route to, with whatever pricing the
+ * descriptions admit. FREE (metadata, not a routed call), cached in
+ * PlatformConfig so dashboard loads never re-ask. Never throws.
+ */
+export interface TregCatalogTool {
+  name: string
+  description: string
+  /** Endpoint ids lifted out of the schema/description text, best effort. */
+  endpoints: string[]
+  schema: unknown | null
+}
+
+export async function tregToolsCatalog(): Promise<{ ok: boolean; tools: TregCatalogTool[]; error?: string }> {
+  if (!tregEnabled) return { ok: false, tools: [], error: 'TREG_TOKEN not set' }
+  try {
+    const res = await fetch(TREG_MCP_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TREG_TOKEN}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return { ok: false, tools: [], error: `treg http ${res.status}` }
+    const json = (await res.json()) as {
+      result?: { tools?: { name?: string; description?: string; inputSchema?: unknown }[] }
+    }
+    const raw = json.result?.tools || []
+    const tools: TregCatalogTool[] = raw.map((t) => {
+      const desc = String(t.description || '').slice(0, 800)
+      // Endpoint ids live either in an enum inside the input schema or as
+      // dotted ids inside the description text. Lift both, best effort.
+      const endpoints = new Set<string>()
+      try {
+        const schema = t.inputSchema as { properties?: { endpoint_id?: { enum?: string[] }; arguments?: { properties?: { endpoint_id?: { enum?: string[] } } } } } | undefined
+        for (const e of schema?.properties?.endpoint_id?.enum || []) endpoints.add(String(e))
+        for (const e of schema?.properties?.arguments?.properties?.endpoint_id?.enum || []) endpoints.add(String(e))
+      } catch {}
+      for (const m of desc.matchAll(/\b[a-z0-9]+\.[a-z0-9_]+\.[a-z0-9_]+\b/gi)) endpoints.add(m[0])
+      return {
+        name: String(t.name || ''),
+        description: desc,
+        endpoints: [...endpoints].sort(),
+        schema: t.inputSchema ?? null,
+      }
+    })
+    return { ok: true, tools }
+  } catch (e) {
+    return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// The probe door's lifetime spend: a dedicated durable counter, NOT the call
+// ledger ring (200 receipts can hold less than the probe budget in paid calls,
+// so the ring's arithmetic could undercount).
+const PROBE_SPEND_KEY = 'TREG_PROBE_SPEND'
+export const TREG_PROBE_BUDGET_USD = 1.0
+
+async function probeSpendRead(): Promise<number> {
+  try {
+    const { db } = await import('@/lib/db')
+    const row = await db.platformConfig.findUnique({ where: { key: PROBE_SPEND_KEY } })
+    const v = row?.value ? (JSON.parse(row.value) as { spendMicro?: number }) : null
+    return v?.spendMicro || 0
+  } catch {
+    return 0
+  }
+}
+
+async function probeSpendAdd(micro: number): Promise<void> {
+  try {
+    const { db } = await import('@/lib/db')
+    const prev = await probeSpendRead()
+    await db.platformConfig.upsert({
+      where: { key: PROBE_SPEND_KEY },
+      update: { value: JSON.stringify({ spendMicro: prev + micro, at: Date.now() }) },
+      create: { key: PROBE_SPEND_KEY, value: JSON.stringify({ spendMicro: micro, at: Date.now() }) },
+    })
+  } catch {
+    /* bookkeeping must never fail a probe */
+  }
+}
+
+export async function tregProbeSpendMicro(): Promise<number> {
+  return probeSpendRead()
+}
+
+export interface TregProbeResult {
+  ok: boolean
+  status?: number
+  costUsd?: number
+  callId?: string
+  body?: unknown
+  whoseError?: string
+  error?: string
+}
+
+/**
+ * ONE metered probe call against any endpoint in the catalog. Same transport
+ * as the till, its own 'probe' via on the ledger, and the caller (the route)
+ * owns the budget guard. Fail-open: a refused probe buys nothing.
+ */
+export async function tregProbeCall(
+  endpointId: string,
+  args: Record<string, unknown>,
+  opts?: { timeoutMs?: number; maxCostUsd?: number }
+): Promise<TregProbeResult> {
+  if (!tregEnabled) return { ok: false, error: 'TREG_TOKEN not set' }
+  try {
+    const receipt = await mcpCall(endpointId, args, opts?.timeoutMs ?? 25_000, opts?.maxCostUsd)
+    if (!receipt) return { ok: false, error: 'treg returned no receipt' }
+    const costMicro = Math.round((receipt.cost_usd || 0) * 1_000_000)
+    if (receipt.call_id || costMicro > 0) {
+      await ledgerAdd({
+        id: receipt.call_id,
+        e: String((args as { query?: { email?: string } })?.query?.email || endpointId),
+        v: 'unknown',
+        c: costMicro,
+        via: 'probe',
+        at: Date.now(),
+      })
+    }
+    await probeSpendAdd(costMicro)
+    return {
+      ok: receipt.status === 200,
+      status: receipt.status,
+      costUsd: receipt.cost_usd ?? 0,
+      callId: receipt.call_id,
+      body: receipt.body ?? null,
+      whoseError: receipt.whose_error || undefined,
+      error: receipt.error || undefined,
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
 
