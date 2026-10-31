@@ -196,11 +196,13 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 1) the search call itself
+  // 1) the search call itself — X wants `query`, TikTok wants `q`,
+  //    Facebook's anyapi.facebook.search_pages demands `query` (its 400 says:
+  //    valid fields [query, limit, ...]; 'q' not allowed — fixed 2026-10-31).
   const searchArgs =
-    platform === 'x'
-      ? { method: 'POST', body: { query: ask } }
-      : { method: 'POST', body: { q: ask } }
+    platform === 'tiktok'
+      ? { method: 'POST', body: { q: ask } }
+      : { method: 'POST', body: { query: ask, ...(platform === 'facebook' ? { limit: 10 } : {}) } }
   const search = await tregProbeCall(SEARCH_ENDPOINT[platform], searchArgs, { timeoutMs: 30_000, maxCostUsd: MAX_CALL_COST_USD })
   let costUsd = search.costUsd ?? 0
 
@@ -276,7 +278,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) freshness: one capped metered call per checked account, best-first
-  const toCheck = wantFresh
+  //    (facebook has no freshness endpoint in the map, so it skips cleanly)
+  const toCheck = wantFresh && FRESH_ENDPOINT[platform]
     ? [...kept].sort((a, b) => b.followers - a.followers).slice(0, maxFresh)
     : []
   for (const c of toCheck) {
