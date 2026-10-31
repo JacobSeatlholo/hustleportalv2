@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
-import { getConfigJson, setConfig, CONFIG_KEYS } from '@/lib/config'
-import { XPITCH_SEED } from '@/lib/xpitchSeed'
+import { setConfig, CONFIG_KEYS } from '@/lib/config'
 import { loadPipeline } from '@/lib/xpitchStore'
+import { loadReview, submitReviewLeads } from '@/lib/xpitchReview'
 
 export const maxDuration = 30
 
@@ -10,8 +10,8 @@ export const maxDuration = 30
  * /api/admin/exec/xpitch/review — THE OWNER'S LEAD REVIEW GATE.
  *
  * Boss's law: nothing lands in the pitch pipeline on autopilot. Every new
- * sweep find (X, TikTok, Facebook...) waits in this queue with its
- * freshness + contacts visible, and the owner makes the call:
+ * sweep find (X, TikTok, Facebook, the AI treg search) waits in this queue
+ * with its freshness + contacts visible, and the owner makes the call:
  *
  *   [Add to pipeline]  → verified good fit → joins /xpitch as "to DM"
  *   [Not a fit]        → handle is remembered as rejected, so future sweeps
@@ -20,68 +20,11 @@ export const maxDuration = 30
  * Sweep scripts push candidates with { action: 'submit', leads: [...] } —
  * idempotent by handle: anything already seeded, pipelined, queued or
  * rejected is skipped, so reruns and repeat waves stay clean.
- *
- * Store shape (PlatformConfig XPITCH_REVIEW):
- *   { queue: Record<handle, Lead>, rejected: Record<handle, {why, when}>, updatedAt }
+ * The shared store logic lives in src/lib/xpitchReview.ts so the AI search
+ * route enforces the exact same rules.
  */
 
 const STORE_KEY = CONFIG_KEYS.XPITCH_REVIEW
-
-export interface ReviewLead {
-  handle: string
-  name: string
-  trade: string
-  city: string
-  followers: number
-  url: string
-  phone: string
-  email: string
-  platform: 'x' | 'tiktok' | 'facebook'
-  lastPost: string
-  fresh: 'fresh' | 'warm' | 'stale' | 'no-posts' | 'unknown'
-  source?: string
-  note?: string
-}
-
-interface ReviewStore {
-  queue: Record<string, ReviewLead>
-  rejected: Record<string, { why: string; when: string }>
-  updatedAt?: string
-}
-
-async function loadReview(): Promise<ReviewStore> {
-  const s = await getConfigJson<Partial<ReviewStore> | null>(STORE_KEY, null)
-  return {
-    queue: (s?.queue && typeof s.queue === 'object' ? s.queue : {}) as Record<string, ReviewLead>,
-    rejected: (s?.rejected && typeof s.rejected === 'object' ? s.rejected : {}) as Record<string, { why: string; when: string }>,
-    updatedAt: s?.updatedAt,
-  }
-}
-
-function sanitizeLead(raw: unknown): ReviewLead | null {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const handle = String(r.handle || '').trim()
-  if (!handle || handle.length > 120) return null
-  const platform = ['x', 'tiktok', 'facebook'].includes(String(r.platform)) ? (String(r.platform) as ReviewLead['platform']) : 'x'
-  const fresh = ['fresh', 'warm', 'stale', 'no-posts', 'unknown'].includes(String(r.fresh))
-    ? (String(r.fresh) as ReviewLead['fresh'])
-    : 'unknown'
-  return {
-    handle,
-    name: String(r.name || handle).slice(0, 120),
-    trade: String(r.trade || 'unsorted').slice(0, 40),
-    city: String(r.city || 'SA').slice(0, 60),
-    followers: Math.max(0, Math.round(Number(r.followers) || 0)),
-    url: String(r.url || '').startsWith('http') ? String(r.url).slice(0, 300) : '',
-    phone: String(r.phone || '').slice(0, 30),
-    email: String(r.email || '').slice(0, 120),
-    platform,
-    lastPost: String(r.lastPost || '').slice(0, 20),
-    fresh,
-    source: String(r.source || '').slice(0, 60),
-    note: String(r.note || '').slice(0, 200),
-  }
-}
 
 export async function GET() {
   const gate = await requireExec()
@@ -108,23 +51,8 @@ export async function POST(req: NextRequest) {
 
   if (action === 'submit') {
     const incoming = Array.isArray(body?.leads) ? body.leads : []
-    const store = await loadReview()
-    const pipeline = await loadPipeline()
-    const seeded = new Set(XPITCH_SEED.map((l) => l.handle.toLowerCase()))
-    const piped = new Set(Object.keys(pipeline.extra || {}).map((h) => h.toLowerCase()))
-    let added = 0
-    let skipped = 0
-    for (const raw of incoming) {
-      const lead = sanitizeLead(raw)
-      if (!lead) { skipped++; continue }
-      const k = lead.handle.toLowerCase()
-      if (seeded.has(k) || piped.has(k) || store.queue[k] || store.rejected[k]) { skipped++; continue }
-      store.queue[lead.handle] = lead
-      added++
-    }
-    if (added > 0) store.updatedAt = new Date().toISOString()
-    await setConfig(STORE_KEY, JSON.stringify(store))
-    return NextResponse.json({ ok: true, added, skipped, queueCount: Object.keys(store.queue).length })
+    const r = await submitReviewLeads(incoming)
+    return NextResponse.json({ ok: true, added: r.added, skipped: r.skipped, queueCount: r.queueCount })
   }
 
   const handle = String(body?.handle || '').trim()

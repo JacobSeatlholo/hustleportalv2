@@ -33,12 +33,13 @@ import UpgradeListener from './useUpgrade'
 import SectionTutorial from './SectionTutorial'
 import TaskReminders from './TaskReminders'
 import InstallApp from './InstallApp'
+import SupportView from './SupportView'
 import PwaNotifications, { PushInAppRelay } from './PwaNotifications'
 import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen,
+  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { LEVELS } from '@/lib/levels'
@@ -58,6 +59,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'integrations', label: 'Integrations', icon: <PlugZap className="h-4 w-4" /> },
   { key: 'store', label: 'Store', icon: <ShoppingCart className="h-4 w-4" /> },
   { key: 'services', label: 'Services', icon: <Briefcase className="h-4 w-4" /> },
+  { key: 'support', label: 'Support', icon: <LifeBuoy className="h-4 w-4" /> },
   { key: 'resources', label: 'Resources', icon: <BookOpen className="h-4 w-4" /> },
   { key: 'wallet', label: 'Wallet', icon: <Wallet className="h-4 w-4" /> },
   { key: 'grow', label: 'Grow & Earn', icon: <Gift className="h-4 w-4" /> },
@@ -224,6 +226,7 @@ export default function AppShell() {
       case 'integrations': return <IntegrationsView />
       case 'store': return <StoreView />
       case 'services': return <ServicesView />
+      case 'support': return <SupportView />
       case 'resources': return <ResourcesView />
       case 'wallet': return <WalletView />
       case 'grow': return <GrowView />

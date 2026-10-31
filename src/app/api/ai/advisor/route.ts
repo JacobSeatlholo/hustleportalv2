@@ -4,6 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { bumpChallenge } from '@/lib/gamification'
 import { geminiGenerate, GeminiHistoryTurn } from '@/lib/gemini'
+import { searchPoolForAsk } from '@/lib/cofounderLeads'
 
 export const maxDuration = 60
 
@@ -39,10 +40,16 @@ export async function POST(req: NextRequest) {
   ])
   const pipelineValue = pipeline.reduce((a, l) => a + (l.value || 0), 0)
 
+  // Lead ask? Check the house pool FIRST (free, our own data) so the
+  // Co-Founder answers with what is actually there, not vibes. Contact
+  // details never enter the chat — they stay behind the Lead Finder reveal.
+  const pool = await searchPoolForAsk(String(message), { city: user.city, industry: user.industry })
+
   const context = `Founder: ${user.name}. Business: ${user.businessName || 'not set'}. Industry: ${user.industry || 'not set'}. City: ${user.city || 'not set'}.
 Data: ${leadCount} leads in CRM, pipeline worth R${pipelineValue.toFixed(0)} across: ${pipeline.map((l) => `${l.company} (${l.stage}, R${l.value})`).join('; ') || 'empty pipeline'}.
 Tasks: ${openTasks} open. Credit balance: R${((wallet?.balance || 0) / 100).toFixed(2)}.
-${lastPlan ? `They have an AI business plan generated on ${lastPlan.createdAt.toDateString()}.` : 'No business plan generated yet, suggest it if relevant.'}`
+${lastPlan ? `They have an AI business plan generated on ${lastPlan.createdAt.toDateString()}.` : 'No business plan generated yet, suggest it if relevant.'}
+${pool.matched ? pool.context : ''}`
 
   const history = await db.aiMessage.findMany({
     where: { userId },
@@ -74,7 +81,19 @@ ${lastPlan ? `They have an AI business plan generated on ${lastPlan.createdAt.to
 
   const saved = await db.aiMessage.create({ data: { userId, role: 'assistant', content: result.text } })
   await bumpChallenge(userId, 'ai_chat')
-  return NextResponse.json({ reply: saved.content })
+  return NextResponse.json({
+    reply: saved.content,
+    // Live pool matches for this turn, so the chat can render them as cards.
+    // History turns replay text only — matches are point-in-time.
+    ...(pool.matched
+      ? {
+          poolCount: pool.total,
+          poolTerms: pool.terms,
+          poolCity: pool.city,
+          poolMatches: pool.matches,
+        }
+      : {}),
+  })
 }
 
 // GET, chat history

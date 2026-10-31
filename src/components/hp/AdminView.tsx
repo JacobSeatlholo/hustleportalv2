@@ -1258,6 +1258,18 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
   const confirmed = rows.filter((m) => m.status === 'CONFIRMED').length
   const awaiting = rows.filter((m) => m.status === 'PROPOSED').length
 
+  // One tap: the member asked for the time (support call) — the founder takes
+  // it, and the standard confirm engine emails both sides the final details.
+  async function confirmMeeting(m: MeetingRow) {
+    try {
+      await api('/api/meetings', { method: 'PATCH', body: JSON.stringify({ id: m.id, confirm: true }) })
+      toast({ title: 'Confirmed', description: `Both sides just got the final details for ${m.memberName}.` })
+      onChanged()
+    } catch (e) {
+      toast({ title: 'Could not confirm that', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
+    }
+  }
+
   // One tap: the meeting page link lands on the clipboard, ready to paste
   // straight into WhatsApp. The toast repeats the URL in case the clipboard
   // is locked down, so the link is always easy to get and send on.
@@ -1387,6 +1399,16 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                       ? `invited ${timeAgo(m.invitedAt)}`
                       : ''}
                 </span>
+                {m.status === 'PROPOSED' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[11px] gap-1 border-emerald-500/40 text-emerald-400"
+                    onClick={() => confirmMeeting(m)}
+                  >
+                    <Check className="h-3 w-3" /> Confirm
+                  </Button>
+                )}
                 {m.shareToken && (
                   <Button
                     size="sm"
@@ -1938,6 +1960,12 @@ function LeadReviewCard() {
   const [loading, setLoading] = useState(true)
   const [busyHandle, setBusyHandle] = useState('')
 
+  // The Co-Founder's lead search: one metered treg call, results land HERE —
+  // never straight into the pitch list. The buttons below stay the only door.
+  const [ask, setAsk] = useState('')
+  const [platform, setPlatform] = useState<'x' | 'tiktok'>('x')
+  const [searching, setSearching] = useState(false)
+
   async function load() {
     setLoading(true)
     try {
@@ -1949,6 +1977,26 @@ function LeadReviewCard() {
     }
   }
   useEffect(() => { load() }, [])
+
+  async function runSearch() {
+    if (ask.trim().length < 3 || searching) return
+    setSearching(true)
+    try {
+      const r = await api<{ ok: boolean; message: string; added: number; southAfrican: number; providerRows: number; costUsd: number; queueCount: number }>(
+        '/api/admin/exec/xpitch/search',
+        { method: 'POST', body: JSON.stringify({ ask: ask.trim(), platform, fresh: true }) },
+      )
+      toast({
+        title: `${r.added} new in the review queue`,
+        description: `${r.southAfrican} SA of ${r.providerRows} rows · cost $${r.costUsd.toFixed(4)} · ${r.queueCount} waiting for your call.`,
+      })
+      load()
+    } catch (e) {
+      toast({ title: 'The search bought nothing', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
+    } finally {
+      setSearching(false)
+    }
+  }
 
   async function act(l: ReviewLeadRow, action: 'add' | 'reject') {
     setBusyHandle(l.handle)
@@ -1981,6 +2029,39 @@ function LeadReviewCard() {
         <p className="text-xs text-muted-foreground">
           Every fresh sweep find (X, TikTok, Facebook) waits here first — nothing joins the pitch list until you call it. Good fit → add; dead or wrong → no, and it never comes back.
         </p>
+        {/* The Co-Founder search: ask for a kind of lead, it looks through treg */}
+        <div className="rounded-lg border p-2.5 space-y-2">
+          <div className="text-[11px] font-medium flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-brand" /> Ask the Co-Founder to find leads
+            <span className="ml-auto text-[10px] text-muted-foreground font-normal">~$0.001 a search, from the $1 treg cap</span>
+          </div>
+          <div className="flex gap-1.5">
+            <Input
+              value={ask}
+              onChange={(e) => setAsk(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+              placeholder="e.g. mobile nail tech johannesburg · shisanyama soweto"
+              className="h-8 text-xs flex-1"
+              maxLength={140}
+            />
+            <Button size="sm" className="h-8 px-2.5 text-[11px] bg-brand text-black hover:bg-brand" disabled={searching || ask.trim().length < 3} onClick={runSearch}>
+              {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1" />}
+              {searching ? 'searching' : 'search'}
+            </Button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {(['x', 'tiktok'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPlatform(p)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border ${platform === p ? 'border-brand text-brand bg-brand/10' : 'border-zinc-600/50 text-muted-foreground'}`}
+              >
+                {p === 'x' ? 'X (±$0.0008)' : 'TikTok (±$0.001)'}
+              </button>
+            ))}
+            <span className="text-[10px] text-muted-foreground ml-1">SA-only filter on · freshness stamped · Facebook stays off (R2.20 a call)</span>
+          </div>
+        </div>
         {loading ? (
           <Skeleton className="h-20 w-full" />
         ) : !data ? (

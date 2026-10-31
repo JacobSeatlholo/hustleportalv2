@@ -21,6 +21,14 @@ interface PlanRecord {
   answers: string
 }
 
+interface PoolMatchLite {
+  company: string
+  industry: string | null
+  city: string | null
+  hasPhone: boolean
+  hasWebsite: boolean
+}
+
 const QUESTIONS = [
   { key: 'business', q: 'What is your business name and what does it do?', placeholder: 'e.g. FlexFit SA, online personal training platform' },
   { key: 'targetMarket', q: 'Who is your target market?', placeholder: 'e.g. Working professionals aged 25 to 40 in SA cities' },
@@ -85,7 +93,7 @@ export default function AiView() {
   const [activePlan, setActivePlan] = useState<PlanRecord | null>(null)
 
   // Advisor
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
+  const [messages, setMessages] = useState<{ role: string; content: string; matches?: PoolMatchLite[]; poolCount?: number }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const chatEnd = useRef<HTMLDivElement>(null)
@@ -141,11 +149,11 @@ export default function AiView() {
     setMessages((m) => [...m, { role: 'user', content: q }])
     setChatBusy(true)
     try {
-      const res = await api<{ reply: string }>('/api/ai/advisor', {
+      const res = await api<{ reply: string; poolMatches?: PoolMatchLite[]; poolCount?: number }>('/api/ai/advisor', {
         method: 'POST',
         body: JSON.stringify({ message: q }),
       })
-      setMessages((m) => [...m, { role: 'assistant', content: res.reply }])
+      setMessages((m) => [...m, { role: 'assistant', content: res.reply, matches: res.poolMatches, poolCount: res.poolCount }])
       bumpRefresh()
     } catch (e) {
       toast({ title: 'Advisor unavailable', description: e instanceof Error ? e.message : '', variant: 'destructive' })
@@ -295,10 +303,35 @@ export default function AiView() {
                 )}
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`rounded-2xl px-4 py-2.5 text-sm max-w-[85%] md:max-w-[70%] whitespace-pre-wrap leading-relaxed ${
-                      m.role === 'user' ? 'bg-sidebar text-white rounded-br-sm' : 'bg-muted rounded-bl-sm'
-                    }`}>
-                      {m.content}
+                    <div className={`max-w-[85%] md:max-w-[70%] space-y-2 ${m.role === 'user' ? '' : 'w-fit'}`}>
+                      <div className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                        m.role === 'user' ? 'bg-sidebar text-white rounded-br-sm' : 'bg-muted rounded-bl-sm'
+                      }`}>
+                        {m.content}
+                      </div>
+                      {m.role === 'assistant' && m.matches && m.matches.length > 0 && (
+                        <div className="rounded-xl border bg-background/60 p-2.5 space-y-1.5">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                            <MapPin className="h-3 w-3 text-brand" /> House pool · {m.poolCount} match{m.poolCount === 1 ? '' : 'es'}
+                          </div>
+                          {m.matches.slice(0, 5).map((p) => (
+                            <div key={p.company} className="text-xs flex items-center gap-1.5 min-w-0">
+                              <span className="font-medium truncate">{p.company}</span>
+                              {p.industry && <Badge variant="outline" className="text-[9px] shrink-0">{p.industry}</Badge>}
+                              {p.city && <span className="text-muted-foreground shrink-0">{p.city}</span>}
+                              <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">{[p.hasPhone ? 'phone' : '', p.hasWebsite ? 'site' : ''].filter(Boolean).join(' · ') || 'details on reveal'}</span>
+                            </div>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => window.dispatchEvent(new CustomEvent('hp:navigate', { detail: 'leads' }))}
+                          >
+                            <MapPin className="h-3 w-3 mr-1" /> Open Lead Finder
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
