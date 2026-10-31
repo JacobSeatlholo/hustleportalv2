@@ -225,6 +225,9 @@ interface TregReceipt {
   retry_after?: number | null
   error?: string | null
   detail?: string | null
+  /** The catalog's own tools answer in their own shape (no HTTP status) — the
+   * whole MCP result rides here so the probe door can show it honestly. */
+  raw?: { isError?: boolean; content?: { type?: string; text?: string }[]; structuredContent?: unknown } | null
 }
 
 async function mcpCall(endpointId: string, args: Record<string, unknown>, timeoutMs: number, maxCostUsd?: number, tool = 'call'): Promise<TregReceipt | null> {
@@ -252,8 +255,19 @@ async function mcpCall(endpointId: string, args: Record<string, unknown>, timeou
     signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) throw new Error(`treg http ${res.status}`)
-  const json = (await res.json()) as { result?: { structuredContent?: TregReceipt; isError?: boolean } }
-  return json.result?.structuredContent ?? null
+  const json = (await res.json()) as {
+    result?: { structuredContent?: TregReceipt; isError?: boolean; content?: { type?: string; text?: string }[] }
+    error?: { message?: string }
+  }
+  if (json.error) throw new Error(`treg rpc: ${json.error.message || 'unknown error'}`)
+  const result = json.result
+  if (!result) return null
+  const sc = result.structuredContent
+  if (sc) return { ...sc, raw: result }
+  // Text-content fallback: some tools answer as MCP text content only.
+  const text = (result.content || []).map((c) => c.text || '').join('\n').trim()
+  if (text) return { raw: result, body: { text } as TregReceipt['body'] }
+  return { raw: result }
 }
 
 // ---------- the public doors ----------
@@ -478,14 +492,19 @@ export async function tregProbeCall(
       })
     }
     if (costMicro > 0) await probeSpendAdd(costMicro)
+    // The catalog's own tools carry no HTTP status: their MCP result IS the
+    // answer. Only an isError flag (or an explicit status) means failure.
+    const isError = receipt.raw?.isError === true
+    const ok = receipt.status !== undefined ? receipt.status === 200 : !isError
+    const rawText = (receipt.raw?.content || []).map((c) => c.text || '').join('\n').trim()
     return {
-      ok: receipt.status === 200,
+      ok,
       status: receipt.status,
       costUsd: receipt.cost_usd ?? 0,
       callId: receipt.call_id,
-      body: receipt.body ?? null,
+      body: receipt.body ?? receipt.raw?.structuredContent ?? (rawText ? { text: rawText } : null),
       whoseError: receipt.whose_error || undefined,
-      error: receipt.error || undefined,
+      error: !ok ? receipt.error || receipt.detail || rawText.slice(0, 400) || `treg status ${receipt.status ?? 'unknown'}` : undefined,
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
