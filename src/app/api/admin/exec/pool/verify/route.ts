@@ -220,8 +220,10 @@ export async function POST(req: NextRequest) {
   let costMicro = 0
   let budgetHit = false
   let clockHit = false
+  let lastRowId: string | null = null
 
   for (const row of rows) {
+    lastRowId = row.id
     const email = saneEmail(row.email)
     if (!email) {
       skipped++
@@ -349,10 +351,12 @@ export async function POST(req: NextRequest) {
   // a clock-cut run hands back the last row it actually answered — without
   // this, every clock-cut restarts the walk from id 1 and re-walks answered
   // rows (free on the verdict cache, but it eats the window and the clock).
-  const lastAnsweredId = processed > 0 ? rows[processed - 1].id : null
+  // NOTE: derived from the loop's own bookmark, NOT the counters — a cached
+  // row bumps both `skipped` and its verdict bucket, so `processed` can
+  // overshoot rows.length and an index off the counters crashes (seen live).
   const nextCursor =
-    mode === 'all' && lastAnsweredId && (budgetHit || clockHit || (rows.length === take && !budgetHit))
-      ? lastAnsweredId
+    mode === 'all' && lastRowId && (budgetHit || clockHit || rows.length === take)
+      ? lastRowId
       : null
 
   return NextResponse.json({
