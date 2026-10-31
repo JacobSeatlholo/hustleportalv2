@@ -20,6 +20,7 @@ import { api, randsPlain } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { toCSV } from '@/lib/csv'
+import { photoToDataUrl, fetchCutout } from '@/lib/photoPolish'
 import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles, Upload, Download, Camera, X } from 'lucide-react'
 
 interface ImportReport {
@@ -101,41 +102,20 @@ function ImportDialog({ open, onOpenChange, onImported }: {
 }
 
 /**
- * Product photo intake: draw the picture to a max 256px canvas and come back
- * with a small JPEG data URL the database can carry on the row. Phone photos
- * arrive in megabytes, a 256px JPEG lands around 20 to 60 kilobytes.
+ * Product photo intake: guard the file, then hand it to photoPolish which
+ * brightens, sharpens, square crops and (opt in) cuts the background on the
+ * phone, and comes back with a small 256px JPEG data URL the row can carry.
+ * polish=false keeps the plain downscale, the user can always have the
+ * original back.
  */
-async function processImage(file: File): Promise<string> {
+async function processImage(file: File, opts?: { polish?: boolean; cutout?: Blob | null }): Promise<string> {
   if (!/^image\/(png|jpeg|jpg|webp)$/.test(file.type)) {
     throw new Error('format')
   }
   if (file.size > 12 * 1024 * 1024) {
     throw new Error('size')
   }
-  const objectUrl = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const im = new Image()
-      im.onload = () => resolve(im)
-      im.onerror = () => reject(new Error('decode'))
-      im.src = objectUrl
-    })
-    const longEdge = Math.max(img.naturalWidth, img.naturalHeight)
-    const scale = longEdge > 256 ? 256 / longEdge : 1
-    const w = Math.max(2, Math.round(img.naturalWidth * scale))
-    const h = Math.max(2, Math.round(img.naturalHeight * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('canvas')
-    ctx.drawImage(img, 0, 0, w, h)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
-    if (dataUrl.length > 160_000) throw new Error('size')
-    return dataUrl
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
+  return photoToDataUrl(file, opts)
 }
 
 interface Item {
@@ -172,6 +152,15 @@ export default function InventoryView() {
   const [form, setForm] = useState({ ...EMPTY })
   const [busy, setBusy] = useState(false)
   const [newImage, setNewImage] = useState<string | null>(null)
+  // Photo polish state: the raw file is kept so the toggles re-run the
+  // pipeline without asking for the picture again. The cut out blob is cached
+  // so switching polish on and off never re-downloads the model.
+  const [newRaw, setNewRaw] = useState<File | null>(null)
+  const [polishOn, setPolishOn] = useState(true)
+  const [cutOn, setCutOn] = useState(false)
+  const [cutBlob, setCutBlob] = useState<Blob | null>(null)
+  const [cutBusy, setCutBusy] = useState(false)
+  const applySeq = useRef(0)
   const rowPhotoRef = useRef<HTMLInputElement>(null)
   const rowPhotoTarget = useRef<string | null>(null)
   const addPhotoRef = useRef<HTMLInputElement>(null)
@@ -213,7 +202,7 @@ export default function InventoryView() {
       })
       toast({ title: `${form.name.trim()} added to stock` })
       setForm({ ...EMPTY })
-      setNewImage(null)
+      clearNewImage()
       setShowAdd(false)
       load()
       bumpRefresh()
@@ -226,23 +215,75 @@ export default function InventoryView() {
 
   // Product photos: attach at create time, or tap the camera on a row to set
   // or replace one on an item that already exists. Clearing is one tap on the X.
-  async function onNewImageFile(f: File | undefined | null) {
-    if (!f) return
+  // Polish runs by default; the add dialog shows the toggles so the user can
+  // switch it off or cut the background. A sequence counter keeps a slow run
+  // from overwriting a newer decision.
+  async function applyNewImage(f: File, opts: { polish: boolean; cutout: Blob | null }) {
+    const seq = ++applySeq.current
     try {
-      setNewImage(await processImage(f))
+      const url = await processImage(f, opts)
+      if (applySeq.current === seq) setNewImage(url)
     } catch {
-      toast({ title: 'That picture did not make it in', description: 'Use a PNG, JPG or WebP photo. Keep it under 12 megabytes.', variant: 'destructive' })
+      if (applySeq.current === seq) {
+        toast({ title: 'That picture did not make it in', description: 'Use a PNG, JPG or WebP photo. Keep it under 12 megabytes.', variant: 'destructive' })
+      }
     }
+  }
+
+  function onNewImageFile(f: File | undefined | null) {
+    if (!f) return
+    setNewRaw(f)
+    setPolishOn(true)
+    setCutOn(false)
+    setCutBlob(null)
+    applyNewImage(f, { polish: true, cutout: null })
+  }
+
+  function togglePolish(on: boolean) {
+    setPolishOn(on)
+    if (newRaw) applyNewImage(newRaw, { polish: on, cutout: cutOn ? cutBlob : null })
+  }
+
+  async function toggleCut(on: boolean) {
+    setCutOn(on)
+    if (!newRaw) return
+    if (!on) {
+      setCutBlob(null)
+      applyNewImage(newRaw, { polish: polishOn, cutout: null })
+      return
+    }
+    setCutBusy(true)
+    try {
+      const b = await fetchCutout(newRaw)
+      if (b) {
+        setCutBlob(b)
+        applyNewImage(newRaw, { polish: polishOn, cutout: b })
+      } else {
+        setCutOn(false)
+        toast({ title: 'Could not cut the background', description: 'The photo keeps its original background. Everything else still applies.' })
+      }
+    } finally {
+      setCutBusy(false)
+    }
+  }
+
+  function clearNewImage() {
+    applySeq.current++ // a pending run must not resurrect the picture
+    setNewImage(null)
+    setNewRaw(null)
+    setCutBlob(null)
+    setCutOn(false)
+    setPolishOn(true)
   }
 
   async function onRowImageFile(f: File | undefined | null) {
     const id = rowPhotoTarget.current
     if (!f || !id) return
     try {
-      const image = await processImage(f)
+      const image = await processImage(f, { polish: true })
       const res = await api<{ item: Item }>('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id, image }) })
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, image: res.item.image } : i)))
-      toast({ title: 'Photo saved' })
+      toast({ title: 'Photo saved', description: 'Brightened, sharpened and square cropped on your phone.' })
     } catch {
       toast({ title: 'Could not save that photo', description: 'Use a PNG, JPG or WebP photo, under 12 megabytes.', variant: 'destructive' })
     }
@@ -386,7 +427,7 @@ export default function InventoryView() {
                 <CardContent className="p-3 flex items-center gap-3">
                   {i.image ? (
                     <div className="relative shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img src={i.image} alt={i.name} className="h-11 w-11 rounded-lg object-cover border" />
                       <button
                         type="button"
@@ -498,10 +539,34 @@ export default function InventoryView() {
               <Label>Product photo</Label>
               {newImage ? (
                 <div className="flex items-center gap-2.5 rounded-lg border p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img src={newImage} alt="Product preview" className="h-11 w-11 rounded-lg object-cover border" />
-                  <span className="text-xs text-muted-foreground flex-1">It shows on the stock row.</span>
-                  <button type="button" aria-label="Remove the photo" onClick={() => setNewImage(null)} className="text-muted-foreground hover:text-foreground">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground block">It shows on the stock row.</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <button
+                        type="button"
+                        aria-pressed={polishOn}
+                        title="Brighten, sharpen and square crop, on your phone"
+                        onClick={() => togglePolish(!polishOn)}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] transition ${polishOn ? 'border-brand/60 bg-brand/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Polish {polishOn ? 'on' : 'off'}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={cutOn}
+                        disabled={cutBusy}
+                        title="Cut the product out onto a clean studio backdrop. First use downloads a small model, then it is cached."
+                        onClick={() => toggleCut(!cutOn)}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] transition inline-flex items-center gap-1 disabled:opacity-60 ${cutOn ? 'border-brand/60 bg-brand/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        {cutBusy && <Loader2 className="h-3 w-3 animate-spin" />}
+                        {cutBusy ? 'Cutting out' : 'Cut out background'}
+                      </button>
+                    </div>
+                  </div>
+                  <button type="button" aria-label="Remove the photo" onClick={clearNewImage} className="text-muted-foreground hover:text-foreground">
                     <X className="h-4 w-4" />
                   </button>
                 </div>

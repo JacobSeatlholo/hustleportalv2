@@ -2833,3 +2833,19 @@ Work Log:
 
 Stage Summary:
 - The approved win-back mail is the engine draft now. Nothing sends until the boss opens the Read the draft dialog on the exec desk and hits confirm; first send is capped at 300 and every send is logged.
+
+---
+Task ID: 143
+Agent: Super Z (main)
+Task: Boss: "For product images so the users get good listing images.." after reviewing ComfyUI and docling. Decision: park both tools, steal the idea. Photo polish on listings, free, no box, no GPU, no new keys.
+
+Work Log:
+- Surveyed the intake: InventoryItem.image is a small client side data URL (256px JPEG), processImage in InventoryView was the whole pipeline. The polish slots in before the downscale, no schema change, no API change, the row carries the same size budget it always had.
+- New src/lib/photoPolish.ts, all browser side, R0 marginal: auto levels (luminance histogram percentile stretch, flat or full range pictures pass through untouched), gentle tone pass (saturate 1.1, contrast 1.06, brightness 1.02, skipped where ctx.filter is missing), light unsharp mask (classic kernel blended 55 percent, no halos), cover square crop with a slight top bias (products are shot a little from above).
+- Background cut is opt in via @imgly/background-removal 1.7.0, dynamic import so it never rides the main bundle, isnet_quint8 small model (a few MB, browser cached after first use), output composited onto a warm studio paper gradient (#fbf9f5 to #e7e1d6). Fails soft: any error or 120s timeout returns null, the photo keeps its original background, toast says so. The cut blob is cached per photo so toggling polish never re-runs the model.
+- Laws kept: real photos stay real (levels and sharpen move pixels that were already there, nothing is invented, no AI repaints the product), the photo only leaves the phone when the user saves. Add dialog gets Polish on/off and Cut out background chips with a spinner; rows polish by default with the toast saying what happened. Sequence counter guards a slow run from overwriting a newer decision; the X clears raw file, blob and pending runs.
+- Verify: tsc clean, eslint clean (two stale disable directives removed), full local next build green with a throwaway AUTH_SECRET (the sandbox lacks the real one, prod carries it) proving the dynamic import bundles.
+- Honest limits: cutout quality varies with messy real world backgrounds; only the add dialog offers the cut toggle, rows polish without it; the model downloads from CDN on first opt in, on a slow phone that is a one time wait. ComfyUI and docling stay parked as tools: ComfyUI wants a GPU we do not have, docling parses documents and our OCR routes already cover its usable trick (the flyer to catalog idea is a later build).
+
+Stage Summary:
+- The listing photo path now makes every stock photo look like the same shop: bright, sharp, square, and optionally on a clean studio backdrop, all on the phone for free. The AI illustration card for photo-less listings stays a per image spend decision for the boss.
