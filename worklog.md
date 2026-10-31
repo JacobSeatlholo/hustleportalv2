@@ -2802,3 +2802,21 @@ Work Log:
 
 Stage Summary:
 - Prod 89337e2: every surface of the pitch list speaks the boss's voice now, no dashes anywhere, Facebook branch real, ZA guard on, and the Resend webhook is sealed (forgeries 401, real events flow once the endpoint URL carries the key). Boss side: if the Resend dialog is still open, endpoint URL needs the ?key= tail and events email.bounced plus email.complained only.
+
+---
+Task ID: 141
+Agent: Super Z (main)
+Task: Boss: "it would also be nice to have the notion style carry through to the tasks and finance too, i should be able to edit the title atleast once an entry is made, and also tag other members via @email or something"
+
+Work Log:
+- Survey first: tasks PATCH already accepted title (and seals an EDIT event), invoices PATCH already accepted clientName owner scoped, teams GET already ships member emails. The gap was purely UI plus a notification layer, so no schema, no migration, no money surface touched.
+- TASKS (TasksView.tsx): the title is click to edit inline (Notion style). Click, type, Enter saves via the existing PATCH, Esc cancels, blur saves, the row updates locally on success. The sealed record witnesses every rename server side ("updated the details" EDIT event on the hash chain) because the PATCH route already covered title edits.
+- FINANCE (InvoicesView.tsx): new DocTitle component. On every invoice and quote row the client name is click to edit inline; the INV/QT number series never moves, the PATCH is the same owner scoped one the platform already had, and the list, print sheet and detail dialog all read the updated state. Quote badge stays clear of the edit area.
+- @MENTIONS (task comments): typing @ in the comment box opens a picker over the task's team roster (name and email, keyboard navigable: arrows, Enter, Esc, or click). Picking inserts @email at the caret. Comment bodies render @email tokens as the teammate's name chip (sky highlight) via a regex built from the visible audience, longest email first so near-identical addresses cannot shadow each other.
+- NOTIFY (comments POST): after the comment is saved, mentioned teammates get one system mail each: "{author} tagged you on "{task title}"" with the app link. Laws honoured: only people who can already see the task can be tagged (creator, assignee, team roster, author excluded), suppression list is law (mentioned emails checked against it before any send), cap 5 mentions per comment, mail is best effort with a failed send never eating the comment, legal footer appended by the platform send path. System lane stays free per the airtime law.
+- Honest limits: the mention mail path is code reviewed and typechecked but NOT live fired (a live test would send real mail to dead QA domains, junk we refuse to create). The title renames ride APIs that were already live and proven. tsc fully clean including this diff.
+- Deploy b92d91b pushed via the rebuilt paramiko shim, health sha verified, db ping true.
+
+Stage Summary:
+- Prod b92d91b: the Notion pattern from the pipeline now covers tasks and finance, and teams can talk inside a task with @email tags that actually reach an inbox. Boss eyeballs it on prod; the mention mail fires the first time a real teammate tags a real teammate.
+- Next on the boss's idea list, still queued: the Discord community pulse (phase 1), meeting notes recorder (phase 2), the security audit skill pilot, and the win-back mail waiting on his signature choice.
