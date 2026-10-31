@@ -1829,8 +1829,18 @@ function XPitchCard() {
   }
 
   function dmTemplate(l: XPitchLead) {
-    const where = l.platform === 'tiktok' ? `on TikTok` : 'on X'
-    return `Hi ${l.name.split(' ')[0] || 'there'} — saw your ${l.trade} hustle in ${l.city} ${where}. We built HustlePortal for hustlers like you: search your trade + your city, get real businesses that need your service — names, numbers, emails, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
+    const first = l.name.split(' ')[0] || 'there'
+    const trade = l.trade || 'business'
+    // 'ZA' is the placeholder country code some sweeps leave in the city
+    // field, never show "in ZA" to a human.
+    const cityPhrase = l.city && l.city !== 'ZA' ? ` in ${l.city}` : ''
+    if (l.platform === 'tiktok') {
+      return `Hi ${first}, I found your ${trade} videos on TikTok. Nice work. I run HustlePortal. It finds real people${cityPhrase} who need your service and checks the contact details first. Free to start, 25 searches a day. hustleportal.online if you want to see it.`
+    }
+    if (l.platform === 'facebook') {
+      return `Hi ${first}, I came across your ${trade} page on Facebook. I run HustlePortal. It finds real businesses${cityPhrase} that need your service and checks the contact details first. Free to start, 25 searches a day. hustleportal.online if you want a look.`
+    }
+    return `Hey ${first}, found your ${trade} page on X. I run HustlePortal. It finds real businesses${cityPhrase} that need your service and checks the contact details first. Free to start, 25 searches a day. hustleportal.online if you want a look.`
   }
 
   async function copyDm(l: XPitchLead) {
@@ -1852,9 +1862,9 @@ function XPitchCard() {
   }
   function waLink(l: XPitchLead): string {
     const first = l.name.split(' ')[0] || 'there'
+    const trade = l.trade || 'business'
     const where = l.platform === 'tiktok' ? 'on TikTok' : l.platform === 'facebook' ? 'on Facebook' : 'on X'
-    const place = l.city && l.city !== 'ZA' ? `in ${l.city} ` : 'in SA '
-    const text = `Hi ${first}! Saw your ${l.trade} hustle ${place}${where}. We built HustlePortal for hustlers like you: search your trade + your city, get real people who need your service — names, numbers, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
+    const text = `Hi ${first}, hope business is treating you well. I found your ${trade} page on ${where}. I run HustlePortal, it finds real people who need your service, with the contact details checked. Free to start, 25 searches a day. hustleportal.online`
     return `https://wa.me/${waDigits(l.phone)}?text=${encodeURIComponent(text)}`
   }
 
