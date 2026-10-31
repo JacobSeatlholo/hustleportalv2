@@ -75,6 +75,58 @@ export function kindOf(inv: Pick<Invoice, 'kind'>): 'INVOICE' | 'QUOTE' {
   return inv.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE'
 }
 
+/**
+ * Notion style document name: the client name on an invoice or quote is
+ * click to edit, inline in the list. The number never moves (series law),
+ * only the name does, and the same PATCH the editor uses carries it.
+ */
+function DocTitle({ inv, onRenamed }: { inv: Invoice; onRenamed: (id: string, clientName: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setEditing(false)
+    const v = draft.trim()
+    if (!v || v === inv.clientName) return
+    setSaving(true)
+    try {
+      await api(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ clientName: v }) })
+      onRenamed(inv.id, v)
+    } catch {
+      // the old name stays on a failed save
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); save() }
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className="h-7 max-w-[260px] inline-flex text-sm font-medium align-middle"
+        aria-label="Document name"
+      />
+    )
+  }
+  return (
+    <span
+      className="cursor-text hover:bg-white/5 rounded px-1 transition"
+      title="Click to rename"
+      onClick={() => { setDraft(inv.clientName); setEditing(true) }}
+    >
+      {saving ? '…' : inv.clientName}
+    </span>
+  )
+}
+
 export default function InvoicesView() {
   const { session, activeProjectId, bumpRefresh, setView, setStoreFocus } = useHp()
   const { toast } = useToast()
@@ -293,6 +345,18 @@ export default function InvoicesView() {
       load()
     } catch (e) {
       toast({ title: 'Update failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    }
+  }
+
+  // Notion style rename from the list itself. The PATCH is the same one the
+  // editor uses, owner scoped, and the number series never moves.
+  async function renameInvoice(id: string, clientName: string) {
+    try {
+      await api(`/api/invoices/${id}`, { method: 'PATCH', body: JSON.stringify({ clientName }) })
+      setInvoices((rows) => rows.map((r) => (r.id === id ? { ...r, clientName } : r)))
+      toast({ title: 'Renamed ✓' })
+    } catch (e) {
+      toast({ title: 'Rename failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     }
   }
 
@@ -670,7 +734,7 @@ export default function InvoicesView() {
                     <div key={inv.id} className="p-3.5 flex flex-wrap items-center gap-3 text-sm">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">
-                          {inv.number} · {inv.clientName}
+                          {inv.number} · <DocTitle inv={inv} onRenamed={renameInvoice} />
                           {isQuote && (
                             <Badge variant="outline" className="ml-2 text-[10px] h-4 border-brand/50 text-brand align-middle">QUOTE</Badge>
                           )}

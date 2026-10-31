@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,7 +58,7 @@ export default function TasksView() {
   // Where does this task belong? 'personal' = private to me · 'business' = workspace-shared
   // (no team, not private) · otherwise the team's id.
   const [dest, setDest] = useState<string>('personal')
-  const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string }[] }[]>([])
+  const [teams, setTeams] = useState<{ id: string; name: string; members: { id: string; name: string; email: string }[] }[]>([])
   const [adding, setAdding] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
   // Find and order: search across title + notes, sort by date added, importance or due date.
@@ -129,6 +129,12 @@ export default function TasksView() {
     } finally {
       setAdding(false)
     }
+  }
+
+  // Notion style: a patch lands locally the moment the server accepts it, so
+  // the row never flips back mid session.
+  function patchTask(id: string, patch: Partial<Task>) {
+    setTasks((rows) => rows.map((t) => (t.id === id ? { ...t, ...patch } : t)))
   }
 
   async function toggle(task: Task) {
@@ -337,14 +343,14 @@ export default function TasksView() {
             </Card>
           )}
           {open.map((t) => (
-            <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} />
+            <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} teams={teams} onUpdated={patchTask} />
           ))}
           {done.length > 0 && (
             <div className="pt-2">
               <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Completed</p>
               <div className="space-y-2">
                 {done.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} />
+                  <TaskRow key={t.id} task={t} onToggle={toggle} onRemove={remove} onCommentCountChange={(id, n) => setCounts((c) => ({ ...c, [id]: n }))} currentUserId={session?.user.id || ''} teams={teams} onUpdated={patchTask} />
                 ))}
               </div>
             </div>
@@ -357,12 +363,14 @@ export default function TasksView() {
   )
 }
 
-function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId }: {
+function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId, teams, onUpdated }: {
   task: Task
   onToggle: (t: Task) => void
   onRemove: (t: Task) => void
   onCommentCountChange: (taskId: string, count: number) => void
   currentUserId: string
+  teams: { id: string; name: string; members: { id: string; name: string; email: string }[] }[]
+  onUpdated: (taskId: string, patch: Partial<Task>) => void
 }) {
   const due = task.dueDate ? new Date(task.dueDate) : null
   const overdue = due && task.status !== 'DONE' && due < new Date()
@@ -377,8 +385,81 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   const [record, setRecord] = useState<{ events: TaskEventRow[]; verified: boolean } | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [loadingRecord, setLoadingRecord] = useState(false)
+  // Notion style: click the title, type, Enter. The sealed record witnesses
+  // the rename server side (EDIT event on the chain).
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
+  // @mentions: typing @ opens a picker over the people who can see this task.
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
+  const [mentionIdx, setMentionIdx] = useState(0)
 
   const commentCount = comments ? comments.length : task._count?.comments || 0
+
+  // Who can be tagged: the task's team roster carries the emails. Only people
+  // who can already read the task can be mentioned, nobody else ever hears
+  // about it from a tag.
+  const audience = (() => {
+    const team = task.teamId ? teams.find((x) => x.id === task.teamId) : null
+    return (team?.members || []).filter((m) => m.id !== currentUserId)
+  })()
+  const mentionList = mention
+    ? audience.filter((m) => m.name.toLowerCase().includes(mention.query) || m.email.toLowerCase().includes(mention.query)).slice(0, 5)
+    : []
+
+  function onDraftChange(v: string, caret: number) {
+    setDraft(v)
+    const m = /@([A-Za-z0-9._+\-']*)$/.exec(v.slice(0, caret))
+    if (m && audience.length > 0) {
+      setMention({ query: m[1].toLowerCase(), start: caret - m[1].length - 1 })
+      setMentionIdx(0)
+    } else {
+      setMention(null)
+    }
+  }
+
+  function pickMention(m: { name: string; email: string }) {
+    if (!mention) return
+    const before = draft.slice(0, mention.start)
+    const after = draft.slice(mention.start + 1 + mention.query.length)
+    setDraft(`${before}@${m.email} ${after}`)
+    setMention(null)
+  }
+
+  async function saveTitle() {
+    setEditingTitle(false)
+    const t = titleDraft.trim()
+    if (!t || t === task.title) return
+    setSavingTitle(true)
+    try {
+      await api(`/api/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ title: t }) })
+      onUpdated(task.id, { title: t })
+    } catch {
+      // the old title stays, the row never flips back
+    } finally {
+      setSavingTitle(false)
+    }
+  }
+
+  // @email tokens render as the teammate's name inside the thread.
+  function renderBody(body: string): ReactNode {
+    if (audience.length === 0) return body
+    const esc = audience
+      .map((m) => ({ m, e: m.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }))
+      .sort((a, b) => b.e.length - a.e.length)
+    const re = new RegExp(`@(${esc.map((x) => x.e).join('|')})`, 'g')
+    const out: ReactNode[] = []
+    let last = 0
+    let g: RegExpExecArray | null
+    while ((g = re.exec(body)) !== null) {
+      if (g.index > last) out.push(body.slice(last, g.index))
+      const hit = esc.find((x) => x.e === g![1])
+      out.push(<span key={g.index} className="text-sky-400 font-medium">@{hit?.m.name || g![1]}</span>)
+      last = g.index + g[0].length
+    }
+    if (last < body.length) out.push(body.slice(last))
+    return out
+  }
 
   async function openThread() {
     setThreadOpen((v) => !v)
@@ -444,7 +525,28 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
             {task.status === 'DONE' && '✓'}
           </button>
           <div className="min-w-0 flex-1">
-            <div className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</div>
+            {editingTitle ? (
+              <Input
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); saveTitle() }
+                  if (e.key === 'Escape') setEditingTitle(false)
+                }}
+                className="h-7 text-sm font-medium"
+                aria-label="Task title"
+              />
+            ) : (
+              <div
+                className={`text-sm font-medium cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition ${task.status === 'DONE' ? 'line-through' : ''}`}
+                title="Click to rename"
+                onClick={() => { setTitleDraft(task.title); setEditingTitle(true) }}
+              >
+                {savingTitle ? <Loader2 className="inline h-3 w-3 animate-spin" /> : task.title}
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
               {due && (
                 <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-500 font-medium' : ''}`}>
@@ -547,19 +649,44 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                             {new Date(c.createdAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <p className="whitespace-pre-wrap break-words">{c.body}</p>
+                        <p className="whitespace-pre-wrap break-words">{renderBody(c.body)}</p>
                       </div>
                     </div>
                   )
                 })}
               </div>
             )}
+            {mention && mentionList.length > 0 && (
+              <div className="rounded-lg border bg-card shadow-lg overflow-hidden">
+                {mentionList.map((m, i) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 ${i === mentionIdx ? 'bg-brand/10' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); pickMention(m) }}
+                    onMouseEnter={() => setMentionIdx(i)}
+                  >
+                    <span className="font-medium">{m.name}</span>
+                    <span className="text-muted-foreground">{m.email}</span>
+                  </button>
+                ))}
+                <p className="px-3 py-1 text-[10px] text-muted-foreground border-t">Tag by name or email. A tagged teammate gets a mail about this task.</p>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Input
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() } }}
-                placeholder="Add a comment… e.g. Quoted them R1 200, waiting for Friday"
+                onChange={(e) => onDraftChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+                onKeyDown={(e) => {
+                  if (mention && mentionList.length > 0) {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx((i) => (i + 1) % mentionList.length); return }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx((i) => (i - 1 + mentionList.length) % mentionList.length); return }
+                    if (e.key === 'Enter') { e.preventDefault(); pickMention(mentionList[Math.min(mentionIdx, mentionList.length - 1)]); return }
+                    if (e.key === 'Escape') { setMention(null); return }
+                  }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() }
+                }}
+                placeholder="Add a comment… type @ to tag a teammate"
                 className="flex-1"
               />
               <Button onClick={postComment} disabled={posting || !draft.trim()} size="icon" className="shrink-0" aria-label="Send comment">
