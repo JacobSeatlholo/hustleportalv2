@@ -1724,7 +1724,27 @@ interface XPitchLead {
   url: string
   phone: string
   email: string
+  platform?: 'x' | 'tiktok'
+  lastPost?: string
+  fresh?: 'fresh' | 'warm' | 'stale' | 'no-posts' | 'unknown'
   status: 'todo' | 'dm' | 'replied' | 'joined' | 'skip'
+}
+
+const FRESH_ORDER: Record<string, number> = { fresh: 0, warm: 1, unknown: 2, 'no-posts': 3, stale: 4 }
+const FRESH_CLS: Record<string, string> = {
+  fresh: 'border-emerald-500/40 text-emerald-400',
+  warm: 'border-amber-500/40 text-amber-400',
+  stale: 'border-zinc-600/50 text-zinc-500',
+  'no-posts': 'border-zinc-600/50 text-zinc-500',
+  unknown: 'border-zinc-600/50 text-zinc-500',
+}
+function freshLabel(l: XPitchLead): string {
+  if (!l.lastPost) return l.fresh === 'no-posts' ? 'no posts' : 'activity ?'
+  const d = Math.round((Date.now() - new Date(l.lastPost).getTime()) / 86_400_000)
+  if (d <= 0) return 'posted today'
+  if (d < 60) return `posted ${d}d ago`
+  if (d < 730) return `posted ${Math.round(d / 30)}mo ago`
+  return `posted ${(d / 365).toFixed(1)}y ago`
 }
 
 const XPITCH_ORDER: Record<XPitchLead['status'], number> = { todo: 0, dm: 1, replied: 2, joined: 3, skip: 4 }
@@ -1780,7 +1800,8 @@ function XPitchCard() {
   }
 
   function dmTemplate(l: XPitchLead) {
-    return `Hi ${l.name.split(' ')[0] || 'there'} — saw your ${l.trade} hustle in ${l.city}. We built HustlePortal for hustlers like you: search your trade + your city, get real businesses that need your service — names, numbers, emails, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
+    const where = l.platform === 'tiktok' ? `on TikTok` : 'on X'
+    return `Hi ${l.name.split(' ')[0] || 'there'} — saw your ${l.trade} hustle in ${l.city} ${where}. We built HustlePortal for hustlers like you: search your trade + your city, get real businesses that need your service — names, numbers, emails, verified. Free to start, 25 searches a day. hustleportal.online — worth a look?`
   }
 
   async function copyDm(l: XPitchLead) {
@@ -1792,14 +1813,16 @@ function XPitchCard() {
   }
 
   const counts = data?.counts ?? {}
-  const leads = [...(data?.leads ?? [])].sort((a, b) => XPITCH_ORDER[a.status] - XPITCH_ORDER[b.status] || (b.followers || 0) - (a.followers || 0))
+  const leads = [...(data?.leads ?? [])].sort((a, b) => XPITCH_ORDER[a.status] - XPITCH_ORDER[b.status] || (FRESH_ORDER[a.fresh ?? 'unknown'] ?? 2) - (FRESH_ORDER[b.fresh ?? 'unknown'] ?? 2) || (b.followers || 0) - (a.followers || 0))
+  const ttCount = leads.filter((l) => l.platform === 'tiktok').length
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Send className="h-4 w-4 text-brand" /> X pitch list
+          <Send className="h-4 w-4 text-brand" /> Pitch list
           <Badge variant="outline" className="text-[9px] border-sky-500/40 text-sky-400">{data?.total ?? '…'} prospects</Badge>
+          {ttCount > 0 && <Badge variant="outline" className="text-[9px] border-pink-500/40 text-pink-400">{ttCount} TikTok</Badge>}
           <span className="ml-auto text-xs text-muted-foreground font-normal">{counts.joined ?? 0} joined</span>
         </CardTitle>
       </CardHeader>
@@ -1813,7 +1836,7 @@ function XPitchCard() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. DMs go from your own X account — keep it a handful a day.
+          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. Fresh chips show the account&apos;s last post — work the green ones first, the grey ones are years dead. DMs go from your own accounts, a handful a day.
         </p>
         {loading ? (
           <Skeleton className="h-24 w-full" />
@@ -1827,8 +1850,14 @@ function XPitchCard() {
                   <a href={l.url} target="_blank" rel="noreferrer" className="font-medium truncate hover:underline">
                     @{l.handle}
                   </a>
+                  {l.platform === 'tiktok' ? (
+                    <Badge variant="outline" className="text-[9px] shrink-0 border-pink-500/40 text-pink-400">TikTok</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] shrink-0 border-sky-500/40 text-sky-400">X</Badge>
+                  )}
                   <Badge variant="outline" className="text-[9px] shrink-0">{l.trade}</Badge>
                   {l.followers > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{l.followers.toLocaleString()} followers</span>}
+                  <Badge variant="outline" className={`text-[9px] shrink-0 ${FRESH_CLS[l.fresh ?? 'unknown'] ?? FRESH_CLS.unknown}`}>{freshLabel(l)}</Badge>
                   <Badge
                     variant="outline"
                     className={`ml-auto text-[9px] shrink-0 cursor-pointer ${XPITCH_CLS[l.status]}`}
