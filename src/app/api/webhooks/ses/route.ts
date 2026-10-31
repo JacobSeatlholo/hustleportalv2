@@ -16,6 +16,12 @@ import { recordBounce } from '@/lib/leadfeedback'
  *   mailer stamps X-SES-CONFIGURATION-SET on every SES-lane send.
  * SubscriptionConfirmation is answered automatically (the SubscribeURL must
  * point at amazonaws.com, nothing else is fetched).
+ *
+ * Hardening (QA 2026-10-31): without SES_WEBHOOK_SECRET the endpoint used to
+ * accept forged bounce/complaint notifications. Now: no secret configured =>
+ * provider messageId matches ONLY, the address-only fallback is disabled and
+ * a forged event that names just an address touches nothing. Real SNS events
+ * always carry mail.messageId, so genuine processing is unaffected.
  */
 export const maxDuration = 30
 
@@ -25,6 +31,9 @@ export async function POST(req: NextRequest) {
     const key = req.nextUrl.searchParams.get('key') || req.headers.get('x-webhook-secret') || ''
     if (key !== secret) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  // Unauthenticated callers (no secret configured) must prove the event is
+  // about a send WE made: provider messageId or nothing. Address-spray dies.
+  const providerIdOnly = !secret
 
   let body: { Type?: string; Message?: string; SubscribeURL?: string }
   try {
@@ -87,7 +96,7 @@ export async function POST(req: NextRequest) {
     let log = providerId
       ? await db.emailLog.findFirst({ where: { providerId }, orderBy: { createdAt: 'desc' } })
       : null
-    if (!log) {
+    if (!log && !providerIdOnly) {
       log = await db.emailLog.findFirst({
         where: { toEmail: email, status: 'SENT', sentAt: { gte: weekAgo } },
         orderBy: { sentAt: 'desc' },

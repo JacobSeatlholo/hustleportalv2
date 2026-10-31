@@ -12,16 +12,25 @@ export const maxDuration = 30
  * Match is by provider message id, captured at send time. If RESEND_WEBHOOK_
  * SECRET is set, the caller must carry ?key= or x-webhook-secret.
  * Register at resend.com -> Webhooks -> events: email.bounced, email.complained.
+ *
+ * Hardening (QA 2026-10-31): without a secret this endpoint used to be fully
+ * open, and the address-only fallback let anyone suppress ANY address we
+ * emailed in the last 7 days with one forged POST (suppression poisoning).
+ * Now: no secret configured => provider-id matches ONLY. A forged event that
+ * names just an address touches nothing. Real provider events always carry
+ * the id, so genuine bounce processing is unaffected. Set the secret (and
+ * register the webhook with ?key=) to re-enable the address fallback.
  */
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim()
-  if (!secret) return true
-  if (req.nextUrl.searchParams.get('key') === secret) return true
-  return (req.headers.get('x-webhook-secret') || '') === secret
-}
 
 export async function POST(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim()
+  if (secret) {
+    const key = req.nextUrl.searchParams.get('key') || req.headers.get('x-webhook-secret') || ''
+    if (key !== secret) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  // Unauthenticated callers (no secret configured) must prove the event is
+  // about a send WE made: provider id or nothing. Address-spray dies here.
+  const providerIdOnly = !secret
 
   let payload: { type?: string; data?: { id?: string; email_id?: string; to?: string[] | string } }
   try {
@@ -41,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const log = providerId
     ? await db.emailLog.findFirst({ where: { providerId }, select: { id: true, toEmail: true, campaign: true, leadId: true } })
-    : to
+    : to && !providerIdOnly
       ? await db.emailLog.findFirst({
           where: { toEmail: String(to).toLowerCase(), status: 'SENT', sentAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
           orderBy: { sentAt: 'desc' },

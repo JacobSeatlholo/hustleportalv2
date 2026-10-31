@@ -93,3 +93,6 @@ tool-results/
 /src/lib/api.ts
 /src/lib/hooks.ts
 .qaenv/
+
+# npm audit artifact only; bun.lock is the lockfile of record
+package-lock.json
