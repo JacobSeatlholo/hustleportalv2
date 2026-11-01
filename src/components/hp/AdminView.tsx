@@ -2943,7 +2943,7 @@ interface WinbackFeed {
   draft: { subject: string; body: string }
 }
 
-function WinBackCard() {
+export function WinBackCard() {
   const { toast } = useToast()
   const [feed, setFeed] = useState<WinbackFeed | null>(null)
   const [loading, setLoading] = useState(true)

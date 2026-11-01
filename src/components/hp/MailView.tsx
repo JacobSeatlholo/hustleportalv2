@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
 import { useHp } from './store'
+import { WinBackCard } from './AdminView'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { useToast } from '@/hooks/use-toast'
 import { requestOpenLead } from './leadBus'
@@ -420,6 +421,11 @@ export default function MailView() {
       </div>
 
       {/* Campaigns (exec): build a queue, pace it, watch read receipts land */}
+      {/* The armed win back draft lives here too: this is where the owner
+          looks for campaigns, so the quiet list and its send gate sit above
+          the list. The same gate, the same confirm, no second law. */}
+      {isAdmin && <WinBackCard />}
+
       {isAdmin && (
         <div className="rounded-lg border bg-card p-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
