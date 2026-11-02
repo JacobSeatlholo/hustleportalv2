@@ -4,6 +4,7 @@ import { levelFor, todaysChallenges, loginStreak } from '@/lib/gamification'
 import { ensureWallet } from '@/lib/wallet'
 import { listProjects, getOrCreateDefaultProject } from '@/lib/workspace'
 import { opportunisticTick } from '@/lib/campaignqueue'
+import { hasStatementAccess } from '@/lib/statements'
 
 export async function GET() {
   try {
@@ -26,6 +27,14 @@ export async function GET() {
       team: user.memberships?.[0]?.team
         ? { id: user.memberships[0].team.id, name: user.memberships[0].team.name, role: user.memberships[0].role }
         : null,
+      // The SEH statements book is a narrow door: master, exec seats, and the
+      // master's own team members only. One flag drives the nav item.
+      statementAccess: await hasStatementAccess({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        platformAdmin: user.platformAdmin === true,
+      }),
       projects: projects.map((p) => ({
         id: p.id,
         name: p.name,

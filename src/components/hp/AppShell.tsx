@@ -16,6 +16,7 @@ import AiView from './AiView'
 import FinanceView from './FinanceView'
 import ProfileView from './ProfileView'
 import AdminView from './AdminView'
+import StatementsView from './StatementsView'
 import StoreView from './StoreView'
 import ResourcesView from './ResourcesView'
 import ClientsView from './ClientsView'
@@ -39,8 +40,7 @@ import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy,
-} from 'lucide-react'
+  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy, ScrollText } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { LEVELS } from '@/lib/levels'
 
@@ -232,6 +232,7 @@ export default function AppShell() {
       case 'grow': return <GrowView />
       case 'profile': return <ProfileView />
       case 'admin': return <AdminView />
+      case 'statements': return <StatementsView />
       default: return <DashboardView />
     }
   })()
@@ -553,7 +554,7 @@ const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
 function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout, disabledModules, streak }: {
   view: ViewKey
   setView: (v: ViewKey) => void
-  session: { user: { name: string; businessName: string | null; role: string; xp: number }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null } }
+  session: { user: { name: string; businessName: string | null; role: string; xp: number }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null }; statementAccess?: boolean }
   doneChallenges: number
   totalChallenges: number
   logout: () => Promise<void>
@@ -707,6 +708,18 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
             {n.icon} {n.label}
           </button>
         ))}
+        {session.statementAccess && (
+          <button
+            onClick={() => setView('statements' as ViewKey)}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              view === 'statements'
+                ? 'bg-brand text-black'
+                : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <ScrollText className="h-4 w-4" /> Statements
+          </button>
+        )}
         {isAdmin && (
           <button
             onClick={() => setView(ADMIN_NAV.key)}

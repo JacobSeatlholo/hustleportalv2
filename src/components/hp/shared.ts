@@ -39,6 +39,7 @@ export interface SessionData {
   challenges: Challenge[]
   streak?: number
   team: { id: string; name: string; role: string } | null
+  statementAccess?: boolean
   projects: HpProjectRef[]
 }
 

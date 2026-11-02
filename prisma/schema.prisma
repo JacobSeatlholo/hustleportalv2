@@ -10,43 +10,43 @@ datasource db {
 // ============ USERS & TEAMS ============
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  businessName String?
-  industry     String?
-  city         String?
-  phone        String?
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  name             String
+  businessName     String?
+  industry         String?
+  city             String?
+  phone            String?
   // Default pitch video theme for the Video Studio: machine = the retro
   // computer boot, clean = the classic bold services list. Null = never set,
   // the studio then falls back to the per device memory.
-  videoTheme   String?
-  role         String   @default("MEMBER") // ADMIN | MEMBER
-  accountStatus String  @default("ACTIVE") // ACTIVE | SUSPENDED (exec can pause an account; suspended = locked out everywhere)
-  suspendedAt  DateTime?
-  suspendReason String?
+  videoTheme       String?
+  role             String    @default("MEMBER") // ADMIN | MEMBER
+  accountStatus    String    @default("ACTIVE") // ACTIVE | SUSPENDED (exec can pause an account; suspended = locked out everywhere)
+  suspendedAt      DateTime?
+  suspendReason    String?
   // Onboarding survey answers (post signup): how they work and what they want
   // first. Drives the personalized dashboard track and future nurture emails.
-  persona     String? // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
-  profession  String? // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
-  onboardedAt DateTime?
+  persona          String? // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
+  profession       String? // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
+  onboardedAt      DateTime?
   // Last successful login (signup counts). JWT sessions leave no DB rows, so this
   // stamp is the only honest signal for win-back: who has gone quiet and for how
   // long. Null on every account that last logged in before this shipped; the
   // win-back audience then falls back to the account's latest activity rows.
-  lastLoginAt DateTime?
-  xp           Int      @default(0)
-  refCode      String?  @unique // personal invite code (lazy-generated)
-  platformAdmin Boolean @default(false)
-  resetTokenHash  String?   // sha256 of the password-reset token (never the token itself)
+  lastLoginAt      DateTime?
+  xp               Int       @default(0)
+  refCode          String?   @unique // personal invite code (lazy-generated)
+  platformAdmin    Boolean   @default(false)
+  resetTokenHash   String? // sha256 of the password-reset token (never the token itself)
   resetTokenExpiry DateTime? // single-use, 30-minute window
   // Session epoch: bumped on every password reset/change. JWTs embed the epoch
   // they were issued under, so a reset instantly kills every older session —
   // a stolen cookie stops working the moment the owner reclaims the account.
-  sessionEpoch Int @default(1)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  sessionEpoch     Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   teamsOwned         Team[]              @relation("TeamOwner")
   memberships        TeamMember[]
@@ -67,20 +67,21 @@ model User {
   appointments       Appointment[]
   invoices           Invoice[]
   emailLogs          EmailLog[]
+  statementAccounts  StatementAccount[]
   userSettings       UserSetting[]
   subscription       Subscription?
-  referralsMade      Referral[]    @relation("Referrer")
-  referralsReceived  Referral[]    @relation("Invitee")
+  referralsMade      Referral[]          @relation("Referrer")
+  referralsReceived  Referral[]          @relation("Invitee")
   waMessages         WaMessage[]
   waBotLinks         WaBotLink[]
   inventoryItems     InventoryItem[]
   pushSubs           PushSubscription[]
   taskComments       TaskComment[]
-  projectMemberships ProjectMember[]  @relation("ProjectMemberUser")
+  projectMemberships ProjectMember[]     @relation("ProjectMemberUser")
   poolLeads          ClientPoolLead[]
   leadSignals        LeadSignal[]
-  meetingsOwned      Meeting[]        @relation("MeetingOwner")
-  meetingsAsMember   Meeting[]        @relation("MeetingMember")
+  meetingsOwned      Meeting[]           @relation("MeetingOwner")
+  meetingsAsMember   Meeting[]           @relation("MeetingMember")
 }
 
 // ============ FACILITATED MEETINGS (Executive Dashboard) ============
@@ -141,32 +142,32 @@ model MeetingComment {
 // ============ COMPANY WORKSPACE (per-business context) ============
 
 model Project {
-  id           String   @id @default(cuid())
-  userId       String
-  name         String
-  description  String?  // what this project is about — the monday.com style summary
-  industry     String?
-  valueProp    String?
-  targetMarket String?
-  offerings    String? // newline-separated list of products/services
-  tone         String? // communication tone for AI drafts
-  website      String?
-  contactEmail String?
-  contactPhone String?
-  salesPitch   String? // AI-generated pitch (ProfileView → /api/ai/sales-pitch)
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  description     String? // what this project is about — the monday.com style summary
+  industry        String?
+  valueProp       String?
+  targetMarket    String?
+  offerings       String? // newline-separated list of products/services
+  tone            String? // communication tone for AI drafts
+  website         String?
+  contactEmail    String?
+  contactPhone    String?
+  salesPitch      String? // AI-generated pitch (ProfileView → /api/ai/sales-pitch)
   audienceInsight String? // AI business-URL analysis: audience, brand voice + pitch pack (JSON)
-  isDefault    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  members      ProjectMember[]
-  leads        Lead[]
-  clients      Client[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  leads          Lead[]
+  clients        Client[]
   financeEntries FinanceEntry[]
-  appointments Appointment[]
-  invoices     Invoice[]
-  emailLogs    EmailLog[]
+  appointments   Appointment[]
+  invoices       Invoice[]
+  emailLogs      EmailLog[]
 
   @@index([userId])
 }
@@ -175,12 +176,12 @@ model Project {
 // Assigning is explicit: a teammate sees the project name on tasks and pipelines
 // they touch, and the owner sees exactly who is on each project.
 model ProjectMember {
-  id         String   @id @default(cuid())
-  projectId  String
-  userId     String
-  role       String   @default("MEMBER") // MEMBER | MANAGER
-  addedById  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // MEMBER | MANAGER
+  addedById String?
+  createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -219,7 +220,7 @@ model TeamMember {
 model TeamInvite {
   id          String    @id @default(cuid())
   teamId      String
-  email       String    // lowercased at creation
+  email       String // lowercased at creation
   role        String    @default("MEMBER")
   invitedById String
   acceptedAt  DateTime?
@@ -234,45 +235,45 @@ model TeamInvite {
 // ============ LEADS / CRM ============
 
 model Lead {
-  id          String   @id @default(cuid())
-  userId      String
-  teamId      String?
-  company     String
-  contactName String?
-  role        String? // the human's part: Owner, Manager, Buyer
-  profileUrl  String? // public profile page where this person is named (LinkedIn, team page, directory)
-  email       String?
-  phone       String?
-  website     String?
-  address     String? // physical address: street, suburb, city
-  industry    String?
-  city        String?
-  country     String?
-  source      String   @default("MANUAL") // EXPLEE | CSV | MANUAL
-  stage       String   @default("NEW") // NEW | CONTACTED | QUALIFIED | QUOTE_SENT | WON | LOST
-  value       Float    @default(0)
-  notes       String?
-  unlocked    Boolean  @default(false) // contact details revealed (paid)
-  score       Int?
-  externalId  String? // Explee dedup
+  id              String    @id @default(cuid())
+  userId          String
+  teamId          String?
+  company         String
+  contactName     String?
+  role            String? // the human's part: Owner, Manager, Buyer
+  profileUrl      String? // public profile page where this person is named (LinkedIn, team page, directory)
+  email           String?
+  phone           String?
+  website         String?
+  address         String? // physical address: street, suburb, city
+  industry        String?
+  city            String?
+  country         String?
+  source          String    @default("MANUAL") // EXPLEE | CSV | MANUAL
+  stage           String    @default("NEW") // NEW | CONTACTED | QUALIFIED | QUOTE_SENT | WON | LOST
+  value           Float     @default(0)
+  notes           String?
+  unlocked        Boolean   @default(false) // contact details revealed (paid)
+  score           Int?
+  externalId      String? // Explee dedup
   // ---- Lead quality feedback (the seller's verdict, the loop's fuel) ----
   // One tap on the contact card: "Good fit" or "Not a fit" with a reason.
   // The verdict trains three things at once: the seller's own taste profile
   // (LeadSignal), the shared pool's quality counters (LeadPool.feedbackGood/
   // feedbackBad), and the owner's quality lens on the Executive Dashboard.
-  qualityFeedback String?   // GOOD_FIT | BAD_FIT (null = not rated yet)
-  feedbackReason  String?   // GOOD | WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | BAD_CONTACT | NOT_NOW
-  feedbackNote    String?   // optional one-liner in the seller's own words
+  qualityFeedback String? // GOOD_FIT | BAD_FIT (null = not rated yet)
+  feedbackReason  String? // GOOD | WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | BAD_CONTACT | NOT_NOW
+  feedbackNote    String? // optional one-liner in the seller's own words
   feedbackAt      DateTime?
   releasedAt      DateTime? // bad-fit PLATFORM lead handed back to the shared pool, ready to serve a better-fit seller. Never set on MANUAL/CSV rows (the seller's own data stays theirs).
   emailBouncedAt  DateTime? // the provider told us this address bounced (hard fact, not a seller verdict). The reachable promise starts here.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
   projectId String?
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   emailLogs EmailLog[]
   tasks     Task[]
 
@@ -294,11 +295,11 @@ model Client {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String?
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  tasks Task[]
-  notesLog ClientNote[]
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tasks     Task[]
+  notesLog  ClientNote[]
 
   @@index([projectId])
 }
@@ -333,11 +334,11 @@ model Task {
   creatorId  String
   assigneeId String?
 
-  creator  User  @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  lead     Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  creator  User          @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  team     Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  lead     Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client   Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
   comments TaskComment[]
   events   TaskEvent[]
 
@@ -370,11 +371,11 @@ model TaskComment {
 model TaskEvent {
   id        String   @id @default(cuid())
   taskId    String
-  seq       Int      // 1..n within the task; the chain walks in this order
-  type      String   // CREATED | SENT | OPENED | STATUS | COMMENT | EDIT
+  seq       Int // 1..n within the task; the chain walks in this order
+  type      String // CREATED | SENT | OPENED | STATUS | COMMENT | EDIT
   actorId   String?
-  actorName String   // denormalised: the record survives member changes
-  detail    String   // human line: "sent to Sipho", "opened it", "moved to Done"
+  actorName String // denormalised: the record survives member changes
+  detail    String // human line: "sent to Sipho", "opened it", "moved to Done"
   prevHash  String   @default("")
   hash      String
   createdAt DateTime @default(now())
@@ -397,9 +398,9 @@ model FinanceEntry {
   occurredAt  DateTime @default(now())
   createdAt   DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String?
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, occurredAt])
   @@index([projectId])
@@ -408,21 +409,21 @@ model FinanceEntry {
 // ============ APPOINTMENTS ============
 
 model Appointment {
-  id         String    @id @default(cuid())
-  userId     String
-  projectId  String?
-  title      String
-  clientName String?
-  notes      String?
-  startsAt   DateTime
-  endsAt     DateTime?
-  meetLink   String? // Jitsi link (meet.ts)
-  source     String    @default("MANUAL") // MANUAL | VOICE | ICS
-  gcalEventId String?  // set when synced to Google Calendar
-  externalId String?   // iCalendar UID or feed identity — the import/sync dedupe key
-  icsFeed    Boolean   @default(false) // true when this row came from an ICS feed sync
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  userId      String
+  projectId   String?
+  title       String
+  clientName  String?
+  notes       String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  meetLink    String? // Jitsi link (meet.ts)
+  source      String    @default("MANUAL") // MANUAL | VOICE | ICS
+  gcalEventId String? // set when synced to Google Calendar
+  externalId  String? // iCalendar UID or feed identity — the import/sync dedupe key
+  icsFeed     Boolean   @default(false) // true when this row came from an ICS feed sync
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -434,28 +435,28 @@ model Appointment {
 // ============ INVOICES ============
 
 model Invoice {
-  id          String    @id @default(cuid())
-  userId      String
-  projectId   String?
-  number      String    @unique
-  kind        String    @default("INVOICE") // INVOICE | QUOTE (quotes live in the same book, QT- numbers, accept/decline instead of paid)
-  clientName  String
-  clientEmail String?
-  status      String    @default("DRAFT") // invoices: DRAFT | SENT | PAID | OVERDUE · quotes: DRAFT | SENT | ACCEPTED | DECLINED
-  items       String    @default("[]") // JSON [{description, quantity, unitPrice}]
-  currency    String    @default("ZAR")
-  subtotal    Float     @default(0) // EXCLUDING VAT (computed from the prices below)
-  taxRate     Float     @default(15)
-  total       Float     @default(0) // INCLUDING VAT: what the client actually pays
-  pricesIncludeVat Boolean @default(false) // true when the line prices were typed VAT inclusive
-  logoUrl     String?   // data URL for the printable template
-  bankDetails String?   // banking details snapshot printed on the invoice (plain text lines)
-  notes       String?
-  issuedAt    DateTime  @default(now())
-  dueAt       DateTime?
-  paidAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  userId           String
+  projectId        String?
+  number           String    @unique
+  kind             String    @default("INVOICE") // INVOICE | QUOTE (quotes live in the same book, QT- numbers, accept/decline instead of paid)
+  clientName       String
+  clientEmail      String?
+  status           String    @default("DRAFT") // invoices: DRAFT | SENT | PAID | OVERDUE · quotes: DRAFT | SENT | ACCEPTED | DECLINED
+  items            String    @default("[]") // JSON [{description, quantity, unitPrice}]
+  currency         String    @default("ZAR")
+  subtotal         Float     @default(0) // EXCLUDING VAT (computed from the prices below)
+  taxRate          Float     @default(15)
+  total            Float     @default(0) // INCLUDING VAT: what the client actually pays
+  pricesIncludeVat Boolean   @default(false) // true when the line prices were typed VAT inclusive
+  logoUrl          String? // data URL for the printable template
+  bankDetails      String? // banking details snapshot printed on the invoice (plain text lines)
+  notes            String?
+  issuedAt         DateTime  @default(now())
+  dueAt            DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -502,7 +503,7 @@ model EmailLog {
 model Suppression {
   id        String   @id @default(cuid())
   email     String   @unique
-  reason    String   // BOUNCE | COMPLAINT | UNSUB | MANUAL
+  reason    String // BOUNCE | COMPLAINT | UNSUB | MANUAL
   note      String? // e.g. the campaign that produced the bounce
   createdAt DateTime @default(now())
 }
@@ -513,11 +514,11 @@ model WaMessage {
   id          String   @id @default(cuid())
   userId      String
   clientId    String?
-  phone       String   // E.164 without + (WhatsApp wa_id)
-  direction   String   // IN | OUT
+  phone       String // E.164 without + (WhatsApp wa_id)
+  direction   String // IN | OUT
   body        String
   status      String   @default("RECEIVED") // RECEIVED | SENT | FAILED
-  waMessageId String?  // Meta wamid for dedup/status
+  waMessageId String? // Meta wamid for dedup/status
   error       String?
   createdAt   DateTime @default(now())
 
@@ -540,7 +541,7 @@ model WaBotLink {
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   status    String   @default("PENDING") // PENDING | ACTIVE | OPTED_OUT
-  pending   String?  // JSON context for multi-turn flows (contact disambiguation)
+  pending   String? // JSON context for multi-turn flows (contact disambiguation)
   attempts  Int      @default(0) // failed link attempts on this phone
   lastMsgAt DateTime @default(now())
   createdAt DateTime @default(now())
@@ -589,16 +590,16 @@ model CreditTx {
 }
 
 model TopUp {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   packageId   String
   amountCents Int // what user pays
   creditCents Int // credits received
-  status      String   @default("PENDING") // PENDING | PAID | FAILED
-  provider    String   @default("YOCO")
+  status      String    @default("PENDING") // PENDING | PAID | FAILED
+  provider    String    @default("YOCO")
   reference   String
   providerRef String? // Yoco checkout/payment id for reconciliation
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   paidAt      DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -670,14 +671,14 @@ model PlatformConfig {
 model Subscription {
   id           String    @id @default(cuid())
   userId       String    @unique // one plan per user (upsert on renewal/upgrade)
-  plan         String    // HUSTLER | BOSS
+  plan         String // HUSTLER | BOSS
   status       String    @default("PENDING") // PENDING | ACTIVE | PAUSED | PAST_DUE | CANCELED
   billingCycle String    @default("MONTHLY") // MONTHLY | ANNUAL (annual = 2 months free)
   amountCents  Int
   provider     String    @default("YOCO")
-  reference    String    // platform reference (HPSUB-...)
-  providerRef  String?   // Yoco checkout/payment id for reconciliation
-  npoNumber    String?   // registered nonprofit number: 30% off while it stands
+  reference    String // platform reference (HPSUB-...)
+  providerRef  String? // Yoco checkout/payment id for reconciliation
+  npoNumber    String? // registered nonprofit number: 30% off while it stands
   pausedUntil  DateTime? // while PAUSED: plan is frozen; auto-resumes with zero lost days
   startedAt    DateTime?
   renewsAt     DateTime? // monthly (+35d grace) or annual (+370d grace) anniversary
@@ -693,16 +694,16 @@ model Subscription {
 
 model Referral {
   id            String    @id @default(cuid())
-  referrerId    String    // who shared their code
-  invitedUserId String?   // set when the invited person registers
+  referrerId    String // who shared their code
+  invitedUserId String? // set when the invited person registers
   invitedEmail  String?
   status        String    @default("SIGNED_UP") // SIGNED_UP | SUBSCRIBED
   rewardCents   Int       @default(0) // total credited to referrer
   createdAt     DateTime  @default(now())
   subscribedAt  DateTime?
 
-  referrer    User   @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
-  invitedUser User?  @relation("Invitee", fields: [invitedUserId], references: [id], onDelete: SetNull)
+  referrer    User  @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  invitedUser User? @relation("Invitee", fields: [invitedUserId], references: [id], onDelete: SetNull)
 
   @@index([referrerId])
   @@index([invitedUserId])
@@ -711,21 +712,21 @@ model Referral {
 // ============ INVENTORY (stock management) ============
 
 model InventoryItem {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  sku         String?  // stock code / barcode
-  quantity    Float    @default(0)
-  unit        String?  // "units", "kg", "litres"…
-  costPrice   Float    @default(0) // rands per unit
-  sellPrice   Float    @default(0) // rands per unit
-  lowStockAt  Float    @default(0) // alert when quantity <= this
-  supplier    String?  // who you buy it from
-  location    String?  // shelf, bin, storeroom
-  image       String?  // product photo as a small data URL, downscaled client side
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  sku        String? // stock code / barcode
+  quantity   Float    @default(0)
+  unit       String? // "units", "kg", "litres"…
+  costPrice  Float    @default(0) // rands per unit
+  sellPrice  Float    @default(0) // rands per unit
+  lowStockAt Float    @default(0) // alert when quantity <= this
+  supplier   String? // who you buy it from
+  location   String? // shelf, bin, storeroom
+  image      String? // product photo as a small data URL, downscaled client side
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -738,7 +739,7 @@ model PushSubscription {
   id        String   @id @default(cuid())
   userId    String
   endpoint  String   @unique // push service URL — one row per device
-  p256dh    String   // subscription keys
+  p256dh    String // subscription keys
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
@@ -763,26 +764,26 @@ model LeadPool {
   company        String
   industry       String?
   city           String?
-  areaLabel      String?   // the human area line of the scans that found it
+  areaLabel      String? // the human area line of the scans that found it
   address        String?
-  phone          String?   // normalized +27 form
-  phoneRaw       String?   // as first seen
+  phone          String? // normalized +27 form
+  phoneRaw       String? // as first seen
   email          String?
   website        String?
   contactName    String?
-  role           String?   // the human's part: Owner, Manager, Buyer
-  profileUrl     String?   // public profile page where this person is named
-  why            String?   // last fit line from ranking
-  score          Int?      // last AI fit score 1..5
+  role           String? // the human's part: Owner, Manager, Buyer
+  profileUrl     String? // public profile page where this person is named
+  why            String? // last fit line from ranking
+  score          Int? // last AI fit score 1..5
   lat            Float?
   lng            Float?
-  source         String    // GEMINI | ZAI | OSM | EXPLEE
-  poolTag        String?   // the outreach project this verified contact came from
-  sourceRef      String?   // OSM node/way link or directory url
+  source         String // GEMINI | ZAI | OSM | EXPLEE
+  poolTag        String? // the outreach project this verified contact came from
+  sourceRef      String? // OSM node/way link or directory url
   confirmCount   Int       @default(1)
   verifyScore    Int       @default(0) // 0..100
   verifyState    String    @default("new") // new | active | listed | stale
-  verifyChecks   String?   // JSON { phoneOk, websiteOk, checkedAt }
+  verifyChecks   String? // JSON { phoneOk, websiteOk, checkedAt }
   firstSeenAt    DateTime  @default(now())
   lastSeenAt     DateTime  @default(now())
   lastVerifiedAt DateTime?
@@ -833,7 +834,7 @@ model ScanRun {
   id        String   @id @default(cuid())
   userId    String
   topicFp   String
-  mode      String   // POOL | WARM | AI_SEARCH | OSM | EXPLEE | NONE
+  mode      String // POOL | WARM | AI_SEARCH | OSM | EXPLEE | NONE
   leadCount Int      @default(0)
   fromPool  Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -889,13 +890,13 @@ model ClientPoolLead {
 model LeadSignal {
   id          String   @id @default(cuid())
   userId      String
-  signal      String   // SAVE | DISMISS
-  reason      String?  // WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | NOT_NOW
-  companyKey  String   // normKey(company), the face that never returns once dismissed
-  categoryKey String?  // resolved trade key from the taxonomy, server side only
+  signal      String // SAVE | DISMISS
+  reason      String? // WRONG_INDUSTRY | TOO_FAR | TOO_BIG | TOO_SMALL | ALREADY_CLIENT | NOT_NOW
+  companyKey  String // normKey(company), the face that never returns once dismissed
+  categoryKey String? // resolved trade key from the taxonomy, server side only
   city        String?
   industry    String?
-  source      String?  // the serve lane that showed the face: WEB | MAP | POOL | TEAM
+  source      String? // the serve lane that showed the face: WEB | MAP | POOL | TEAM
   createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -951,15 +952,61 @@ model LeadLookupCache {
 // opt-out must never leak through a fingerprint variation.
 model ListingSuppression {
   id        String   @id @default(cuid())
-  name      String   // business name as submitted
-  nameKey   String   // normalised name — the matching key
+  name      String // business name as submitted
+  nameKey   String // normalised name — the matching key
   city      String   @default("") // normalised city, empty = none given
-  osmId     String?  // external map listing id when known
-  contact   String?  // requester email or phone (for confirming the request)
+  osmId     String? // external map listing id when known
+  contact   String? // requester email or phone (for confirming the request)
   reason    String?
   source    String   @default("WEB") // WEB | EXEC
   createdAt DateTime @default(now())
 
   @@unique([nameKey, city])
   @@index([osmId])
+}
+
+// ============ STATEMENTS (SEH internal billing documents) ============
+
+// Monthly account statements for the boss's own book: Simple Eternity
+// Holdings billing its clients (Kloof Street Online memberships, web work).
+// Access is deliberately narrow: the master account, exec seats, and members
+// of the master's own team. Everyone else never sees this exists.
+// One account = one client ledger. balanceBfwd carries the opening balance
+// from the paper/Canva era; entries carry signed amounts (+ charge, - payment
+// received) and the statement math is computed, never stored.
+model StatementAccount {
+  id           String   @id @default(cuid())
+  ownerId      String
+  refNo        String   @unique // printed as Account Ref No, e.g. BVS-0999-06
+  clientName   String // "Kim Tucker | Bodyvision Studio"
+  address      String?
+  email        String?
+  website      String?
+  phone        String?
+  recipientVat String?
+  recipientReg String?
+  balanceBfwd  Float    @default(0) // opening balance from before this book
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner   User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  entries StatementEntry[]
+
+  @@index([ownerId])
+}
+
+model StatementEntry {
+  id        String   @id @default(cuid())
+  accountId String
+  date      DateTime
+  product   String? // short ref printed in the Product column ("Membership")
+  remarks   String // the human line ("kloofstreet.online - October 2026")
+  quantity  String? // kept as printed text ("1", "4.2 hours")
+  amount    Float // signed: + charge, - payment received
+  kind      String   @default("CHARGE") // BFWD | CHARGE | PAYMENT
+  createdAt DateTime @default(now())
+
+  account StatementAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, date])
 }

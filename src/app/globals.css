@@ -250,6 +250,27 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
   body:has(#invoice-print-root) {
     background: #ffffff !important;
   }
+  /* Task 147: the SEH statement sheet joins the same law. */
+  body:has(#statement-print-root) > *:not(#statement-print-root) {
+    display: none !important;
+  }
+  body:has(#statement-print-root) {
+    background: #ffffff !important;
+  }
+  body.statement-printing > *:not(#statement-print-root) {
+    display: none !important;
+  }
+  body.statement-printing {
+    background: #ffffff !important;
+  }
+  /* The statement sheet is drawn on the template's own 1004x1418 grid; zoom
+     maps it onto A4 paper exactly (1004px * 0.7908 = 794px = 210mm @96dpi). */
+  .statement-sheet {
+    zoom: 0.7908;
+  }
+  .statement-preview-wrap {
+    zoom: 1 !important;
+  }
   /* v2: same law keyed on the body class the sheet adds while mounted, for
      browsers without :has(). Two doors, one outcome: sheet only. */
   body.invoice-printing > *:not(#invoice-print-root) {
@@ -264,5 +285,13 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
      keeps ordinary page prints off the paper edge. */
   @page {
     margin: 0;
+  }
+}
+
+/* Statement sheet on screen: shrink to fit the content column; on paper the
+   print law above takes over with the exact A4 zoom. */
+@media screen {
+  .statement-preview-wrap {
+    zoom: 0.66;
   }
 }

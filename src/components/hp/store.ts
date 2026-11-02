@@ -24,6 +24,7 @@ export type ViewKey =
   | 'grow'
   | 'profile'
   | 'admin'
+  | 'statements'
 
 export interface HpProject {
   id: string
