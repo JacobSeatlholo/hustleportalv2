@@ -10,7 +10,7 @@ async function loadTarget(id: string) {
     select: {
       id: true, email: true, name: true, businessName: true, industry: true, city: true,
       phone: true, role: true, platformAdmin: true, accountStatus: true, suspendedAt: true,
-      suspendReason: true, createdAt: true,
+      suspendReason: true, createdAt: true, refCode: true,
       wallet: { select: { balance: true } },
       subscription: {
         select: {
@@ -117,15 +117,50 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   })
 }
 
-// PATCH /api/admin/exec/client/[id], pause or restore an account.
-// Body: { status: 'ACTIVE' | 'SUSPENDED', reason?: string }
+// PATCH /api/admin/exec/client/[id], pause or restore an account, or set the
+// member's personal referral code.
+// Body: { status: 'ACTIVE' | 'SUSPENDED', reason?: string } or { refCode: string }
 // Guard rails: the exec cannot pause themselves or any other admin/exec account.
+// Referral codes: 4 to 16 letters and numbers, stored uppercase (attribution
+// uppercases at signup anyway), unique across members, exec seats excluded.
+// Replacing a code retires the old printed links on purpose, rewards already
+// attributed never move.
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
   const { id } = await ctx.params
 
   const body = await req.json().catch(() => ({}))
+
+  // Referral code path: the exec sets a memorable personal code for a member.
+  if (typeof body?.refCode === 'string') {
+    const code = body.refCode.trim().toUpperCase()
+    if (!/^[A-Z0-9]{4,16}$/.test(code)) {
+      return NextResponse.json({ error: 'Referral code must be 4 to 16 letters or numbers.' }, { status: 400 })
+    }
+    const target = await loadTarget(id)
+    if (!target) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
+    if (isExecUser(target)) {
+      return NextResponse.json({ error: 'Exec seats do not carry referral codes.' }, { status: 400 })
+    }
+    const clash = await db.user.findUnique({ where: { refCode: code }, select: { id: true } })
+    if (clash && clash.id !== id) {
+      return NextResponse.json({ error: 'That referral code is already taken.' }, { status: 409 })
+    }
+    const updated = await db.user.update({
+      where: { id },
+      data: { refCode: code },
+      select: { id: true, refCode: true },
+    })
+    return NextResponse.json({
+      ok: true,
+      client: updated,
+      note: target.refCode && target.refCode !== code
+        ? 'Old link retired. Links shared with the previous code stop attributing.'
+        : 'Referral code set.',
+    })
+  }
+
   const status = body?.status
   if (status !== 'ACTIVE' && status !== 'SUSPENDED') {
     return NextResponse.json({ error: 'Status must be ACTIVE or SUSPENDED.' }, { status: 400 })

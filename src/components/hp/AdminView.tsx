@@ -252,6 +252,7 @@ interface ClientDetail {
     industry: string | null
     city: string | null
     phone: string | null
+    refCode: string | null
     isAdmin: boolean
     accountStatus: string
     suspendedAt: string | null
@@ -690,6 +691,89 @@ function PoolCard({ detail, busy, onRun, onAction }: {
 
 // =================== Client drawer ===================
 
+/**
+ * RefLinkRow, the member's personal referral link on the exec desk. Shows the
+ * code and the full link, copy in one tap, and the exec can set a memorable
+ * custom code (the boss's ask, something like KABIR888). The API is the law:
+ * charset and uniqueness are checked server side, exec only.
+ */
+function RefLinkRow({ code, clientId, name, onSaved }: {
+  code: string | null
+  clientId: string
+  name: string
+  onSaved: (code: string) => void
+}) {
+  const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const link = code ? `https://hustleportal.online/?ref=${code}` : null
+
+  async function save() {
+    setBusy(true)
+    try {
+      const r = await api<{ ok: boolean; client: { refCode: string } }>(`/api/admin/exec/client/${clientId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ refCode: value.trim() }),
+      })
+      onSaved(r.client.refCode)
+      setEditing(false)
+      toast({ title: 'Referral link remade', description: `hustleportal.online/?ref=${r.client.refCode}` })
+    } catch (e) {
+      toast({ title: 'Could not set the code', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border bg-white/5 p-2.5">
+      <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+        <Link2 className="h-3 w-3" /> Referral link · {name.split(' ')[0]}
+      </div>
+      {editing ? (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <Input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16))}
+            placeholder="KABIR888"
+            className="h-8 text-sm font-mono"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && value.trim().length >= 4) save()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+          />
+          <Button size="sm" className="h-8 shrink-0" disabled={busy || value.trim().length < 4} onClick={save}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={() => setEditing(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mt-1.5">
+          <code className="text-xs font-mono truncate flex-1 text-foreground/90">{link || 'not made yet'}</code>
+          {link && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 gap-1"
+              onClick={async () => {
+                try { await navigator.clipboard.writeText(link); toast({ title: 'Link copied' }) }
+                catch { toast({ title: 'Could not copy, select it by hand', variant: 'destructive' }) }
+              }}
+            >
+              <Copy className="h-3 w-3" /> Copy
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => { setValue(code || ''); setEditing(true) }}>
+            {code ? 'Change' : 'Create code'}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
   id: string | null
   onClose: () => void
@@ -790,6 +874,14 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                 <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
                   Paused {c.suspendedAt ? timeAgo(c.suspendedAt) : ''}{c.suspendReason ? ` · ${c.suspendReason}` : ''}
                 </div>
+              )}
+              {!c.isAdmin && (
+                <RefLinkRow
+                  code={c.refCode ?? null}
+                  clientId={c.id}
+                  name={c.name}
+                  onSaved={(code) => { if (fresh) setDetail({ ...fresh, client: { ...c, refCode: code } }) }}
+                />
               )}
               <div className="flex flex-wrap gap-2 mt-4">
                 {!c.isAdmin && (
