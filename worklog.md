@@ -2895,3 +2895,18 @@ Work Log:
 
 Stage Summary:
 - The October statement now prints one A4 page, edge to edge like the Canva original, Save as PDF included. Print > Save as PDF in the dialog reads "1 sheet of paper".
+
+Task ID: 149
+Agent: Super Z (main)
+Task: Boss, at the print dialog again: "Nah Theres 2 things.. the numbers go over the lines to the right on the right hand side of the box. ensure everything looks perfect."
+
+Work Log:
+- The crossing numbers: every row anchored its Total value at right:90 of the 804px table, which lands the right edge at template x 714 - ten pixels PAST the Total|AmountDue divider at x 704. Fixed to right:113, which ends the values at x 691: exactly 13px inside the divider, the same padding the header cells use. Same anchor for the Balance B/f row. Verified by pixel zones on the printed page: zero ink between the value ends (device x ~969) and the divider (x 986) across the whole table body, and zero between the running balances and the box edge.
+- Template fidelity pass, measured off the boss's own Canva PDF (upload page 2): Total column now carries the template's "R 700.00" voice (raw, no thousands separator); entity value 13.5px so "Simple Eternity Holdings (Pty) Ltd" sits on ONE line like the template; Recipient VAT/Reg labels back to two lines inside their 40px cells; "Statement Created, On:" pulled up to 580 with 14px lines so the timestamp clears the table top at 612 (it was half buried under the table before); box values vertically centred (entity 8, address 20, tel 14); client block pitch 21px like the template; right-side furniture (meta values 14.5, Charges line 14.5, queries 13.5, table header 14.5, row text 13.5, arrears/return/bank 13.5, big box 16.5, footer 16) all brought down from the oversized first pass.
+- Proof harness upgraded to the real component: bun SSR-renders the actual StatementSheet (exported for the test), wraps it in the exact globals.css print law, headless Chromium prints it, and scripts/printtest/verify_sheet.py asserts page count, A4, band-to-edge, both no-cross zones, divider position, R-prefix ink, entity reg line, footer. PASS on the polished sheet: 1 page, A4.
+- Print-perfect October statement re-shipped as download/Bodyvision_Statement_Oct2026.pdf (the harness PDF IS the site sheet) since the recycle wiped the previous download.
+- Local build initially failed and NOT from this work: Turbopack now compiles the gitignored Task-25 leftovers kept on disk, and /api/seed imports ensureWorkspaceData which left workspace.ts in October. Deleted the broken untracked dir; the other leftovers compile and stay. Vercel builds from git never saw it.
+- Deploy still parked on the same blocker: the recycled sandbox has no GitHub push credential (no ssh binary, no key, no token anywhere in the project - swept twice). Task 148 zoom/A4 fix plus this polish are both committed locally, one push from live the moment the boss re-sends deploy access.
+
+Stage Summary:
+- The printed sheet now matches the Canva original line for line: numbers sit inside their columns with the header's own padding, the template's R-voice is back, nothing hides under the table, and the whole thing is one A4 page. Both statement fixes wait in two local commits for the deploy key.

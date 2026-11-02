@@ -72,7 +72,8 @@ function d2(d: Date): string {
 // ---- the printable sheet: absolute grid replica of the Canva template ----
 // className="statement-sheet" is the print hook: globals.css zooms this fixed
 // grid onto one A4 sheet and forces the template greys to print exact.
-function StatementSheet({ account, monthKey, now }: { account: Account; monthKey: string; now: string }) {
+// Exported for the print-fidelity test (scripts/printtest) only.
+export function StatementSheet({ account, monthKey, now }: { account: Account; monthKey: string; now: string }) {
   const [y, m] = monthKey.split('-').map(Number)
   const monthName = MONTHS[(m || 1) - 1]
   const monthStart = new Date(y, m - 1, 1)
@@ -102,25 +103,26 @@ function StatementSheet({ account, monthKey, now }: { account: Account; monthKey
       {/* title */}
       <div style={{ position: 'absolute', top: 88, left: 496, width: 373, textAlign: 'center', fontSize: 27, fontWeight: 700 }}>Statement</div>
 
-      {/* entity / address / telephone box */}
+      {/* entity / address / telephone box — values vertically centred per the
+          template (entity ~8, address ~20, tel ~14) */}
       {[
-        { t: 123, h: 53, label: ['Entity'], lines: ['Simple Eternity Holdings (Pty) Ltd', '2017/652523/07'] },
-        { t: 176, h: 112, label: ['Address'], lines: ['99 Kloof Street', 'Gardens.', 'Western Cape', '8001'] },
-        { t: 288, h: 50, label: ['Telephone', 'number'], lines: ['+27 21 422 5140'] },
+        { t: 123, h: 53, vt: 8, label: ['Entity'], lines: ['Simple Eternity Holdings (Pty) Ltd', '2017/652523/07'] },
+        { t: 176, h: 112, vt: 20, label: ['Address'], lines: ['99 Kloof Street', 'Gardens.', 'Western Cape', '8001'] },
+        { t: 288, h: 50, vt: 14, label: ['Telephone', 'number'], lines: ['+27 21 422 5140'] },
       ].map((r, i) => (
         <div key={i} style={{ position: 'absolute', top: r.t, left: 524, width: 373, height: r.h, border: `1.5px solid ${BOX}`, borderTop: i === 0 ? `1.5px solid ${BOX}` : 'none' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, width: 103, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 13.5, lineHeight: 1.3, textAlign: 'center', padding: '0 4px' }}>
             {r.label.map((l, j) => <span key={j}>{l}</span>)}
           </div>
-          <div style={{ position: 'absolute', top: 6, left: 110, fontSize: 16.9, lineHeight: '23px' }}>
+          <div style={{ position: 'absolute', top: r.vt, left: 110, fontSize: 13.5, lineHeight: '18px' }}>
             {r.lines.map((l, j) => <div key={j}>{l}</div>)}
           </div>
         </div>
       ))}
 
-      {/* client block */}
-      <div style={{ position: 'absolute', top: 352, left: 100, fontSize: 18.5 }}>{account.clientName}</div>
-      <div style={{ position: 'absolute', top: 382, left: 100, fontSize: 17.6, lineHeight: '31px' }}>
+      {/* client block — template pitch is a tight ~21px line */}
+      <div style={{ position: 'absolute', top: 352, left: 100, fontSize: 15.5 }}>{account.clientName}</div>
+      <div style={{ position: 'absolute', top: 380, left: 100, fontSize: 15.5, lineHeight: '21px' }}>
         {account.address ? <div>{account.address}</div> : null}
         {account.email ? <div>{account.email}</div> : null}
         {account.website ? <div>{account.website}</div> : null}
@@ -132,31 +134,32 @@ function StatementSheet({ account, monthKey, now }: { account: Account; monthKey
         <div style={{ position: 'absolute', top: 0, left: 0, width: 103, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, lineHeight: 1.3, textAlign: 'center' }}>
           <span>Account Ref</span><span>No</span>
         </div>
-        <div style={{ position: 'absolute', top: 0, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16.9 }}>{account.refNo}</div>
-        <div style={{ position: 'absolute', top: 0, left: 244, width: 68, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, lineHeight: 1.3, textAlign: 'center' }}>
+        <div style={{ position: 'absolute', top: 0, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14.5 }}>{account.refNo}</div>
+        <div style={{ position: 'absolute', top: 0, left: 244, width: 68, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1.25, textAlign: 'center', padding: '0 1px' }}>
           <span>Recipient VAT</span><span>No</span>
         </div>
         <div style={{ position: 'absolute', top: 0, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>{account.recipientVat || ''}</div>
         <div style={{ position: 'absolute', top: 40, left: 0, width: 103, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, textAlign: 'center' }}>For the Month</div>
-        <div style={{ position: 'absolute', top: 40, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16.9 }}>{monthName} {y}</div>
-        <div style={{ position: 'absolute', top: 40, left: 244, width: 68, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, lineHeight: 1.3, textAlign: 'center' }}>
+        <div style={{ position: 'absolute', top: 40, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14.5 }}>{monthName} {y}</div>
+        <div style={{ position: 'absolute', top: 40, left: 244, width: 68, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1.25, textAlign: 'center', padding: '0 1px' }}>
           <span>Recipient Reg</span><span>No</span>
         </div>
         <div style={{ position: 'absolute', top: 40, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5 }}>{account.recipientReg || ''}</div>
         <div style={{ position: 'absolute', top: 90, left: 0, width: '100%', height: 39 }}>
-          <div style={{ position: 'absolute', top: 8, left: 8, fontSize: 16.9 }}>Charges Generated for {monthName} {y}</div>
+          <div style={{ position: 'absolute', top: 10, left: 8, fontSize: 14.5 }}>Charges Generated for {monthName} {y}</div>
         </div>
       </div>
 
       {/* queries box */}
       <div style={{ position: 'absolute', top: 510, left: 524, width: 373, height: 67, border: `1.5px solid ${BOX}` }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 103, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15.2 }}>Queries</div>
-        <div style={{ position: 'absolute', top: 13, left: 110, fontSize: 15.2, color: LINK, textDecoration: 'underline' }}>accounts@businesshustle.co.za</div>
-        <div style={{ position: 'absolute', top: 38, left: 110, fontSize: 15.2 }}>Tel: 021 422 5140</div>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 103, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5 }}>Queries</div>
+        <div style={{ position: 'absolute', top: 15, left: 110, fontSize: 13.5, color: LINK, textDecoration: 'underline' }}>accounts@businesshustle.co.za</div>
+        <div style={{ position: 'absolute', top: 38, left: 110, fontSize: 13.5 }}>Tel: 021 422 5140</div>
       </div>
 
-      {/* statement created */}
-      <div style={{ position: 'absolute', top: 584, left: 524, width: 373, textAlign: 'right', fontSize: 13.5, lineHeight: 1.45 }}>
+      {/* statement created — must clear the table top at 612: two 14px lines
+          starting at 580 end at 608 */}
+      <div style={{ position: 'absolute', top: 580, left: 524, width: 373, textAlign: 'right', fontSize: 12.5, lineHeight: '14px' }}>
         <div>Statement Created, On:</div>
         <div>{now}</div>
       </div>
@@ -176,7 +179,7 @@ function StatementSheet({ account, monthKey, now }: { account: Account; monthKey
             position: 'absolute', top: 0, left: h.x, width: h.w, height: 50,
             display: 'flex', alignItems: 'center', justifyContent: h.a === 'left' ? 'flex-start' : h.a === 'center' ? 'center' : 'flex-end',
             paddingLeft: h.a === 'left' ? 13 : 0, paddingRight: h.a === 'right' ? 13 : 0,
-            fontSize: 16.9, borderBottom: `1.5px solid ${BOX}`,
+            fontSize: 14.5, borderBottom: `1.5px solid ${BOX}`,
           }}>{h.t}</div>
         ))}
         {[100, 223, 504, 601, 704].map((x, i) => (
@@ -184,59 +187,62 @@ function StatementSheet({ account, monthKey, now }: { account: Account; monthKey
         ))}
         {/* Balance B/f row */}
         <div style={{ position: 'absolute', top: 50, left: 0, width: '100%', height: SLOT }}>
-          <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 16 }}>{d2(monthStart)}</div>
-          <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 16, fontWeight: 700 }}>Balance B/f</div>
-          <div style={{ position: 'absolute', top: 14, right: 90, fontSize: 16 }}>{fmtPlain(opening)}</div>
-          <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 16 }}>{fmtPlain(opening)}</div>
+          <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 13.5 }}>{d2(monthStart)}</div>
+          <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 13.5, fontWeight: 700 }}>Balance B/f</div>
+          {/* right 113 = 13px inside the Total|AmountDue divider at x 704, same as the header cell */}
+          <div style={{ position: 'absolute', top: 14, right: 113, fontSize: 13.5 }}>{fmtPlain(opening)}</div>
+          <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 13.5 }}>{fmtPlain(opening)}</div>
         </div>
         {/* month lines */}
         {rows.map((r, i) => (
           <div key={r.id} style={{ position: 'absolute', top: 50 + (i + 1) * SLOT, left: 0, width: '100%', height: SLOT }}>
-            <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 16 }}>{d2(new Date(r.date))}</div>
-            {r.product ? <div style={{ position: 'absolute', top: 14, left: 113, fontSize: 16, fontWeight: 700 }}>{r.product}</div> : null}
-            <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 16, maxWidth: 255, lineHeight: 1.3 }}>{r.remarks}</div>
-            {r.quantity ? <div style={{ position: 'absolute', top: 14, left: 504, width: 97, textAlign: 'center', fontSize: 16 }}>{r.quantity}</div> : null}
-            <div style={{ position: 'absolute', top: 14, right: 90, fontSize: 16 }}>{fmtPlain(r.amount)}</div>
-            <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 16 }}>{fmtPlain(r.running)}</div>
+            <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 13.5 }}>{d2(new Date(r.date))}</div>
+            {r.product ? <div style={{ position: 'absolute', top: 14, left: 113, fontSize: 13.5, fontWeight: 700, maxWidth: 110 }}>{r.product}</div> : null}
+            <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 13.5, maxWidth: 255, lineHeight: 1.3 }}>{r.remarks}</div>
+            {r.quantity ? <div style={{ position: 'absolute', top: 14, left: 504, width: 97, textAlign: 'center', fontSize: 13.5 }}>{r.quantity}</div> : null}
+            {/* Total keeps the template's own voice: "R 700.00" raw, no thousands
+                separator; anchor 13px inside the Total|AmountDue divider */}
+            <div style={{ position: 'absolute', top: 14, right: 113, fontSize: 13.5 }}>{`R ${Math.abs(r.amount).toFixed(2)}`}</div>
+            <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 13.5 }}>{fmtPlain(r.running)}</div>
           </div>
         ))}
       </div>
 
       {/* return portion */}
-      <div style={{ position: 'absolute', top: 995, left: 440, fontSize: 15.2, fontWeight: 700 }}>PLEASE RETURN THIS PORTION WITH PROOF OF YOUR PAYMENT TO:</div>
-      <div style={{ position: 'absolute', top: 1018, left: 440, fontSize: 15.2 }}>accounts@businesshustle.co.za</div>
+      <div style={{ position: 'absolute', top: 995, left: 440, fontSize: 13.5, fontWeight: 700 }}>PLEASE RETURN THIS PORTION WITH PROOF OF YOUR PAYMENT TO:</div>
+      <div style={{ position: 'absolute', top: 1016, left: 440, fontSize: 13.5 }}>accounts@businesshustle.co.za</div>
 
       {/* arrears slip */}
       <div style={{ position: 'absolute', top: 1043, left: 468, width: 429, height: 70, border: `1.5px solid ${BOX}` }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 127, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15.2 }}>Arrears(-)</div>
-        <div style={{ position: 'absolute', top: 0, right: 10, height: '100%', display: 'flex', alignItems: 'center', fontSize: 15.2 }}>{fmtPlain(due)}</div>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 127, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5 }}>Arrears(-)</div>
+        <div style={{ position: 'absolute', top: 0, right: 10, height: '100%', display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{fmtPlain(due)}</div>
       </div>
       <div style={{ position: 'absolute', top: 1112, left: 456, width: 447, height: 4, background: BOX }} />
 
       {/* amount due */}
-      <div style={{ position: 'absolute', top: 1128, left: 605, width: 163, textAlign: 'right', fontSize: 15.2, lineHeight: 1.3 }}>Amount<br />Due</div>
-      <div style={{ position: 'absolute', top: 1120, left: 783, width: 114, height: 56, border: `2px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18.5, fontWeight: 700 }}>
+      <div style={{ position: 'absolute', top: 1128, left: 605, width: 163, textAlign: 'right', fontSize: 13.5, lineHeight: 1.3 }}>Amount<br />Due</div>
+      <div style={{ position: 'absolute', top: 1120, left: 783, width: 114, height: 56, border: `2px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16.5, fontWeight: 700 }}>
         R {fmtPlain(due)}
       </div>
       <div style={{ position: 'absolute', top: 1176, left: 768, width: 135, height: 4, background: BOX }} />
 
       {/* bank block */}
-      <div style={{ position: 'absolute', top: 1044, left: 100, fontSize: 15.2, lineHeight: '17px' }}>
+      <div style={{ position: 'absolute', top: 1044, left: 100, fontSize: 13.5, lineHeight: '17px' }}>
         <div>Account Name: Simple Eternity Holdings (Pty) Ltd</div>
         <div>t/a Business Hustle Ltd ©</div>
         <div>Bank: Tyme Bank Business Account</div>
         <div>Account No: 530 000 691 98</div>
         <div>Branch Code: 678 910</div>
       </div>
-      <div style={{ position: 'absolute', top: 1136, left: 100, fontSize: 15.2, fontWeight: 700, lineHeight: '19px' }}>
+      <div style={{ position: 'absolute', top: 1140, left: 100, fontSize: 13.5, fontWeight: 700, lineHeight: '18px' }}>
         <div>PLEASE USE YOUR ACCOUNT NUMBER AS</div>
         <div>REFERENCE WHEN MAKING PAYMENT.</div>
       </div>
-      <div style={{ position: 'absolute', top: 1178, left: 100, fontSize: 15.2 }}>All payments accepted without prejudice to our rights.</div>
+      <div style={{ position: 'absolute', top: 1186, left: 100, fontSize: 13.5 }}>All payments accepted without prejudice to our rights.</div>
 
       {/* footer */}
       <img src="/brand/footer_logo.png" alt="" style={{ position: 'absolute', top: 1238, left: 437, width: 137, height: 69 }} />
-      <div style={{ position: 'absolute', top: 1334, left: 100, fontSize: 18.5 }}>Simple Eternity Holdings (Pty) Ltd</div>
+      <div style={{ position: 'absolute', top: 1334, left: 100, fontSize: 16 }}>Simple Eternity Holdings (Pty) Ltd</div>
     </div>
   )
 }
