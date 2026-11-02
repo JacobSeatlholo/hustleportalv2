@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { campaignStateKey, readCampaignStates, writeCampaignState } from '@/lib/campaignqueue'
 
 // ONE-SHOT OPS REPAIR DOOR (Task 146) — deliberately temporary.
 //
-// Context: the kloofstreet-2026-11 contact blast hard-failed on six addresses
-// that live on domains which cannot receive mail at all (kloofstreet.online
-// publishes no MX record, bodyvision.co.za publishes a Null MX). The boss
-// ordered: diagnose, remove the dead addresses, and replace six of them with
-// the real working addresses he supplied. The exec seat password was rotated
-// in the same window, so this door exists exactly long enough to run that one
-// repair, then the route is deleted in the very next commit and the token
-// dies with it. No send capability lives here — it edits contact book rows
-// and the suppression ledger only.
+// What the blast truth showed: the kloofstreet-2026-11 failures and the
+// win-back failures were all RESEND 429 rate-limit errors (10 req/s burst
+// law), not bad addresses; the six dead addresses the boss flagged are
+// member LOGIN emails on domains that cannot receive mail at all
+// (kloofstreet.online publishes no MX, bodyvision.co.za a Null MX).
+//
+// This door therefore does exactly four things, nothing else:
+//   1. repoint the six member logins to the boss's working addresses,
+//   2. land the six dead addresses on the Suppression ledger forever,
+//   3. re-queue the one blast email a 429 dropped (studburger) and wake the
+//      campaign so the engine itself redelivers it under its own laws,
+//   4. report anything it could not do instead of forcing it.
+// No send capability lives here. Deleted in the next commit; the token dies.
 
 const TOKEN = '8735175f83e713c08b9dee92b7b45acdee445ad44bdad42f'
 
@@ -25,18 +30,10 @@ const REPLACEMENTS: Record<string, string> = {
   'admin@bodyvision.co.za': 'kim@tuckermail.co.za',
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+const STUCK_TAG = 'kloofstreet-2026-11'
+const STUCK_EMAIL = 'info@studburger.com'
 
-// A conservative hard-failure detector: only provider errors that read as
-// permanent become suppressions. Quota, timeout and rate words never do.
-function isHardFailure(err: string | null | undefined): boolean {
-  if (!err) return false
-  const e = err.toLowerCase()
-  const hard = ['not found', 'no mail', 'mailbox', 'no mx', 'mx record', 'dns', 'invalid', 'rejected', 'bounce', 'unrouteable', 'no such user', 'recipient', 'disabled', 'permanent']
-  const soft = ['rate', 'quota', 'timeout', 'timed out', 'temporarily', 'try again', '429', 'limit']
-  if (soft.some((s) => e.includes(s))) return false
-  return hard.some((h) => e.includes(h))
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 function gate(req: NextRequest): NextResponse | null {
   const header = (req.headers.get('authorization') || '').trim()
@@ -46,9 +43,8 @@ function gate(req: NextRequest): NextResponse | null {
   return null
 }
 
-// GET — the full truth: every non-SENT row in the kloofstreet campaigns, the
-// six affected lead rows wherever they sit, and the current state of the six
-// replacement addresses (dupes, suppression).
+// GET — the full truth before anything moves: blast failure rows, the six
+// member rows, replacement-address collisions, suppression state.
 export async function GET(req: NextRequest) {
   const deny = gate(req)
   if (deny) return deny
@@ -58,58 +54,35 @@ export async function GET(req: NextRequest) {
   const badRows = await db.emailLog.findMany({
     where: { campaign: { contains: 'kloofstreet' }, status: { in: ['FAILED', 'BOUNCED', 'SKIPPED'] } },
     orderBy: { createdAt: 'desc' },
-    take: 300,
-    select: { toEmail: true, status: true, error: true, campaign: true, sentAt: true, createdAt: true },
-  })
-
-  // Also catch recent hard failures outside the kloofstreet tags, last 14 days.
-  const since = new Date(Date.now() - 14 * 24 * 3600 * 1000)
-  const otherBad = await db.emailLog.findMany({
-    where: {
-      status: { in: ['FAILED', 'BOUNCED'] },
-      OR: [{ sentAt: { gte: since } }, { createdAt: { gte: since } }],
-      NOT: { campaign: { contains: 'kloofstreet' } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    select: { toEmail: true, status: true, error: true, campaign: true, sentAt: true, createdAt: true },
+    take: 50,
+    select: { toEmail: true, status: true, error: true, campaign: true, createdAt: true },
   })
 
   const olds = Object.keys(REPLACEMENTS)
   const news = Object.values(REPLACEMENTS)
 
-  const [oldLeads, newLeads, oldUsers, supOld, supNew] = await Promise.all([
-    db.lead.findMany({ where: { email: { in: olds } }, select: { id: true, email: true, company: true, userId: true, projectId: true, stage: true } }),
-    db.lead.findMany({ where: { email: { in: news } }, select: { id: true, email: true, company: true, userId: true } }),
-    db.user.findMany({ where: { email: { in: olds } }, select: { id: true, email: true, name: true } }),
+  const [oldUsers, newUsers, supOld, supNew, stuckRow] = await Promise.all([
+    db.user.findMany({ where: { email: { in: olds } }, select: { id: true, email: true, name: true, businessName: true, accountStatus: true } }),
+    db.user.findMany({ where: { email: { in: news } }, select: { id: true, email: true, name: true } }),
     db.suppression.findMany({ where: { email: { in: olds } }, select: { email: true, reason: true } }),
     db.suppression.findMany({ where: { email: { in: news } }, select: { email: true, reason: true } }),
+    db.emailLog.findFirst({ where: { campaign: STUCK_TAG, toEmail: STUCK_EMAIL }, orderBy: { createdAt: 'desc' }, select: { id: true, status: true, error: true } }),
   ])
 
   return NextResponse.json({
     campaigns,
     kloofBad: badRows,
-    otherBadRecent: otherBad,
-    oldLeads,
-    newLeadsAlreadyExist: newLeads,
-    oldEmailsAreUserLogins: oldUsers,
+    oldUsers,
+    newEmailsAlreadyUsers: newUsers,
     suppressionOnOld: supOld,
     suppressionOnNew: supNew,
-    plan: {
-      replace: Object.entries(REPLACEMENTS).map(([o, n]) => ({ old: o, new: n })),
-      suppress: olds,
-    },
+    stuckRow,
   })
 }
 
-// POST { confirm: true } — apply the repair exactly as planned:
-//  1. lead.email = the new working address (all rows carrying the dead one),
-//     with a provenance line appended to notes.
-//  2. the six dead addresses land on Suppression (BOUNCE) so no future
-//     campaign can ever touch them again.
-//  3. any other blast address whose provider error reads as a permanent
-//     failure is suppressed too; soft errors are left alone.
-// Never: unsuppresses anything, sends anything, touches User logins.
+// POST { confirm: true } — apply the repair exactly as planned. Never
+// unsuppresses anything, sends nothing (the engine sends the requeued row on
+// its own tick under its own laws), touches no other account.
 export async function POST(req: NextRequest) {
   const deny = gate(req)
   if (deny) return deny
@@ -118,52 +91,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'confirm:true required' }, { status: 400 })
   }
 
-  const audit = { replaced: [] as unknown[], conflicts: [] as unknown[], suppressed: [] as string[], alreadySuppressed: [] as string[], suppressedExtras: [] as string[], skippedSoft: [] as { email: string; error: string }[] }
+  const result: Record<string, unknown[]> = { repointed: [], conflicts: [], suppressed: [], alreadySuppressed: [], requeued: [], notes: [] }
 
   const olds = Object.keys(REPLACEMENTS)
 
-  // ---- 1. replacements ----
+  // ---- 1. repoint the six member logins ----
   for (const [oldE, newE] of Object.entries(REPLACEMENTS)) {
-    if (!EMAIL_RE.test(newE)) { audit.conflicts.push({ old: oldE, new: newE, reason: 'replacement address fails format check' }); continue }
-    const holders = await db.lead.findMany({ where: { email: oldE }, select: { id: true, company: true, notes: true } })
-    if (holders.length === 0) { audit.conflicts.push({ old: oldE, new: newE, reason: 'no lead row carries the old address (already gone?)' }); continue }
-    const taken = await db.lead.findFirst({ where: { email: newE }, select: { id: true, company: true } })
-    if (taken) { audit.conflicts.push({ old: oldE, new: newE, reason: `replacement address already sits on lead ${taken.id} (${taken.company}); no merge done` }); continue }
-    for (const h of holders) {
-      const stamp = new Date().toISOString().slice(0, 10)
-      const line = `[${stamp}] email updated by ops: ${oldE} could not receive mail (domain has no mail service); replaced with ${newE}.`
-      await db.lead.update({ where: { id: h.id }, data: { email: newE, notes: `${h.notes ? `${h.notes}\n` : ''}${line}`.slice(0, 2000) } })
-      audit.replaced.push({ leadId: h.id, company: h.company, from: oldE, to: newE })
+    if (!EMAIL_RE.test(newE)) { result.conflicts.push({ old: oldE, new: newE, reason: 'replacement address fails format check' }); continue }
+    const holder = await db.user.findUnique({ where: { email: oldE }, select: { id: true, name: true } })
+    if (!holder) { result.conflicts.push({ old: oldE, new: newE, reason: 'no member row carries the old address' }); continue }
+    const taken = await db.user.findUnique({ where: { email: newE }, select: { id: true, name: true } })
+    if (taken) { result.conflicts.push({ old: oldE, new: newE, reason: `replacement address already belongs to member ${taken.id} (${taken.name}); no merge done` }); continue }
+    await db.user.update({ where: { id: holder.id }, data: { email: newE } })
+    // A pending team invite carrying the dead address would never arrive;
+    // move it along so the invite still works on the new address.
+    const invites = await db.teamInvite.findMany({ where: { email: oldE, acceptedAt: null }, select: { id: true, teamId: true } })
+    for (const inv of invites) {
+      const clash = await db.teamInvite.findUnique({ where: { teamId_email: { teamId: inv.teamId, email: newE } } })
+      if (!clash) await db.teamInvite.update({ where: { id: inv.id }, data: { email: newE } })
+    }
+    result.repointed.push({ userId: holder.id, name: holder.name, from: oldE, to: newE, invitesMoved: invites.length })
+  }
+
+  // ---- 2. suppress the six dead addresses forever ----
+  for (const oldE of olds) {
+    const existing = await db.suppression.findUnique({ where: { email: oldE } })
+    if (existing) { result.alreadySuppressed.push(oldE); continue }
+    await db.suppression.create({ data: { email: oldE, reason: 'BOUNCE', note: 'dead login address: domain cannot receive mail (no MX / Null MX), boss-ordered removal 2026-11-02' } })
+    result.suppressed.push(oldE)
+  }
+
+  // ---- 3. wake the one blast email the 429 dropped ----
+  const stuck = await db.emailLog.findFirst({ where: { campaign: STUCK_TAG, toEmail: STUCK_EMAIL }, orderBy: { createdAt: 'desc' } })
+  if (!stuck) {
+    result.notes.push(`no ${STUCK_EMAIL} row found in ${STUCK_TAG}; nothing to requeue`)
+  } else if (stuck.status === 'SENT') {
+    result.notes.push(`${STUCK_EMAIL} already SENT; nothing to do`)
+  } else {
+    const suppressed = await db.suppression.findUnique({ where: { email: STUCK_EMAIL }, select: { reason: true } })
+    if (suppressed) {
+      result.notes.push(`${STUCK_EMAIL} is suppressed (${suppressed.reason}); left untouched by law`)
+    } else {
+      await db.emailLog.update({ where: { id: stuck.id }, data: { status: 'QUEUED', error: null, sentAt: null } })
+      result.requeued.push({ id: stuck.id, to: STUCK_EMAIL, campaign: STUCK_TAG })
+      const states = await readCampaignStates()
+      const state = states[STUCK_TAG]
+      if (state && state.status !== 'ACTIVE') {
+        await writeCampaignState(STUCK_TAG, { ...state, status: 'ACTIVE', completedAt: undefined })
+        result.notes.push(`campaign ${STUCK_TAG} state ${state.status} -> ACTIVE so the engine tick delivers the requeued row`)
+      } else if (!state) {
+        result.notes.push(`no campaign state found for ${STUCK_TAG}; row stays QUEUED and needs the campaign woken by hand`)
+      }
     }
   }
 
-  // ---- 2. suppress the six dead addresses ----
-  for (const oldE of olds) {
-    const existing = await db.suppression.findUnique({ where: { email: oldE } })
-    if (existing) { audit.alreadySuppressed.push(oldE); continue }
-    await db.suppression.create({ data: { email: oldE, reason: 'BOUNCE', note: 'kloofstreet-2026-11 blast: domain cannot receive mail (no MX / Null MX), boss-ordered removal' } })
-    audit.suppressed.push(oldE)
-  }
-
-  // ---- 3. other permanent failures from the blast ----
-  const badRows = await db.emailLog.findMany({
-    where: { campaign: { contains: 'kloofstreet' }, status: { in: ['FAILED', 'BOUNCED'] } },
-    select: { toEmail: true, error: true },
-  })
-  const extra = new Map<string, string>()
-  for (const r of badRows) {
-    const e = (r.toEmail || '').toLowerCase().trim()
-    if (!e || e in REPLACEMENTS) continue
-    const err = r.error || ''
-    if (!isHardFailure(err)) { if (err) audit.skippedSoft.push({ email: e, error: err.slice(0, 160) }); continue }
-    if (!extra.has(e) || err.length > (extra.get(e) || '').length) extra.set(e, err)
-  }
-  for (const [email, err] of extra) {
-    const existing = await db.suppression.findUnique({ where: { email } })
-    if (existing) { audit.alreadySuppressed.push(email); continue }
-    await db.suppression.create({ data: { email, reason: 'BOUNCE', note: `kloofstreet-2026-11 blast permanent failure: ${err.slice(0, 100)}` } })
-    audit.suppressedExtras.push(email)
-  }
-
-  return NextResponse.json({ ok: true, audit })
+  return NextResponse.json({ ok: true, result })
 }

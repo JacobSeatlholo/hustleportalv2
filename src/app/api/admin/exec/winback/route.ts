@@ -59,7 +59,14 @@ export async function POST(req: NextRequest) {
     const email = m.email.toLowerCase().trim()
     if (sent.has(email)) { skippedN += 1; continue }
     const mail = buildWinbackEmail({ name: m.name, businessName: m.businessName })
-    const r = await sendSystemMail({ to: m.email, subject: mail.subject, body: mail.body })
+    // The provider counts requests per second; a back-to-back loop trips it
+    // and drops live mail as FAILED. Breathe between sends, retry a 429 once.
+    let r = await sendSystemMail({ to: m.email, subject: mail.subject, body: mail.body })
+    if (!r.ok && (r.error || '').includes('429')) {
+      await new Promise((resolve) => setTimeout(resolve, 1_600))
+      r = await sendSystemMail({ to: m.email, subject: mail.subject, body: mail.body })
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await db.emailLog.create({
       data: {
         userId: m.id,

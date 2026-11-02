@@ -37,6 +37,18 @@ export function campaignStateKey(tag: string): string {
   return `${CAMPAIGN_STATE_PREFIX}${tag}`
 }
 
+// The provider's burst law is 10 requests per second; a tick that fires sends
+// back to back blows straight through it and drops live mail as FAILED. Every
+// send is therefore followed by a short breath, and a 429 gets one patient
+// retry after a longer pause before the row is marked failed. Cheap, honest,
+// and it keeps the pace under the ceiling no matter how many rows a tick
+// grabbed.
+const SEND_GAP_MS = 150
+const RATE_RETRY_MS = 1_600
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function readCampaignStates(): Promise<Record<string, CampaignState>> {
   const rows = await db.platformConfig.findMany({
     where: { key: { startsWith: CAMPAIGN_STATE_PREFIX } },
@@ -185,9 +197,18 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       unsubscribeUrl: unsubscribeUrl(queued.id),
     }
     // The campaign's lane decides the pipe. Same mail, same laws, either way.
-    const r = state.provider === 'SES'
+    // One rate-limit retry: the provider counts requests per second, so a
+    // pause and a second try turns a burst drop into a delivered email.
+    let r = state.provider === 'SES'
       ? await sendCampaignMailViaSes(mail)
       : await sendCampaignMail(mail)
+    if (!r.ok && (r.error || '').includes('429')) {
+      await sleep(RATE_RETRY_MS)
+      r = state.provider === 'SES'
+        ? await sendCampaignMailViaSes(mail)
+        : await sendCampaignMail(mail)
+    }
+    await sleep(SEND_GAP_MS)
     if (r.ok) {
       await db.emailLog.update({
         where: { id: queued.id },
