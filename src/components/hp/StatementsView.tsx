@@ -70,6 +70,8 @@ function d2(d: Date): string {
 }
 
 // ---- the printable sheet: absolute grid replica of the Canva template ----
+// className="statement-sheet" is the print hook: globals.css zooms this fixed
+// grid onto one A4 sheet and forces the template greys to print exact.
 function StatementSheet({ account, monthKey, now }: { account: Account; monthKey: string; now: string }) {
   const [y, m] = monthKey.split('-').map(Number)
   const monthName = MONTHS[(m || 1) - 1]
@@ -93,7 +95,7 @@ function StatementSheet({ account, monthKey, now }: { account: Account; monthKey
   const SLOT = 81
 
   return (
-    <div style={{ width: 1004, height: 1418, position: 'relative', background: '#fff', fontFamily: SANS, color: INK }}>
+    <div className="statement-sheet" style={{ width: 1004, height: 1418, position: 'relative', background: '#fff', fontFamily: SANS, color: INK }}>
       <img src="/brand/band.png" alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1004, height: 94 }} />
       <img src="/brand/logo.png" alt="Business Hustle" style={{ position: 'absolute', top: 180, left: 171, width: 71, height: 88 }} />
 

@@ -264,9 +264,15 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
     background: #ffffff !important;
   }
   /* The statement sheet is drawn on the template's own 1004x1418 grid; zoom
-     maps it onto A4 paper exactly (1004px * 0.7908 = 794px = 210mm @96dpi). */
+     maps it onto A4 paper (793.7 x 1122.5px @96dpi, margin 0). 0.789 leaves a
+     hair of slack on BOTH axes (792.2 x 1118.8): at the "exact" 0.7908 the
+     sheet overflows the page box by a quarter pixel and Chrome answers with a
+     second sheet. print-color-adjust keeps the template's grey label cells
+     grey even without the Background-graphics checkbox. */
   .statement-sheet {
-    zoom: 0.7908;
+    zoom: 0.789;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .statement-preview-wrap {
     zoom: 1 !important;
@@ -282,8 +288,11 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
   /* Margin zero pulls the rug from under the browser's own print furniture
      (page URL, timestamp, Page N of M) — no margin box, no furniture. The
      sheet carries its own generous paper padding, and the app's main padding
-     keeps ordinary page prints off the paper edge. */
+     keeps ordinary page prints off the paper edge. size: A4 pins the page box
+     so a Letter-default printer driver can never respawn the second sheet
+     (SA paper is A4; without it Chrome falls back to the driver default). */
   @page {
+    size: A4;
     margin: 0;
   }
 }

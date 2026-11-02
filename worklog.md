@@ -2881,3 +2881,17 @@ Work Log:
 
 Stage Summary:
 - Boss can now open Statements, pick October 2026, and print/save the exact Canva-format statement with the R 150 payment and R 700 membership already in it. Every future account is two fields away, and the template never needs Canva again.
+
+Task ID: 148
+Agent: Super Z (main)
+Task: Boss: "bug.." - screenshot of the Body Vision October 2026 statement at the Chrome print dialog: the preview is clipped on both edges ("Bodyvision Studio" half gone off the left, the entity box cut mid-word on the right) and the dialog reads "2 sheets of paper" for a one-page template.
+
+Work Log:
+- Root cause: the print law in globals.css zooms .statement-sheet onto A4 (1004px * 0.7908 = 794px = 210mm), but the class was never attached to the sheet root in StatementsView.tsx. The rule matched nothing, so the sheet printed at raw template size: 1004px wide against a 793.7px page box (centered overflow -> clipped both sides) and 1418px tall against 1122.5px of paper (second sheet). Task 147 QA screenshotted the on-screen preview, which scales through a different rule, so the print path was never exercised end to end.
+- Fix, three layers: the class attached; zoom eased 0.7908 -> 0.789 (792.2 x 1118.8px - the "exact" figure actually overflowed the page box by a quarter pixel horizontally, enough for Chrome to answer with another sheet); @page now pins size: A4 so a Letter-default printer driver cannot shrink the page box under the sheet. Headless Chrome reproduced that last trap exactly: Letter default, 2 pages, with the zoom already in place.
+- print-color-adjust: exact added so the template's grey label cells and table header print grey even when Background graphics is unticked.
+- Proof, not hope: the sheet's exact grid (1004x1418, same @page, same zoom law) printed through headless Chromium: Pages 1, Page size A4, pixel probes PASS - top band inked at both corners, red right-edge strip the full height, blue bottom-edge strip on the page with paper white after it, footer line inked, table border present.
+- next build green; deployed; health green. Ledger, gate and numbers untouched - paper geometry only.
+
+Stage Summary:
+- The October statement now prints one A4 page, edge to edge like the Canva original, Save as PDF included. Print > Save as PDF in the dialog reads "1 sheet of paper".
