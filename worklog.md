@@ -2866,3 +2866,18 @@ Work Log:
 Stage Summary:
 - Every future blast is now burst proof: 150ms gaps and one 429 retry keep the engine under the provider's 10 per second law, and the failed winback members will get their email the next time the boss presses Send.
 - The six dead logins are gone from the platform's mouth: five members now carry real working addresses, the sixth (Nigel) is already live on his own gmail, and all six dead strings sit on the suppression ledger forever.
+
+Task ID: 147
+Agent: Super Z (main)
+Task: Boss: "I want to be able to send out statements from here... only for me and members of the Simple eternity holdings team... use that statement of bodyvision to update it to this month, also with a collected payment of R150 on the 21st of October 2026. R700 due for kloofstreet.online membership for bodyvision." Template PDF attached.
+
+Work Log:
+- Template dissected visually and numerically: page 2 of the Canva PDF is the real Apr - Aug 2026 statement for BVS-0999-06 (Kim Tucker | Bodyvision Studio) closing at R 550.00 due. The ledger reconstructs exactly: 1,850 B/f + 4,500 invoice (1,550 waived, struck out) = 6,350; less 3,000 + 1,000 + 800 + 1,000 payments = 550. Brand assets (header band, BH logo, footer cluster) cropped from the boss's own PDF at 300dpi; palette sampled: navy #012D60, orange #FF8500, yellow #FFC400, label gray #E6E6E6, link blue #4C4CFF.
+- Immediate deliverable: download/Bodyvision_Statement_Oct2026.pdf (ReportLab, single A4, template-faithful): Balance B/f 550.00, 01/10 Membership kloofstreet.online October R 700.00 (running 1,250.00), 21/10 Payment Received R 150.00 (running 1,100.00), Amount Due R 1,100.00, statement created 02/11/2026. font.check clean, pdf_qa warnings only from the template's own right-weighted geometry, metadata set to the company.
+- The feature: StatementAccount + StatementEntry tables (additive; signed amounts, + charge / - payment; balanceBfwd carries the pre-digital opening; statement math computed never stored). Gate in src/lib/statements.ts: master account, exec seats, and members of ANY team owned by the master - the all-teams check matters, a findFirst on one arbitrary team silently locked members of the others (caught by local E2E). /api/auth/me carries statementAccess; the nav item renders only for the gated.
+- First gated load of an empty book seeds BVS-0999-06 with the paper ledger (550 B/f, the R 700 October membership, the R 150 payment). Accounts, ledger lines, month picker (defaults to the newest entry month), and the printable sheet: the Canva template rebuilt 1:1 on its own 1004x1418 grid, joined the invoice print law (#statement-print-root portal + body class + A4 zoom 0.7908 in globals.css). Print > Save as PDF replaces Canva.
+- Local E2E (scripts/task147_statements_e2e.mjs): 19/19 - seeding, gate matrix (master / team member via invite auto-attach / outsider 403 / anonymous 401), add+remove entry, balance math 1,100 -> 1,800 -> 1,100, duplicate ref 409. Browser QA on the dev server: nav gating, ledger, sheet preview screenshots verified against the template. Full next build green; deployed ae39aa8, health green, /api/statements anonymous 401 verified on prod.
+- Honest edges: no email-the-statement button yet (boss attaches the PDF or mails from Mail; sending stays behind his own buttons); the sheet's Recipient Reg stays the template's K____/____/__ blank until he fills Kim's registration number; November defaults are one click away in the month picker.
+
+Stage Summary:
+- Boss can now open Statements, pick October 2026, and print/save the exact Canva-format statement with the R 150 payment and R 700 membership already in it. Every future account is two fields away, and the template never needs Canva again.
