@@ -50,7 +50,12 @@ const INK = '#1A1A1A'
 const SANS = 'Arial, "Helvetica Neue", Helvetica, sans-serif'
 
 function fmtPlain(n: number): string {
-  return Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // The template's own voice: comma thousands, dot decimals — spelled out by
+  // hand because en-ZA locale data groups with a SPACE on some machines, which
+  // is exactly how the Amount Due figures drifted back onto the Total|AmountDue
+  // divider. The printed sheet never leans on the viewer's ICU again.
+  const [int, dec] = Math.abs(n).toFixed(2).split('.')
+  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${dec}`
 }
 
 function monthKeyOf(d: string | Date): string {
@@ -69,6 +74,33 @@ function d2(d: Date): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
+// Remark text rules, straight off the boss's archive statement: a multi-line
+// remark renders line-per-line with the first line bold ("Invoice revised:"),
+// and a waived line keeps its label plain while the waiver tail prints
+// struck+underlined ("Content creation: Waive Approved by CEO.").
+function RemarkText({ remark, waived }: { remark: string; waived: boolean }) {
+  if (waived) {
+    const i = remark.indexOf(': ')
+    const head = i === -1 ? remark : remark.slice(0, i + 1)
+    const tail = i === -1 ? '' : remark.slice(i + 2)
+    return (
+      <>
+        {head}{' '}
+        {tail ? <span style={{ textDecoration: 'line-through underline' }}>{tail}</span> : null}
+      </>
+    )
+  }
+  const lines = remark.split('\n')
+  if (lines.length === 1) return <>{remark}</>
+  return (
+    <>
+      {lines.map((ln, j) => (
+        <div key={j}>{j === 0 ? <strong>{ln}</strong> : ln}</div>
+      ))}
+    </>
+  )
+}
+
 // ---- the printable sheet: absolute grid replica of the Canva template ----
 // className="statement-sheet" is the print hook: globals.css zooms this fixed
 // grid onto one A4 sheet and forces the template greys to print exact.
@@ -79,21 +111,65 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
   const monthStart = new Date(y, m - 1, 1)
   const monthEnd = new Date(y, m, 1)
   const entries = [...account.entries].sort((a, b) => +new Date(a.date) - +new Date(b.date))
-  const opening = entries.reduce((acc, e) => (+new Date(e.date) < +monthStart ? acc + e.amount : acc), account.balanceBfwd)
-  const lines = entries.filter((e) => +new Date(e.date) >= +monthStart && +new Date(e.date) < +monthEnd)
-  const rows: { id: string; date: string; product: string | null; remarks: string; quantity: string | null; amount: number; kind: string; running: number }[] = []
+  // Cumulative law — a statement is the running account as it stood at the end
+  // of the selected month, exactly like the boss's own Canva statements ("For
+  // the Month: Apr - Aug 2026"): every entry up to month end, the account's
+  // opening balance on top. WAIVED lines print for the record (struck through,
+  // like the archive's waived content-creation fee) but move no money.
+  const opening = account.balanceBfwd
+  const rows = entries
+    .filter((e) => +new Date(e.date) < +monthEnd)
+    .map((e) => ({ ...e, running: 0 }))
   {
     let run = opening
-    for (const e of lines) {
-      run += e.amount
-      rows.push({ ...e, running: run })
+    for (const r of rows) {
+      if (r.kind !== 'WAIVED') run += r.amount
+      r.running = run
     }
   }
   const due = rows.length ? rows[rows.length - 1].running : opening
+  // The generated Balance B/f row only exists when the account carries a real
+  // opening balance; the archive's own B/f line is a ledger entry and prints
+  // as a normal row.
+  const hasBfRow = Math.abs(opening) >= 0.005
 
-  // table geometry (template px): x 93..897, header 612..662, body to 988
-  const colX = [0, 100, 223, 504, 601, 704, 804] // relative to table left 93
-  const SLOT = 81
+  // "For the Month": a range when the statement spans months, exactly like
+  // the archive's own "Apr - Aug 2026" — one year suffix, on the right.
+  const monthLabel = (() => {
+    const sel = `${MONTHS[(m || 1) - 1].slice(0, 3)} ${y}`
+    if (!rows.length) return sel
+    const first = new Date(rows[0].date)
+    if (first.getFullYear() === y) return `${MONTHS[first.getMonth()].slice(0, 3)} - ${sel}`
+    return `${MONTHS[first.getMonth()].slice(0, 3)} ${first.getFullYear()} - ${sel}`
+  })()
+
+  // table geometry (template px): x 93..897, header 612..662, body to 988.
+  // The template's body rows are borderless with manual heights; heights are
+  // computed the same way: multi-line remarks take what they need, single-line
+  // rows share the rest of the body evenly (the archive's 8 lines → ~37px).
+  const BODY = 324 // 376 box − 50 header − border hair
+  const LINE_H = 17.6 // 13.5px × 1.3
+  const lineCount = (t: string) => Math.max(1, t.split('\n').length)
+  const minH = (n: number) => n * LINE_H + 12
+  const allRows: { key: string; date: Date; product: string | null; remarks: string; quantity: string | null; amount: number; kind: string; running: number; lines: number; bf: boolean }[] = []
+  if (hasBfRow) {
+    allRows.push({ key: 'bf', date: monthStart, product: null, remarks: 'Balance B/f', quantity: null, amount: opening, kind: 'BFWD', running: opening, lines: 1, bf: true })
+  }
+  for (const r of rows) {
+    allRows.push({ key: r.id, date: new Date(r.date), product: r.product, remarks: r.remarks, quantity: r.quantity, amount: r.amount, kind: r.kind, running: r.running, lines: lineCount(r.remarks), bf: false })
+  }
+  const totalMin = allRows.reduce((acc, r) => acc + minH(r.lines), 0)
+  const singleCount = allRows.filter((r) => r.lines === 1).length
+  const bonus = singleCount > 0 ? Math.max(0, (BODY - totalMin) / singleCount) : 0
+  const rowH = allRows.map((r) => minH(r.lines) + (r.lines === 1 ? bonus : 0))
+  const rowTop: number[] = []
+  {
+    let acc = 50
+    for (const h of rowH) {
+      rowTop.push(acc)
+      acc += h
+    }
+  }
 
   return (
     <div className="statement-sheet" style={{ width: 1004, height: 1418, position: 'relative', background: '#fff', fontFamily: SANS, color: INK }}>
@@ -140,11 +216,11 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
         </div>
         <div style={{ position: 'absolute', top: 0, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>{account.recipientVat || ''}</div>
         <div style={{ position: 'absolute', top: 40, left: 0, width: 103, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, textAlign: 'center' }}>For the Month</div>
-        <div style={{ position: 'absolute', top: 40, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14.5 }}>{monthName} {y}</div>
+        <div style={{ position: 'absolute', top: 40, left: 103, width: 141, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14.5 }}>{monthLabel}</div>
         <div style={{ position: 'absolute', top: 40, left: 244, width: 68, height: 40, background: GRAY, borderRight: `1.5px solid ${BOX}`, borderBottom: `1.5px solid ${BOX}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1.25, textAlign: 'center', padding: '0 1px' }}>
           <span>Recipient Reg</span><span>No</span>
         </div>
-        <div style={{ position: 'absolute', top: 40, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5 }}>{account.recipientReg || ''}</div>
+        <div style={{ position: 'absolute', top: 40, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5 }}>{account.recipientReg || ''}</div>
         <div style={{ position: 'absolute', top: 90, left: 0, width: '100%', height: 39 }}>
           <div style={{ position: 'absolute', top: 10, left: 8, fontSize: 14.5 }}>Charges Generated for {monthName} {y}</div>
         </div>
@@ -158,54 +234,59 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
       </div>
 
       {/* statement created — must clear the table top at 612: two 14px lines
-          starting at 580 end at 608 */}
-      <div style={{ position: 'absolute', top: 580, left: 524, width: 373, textAlign: 'right', fontSize: 12.5, lineHeight: '14px' }}>
+          starting at 580 end at 608. width 340 (not the box's full 373) keeps
+          the stamp on the template's measured right axis, 33px inside x 897,
+          same as every right-anchored figure on the sheet. */}
+      <div style={{ position: 'absolute', top: 580, left: 524, width: 340, textAlign: 'right', fontSize: 12.5, lineHeight: '14px'}}>
         <div>Statement Created, On:</div>
         <div>{now}</div>
       </div>
 
-      {/* main table */}
+      {/* main table — amounts sit on the axes measured off the boss's archive
+          statement: Total values LEFT-anchored 30px inside their column, Amount
+          Due values right-anchored 33px inside the box's right border (the
+          archive measures ~32-37px there — 13px was riding the line), Amount
+          Due header LEFT-anchored 14px, Quantity/Total headers right at 10px,
+          left columns in at 16px. Nothing touches a line. */}
       <div style={{ position: 'absolute', top: 612, left: 93, width: 804, height: 376, border: `1.5px solid ${BOX}` }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 50, background: GRAY, borderBottom: `1.5px solid ${BOX}` }} />
         {[
           { x: 0, w: 100, t: 'Date', a: 'left' },
           { x: 100, w: 123, t: 'Product', a: 'left' },
           { x: 223, w: 281, t: 'Remarks', a: 'left' },
-          { x: 504, w: 97, t: 'Quantity', a: 'center' },
+          { x: 504, w: 97, t: 'Quantity', a: 'right' },
           { x: 601, w: 103, t: 'Total', a: 'right' },
-          { x: 704, w: 100, t: 'Amount Due', a: 'right' },
+          { x: 704, w: 100, t: 'Amount Due', a: 'left' },
         ].map((h, i) => (
           <div key={i} style={{
             position: 'absolute', top: 0, left: h.x, width: h.w, height: 50,
-            display: 'flex', alignItems: 'center', justifyContent: h.a === 'left' ? 'flex-start' : h.a === 'center' ? 'center' : 'flex-end',
-            paddingLeft: h.a === 'left' ? 13 : 0, paddingRight: h.a === 'right' ? 13 : 0,
+            display: 'flex', alignItems: 'center', justifyContent: h.a === 'left' ? 'flex-start' : 'flex-end',
+            paddingLeft: h.a === 'left' ? (h.x === 704 ? 14 : 16) : 0, paddingRight: h.a === 'right' ? 10 : 0,
             fontSize: 14.5, borderBottom: `1.5px solid ${BOX}`,
           }}>{h.t}</div>
         ))}
         {[100, 223, 504, 601, 704].map((x, i) => (
           <div key={i} style={{ position: 'absolute', top: 0, left: x, width: 1.5, height: '100%', background: BOX }} />
         ))}
-        {/* Balance B/f row */}
-        <div style={{ position: 'absolute', top: 50, left: 0, width: '100%', height: SLOT }}>
-          <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 13.5 }}>{d2(monthStart)}</div>
-          <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 13.5, fontWeight: 700 }}>Balance B/f</div>
-          {/* right 113 = 13px inside the Total|AmountDue divider at x 704, same as the header cell */}
-          <div style={{ position: 'absolute', top: 14, right: 113, fontSize: 13.5 }}>{fmtPlain(opening)}</div>
-          <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 13.5 }}>{fmtPlain(opening)}</div>
-        </div>
-        {/* month lines */}
-        {rows.map((r, i) => (
-          <div key={r.id} style={{ position: 'absolute', top: 50 + (i + 1) * SLOT, left: 0, width: '100%', height: SLOT }}>
-            <div style={{ position: 'absolute', top: 14, left: 13, fontSize: 13.5 }}>{d2(new Date(r.date))}</div>
-            {r.product ? <div style={{ position: 'absolute', top: 14, left: 113, fontSize: 13.5, fontWeight: 700, maxWidth: 110 }}>{r.product}</div> : null}
-            <div style={{ position: 'absolute', top: 14, left: 236, fontSize: 13.5, maxWidth: 255, lineHeight: 1.3 }}>{r.remarks}</div>
-            {r.quantity ? <div style={{ position: 'absolute', top: 14, left: 504, width: 97, textAlign: 'center', fontSize: 13.5 }}>{r.quantity}</div> : null}
-            {/* Total keeps the template's own voice: "R 700.00" raw, no thousands
-                separator; anchor 13px inside the Total|AmountDue divider */}
-            <div style={{ position: 'absolute', top: 14, right: 113, fontSize: 13.5 }}>{`R ${Math.abs(r.amount).toFixed(2)}`}</div>
-            <div style={{ position: 'absolute', top: 14, right: 13, fontSize: 13.5 }}>{fmtPlain(r.running)}</div>
-          </div>
-        ))}
+        {/* running-account lines, template-style: borderless, height follows
+            the remark (the archive's 3-line invoice row gets room to breathe) */}
+        {allRows.map((r, i) => {
+          const textTop = Math.max(6, Math.round((rowH[i] - r.lines * LINE_H) / 2))
+          return (
+            <div key={r.key} style={{ position: 'absolute', top: rowTop[i], left: 0, width: '100%', height: rowH[i] }}>
+              <div style={{ position: 'absolute', top: textTop, left: 16, fontSize: 13.5 }}>{d2(r.date)}</div>
+              {r.product && !r.bf ? <div style={{ position: 'absolute', top: textTop, left: 116, fontSize: 13.5, fontWeight: 700, maxWidth: 107 }}>{r.product}</div> : null}
+              <div style={{ position: 'absolute', top: textTop, left: 239, fontSize: 13.5, maxWidth: 264, lineHeight: 1.3 }}>
+                {r.bf ? 'Balance B/f' : <RemarkText remark={r.remarks} waived={r.kind === 'WAIVED'} />}
+              </div>
+              {r.quantity ? <div style={{ position: 'absolute', top: textTop, left: 504, width: 97, textAlign: 'center', fontSize: 13.5 }}>{r.quantity}</div> : null}
+              {/* Total keeps the template's own voice: "R 4500.00" raw, no
+                  thousands separator; waived lines print struck for the record */}
+              <div style={{ position: 'absolute', top: textTop, left: 631, fontSize: 13.5, textDecoration: r.kind === 'WAIVED' ? 'line-through' : undefined }}>{`R ${Math.abs(r.amount).toFixed(2)}`}</div>
+              <div style={{ position: 'absolute', top: textTop, right: 33, fontSize: 13.5 }}>{fmtPlain(r.running)}</div>
+            </div>
+          )
+        })}
       </div>
 
       {/* return portion */}
@@ -215,7 +296,7 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
       {/* arrears slip */}
       <div style={{ position: 'absolute', top: 1043, left: 468, width: 429, height: 70, border: `1.5px solid ${BOX}` }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: 127, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5 }}>Arrears(-)</div>
-        <div style={{ position: 'absolute', top: 0, right: 10, height: '100%', display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{fmtPlain(due)}</div>
+        <div style={{ position: 'absolute', top: 0, right: 33, height: '100%', display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{fmtPlain(due)}</div>
       </div>
       <div style={{ position: 'absolute', top: 1112, left: 456, width: 447, height: 4, background: BOX }} />
 

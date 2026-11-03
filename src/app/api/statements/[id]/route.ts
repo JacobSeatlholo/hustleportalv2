@@ -85,7 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const kindRaw = String(body?.kind || (amount > 0 ? 'CHARGE' : 'PAYMENT')).toUpperCase()
-  const kind = ['BFWD', 'CHARGE', 'PAYMENT'].includes(kindRaw) ? kindRaw : amount > 0 ? 'CHARGE' : 'PAYMENT'
+  // WAIVED = on the book for the record (prints struck through, moves no money).
+  const kind = ['BFWD', 'CHARGE', 'PAYMENT', 'WAIVED'].includes(kindRaw) ? kindRaw : amount > 0 ? 'CHARGE' : 'PAYMENT'
 
   const entry = await db.statementEntry.create({
     data: {

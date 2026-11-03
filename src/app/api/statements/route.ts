@@ -7,14 +7,42 @@ import { hasStatementAccess, sehOwnerId } from '@/lib/statements'
 // and members of the master's own team; see hasStatementAccess).
 //
 // GET  → every account with its entries and the computed running balances.
-//        First gated load of an empty book seeds the Body Vision account
-//        straight from the boss's Canva statement archive: opening balance
-//        R 550.00 carried from the Apr - Aug 2026 statement, the October
-//        membership charge and the R 150.00 payment he collected on 21/10.
+//        Also keeps the book faithful to the boss's paper archive:
+//        1. an empty book is seeded with the Body Vision account exactly as
+//           the last statement sent to Kim prints it (the Apr - Aug 2026
+//           statement, closed at R 550.00) plus the R 150.00 payment he
+//           collected on 21/10 → R 400.00;
+//        2. a book still carrying the OLD bootstrap shape (B/f 550 + two
+//           October placeholder lines) is repaired into that same archive
+//           ledger. Signature-gated and idempotent: if any line was added or
+//           edited by hand since, nothing is touched.
 // POST → { refNo, clientName, address?, email?, website?, phone?,
 //          recipientVat?, recipientReg?, balanceBfwd? } create an account.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+// The archive ledger — line for line off the last statement sent to Kim
+// (BVS-0999-06, created 03/09/2026), plus the recent payment. The waived
+// content-creation fee stays on the book for the record with kind WAIVED: it
+// prints struck through and moves no money — every balance sum skips it.
+const ARCHIVE_LEDGER = [
+  { date: '2026-04-25', product: 'INV-0999-06', remarks: 'Balance B/f', quantity: null as string | null, amount: 1850, kind: 'BFWD' },
+  { date: '2026-05-01', product: null, remarks: 'Invoice revised:\nWebsite Development added\n- bodyvision.online', quantity: null, amount: 4500, kind: 'CHARGE' },
+  { date: '2026-05-06', product: null, remarks: 'Content creation: Waive Approved by CEO.', quantity: '4.2 hours', amount: 1550, kind: 'WAIVED' },
+  { date: '2026-05-30', product: null, remarks: 'Payment Received, Thank You', quantity: null, amount: -3000, kind: 'PAYMENT' },
+  { date: '2026-06-27', product: null, remarks: 'Cash Payment Received, Thank You', quantity: null, amount: -1000, kind: 'PAYMENT' },
+  { date: '2026-07-21', product: null, remarks: 'Cash Payment Received, Thank You', quantity: null, amount: -800, kind: 'PAYMENT' },
+  { date: '2026-08-31', product: null, remarks: 'Cash Payment Received, Thank You', quantity: null, amount: -1000, kind: 'PAYMENT' },
+  { date: '2026-10-21', product: null, remarks: 'Payment Received, Thank You', quantity: null, amount: -150, kind: 'PAYMENT' },
+]
+
+// For nested creates (no accountId); createMany callers add accountId.
+function archiveEntryData() {
+  return ARCHIVE_LEDGER.map((e) => ({ ...e, date: new Date(`${e.date}T00:00:00`) }))
+}
+function archiveEntries(accountId: string) {
+  return archiveEntryData().map((e) => ({ ...e, accountId }))
+}
 
 async function gate() {
   const userId = await getUserId()
@@ -38,10 +66,10 @@ export async function GET() {
   let seeded = false
   const count = await db.statementAccount.count({ where: { ownerId: owner } })
   if (count === 0) {
-    // Bootstrap from the boss's paper archive: one account, the ledger he
-    // gave in the template PDF (Apr - Aug 2026 statement closed at R 550.00;
-    // October brings the R 700 kloofstreet.online membership and the R 150
-    // payment collected on the 21st). Idempotent: only runs on an empty book.
+    // Bootstrap from the boss's paper archive: one account, the ledger the
+    // last statement to Kim actually printed (closed at R 550.00) plus the
+    // R 150.00 payment collected on 21/10 → R 400.00. Idempotent: only runs
+    // on an empty book.
     await db.statementAccount.create({
       data: {
         ownerId: owner,
@@ -51,17 +79,37 @@ export async function GET() {
         email: 'kim@tuckermail.co.za',
         website: 'Bodyvision.online',
         phone: '+27 82 457 2118',
-        recipientReg: 'K____/____/__',
-        balanceBfwd: 550,
-        entries: {
-          create: [
-            { date: new Date('2026-10-01T00:00:00'), product: 'Membership', remarks: 'kloofstreet.online - October 2026', quantity: '1', amount: 700, kind: 'CHARGE' },
-            { date: new Date('2026-10-21T00:00:00'), product: null, remarks: 'Payment Received, Thank You', quantity: null, amount: -150, kind: 'PAYMENT' },
-          ],
-        },
+        recipientReg: 'K__/___/___',
+        balanceBfwd: 0,
+        entries: { create: archiveEntryData() },
       },
     })
     seeded = true
+  }
+
+  // Repair door: the first bootstrap carried B/f 550 + two October placeholder
+  // lines (the R 700 membership charge among them) before the archive arrived.
+  // If that EXACT signature is still on the book — nothing added or edited by
+  // hand since — swap it for the archive ledger. The R 700 line goes with it:
+  // the archive statements bill project fees and payments, no membership
+  // lines. If she does owe October's membership, the boss adds it back by
+  // hand and the balance reads R 1,100.00 again.
+  const stale = await db.statementAccount.findFirst({
+    where: { ownerId: owner, refNo: 'BVS-0999-06', balanceBfwd: 550 },
+    include: { entries: true },
+  })
+  if (stale) {
+    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    const staleSignature =
+      stale.entries.length === 2 &&
+      stale.entries.some((e) => iso(e.date) === '2026-10-01' && e.amount === 700 && e.kind === 'CHARGE' && e.remarks === 'kloofstreet.online - October 2026') &&
+      stale.entries.some((e) => iso(e.date) === '2026-10-21' && e.amount === -150 && e.kind === 'PAYMENT' && e.remarks === 'Payment Received, Thank You')
+    if (staleSignature) {
+      await db.statementEntry.deleteMany({ where: { accountId: stale.id } })
+      await db.statementAccount.update({ where: { id: stale.id }, data: { balanceBfwd: 0, recipientReg: 'K__/___/___' } })
+      await db.statementEntry.createMany({ data: archiveEntries(stale.id) })
+      seeded = true
+    }
   }
 
   const accounts = await db.statementAccount.findMany({
@@ -72,7 +120,8 @@ export async function GET() {
 
   return NextResponse.json({
     accounts: accounts.map((a) => {
-      const signed = a.entries.reduce((acc, e) => acc + e.amount, a.balanceBfwd)
+      // WAIVED lines are on the book for the record only — they move no money.
+      const signed = a.entries.reduce((acc, e) => acc + (e.kind === 'WAIVED' ? 0 : e.amount), a.balanceBfwd)
       return {
         id: a.id,
         refNo: a.refNo,
