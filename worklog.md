@@ -2970,3 +2970,16 @@ Work Log:
 
 Stage Summary:
 - Unblock is now binary for the boss: (a) send the actual current seat password, or (b) hand over GitHub push access - then the 5 parked commits ship AND a one-time token-gated repair door (exact Task 146 precedent: built, used, deleted in the same task) sets the seat password to a value he chooses. Executor is rebuilt and re-verified; the moment any door opens, plan -> 10 picks -> commit -> read-back -> the authorized email is a two-minute finish.
+
+Task ID: 152 (continued)
+Agent: Super Z (main)
+Task: Boss: "What if I fund the Google instead of Z.ai?"
+
+Work Log:
+- Advisory question, no code touched. Live pricing verified today (ai.google.dev/gemini-api/docs/pricing): Gemini 3 Flash $0.50/$3.00 per 1M in/out, 2.5 Flash $0.30/$2.50, Flash-Lite $0.10/$0.40; Google Search grounding on Gemini 3+ models = 5,000 free requests/month, 1,500/day hard cap per project, then $14/1K (2.5 Flash: 1,500 free RPD then $35/1K). z.ai side unchanged: GLM-4.6 $0.60/$2.20 + $0.01 web_search tool use.
+- Cost model (scan profile from the 03 Nov live trace: ~12K in, ~1.5K out): grounded scan costs 2.05c funded z.ai vs 1.05c funded Gemini 3 Flash vs 0.73c on 2.5 Flash, while grounding rides the free allowance; past the allowance Gemini 3 Flash is 2.45c. $12 buys ~585 scans on z.ai vs ~1,142 on Google. Crossover where z.ai wins again: ~17,500 scans/month (~583/day). Gemini's 1,500 grounded requests/day is a HARD per-project cap regardless of money - Google alone cannot serve scale beyond that; z.ai has no published ceiling.
+- Reveal lane confirmed on the same wallet: reveal/route.ts calls geminiGenerate first with zaiGenerate backup (discover is the same pair) - funding Google lifts BOTH the AI Lead Finder scans and People Pass reveals, zero code change (engine already walks Gemini first for everyone without a personal z.ai key, handles AIza and AQ. key generations, benches dead models).
+- Recommendation delivered: fund Google as the primary at trial scale (about half price per scan under 583 scans/day) AND keep $12 z.ai cash as the funded overflow engine - the chain already fails over Gemini/GLM both ways, so trial AI budget ~$24/month covers up to ~600 scans/day and no single vendor wallet owns search. Also restated: money makes scans WORK, the funding-aware pre-flight still needs shipping so scans stop walking dead rungs before the live lane.
+
+Stage Summary:
+- Funding Google instead of Z.ai is the cheaper trial-scale lane (about 2c saved per scan under ~600 scans/day) and needs zero code; the honest answer is both, roughly $24/month total, because Google hard-caps at 1,500 grounded scans/day and the walk-speed fix is code, not cash.
