@@ -83,17 +83,19 @@ function markSticky(endpoint: ZaiEndpointId) {
 const MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-5.3', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 /**
- * SEARCH walks lead with the bundle rung now that it can finish. A grounded
- * scan needs its search rounds FINISHED inside the scan budget, and the live
- * walk proved the flash rung with hybrid reasoning ON could not land one:
- * 200 with empty content at 19s (output cap spent on thinking and tool
- * rounds), then timeouts at 28s and 33s with a fatter cap and a fair window -
- * on both doors. Search walks now disable thinking (see the request body),
- * and flash leads: its tokens are prepaid on the platform account, glm-4.6
- * follows as the cash backed step-up. Plain generation keeps thinking on and
- * still burns the bundle flash-first.
+ * SEARCH walks never touch the flash rung. The live evidence is exhaustive:
+ * glm-5.3-flash could not land one grounded scan in five fair attempts
+ * (200 with empty content at 19s thinking on, then timeouts at 28s and 33s
+ * thinking off, on both doors, with a clean business-intent query) while
+ * glm-4.6 answered the same work in 9.2 seconds with real leads. Every scan
+ * that re-paid flash's 33s of dead air stole the window from the rung that
+ * actually delivers - and the hang bench expires between scans, so the tax
+ * came back again and again. glm-4.6 leads (its tokens cost cash fractions
+ * of a cent, the runway model's own assumption); the free Zhipu rungs stay
+ * as the zero-credit survival net. Plain generation keeps flash first, where
+ * it is fast and burns the prepaid bundle as designed.
  */
-const SEARCH_MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-4.5-flash', 'glm-4-flash'] as const
+const SEARCH_MODEL_PREFERENCE = ['glm-4.6', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 const PROBE_MODELS = ['glm-4.6', 'glm-4.5-flash'] as const
 
