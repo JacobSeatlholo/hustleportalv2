@@ -3167,3 +3167,21 @@ Boss's three asks + the standing "numbers going over lines" bug, in one pass.
 **Email statement (generate → edit → send).** New "Email statement" button on the selected account: mounts the REAL printable sheet off-screen, waits for its brand images, captures it with html2canvas-pro at 2x, wraps it in a jsPDF A4 page (595.28x841.89pt — the exact print-law scale, so the PDF is pixel-identical to what prints), and opens the compose dialog with To (prefilled from the account's email), Subject ("Statement of account — BVS-0999-06 — Apr - Nov 2026") and a generated body (due, ref, month span, Tyme Bank details, refNo as payment reference, queries line) — ALL editable before anything sends. The no-auto-send law holds: nothing leaves without the boss pressing Send. filename: Statement-<ref>-<months>.pdf. statementMeta() is shared by sheet and email so paper and email can never disagree on the due figure. Verified in-browser: PDF builds (0.4MB), dialog prefilled, send lands an honest emailLog row (FAILED locally with "mail warming up" — the engine is configured and verified on prod).
 
 QA: scripts/task162_email_delete_qa.mjs 18/18 PASS (login, book, throwaway account lifecycle, delete laws, line-law regression guard, attachments send, log row, cleanup of its own throwaways). tsc clean (the one error is the pre-existing skills/ image-edit one), next build green, deployed fe39b5d, health ok/db:true/zai:true/emailPlatformKey:true.
+
+## Task 163 — the statement email now reaches the pipeline: send → "Update lead?" (2026-11-05)
+
+Boss's ask: the statement email send should connect to the client — update the lead automatically, or offer an "update lead" prompt after sending. Built the prompt (his safer option; nothing ever writes to the pipeline without his tap).
+
+**The bridge, in three pieces:**
+- `src/lib/leadMatch.ts` — the matching law, twin of statementSync's account match: email exact (case/space-insensitive) first, else normalized company↔name containment both ways; 0 hits → NONE, 1 → ONE, ≥2 → AMBIGUOUS. Never guesses. Runs against the sender's OWN leads. Matching can never fail the send that already went out (guarded).
+- `POST /api/emails` — opt-in `matchLead` flag (only the statements flow asks). After a SUCCESSFUL send, the match rides back in the response as `leadMatch`; a failed send returns before matching, so the bridge stays silent (QA-asserted).
+- `POST /api/statements/lead-update` — the "Update lead?" door, same hasStatementAccess gate as every statements route. Link path: pins the sent email to the lead (EmailLog.leadId — it now shows on the lead detail timeline with open tracking) and optionally moves the lead to WON (forward only, idempotent). Create path: no lead matched → adds one (stage WON, source MANUAL, notes remember the statements book) and pins the email — next month's statement matches on its own. Atomic via $transaction.
+
+**UI (StatementsView):** after "Statement emailed ✓", one dialog, three honest shapes:
+- ONE + stage ≠ WON: "Update the lead?" — names the company and its current stage; Update lead moves to Won + pins the email.
+- ONE + already WON: same dialog, pins the email only (timeline + read tracking).
+- NONE: "Add <client> as a lead?" — creates in Won, email pinned.
+- AMBIGUOUS: "Which lead is it?" — "I don't guess — open Leads and update the right one yourself."
+- Not now dismisses; nothing was ever written without the tap.
+
+QA: scripts/task163_match_lead_qa.ts 9/9 PASS (the REAL matchLead via tsx: empty→NONE, exact/containment/reverse/normalization→ONE, two hits→AMBIGUOUS, email priority over name ambiguity, shared email→AMBIGUOUS) + scripts/task163_lead_link_qa.mjs 16/16 PASS over HTTP (401/403/400/404 walls, foreign lead 404, link moved:true + stage WON + pin, idempotent moved:false + one row, create path source/notes/pin, failed-send silence). Local runbook: sandbox reset again (no postgres) → sqlite schema swap per precedent, restored + regenerated after. tsc clean, next build green. The one local gap: a SUCCESSFUL send can't happen without RESEND_API_KEY — the composition (res.leadMatch → prompt) rides the build + prod smoke.

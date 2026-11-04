@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api } from './shared'
+import { api, STAGES } from './shared'
 import { useHp } from './store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -529,6 +529,19 @@ export default function StatementsView() {
   const [emailAttach, setEmailAttach] = useState<{ filename: string; content: string; sizeBytes: number } | null>(null)
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailSending, setEmailSending] = useState(false)
+
+  // The lead bridge: after a statement email lands, the book asks ONE honest
+  // question — move the matching lead to Won, pin the email to their timeline
+  // (with read tracking), or add them as a brand-new lead when nobody matched.
+  // Nothing writes until the boss taps; two matches = no guess, just told so.
+  const [leadPrompt, setLeadPrompt] = useState<null | {
+    kind: 'ONE' | 'NONE' | 'AMBIGUOUS'
+    lead?: { id: string; company: string; contactName: string | null; stage: string }
+    emailLogId: string
+    clientName: string
+    email: string
+  }>(null)
+  const [leadBusy, setLeadBusy] = useState(false)
   const hiddenRef = useRef<HTMLDivElement>(null)
   const [hiddenAccount, setHiddenAccount] = useState<Account | null>(null)
   const [hiddenNow, setHiddenNow] = useState('')
@@ -733,20 +746,64 @@ export default function StatementsView() {
     }
     setEmailSending(true)
     try {
-      await api('/api/emails', {
+      const res = await api<{ email: { id: string }; leadMatch?: { kind: 'NONE' | 'ONE' | 'AMBIGUOUS'; lead?: { id: string; company: string; contactName: string | null; stage: string } } }>('/api/emails', {
         method: 'POST',
         body: JSON.stringify({
           to: emailTo.trim(),
           subject: emailSubject.trim(),
           body: emailBody,
           attachments: emailAttach ? [{ filename: emailAttach.filename, content: emailAttach.content }] : undefined,
+          matchLead: true,
+          leadName: selected?.clientName || '',
         }),
       })
       toast({ title: 'Statement emailed ✓', description: `${emailAttach ? emailAttach.filename : 'No PDF attached'} → ${emailTo.trim()}. A copy sits in your Mail log.` })
       setEmailOpen(false)
+      // The pipeline gets its chance to hear about it — the boss decides.
+      if (res.leadMatch && selected) {
+        setLeadPrompt({
+          kind: res.leadMatch.kind,
+          lead: res.leadMatch.kind === 'ONE' ? res.leadMatch.lead : undefined,
+          emailLogId: res.email.id,
+          clientName: selected.clientName,
+          email: emailTo.trim(),
+        })
+      }
     } catch (e) {
       toast({ title: 'The email did not go out', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
     } finally { setEmailSending(false) }
+  }
+
+  // One tap on the prompt → one atomic write on the lead side. The door does
+  // the work; this just honest-toasts the outcome.
+  async function applyLeadUpdate() {
+    if (!leadPrompt) return
+    setLeadBusy(true)
+    try {
+      if (leadPrompt.kind === 'ONE' && leadPrompt.lead) {
+        const was = leadPrompt.lead.stage !== 'WON'
+        await api('/api/statements/lead-update', {
+          method: 'POST',
+          body: JSON.stringify({ emailLogId: leadPrompt.emailLogId, leadId: leadPrompt.lead.id, moveToWon: was }),
+        })
+        toast({
+          title: 'Lead updated ✓',
+          description: was
+            ? `${leadPrompt.lead.company} moved to Won, with the statement on their timeline (read tracking on).`
+            : `The statement now sits on ${leadPrompt.lead.company}'s lead timeline (read tracking on).`,
+        })
+      } else if (leadPrompt.kind === 'NONE') {
+        await api('/api/statements/lead-update', {
+          method: 'POST',
+          body: JSON.stringify({ emailLogId: leadPrompt.emailLogId, create: { company: leadPrompt.clientName, email: leadPrompt.email } }),
+        })
+        toast({ title: 'Lead added ✓', description: `${leadPrompt.clientName} is in your pipeline in Won — next month's statement finds them on its own.` })
+      }
+      bumpRefresh()
+      setLeadPrompt(null)
+    } catch (e) {
+      toast({ title: 'Could not update the lead', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally { setLeadBusy(false) }
   }
 
   function printStatement() {
@@ -1005,6 +1062,75 @@ export default function StatementsView() {
                 </div>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* the lead bridge: one honest question after the statement lands —
+          nothing writes until the boss taps */}
+      {selected && (
+        <Dialog open={!!leadPrompt} onOpenChange={(o) => { if (!o) setLeadPrompt(null) }}>
+          <DialogContent className="sm:max-w-md">
+            {leadPrompt?.kind === 'ONE' && leadPrompt.lead && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Update the lead?</DialogTitle>
+                  <DialogDescription>
+                    Statement emailed to {leadPrompt.email}. {leadPrompt.lead.company} is in your pipeline
+                    as {STAGES.find((s) => s.key === leadPrompt.lead?.stage)?.label || leadPrompt.lead.stage}.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {leadPrompt.lead.stage !== 'WON'
+                      ? `Update lead moves ${leadPrompt.lead.company} to Won and pins this email to their lead timeline — you'll see when they read it.`
+                      : `This pins the email to ${leadPrompt.lead.company}'s lead timeline — you'll see when they read it.`}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setLeadPrompt(null)}>Not now</Button>
+                    <Button onClick={applyLeadUpdate} disabled={leadBusy} className="gap-2">
+                      {leadBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Update lead
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+            {leadPrompt?.kind === 'NONE' && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Add {leadPrompt.clientName} as a lead?</DialogTitle>
+                  <DialogDescription>
+                    Statement emailed to {leadPrompt.email}, but nobody by that name is in your pipeline yet.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Add lead puts {leadPrompt.clientName} in Won with this email on their timeline — next
+                    month's statement finds them on its own.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setLeadPrompt(null)}>Not now</Button>
+                    <Button onClick={applyLeadUpdate} disabled={leadBusy} className="gap-2">
+                      {leadBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add lead
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+            {leadPrompt?.kind === 'AMBIGUOUS' && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Which lead is it?</DialogTitle>
+                  <DialogDescription>
+                    More than one lead matches {leadPrompt.clientName}. I don't guess — open Leads and update
+                    the right one yourself.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setLeadPrompt(null)}>OK</Button>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       )}

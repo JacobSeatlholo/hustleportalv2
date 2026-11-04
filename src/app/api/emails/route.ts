@@ -6,6 +6,7 @@ import { planState, FREE_LIMITS } from '@/lib/limits'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, spendCredits, addCredits, formatRands } from '@/lib/wallet'
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
+import { matchLead, type LeadMatch } from '@/lib/leadMatch'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -117,6 +118,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error, email }, { status: 400 })
   }
 
+  // The statement→lead bridge (opt-in: only the statements flow asks). After
+  // a successful send, try to find the pipeline lead this recipient belongs
+  // to and hand the match back — the CLIENT decides with the boss whether to
+  // apply it (the "Update lead?" prompt). Nothing is written here; matching
+  // never fails the send that already went out.
+  let leadMatch: LeadMatch | null = null
+  if (body.matchLead) {
+    leadMatch = await matchLead(userId, to, typeof body.leadName === 'string' ? body.leadName : null)
+  }
+
   // The debit lands ONLY after the send actually went out (honesty law —
   // the airtime twin of "failed lookups charge nothing").
   let spend: { chargedCents: number; balanceAfter: number } | null = null
@@ -133,7 +144,7 @@ export async function POST(req: NextRequest) {
       spend = { chargedCents: priceCents, balanceAfter: after.balance }
     }
   }
-  return NextResponse.json({ email, notice: result.notice || null, freeRemaining: freeRemaining ?? null, bundleRemaining: bundleRemaining ?? null, spend })
+  return NextResponse.json({ email, notice: result.notice || null, freeRemaining: freeRemaining ?? null, bundleRemaining: bundleRemaining ?? null, spend, leadMatch })
 }
 
 // DELETE /api/emails?id= → remove a draft/log row
