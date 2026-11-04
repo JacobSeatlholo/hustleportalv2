@@ -1038,13 +1038,30 @@ export async function POST(req: NextRequest) {
   const mapWhy = osm.note ? ` ${osm.note}` : ' The map directory had nothing for that description either.'
   const engineErrors: { error: string; reason?: string }[] = []
   if (!ai.ok) engineErrors.push({ error: ai.error })
-  if (personalZai && zai && !zai.ok) engineErrors.push({ error: zai.error, reason: zai.reason })
+  // The platform lane's failure counts too: a BALANCE or key cause from the
+  // operator pool is exactly as actionable as a personal key's, and hiding it
+  // let a pure Google quota rest speak for a money problem it could not explain.
+  if (zai && !zai.ok) engineErrors.push({ error: zai.error, reason: zai.reason })
+  const isDrain = (s?: string) => !!s && /allowance|drained|refill/i.test(s)
+  const actionable = engineErrors.some((e) => e.reason === 'BALANCE' || e.reason === 'KEY_INVALID' || e.reason === 'RATE')
   const engineError = engineErrors.length
     ? engineErrors.find((e) => e.reason === 'BALANCE' || e.reason === 'KEY_INVALID' || e.reason === 'RATE')?.error ?? engineErrors[0].error
     : ''
+  // The drained-allowance line never ships, even in a total blackout (both
+  // engines down AND the keyless directory empty): a pure quota rest reads as
+  // a resting note with a next move, never a wait-till-morning dead end. An
+  // actionable cause (money, key, pace) still leads verbatim.
+  const leadError = engineError && isDrain(engineError) && !actionable
+    ? 'The search engine is resting on its free allowance right now. Try naming the type of business and the area more directly, for example: taverns in Soweto that need security services.'
+    : engineError
+  const aiAlso = !ai.ok && ai.error !== engineError
+    ? isDrain(ai.error)
+      ? ' The Google engine is also resting on its free allowance right now.'
+      : ` The Google engine also could not answer this minute: ${ai.error}`
+    : ''
   const note = ai.ok || zai?.ok
     ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
-    : `${engineError}${mapWhy}${!ai.ok && ai.error !== engineError ? ` The Google engine also could not answer this minute: ${ai.error}` : ''}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
+    : `${leadError}${mapWhy}${aiAlso}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
   await logScanRun(userId, topicFp, 'NONE', 0, false)
   return NextResponse.json(

@@ -92,6 +92,15 @@ export async function GET() {
   // the queue heartbeat too (cooldown gated, DB paced, silent on failure).
   await opportunisticTick()
 
+  // z.ai lane presence (the GLM backup that catches every drained Google
+  // afternoon). Presence boolean only, never the key value. Resolved through
+  // the same function the engines use, so alias names count as wired.
+  let zaiLane = false
+  try {
+    const zaiMod = await import('@/lib/zai')
+    zaiLane = Boolean(zaiMod.getPlatformZaiKey())
+  } catch {}
+
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
@@ -104,6 +113,7 @@ export async function GET() {
     db: { ping: dbPing, ...detail },
     integrations: {
       aiPlatformKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      zai: zaiLane,
       openrouterPlatformKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
       emailPlatformKey: Boolean(process.env.RESEND_API_KEY?.trim()),
       // Truthful by design: RESEND_FROM is an optional operator override. The
