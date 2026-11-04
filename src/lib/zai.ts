@@ -70,6 +70,19 @@ function markSticky(endpoint: ZaiEndpointId) {
  */
 const MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-5.3', 'glm-4.5-flash', 'glm-4-flash'] as const
 
+/**
+ * SEARCH walks lead with the workhorse, not the bundle. A grounded scan needs
+ * its search rounds FINISHED inside the scan budget, and the live walk proved
+ * glm-5.3-flash cannot land one: 200 with empty content at 19s (output cap
+ * spent on search rounds), then timeouts at 28s and 33s with a fair window -
+ * the rung never reached an answer. glm-4.6 grounds fast on both doors (it is
+ * the probe model) and its tokens cost cash fractions of a cent, exactly what
+ * the runway model assumed for a backup-lane scan. The flash rungs stay in the
+ * walk as the bundle backed fallback, so a lucky rung still burns prepaid
+ * tokens instead of cash.
+ */
+const SEARCH_MODEL_PREFERENCE = ['glm-4.6', 'glm-5.3-flash', 'glm-4.5-flash', 'glm-4-flash'] as const
+
 const PROBE_MODELS = ['glm-4.6', 'glm-4.5-flash'] as const
 
 export const ZAI_PROBE_MODEL = 'glm-4.6'
@@ -310,7 +323,7 @@ export async function zaiGenerate(
   for (const ep of orderedEndpoints()) {
     doorArrears = false
     doorPaced = false
-    for (const model of MODEL_PREFERENCE) {
+    for (const model of opts.search ? SEARCH_MODEL_PREFERENCE : MODEL_PREFERENCE) {
       const remaining = deadline - Date.now()
       if (remaining < 4_000) {
         const b = pickWorst()
