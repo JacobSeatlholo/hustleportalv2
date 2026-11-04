@@ -3149,3 +3149,21 @@ Work Log:
 
 Stage Summary:
 - The statement paper is the template again: one A4 sheet, every column on the paper, every number inside its row, up to print day. Boss should reload the tab once after this deploy so Chrome picks up the new CSS, then print — Save as PDF or straight to the OfficeJet, either fits one sheet.
+
+## Task 162 — statements: delete an account, email the statement, mail PDF uploads; the numbers finally can never cross a line (2026-11-04, deployed fe39b5d)
+
+Boss's three asks + the standing "numbers going over lines" bug, in one pass.
+
+**The overflow bug — fixed at the root.** The sheet's row math estimated wrapped lines by CHAR COUNT (34 chars for remarks, 14 for product). Print doesn't count chars, it paints pixels: a capitals-heavy remark, a long word, a wide figure all overran the estimate — rows built too short (next row's figures print over text) and figures riding over the Total|AmountDue divider ("R 12500.00" left-anchored at x631 crosses the x704 divider; 10-char running balances cross it leftward at right:33). Fixes, all measured:
+- Row heights now canvas-measured (measureText on the browser's own Arial metrics) — remarks, product (bold), AND quantity contribute their REAL wrapped lines; char counts remain only as the no-canvas fallback. overflowWrap:'anywhere' on those cells so print and count agree even on monster words.
+- fitFontSize: a figure too wide for its column steps down 13.5→12.5→11.5→10.5 instead of crossing (Total has 71px, Amount Due 64px, the big Due box 108px bold 16.5→12). Small figures print on the template's own axis, byte-identical to before.
+- Screen table: Amount cells nowrap; remarks pre-line; product break-words.
+- Verified in a real browser against a stress book: R 12500.00 and R 100000.00 totals step down and end before the divider, 113,650.00 running figure stays inside Amount Due, caps remark wraps to 2 clean lines, 4-line product row grows without overlapping, arrears 113,400.00 and Due box R 113,400.00 both fit. Screenshot-checked, not just asserted.
+
+**Delete an account by statements.** DELETE /api/statements/[id] with no ?entry= now closes the whole account — but ONLY with ?confirm=<refNo> spelling the account's own ref back (case-insensitive); entries cascade, the invoices themselves are untouched. UI: red-outline "Delete account" button on the selected account → dialog shows ref, client, line count, balance, and demands the ref typed back (button disabled until exact match). QA: no confirm 400, wrong confirm 400, right confirm deletes, account 404 after, book size restored.
+
+**Mail PDF upload.** The composer has an "Attach PDF" button (hidden file input, accepts .pdf/.png/.jpg, multi): files ride as base64 into the EXISTING /api/emails attachments law — same sanitizer, 8MB total / 3 files caps, honest client-side toasts when a file would breach them. Chips show filename + size, removable. The Video Studio attach now shares the same send.
+
+**Email statement (generate → edit → send).** New "Email statement" button on the selected account: mounts the REAL printable sheet off-screen, waits for its brand images, captures it with html2canvas-pro at 2x, wraps it in a jsPDF A4 page (595.28x841.89pt — the exact print-law scale, so the PDF is pixel-identical to what prints), and opens the compose dialog with To (prefilled from the account's email), Subject ("Statement of account — BVS-0999-06 — Apr - Nov 2026") and a generated body (due, ref, month span, Tyme Bank details, refNo as payment reference, queries line) — ALL editable before anything sends. The no-auto-send law holds: nothing leaves without the boss pressing Send. filename: Statement-<ref>-<months>.pdf. statementMeta() is shared by sheet and email so paper and email can never disagree on the due figure. Verified in-browser: PDF builds (0.4MB), dialog prefilled, send lands an honest emailLog row (FAILED locally with "mail warming up" — the engine is configured and verified on prod).
+
+QA: scripts/task162_email_delete_qa.mjs 18/18 PASS (login, book, throwaway account lifecycle, delete laws, line-law regression guard, attachments send, log row, cleanup of its own throwaways). tsc clean (the one error is the pre-existing skills/ image-edit one), next build green, deployed fe39b5d, health ok/db:true/zai:true/emailPlatformKey:true.
