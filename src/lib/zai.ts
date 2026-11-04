@@ -45,7 +45,19 @@ let stickyEndpoint: ZaiEndpointId | null = null
 let stickyAt = 0
 const STICKY_TTL = 10 * 60_000
 
-function orderedEndpoints() {
+function orderedEndpoints(opts?: { search?: boolean }) {
+  // SEARCH walks knock where the money lives first. The platform account sits
+  // on z.ai international: its pocket holds the prepaid flash bundle and the
+  // cash that pays the web search fee. The Zhipu door accepts the key too,
+  // but its grounded walks stalled past every honest budget in the live
+  // check (33s timeouts on both workhorse models), so letting it walk first
+  // meant the funded door never got a knock at all - the walk clock ran out
+  // one door before the money.
+  if (opts?.search) {
+    const zai = ENDPOINTS.find((e) => e.id === 'z.ai')!
+    const rest = ENDPOINTS.filter((e) => e.id !== 'z.ai')
+    return [zai, ...rest]
+  }
   if (stickyEndpoint && Date.now() - stickyAt < STICKY_TTL && ENDPOINTS[0].id !== stickyEndpoint) {
     return [ENDPOINTS[1], ENDPOINTS[0]]
   }
@@ -320,7 +332,7 @@ export async function zaiGenerate(
   // wrong: a z.ai key with a paid resource pack was refused by the Zhipu
   // door's pocket and the walk never asked the z.ai door.)
   let arrearsDoors = 0
-  for (const ep of orderedEndpoints()) {
+  for (const ep of orderedEndpoints({ search: opts.search })) {
     doorArrears = false
     doorPaced = false
     for (const model of opts.search ? SEARCH_MODEL_PREFERENCE : MODEL_PREFERENCE) {
