@@ -4,6 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { bumpChallenge } from '@/lib/gamification'
 import { geminiGenerate, GeminiHistoryTurn } from '@/lib/gemini'
+import { zaiGenerate } from '@/lib/zai'
 import { searchPoolForAsk } from '@/lib/cofounderLeads'
 
 export const maxDuration = 60
@@ -13,6 +14,7 @@ const NO_KEY_MSG =
 
 // POST /api/ai/advisor, AI Co-Founder chat, grounded in the user's real data
 export async function POST(req: NextRequest) {
+  const tAdvisor = Date.now()
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // AI cost guard: one daily allowance per account, checked BEFORE any
@@ -62,24 +64,55 @@ ${pool.matched ? pool.context : ''}`
 
   await db.aiMessage.create({ data: { userId, role: 'user', content: String(message) } })
 
+  const cofounderSystem = `You are the AI Co-Founder inside HustlePortal, a business growth platform for South African entrepreneurs. You speak like a sharp, encouraging South African business partner, practical, warm, direct. Use rand values, SA context (WhatsApp marketing, Yoco, township economy, loadshedding). Reference the founder's real data when useful. If they ask about Google, Google Maps or their Google Business Profile, give a short answer and point them to the Google profile tab in the AI Co-Founder, which writes their full profile kit ready to paste. Keep answers under 180 words unless asked for detail. Never invent facts, numbers, prices or results: give advice from the context you have, and when you do not know, say what to check instead of guessing.\n\nCONTEXT:\n${context}`
+
   const result = await geminiGenerate(userId, {
-    system: `You are the AI Co-Founder inside HustlePortal, a business growth platform for South African entrepreneurs. You speak like a sharp, encouraging South African business partner, practical, warm, direct. Use rand values, SA context (WhatsApp marketing, Yoco, township economy, loadshedding). Reference the founder's real data when useful. If they ask about Google, Google Maps or their Google Business Profile, give a short answer and point them to the Google profile tab in the AI Co-Founder, which writes their full profile kit ready to paste. Keep answers under 180 words unless asked for detail. Never invent facts, numbers, prices or results: give advice from the context you have, and when you do not know, say what to check instead of guessing.\n\nCONTEXT:\n${context}`,
+    system: cofounderSystem,
     prompt: String(message),
     history: msgs,
   })
+  const geminiError = result.ok ? null : result.error
+  let text: string | null = result.ok ? result.text || null : null
+  let glmError: string | null = null
 
-  if (!result.ok) {
-    if (result.error.startsWith('NO_KEY')) {
+  // DOOR 2: the GLM engine, a different model family and a different quota
+  // pocket. When Google's free tier is drained for the morning or the key
+  // wobbles, the Co-Founder does not die with it: same system line, same
+  // chat history, same promise. The seller's own z.ai key rides first (their
+  // credits, their control), the platform pool second. Silent to the member:
+  // the advice reads the same no matter which engine wrote it.
+  if (!text) {
+    const left = 55_000 - (Date.now() - tAdvisor)
+    if (left > 9_000) {
+      const glm = await zaiGenerate(userId, {
+        system: cofounderSystem,
+        prompt: String(message),
+        history: msgs,
+        maxTokens: 900,
+        timeoutMs: Math.min(20_000, left),
+      })
+      if (glm.ok) text = glm.text
+      else glmError = glm.error
+    }
+  }
+
+  if (!text) {
+    // Both doors down. When BOTH are structurally keyless the warming up
+    // message with the self serve fix is the honest answer; any other double
+    // failure (pacing, balance, network) gets the retry line. Engine names
+    // stay internal either way, the member sees the outcome, not the plumbing.
+    const bothKeyless = Boolean(geminiError?.startsWith('NO_KEY')) && (!glmError || /no z\.ai key/i.test(glmError))
+    console.error('advisor error', geminiError, glmError || '')
+    if (bothKeyless) {
       return NextResponse.json({ error: NO_KEY_MSG, code: 'MISSING_GEMINI_KEY' }, { status: 400 })
     }
-    console.error('advisor error', result.error)
     return NextResponse.json(
       { error: 'The AI Co-Founder could not answer right now. Try again in a moment.' },
       { status: 502 }
     )
   }
 
-  const saved = await db.aiMessage.create({ data: { userId, role: 'assistant', content: result.text } })
+  const saved = await db.aiMessage.create({ data: { userId, role: 'assistant', content: text } })
   await bumpChallenge(userId, 'ai_chat')
   return NextResponse.json({
     reply: saved.content,

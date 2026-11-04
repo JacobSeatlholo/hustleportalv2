@@ -58,15 +58,17 @@ function markSticky(endpoint: ZaiEndpointId) {
 }
 
 /**
- * Walk list, cheap first. GLM-4.6 is the price/performance workhorse (both
- * doors still answer it); GLM-5.3 and the 5.3 flash family follow as the
- * current generation per the model docs, so a door that has retired 4.6
- * steps forward instead of failing; the tail rungs are free on the Zhipu
- * door, so a key with zero credits still scans. A model error walks to the
- * next entry; an auth error skips straight to the other door (auth is door
- * wide, never model wide).
+ * Walk list, funded rungs first. GLM-5.3-Flash leads: the platform account
+ * carries a prepaid 5.3 flash token bundle (100M, Nov 2026), so its rung
+ * burns prepaid tokens and leaves the cash pocket for the web search fee,
+ * which bills apart from model tokens. GLM-4.6 follows as the paid step-up
+ * when a door refuses flash, then the 5.3 flagship for the doors that have
+ * moved past 4.6, and the tail rungs stay free on the Zhipu door so a key
+ * with zero credits still scans. A model error walks to the next entry; an
+ * auth error skips straight to the other door (auth is door wide, never
+ * model wide).
  */
-const MODEL_PREFERENCE = ['glm-4.6', 'glm-5.3', 'glm-5.3-flash', 'glm-4.5-flash', 'glm-4-flash'] as const
+const MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-5.3', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 const PROBE_MODELS = ['glm-4.6', 'glm-4.5-flash'] as const
 
@@ -222,9 +224,47 @@ function searchBenched(model: string): boolean {
   return true
 }
 
+/**
+ * Platform search pocket memory: the platform GLM wallet funds the web
+ * search tool from its own cash pocket, topped up manually by the operator
+ * (never auto charged). A search walk that ENDED ok on a platform key proves
+ * the pocket pays, so for the next half hour the backup lane can be trusted
+ * without re-proving itself; a walk that ended BALANCE (both doors refused
+ * the tool) means the pocket is dry, so for five minutes scans skip the dead
+ * knocks and hand those seconds to the lanes that can answer. Personal keys
+ * are never memorized: their wallets are their owner's business. Both TTLs
+ * self-heal: the dead flag expires so a fresh top up is picked up within
+ * minutes, and the alive flag expires so a drained pocket is re-discovered
+ * honestly instead of being trusted on stale proof.
+ */
+const PLATFORM_ALIVE_MS = 30 * 60_000
+const PLATFORM_DEAD_MS = 5 * 60_000
+let platformPocketAliveUntil = 0
+let platformPocketDownUntil = 0
+
+export function markPlatformSearchOutcome(
+  source: 'user' | 'platform',
+  ok: boolean,
+  reason?: ZaiErrorReason
+): void {
+  if (source !== 'platform') return
+  if (ok) {
+    platformPocketAliveUntil = Date.now() + PLATFORM_ALIVE_MS
+    platformPocketDownUntil = 0
+  } else if (reason === 'BALANCE') {
+    platformPocketDownUntil = Date.now() + PLATFORM_DEAD_MS
+    platformPocketAliveUntil = 0
+  }
+}
+
+/** True while the platform pocket is freshly known to refuse the search tool. */
+export function platformPocketDown(): boolean {
+  return Date.now() < platformPocketDownUntil
+}
+
 export async function zaiGenerate(
   userId: string,
-  opts: { system?: string; prompt: string; json?: boolean; search?: boolean; temperature?: number; maxTokens?: number; timeoutMs?: number; trace?: string[] }
+  opts: { system?: string; prompt: string; history?: { role: 'user' | 'assistant'; content: string }[]; json?: boolean; search?: boolean; temperature?: number; maxTokens?: number; timeoutMs?: number; trace?: string[] }
 ): Promise<ZaiResult> {
   const { key, source } = await resolveZaiKey(userId)
   if (!key) {
@@ -232,9 +272,11 @@ export async function zaiGenerate(
   }
   // JSON mime mode rides along only on plain calls: with the web search tool active
   // we ask for raw JSON in the prompt instead and parse loosely, exactly like the
-  // Gemini path handles search plus JSON.
+  // Gemini path handles search plus JSON. History (chat continuity, the AI
+  // Co-Founder fallback) rides between the system line and the new turn.
   const messages = [
     ...(opts.system ? [{ role: 'system', content: opts.system }] : []),
+    ...(opts.history ?? []),
     { role: 'user', content: opts.prompt },
   ]
   // timeoutMs is the TOTAL walk budget across doors and models; each attempt

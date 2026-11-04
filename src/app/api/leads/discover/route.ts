@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
 import { openrouterGenerate } from '@/lib/openrouter'
-import { zaiGenerate, getUserZaiKey } from '@/lib/zai'
+import { zaiGenerate, getUserZaiKey, markPlatformSearchOutcome, platformPocketDown } from '@/lib/zai'
 import { searchLeads } from '@/lib/explee'
 import { searchOsmLeads } from '@/lib/osm'
 import { planState, FREE_LIMITS, upgradeJson } from '@/lib/limits'
@@ -747,12 +747,12 @@ export async function POST(req: NextRequest) {
 
   // WHO LEADS THE SCAN: a PERSONAL z.ai key (the seller's own credits, their
   // control) puts the GLM engine in front. The platform GLM pool stays OUT of
-  // the lead spot: its web search tool draws on a separate cash balance, and
-  // while that is unfunded a platform led scan always dies on the same refusal
-  // and drags its billing note into every result. Gemini (the seller's own key
-  // or the platform key) leads instead; the GLM engine keeps its place as the
-  // automatic second engine and takes the lead back the moment its search
-  // balance is funded.
+  // the lead spot even though its search pocket is now funded (operator top
+  // up, Nov 2026): Google's free tier absorbs the scan volume at zero cost,
+  // so the platform GLM engine carries the BACKUP lane, and it can actually
+  // answer now instead of dying on the same refusal. The pocket memory below
+  // keeps that backup honest in both directions: skipped while the pocket is
+  // freshly known dry, trusted again the moment it proves it pays.
   const personalZai = Boolean(await getUserZaiKey(userId))
   const zaiFirst = personalZai
 
@@ -868,9 +868,19 @@ export async function POST(req: NextRequest) {
     if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
 
     // 2) SECOND, z.ai GLM with live Web Search grounding (the platform pool:
-    //    a saved key would have taken the lead spot above). Google was tried
-    //    first and could not answer, say so once, gently.
-    zai = await runZaiScan()
+    //    a saved key would have taken the lead spot above). Pre-flight: when
+    //    the pocket is freshly known to refuse the search tool for balance,
+    //    skip the dead knocks entirely and hand those seconds to the map
+    //    directory; every real outcome re-marks the memory, so an operator
+    //    top up is picked up within minutes. Google was tried first and
+    //    could not answer, say so once, gently.
+    if (platformPocketDown()) {
+      zai = null
+      glmTrace.push('platform pocket skipped, refused for balance in the last few minutes')
+    } else {
+      zai = await runZaiScan()
+      if (zai) markPlatformSearchOutcome('platform', zai.ok, zai.ok ? undefined : zai.reason)
+    }
     leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
     if (zai?.ok && leads.length > 0) {
       const engineNotice = !ai.ok
