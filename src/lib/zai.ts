@@ -83,17 +83,17 @@ function markSticky(endpoint: ZaiEndpointId) {
 const MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-5.3', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 /**
- * SEARCH walks lead with the workhorse, not the bundle. A grounded scan needs
- * its search rounds FINISHED inside the scan budget, and the live walk proved
- * glm-5.3-flash cannot land one: 200 with empty content at 19s (output cap
- * spent on search rounds), then timeouts at 28s and 33s with a fair window -
- * the rung never reached an answer. glm-4.6 grounds fast on both doors (it is
- * the probe model) and its tokens cost cash fractions of a cent, exactly what
- * the runway model assumed for a backup-lane scan. The flash rungs stay in the
- * walk as the bundle backed fallback, so a lucky rung still burns prepaid
- * tokens instead of cash.
+ * SEARCH walks lead with the bundle rung now that it can finish. A grounded
+ * scan needs its search rounds FINISHED inside the scan budget, and the live
+ * walk proved the flash rung with hybrid reasoning ON could not land one:
+ * 200 with empty content at 19s (output cap spent on thinking and tool
+ * rounds), then timeouts at 28s and 33s with a fatter cap and a fair window -
+ * on both doors. Search walks now disable thinking (see the request body),
+ * and flash leads: its tokens are prepaid on the platform account, glm-4.6
+ * follows as the cash backed step-up. Plain generation keeps thinking on and
+ * still burns the bundle flash-first.
  */
-const SEARCH_MODEL_PREFERENCE = ['glm-4.6', 'glm-5.3-flash', 'glm-4.5-flash', 'glm-4-flash'] as const
+const SEARCH_MODEL_PREFERENCE = ['glm-5.3-flash', 'glm-4.6', 'glm-4.5-flash', 'glm-4-flash'] as const
 
 const PROBE_MODELS = ['glm-4.6', 'glm-4.5-flash'] as const
 
@@ -358,7 +358,19 @@ export async function zaiGenerate(
         max_tokens: opts.maxTokens ?? 1200,
         stream: false,
         ...(opts.json && !opts.search ? { response_format: { type: 'json_object' } } : {}),
-        ...(opts.search ? { tools: searchTool(ep.id) } : {}),
+        ...(opts.search
+          ? {
+              tools: searchTool(ep.id),
+              // Hybrid reasoning OFF on search walks. The live walk caught the
+              // smoking gun: at a 900 token cap flash returned 200 at 19s with
+              // EMPTY content (the cap went to thinking and tool rounds), and
+              // with a fatter cap it just thought LONGER - timeouts at 28s and
+              // 33s on both workhorse models and both doors. The search tool
+              // does the grounding; the JSON report needs the model's answer,
+              // not its essay. Documented GLM parameter on both doors.
+              thinking: { type: 'disabled' },
+            }
+          : {}),
       }
       const at = Date.now()
       try {
