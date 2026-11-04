@@ -321,8 +321,11 @@ export async function zaiGenerate(
       if (modelRetired(model)) continue
       if (opts.search && searchBenched(model)) continue
       // Flash rungs answer fast or step aside: a hung free model must not eat
-      // the budget the other door still needs.
-      const attemptCap = FREE_MODELS.has(model) ? 10_000 : 28_000
+      // the budget the other door still needs. PAID rungs on a search walk get
+      // a real window: a grounded GLM scan spends 20 to 40 seconds on search
+      // rounds before the JSON answer (the live walk proved flash needs more
+      // than 28s), so a Gemini-sized cap only produces timeouts.
+      const attemptCap = FREE_MODELS.has(model) ? 10_000 : opts.search ? 33_000 : 28_000
       const body: Record<string, unknown> = {
         model,
         messages,

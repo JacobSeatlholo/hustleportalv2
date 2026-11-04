@@ -773,9 +773,11 @@ export async function POST(req: NextRequest) {
           // funded bundle prices these tokens at a rounding error; an empty
           // rung costs the whole scan.
           maxTokens: cap <= 3 ? 2048 : 3072,
-          // Two doors plus a REAL 15 to 25 second grounded generation need
-          // more runway than a single door ever did.
-          timeoutMs: Math.min(34_000, remaining),
+          // Two doors plus a REAL 20 to 40 second grounded generation need
+          // more runway than a single door ever did: the walk clock, not a
+          // tight cap, is what decides when the engine has had its turn.
+          // The map directory's own runway gate downstream keeps its slice.
+          timeoutMs: Math.min(40_000, remaining),
           trace: glmTrace,
         })
       : Promise.resolve(null)
