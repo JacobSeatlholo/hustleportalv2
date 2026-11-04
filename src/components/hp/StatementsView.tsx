@@ -158,24 +158,46 @@ export function StatementSheet({ account, now }: { account: Account; now: string
   })()
 
   // table geometry (template px): x 93..897, header 612..662, body to 988.
-  // The template's body rows are borderless with manual heights; heights are
-  // computed the same way: multi-line remarks take what they need, single-line
-  // rows share the rest of the body evenly (the archive's 8 lines → ~37px).
-  const BODY = 324 // 376 box − 50 header − border hair
+  // The template's body rows are borderless; heights follow the CONTENT —
+  // every column's wrap is counted (a long remark, a product like "Kloof
+  // Street Membership" that wraps in its 107px cell, a long quantity), then
+  // the rows are fitted into the body: padding breathes while there is room
+  // (the archive's 8 rows land on the template's own ~37px) and shrinks to a
+  // floor when the book is fuller. A book that truly outgrows the body grows
+  // the table box and pushes the footer down — text integrity first, the
+  // paper template look second, never a number printed across a line.
   const LINE_H = 17.6 // 13.5px × 1.3
-  const lineCount = (t: string) => Math.max(1, t.split('\n').length)
-  const minH = (n: number) => n * LINE_H + 12
+  const PAD_MIN = 5
+  const PAD_MAX = 26
+  const BODY_BASE = 324 // 376 box − 50 header − border hair
+  // remarks cell: 264px of 13.5px ≈ 34 chars a line; explicit \n always breaks
+  const lineCount = (t: string) => {
+    const parts = t.split('\n').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return 1
+    return parts.reduce((acc, p) => acc + Math.max(1, Math.ceil(p.length / 34)), 0)
+  }
+  const productLines = (p: string | null) => (p ? Math.max(1, Math.ceil(p.length / 14)) : 0) // product cell 107px bold
   const allRows: { key: string; date: Date; product: string | null; remarks: string; quantity: string | null; amount: number; kind: string; running: number; lines: number; bf: boolean }[] = []
   if (hasBfRow) {
     allRows.push({ key: 'bf', date: monthStart, product: null, remarks: 'Balance B/f', quantity: null, amount: opening, kind: 'BFWD', running: opening, lines: 1, bf: true })
   }
   for (const r of rows) {
-    allRows.push({ key: r.id, date: new Date(r.date), product: r.product, remarks: r.remarks, quantity: r.quantity, amount: r.amount, kind: r.kind, running: r.running, lines: lineCount(r.remarks), bf: false })
+    allRows.push({ key: r.id, date: new Date(r.date), product: r.product, remarks: r.remarks, quantity: r.quantity, amount: r.amount, kind: r.kind, running: r.running, lines: Math.max(lineCount(r.remarks), productLines(r.product)), bf: false })
   }
-  const totalMin = allRows.reduce((acc, r) => acc + minH(r.lines), 0)
-  const singleCount = allRows.filter((r) => r.lines === 1).length
-  const bonus = singleCount > 0 ? Math.max(0, (BODY - totalMin) / singleCount) : 0
-  const rowH = allRows.map((r) => minH(r.lines) + (r.lines === 1 ? bonus : 0))
+  const nRows = allRows.length
+  const linesH = allRows.reduce((acc, r) => acc + r.lines * LINE_H, 0)
+  let BODY = BODY_BASE
+  let pad = 12
+  if (nRows > 0) {
+    if (linesH + nRows * PAD_MIN <= BODY_BASE) {
+      pad = Math.min(PAD_MAX, (BODY_BASE - linesH) / nRows)
+    } else {
+      BODY = linesH + nRows * PAD_MIN
+      pad = PAD_MIN
+    }
+  }
+  const GROW = Math.max(0, BODY - BODY_BASE)
+  const rowH = allRows.map((r) => r.lines * LINE_H + pad)
   const rowTop: number[] = []
   {
     let acc = 50
@@ -186,7 +208,11 @@ export function StatementSheet({ account, now }: { account: Account; now: string
   }
 
   return (
-    <div className="statement-sheet" style={{ width: 1004, height: 1418, position: 'relative', background: '#fff', fontFamily: SANS, color: INK }}>
+    <div
+      className="statement-print-page"
+      style={GROW > 0 ? { height: 'auto' } : undefined}
+    >
+    <div className="statement-sheet" style={{ width: 1004, height: 1418 + GROW, position: 'relative', background: '#fff', fontFamily: SANS, color: INK }}>
       <img src="/brand/band.png" alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1004, height: 94 }} />
       <img src="/brand/logo.png" alt="Business Hustle" style={{ position: 'absolute', top: 180, left: 171, width: 71, height: 88 }} />
 
@@ -262,7 +288,7 @@ export function StatementSheet({ account, now }: { account: Account; now: string
           archive measures ~32-37px there — 13px was riding the line), Amount
           Due header LEFT-anchored 14px, Quantity/Total headers right at 10px,
           left columns in at 16px. Nothing touches a line. */}
-      <div style={{ position: 'absolute', top: 612, left: 93, width: 804, height: 376, border: `1.5px solid ${BOX}` }}>
+      <div style={{ position: 'absolute', top: 612, left: 93, width: 804, height: 376 + GROW, border: `1.5px solid ${BOX}` }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 50, background: GRAY, borderBottom: `1.5px solid ${BOX}` }} />
         {[
           { x: 0, w: 100, t: 'Date', a: 'left' },
@@ -303,41 +329,43 @@ export function StatementSheet({ account, now }: { account: Account; now: string
         })}
       </div>
 
-      {/* return portion */}
-      <div style={{ position: 'absolute', top: 995, left: 440, fontSize: 13.5, fontWeight: 700 }}>PLEASE RETURN THIS PORTION WITH PROOF OF YOUR PAYMENT TO:</div>
-      <div style={{ position: 'absolute', top: 1016, left: 440, fontSize: 13.5 }}>accounts@businesshustle.co.za</div>
+      {/* return portion — every top below the table shifts when a full book
+          grew the body, so the footer travels WITH the table, never under it */}
+      <div style={{ position: 'absolute', top: 995 + GROW, left: 440, fontSize: 13.5, fontWeight: 700 }}>PLEASE RETURN THIS PORTION WITH PROOF OF YOUR PAYMENT TO:</div>
+      <div style={{ position: 'absolute', top: 1016 + GROW, left: 440, fontSize: 13.5 }}>accounts@businesshustle.co.za</div>
 
       {/* arrears slip */}
-      <div style={{ position: 'absolute', top: 1043, left: 468, width: 429, height: 70, border: `1.5px solid ${BOX}` }}>
+      <div style={{ position: 'absolute', top: 1043 + GROW, left: 468, width: 429, height: 70, border: `1.5px solid ${BOX}` }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: 127, height: '100%', background: GRAY, borderRight: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5 }}>Arrears(-)</div>
         <div style={{ position: 'absolute', top: 0, right: 33, height: '100%', display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{fmtPlain(due)}</div>
       </div>
-      <div style={{ position: 'absolute', top: 1112, left: 456, width: 447, height: 4, background: BOX }} />
+      <div style={{ position: 'absolute', top: 1112 + GROW, left: 456, width: 447, height: 4, background: BOX }} />
 
       {/* amount due */}
-      <div style={{ position: 'absolute', top: 1128, left: 605, width: 163, textAlign: 'right', fontSize: 13.5, lineHeight: 1.3 }}>Amount<br />Due</div>
-      <div style={{ position: 'absolute', top: 1120, left: 783, width: 114, height: 56, border: `2px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16.5, fontWeight: 700 }}>
+      <div style={{ position: 'absolute', top: 1128 + GROW, left: 605, width: 163, textAlign: 'right', fontSize: 13.5, lineHeight: 1.3 }}>Amount<br />Due</div>
+      <div style={{ position: 'absolute', top: 1120 + GROW, left: 783, width: 114, height: 56, border: `2px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16.5, fontWeight: 700 }}>
         R {fmtPlain(due)}
       </div>
-      <div style={{ position: 'absolute', top: 1176, left: 768, width: 135, height: 4, background: BOX }} />
+      <div style={{ position: 'absolute', top: 1176 + GROW, left: 768, width: 135, height: 4, background: BOX }} />
 
       {/* bank block */}
-      <div style={{ position: 'absolute', top: 1044, left: 100, fontSize: 13.5, lineHeight: '17px' }}>
+      <div style={{ position: 'absolute', top: 1044 + GROW, left: 100, fontSize: 13.5, lineHeight: '17px' }}>
         <div>Account Name: Simple Eternity Holdings (Pty) Ltd</div>
         <div>t/a Business Hustle Ltd ©</div>
         <div>Bank: Tyme Bank Business Account</div>
         <div>Account No: 530 000 691 98</div>
         <div>Branch Code: 678 910</div>
       </div>
-      <div style={{ position: 'absolute', top: 1140, left: 100, fontSize: 13.5, fontWeight: 700, lineHeight: '18px' }}>
+      <div style={{ position: 'absolute', top: 1140 + GROW, left: 100, fontSize: 13.5, fontWeight: 700, lineHeight: '18px' }}>
         <div>PLEASE USE YOUR ACCOUNT NUMBER AS</div>
         <div>REFERENCE WHEN MAKING PAYMENT.</div>
       </div>
-      <div style={{ position: 'absolute', top: 1186, left: 100, fontSize: 13.5 }}>All payments accepted without prejudice to our rights.</div>
+      <div style={{ position: 'absolute', top: 1186 + GROW, left: 100, fontSize: 13.5 }}>All payments accepted without prejudice to our rights.</div>
 
       {/* footer */}
-      <img src="/brand/footer_logo.png" alt="" style={{ position: 'absolute', top: 1238, left: 437, width: 137, height: 69 }} />
-      <div style={{ position: 'absolute', top: 1334, left: 100, fontSize: 16 }}>Simple Eternity Holdings (Pty) Ltd</div>
+      <img src="/brand/footer_logo.png" alt="" style={{ position: 'absolute', top: 1238 + GROW, left: 437, width: 137, height: 69 }} />
+      <div style={{ position: 'absolute', top: 1334 + GROW, left: 100, fontSize: 16 }}>Simple Eternity Holdings (Pty) Ltd</div>
+    </div>
     </div>
   )
 }

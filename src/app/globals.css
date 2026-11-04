@@ -263,14 +263,30 @@ html.calm .text-white\/30 { color: rgb(196 200 205 / 0.35); }
   body.statement-printing {
     background: #ffffff !important;
   }
-  /* The statement sheet is drawn on the template's own 1004x1418 grid; zoom
-     maps it onto A4 paper (793.7 x 1122.5px @96dpi, margin 0). 0.789 leaves a
-     hair of slack on BOTH axes (792.2 x 1118.8): at the "exact" 0.7908 the
-     sheet overflows the page box by a quarter pixel and Chrome answers with a
-     second sheet. print-color-adjust keeps the template's grey label cells
-     grey even without the Background-graphics checkbox. */
+  /* The statement sheet is drawn on the template's own 1004x1418 grid. The
+     OLD law scaled it with `zoom` — and the boss's Chrome laid the print out
+     UNSCALED in its pagination pass: the paper showed the sheet cut on both
+     sides (Date and Amount Due columns amputated) across 2 sheets. zoom's
+     print behaviour is not trustworthy. The new law is structural, so the
+     failure mode is physically gone:
+       1. .statement-print-page IS the A4 page box (793x1121px @96dpi, a hair
+          inside 793.7x1122.5) with overflow hidden — the page can never see
+          a wider/taller box, so Chrome can never paginate the sheet in two;
+       2. the sheet inside is scaled with transform (rock-solid in print),
+          0.789 → 792.2x1118.8 — fits with slack on both axes;
+       3. if a browser ever ignored the transform, the box still clips at A4
+          instead of spilling columns across two sheets.
+     print-color-adjust keeps the grey label cells grey without the
+     Background-graphics checkbox. */
+  .statement-print-page {
+    width: 793px;
+    height: 1121px;
+    overflow: hidden;
+    background: #ffffff;
+  }
   .statement-sheet {
-    zoom: 0.789;
+    transform: scale(0.789);
+    transform-origin: top left;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

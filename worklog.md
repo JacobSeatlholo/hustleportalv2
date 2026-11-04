@@ -3136,3 +3136,16 @@ Work Log:
 
 Stage Summary:
 - Statements follow the records now: send an invoice and the charge is on the book; mark it paid and the payment line appears; edit the invoice and the line updates; edit the line and the boss's word is final forever; print covers everything up to today. Money honesty held at every fork: unique match or no booking, no double-booking (cutoff, hand: marker, upsert-by-ref), nothing ever sent without the boss's print/send hand. Typecheck + build green; pushing for Vercel deploy.
+
+Task ID: 161
+Agent: Super Z (main)
+Task: Boss, with a print-dialog screenshot: "still dont show right.. numbers going over lines.." — the statement PRINT was broken: columns amputated on both paper edges (Date column gone left, Amount Due gone right), row text crossing lines ("Kloof Street / Membership" product printing over the section below), and Chrome counting 2 sheets.
+
+Work Log:
+- Reproduced the print in the sandbox first (agent-browser + the boss's exact book shape: archive ledger + the hand R700 "Kloof Street Membership" row): the local render came out CLEAN and 1-page, which pinned the breakage to the print pipeline's reliance on CSS `zoom` — the boss's Chrome laid the pagination pass out UNSCALED (1004px sheet on a 793px page, flex-centered → cut both sides → 2 sheets), a known zoom-in-print trust gap.
+- Rebuilt the print fit structurally so that failure mode is physically impossible: .statement-print-page IS the A4 page box (793x1121px, a hair inside A4 @96dpi) with overflow hidden; the sheet scales inside it with transform: scale(0.789) (rock-solid in print); zoom law deleted. Degraded mode even if a browser ignored the transform is a clip inside A4 — never columns across two sheets. Letter paper (narrower AND shorter than A4) verified 1 page with the full sheet — A4 is strictly easier.
+- Fixed the row-height law that put numbers over lines: heights now count EVERY column's wrap — remarks auto-wrap at ~34 chars/line (the sync's "Payment received, thank you (INV-xxxx)" lines), product wrap at ~14 chars/line in its 107px bold cell ("Kloof Street Membership" = 2 lines), explicit \n always breaks — then rows are fitted into the template's body: padding breathes when there is room (the archive's 8 rows land on the template's own ~37px pitch) and compresses toward a floor when the book is fuller; a book that genuinely outgrows the body grows the table box and the footer travels with it (print-page box relaxes to auto so nothing clips).
+- Verified by print PDF with the boss's book: 10 rows inside the box, "Kloof Street / Membership" inside its taller row, all six columns present, running balances 1850→950 correct, Amount Due R 950.00, 1 page; screen preview modal unchanged; Task 160 sync suite still 46/46; typecheck + build green.
+
+Stage Summary:
+- The statement paper is the template again: one A4 sheet, every column on the paper, every number inside its row, up to print day. Boss should reload the tab once after this deploy so Chrome picks up the new CSS, then print — Save as PDF or straight to the OfficeJet, either fits one sheet.
