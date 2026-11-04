@@ -741,10 +741,8 @@ export async function POST(req: NextRequest) {
     search: true,
     json: true,
     system:
-      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable, you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South Africa ONLY: every business you report must be physically located in South Africa. If a candidate sits outside South Africa, drop it, even when its website looks relevant. Townships, suburbs and metros all count.',
-    prompt:
-      `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers:\n"""${definition}"""\n\n` +
-      `Rules:\n` +
+      'You are a meticulous B2B lead researcher for South African small businesses. You are grounded in live web search results. You report ONLY businesses that actually exist and are publicly findable, you NEVER invent a company name, website, phone number, email or a person\'s name. When unsure, return fewer leads rather than risk a fake one. South Africa ONLY: every business you report must be physically located in South Africa. If a candidate sits outside South Africa, drop it, even when its website looks relevant. Townships, suburbs and metros all count.\n\n' +
+      `Rules for the lead list you will return:\n` +
       `- AREA IS THE PROMISE: every business must sit inside ${pinArea || area} or its immediate surroundings. Finding fewer real ones there beats padding the list with businesses from other cities. Never report a business outside South Africa.\n` +
       `- REAL businesses only, grounded in the search results you actually saw (company websites, directories, Google Business listings, Facebook pages, news).\n` +
       `- PEOPLE ARE THE PRIZE: a named human beats a switchboard. When the results publicly name the owner, founder or decision maker of a business, include contactName (their real name as written), role (Owner, Manager, Buyer and so on) and profileUrl ONLY when the results show a public profile page for them (LinkedIn, Facebook, the company team page, a directory). Copy every field exactly as you saw it. NEVER construct or guess a name or a link.\n` +
@@ -755,6 +753,15 @@ export async function POST(req: NextRequest) {
       `- score = 1 to 5 fit for the seller: 5 means this type of business directly buys what the seller sells, 1 means wrong industry. When unsure, score low, the deck only serves what clears the relevance bar.\n` +
       `Return ONLY JSON, omitting any field you could not verify:\n` +
       `{"leads":[{"company":"","industry":"","city":"","website":"","phone":"","email":"","contactName":"","role":"","profileUrl":"","why":"","score":3}]}`,
+    prompt:
+      // THE SEARCH QUERY LIVES HERE. The doors derive their web search
+      // keywords from the user message, and the live walk proved what happens
+      // when this message is full of JSON schema talk: the engine searched
+      // for "leads json company city" and served documentation pages while
+      // the model honestly answered {"leads":[]}. Every instruction rides in
+      // the system line above; this message stays pure business intent so
+      // the search engine goes looking for the seller's actual market.
+      `Find up to ${cap} real businesses ${pinArea || `in ${area}`} that are likely to need what this seller offers: ${definition}. Search for these businesses and give me the lead list.`,
   })
 
   const t0 = Date.now()
