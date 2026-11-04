@@ -3049,3 +3049,17 @@ Work Log:
 
 Stage Summary:
 - Funding state recorded: z.ai account holds $6 cash + GLM-5.3-Flash 100M bundle (3-month validity). Trial-scale posture: Google free lane primary, z.ai funded fallback. No prod writes; no credentials in this window.
+
+Task ID: 156
+Agent: Super Z (main)
+Task: Boss said "Done. Go ahead." - build the never-fail AI deploy batch: Co-Founder z.ai fallback, Flash-first ordering, funding-aware pre-flight.
+
+Work Log:
+- Recon: Task 151 diagnosis recovered from worklog (scan walk burned ~19s on hung flash rungs; dead refusals walked before the live lane; root cause was unfunded pockets, now funded). zai.ts walked in full (door order+sticky memory, MODEL_PREFERENCE walk, search bench, arrears doors logic, probe helpers), discover route walk region read (zaiFirst = personalZai only; platform z.ai was backup with a stale "unfunded" comment), gemini.ts confirmed already self-healing (model discovery + key chain + benching, no surgery needed), reveal route's GLM fallback block used as the pattern.
+- PATCH 1 advisor route (src/app/api/ai/advisor/route.ts): AI Co-Founder gets DOOR 2. On Gemini failure or empty answer, zaiGenerate runs with the same system line, same chat history (zaiGenerate gained an optional history param, rides between system and the new turn), maxTokens 900, remaining-time guard (55s budget, min 20s, skip under 9s). Double failure: NO_KEY on both doors returns the warming-up message with the self-serve fix (400 MISSING_GEMINI_KEY), anything else returns the retry line (502). Silent to the member, engine names internal. tAdvisor anchor added at POST start.
+- PATCH 2 zai.ts: MODEL_PREFERENCE reordered to glm-5.3-flash first (prepaid 100M bundle burns before cash; cash pocket reserved for the web search fee which bills apart from tokens), glm-4.6 as paid step-up, tail free rungs unchanged. Added platform search pocket memory: markPlatformSearchOutcome(source, ok, reason) sets alive 30min on a platform-key search walk ok, dead 5min on BALANCE; platformPocketDown() exposes the dead flag. Personal keys never memorized. Both TTLs self-heal (top up picked up in minutes, drained pocket re-discovered honestly).
+- PATCH 3 discover route: platform z.ai backup lane is now pre-flighted - when the pocket is freshly known dry, the backup knocks are skipped entirely (glmTrace notes it) and the seconds go to the map directory; every real platform outcome re-marks the memory. Stale "unfunded pocket" comment rewritten (funded Nov 2026; Google free tier still leads platform scans at zero cost, GLM carries backup).
+- Verification: npx tsc --noEmit clean on all app code (one pre-existing error in skills/image-edit tooling, outside the app build, untouched); eslint clean on all three files. Committed bd8ac77 (3 files, +110/-25) on top of the 5 parked commits, working tree clean.
+
+Stage Summary:
+- Never-fail batch is code-complete and parked for deploy (still needs the deploy key): all three user-facing AI surfaces (Lead Finder scans, People Pass reveals, AI Co-Founder) now have two independent doors, the prepaid bundle burns before cash, and a dry pocket costs five minutes of skipped knocks instead of a dead walk in every scan.
