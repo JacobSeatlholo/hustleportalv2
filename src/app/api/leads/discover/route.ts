@@ -155,8 +155,22 @@ async function readSellerSite(raw: string): Promise<{ url: string; text: string 
 
 /** Shared landing for AI answers: strict cleanup so no fabricated contact survives. */
 async function parseLeadList(text: string, cap: number, city: string) {
-  const parsed = parseJsonLoose<{ leads?: AiLead[] }>(text)
-  const pre = (parsed?.leads || [])
+  // Two honest answer shapes land here: {"leads":[...]} and a bare [...] array
+  // (a no-thinking rung loves the terse form). The object extractor in
+  // parseJsonLoose cannot see a top level array - first-{ to last-} spans two
+  // objects and fails to parse - so the bare shape needs its own door below.
+  const parsed = parseJsonLoose<{ leads?: AiLead[] } | AiLead[]>(text)
+  let raw: AiLead[] = Array.isArray(parsed) ? parsed : parsed?.leads || []
+  if (raw.length === 0) {
+    const m = text.replace(/```json|```/g, '').match(/\[[\s\S]*\]/)
+    if (m) {
+      try {
+        const arr = JSON.parse(m[0]) as AiLead[]
+        if (Array.isArray(arr) && arr.length) raw = arr
+      } catch {}
+    }
+  }
+  const pre = raw
     .map((l) => ({
       company: clean(l.company),
       contactName: sanePersonName(l.contactName),
@@ -779,6 +793,12 @@ export async function POST(req: NextRequest) {
           // The map directory's own runway gate downstream keeps its slice.
           timeoutMs: Math.min(40_000, remaining),
           trace: glmTrace,
+        }).then((r) => {
+          // The answer's head rides the debug trace: when the parse below
+          // keeps zero faces, the next diagnosis reads WHY from real words
+          // instead of guessing shapes.
+          if (r.ok) glmTrace.push(`answer head: ${r.text.slice(0, 220).replace(/\s+/g, ' ')}`)
+          return r
         })
       : Promise.resolve(null)
   }
