@@ -3,16 +3,46 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 
 // GET /api/reports → funnel + revenue/profit + invoice stats (leads → revenue story)
+//
+// The funnel counts the SAME leads the pipeline board shows: own + team-shared
+// (mirroring /api/leads default scope and /api/dashboard). Counting only the
+// user's own rows made reports disagree with the board — a deal won on the
+// team lane never showed as a win here. Stage labels are the user's OWN
+// PIPELINE_STAGES renames (the words the board carries), so every screen
+// speaks the same language; the keys never move, only the words.
+
+const DEFAULT_STAGE_LABELS: Record<string, string> = {
+  NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified', QUOTE_SENT: 'Quote sent', WON: 'Won', LOST: 'Lost',
+}
+
 export async function GET() {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [leads, clients, finance, invoices] = await Promise.all([
-    db.lead.findMany({ where: { userId }, select: { stage: true, value: true, source: true, createdAt: true } }),
+  const memberships = await db.teamMember.findMany({ where: { userId }, select: { teamId: true } })
+  const teamIds = memberships.map((m) => m.teamId)
+  const leadScope = teamIds.length > 0 ? { OR: [{ userId }, { teamId: { in: teamIds } }] } : { userId }
+
+  const [leads, clients, finance, invoices, settings] = await Promise.all([
+    db.lead.findMany({ where: leadScope, select: { stage: true, value: true, source: true, createdAt: true } }),
     db.client.findMany({ where: { userId }, select: { monthlyValue: true, status: true } }),
     db.financeEntry.findMany({ where: { userId }, select: { type: true, amount: true, occurredAt: true, category: true } }),
     db.invoice.findMany({ where: { userId }, select: { status: true, total: true, issuedAt: true, kind: true } }),
+    db.userSetting.findFirst({ where: { userId, key: 'PIPELINE_STAGES' } }),
   ])
+
+  let renamed: Record<string, string> = {}
+  if (settings?.value) {
+    try {
+      const parsed = JSON.parse(settings.value)
+      if (parsed && typeof parsed === 'object') renamed = parsed as Record<string, string>
+    } catch { /* junk setting reads as defaults */ }
+  }
+  const stageLabel = (key: string) => {
+    const custom = renamed[key]
+    if (custom && custom.trim()) return custom.trim()
+    return DEFAULT_STAGE_LABELS[key] || key
+  }
 
   // Funnel
   const stages = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTE_SENT', 'WON', 'LOST']
@@ -20,6 +50,7 @@ export async function GET() {
     const rows = leads.filter((l) => l.stage === stage)
     return {
       stage,
+      label: stageLabel(stage),
       count: rows.length,
       value: rows.reduce((s, l) => s + (l.value || 0), 0),
     }

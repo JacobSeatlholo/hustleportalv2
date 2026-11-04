@@ -21,10 +21,6 @@ import { resolveProject } from '@/lib/workspace'
 // The prompt names the lead's current stage, so the tap IS the decision — the
 // door just carries it out.
 
-type Params = { params: Promise<{ id: string }> } // route symmetry; no [id] in this path
-
-const STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTE_SENT', 'WON', 'LOST']
-
 async function gate() {
   const userId = await getUserId()
   if (!userId) return { err: 401 as const }
@@ -37,7 +33,7 @@ async function gate() {
   return { me }
 }
 
-export async function POST(req: NextRequest, _ctx: Params) {
+export async function POST(req: NextRequest) {
   const g = await gate()
   if ('err' in g) return NextResponse.json({ error: g.err === 401 ? 'Unauthorized' : 'Forbidden' }, { status: g.err })
   const userId = g.me.id
@@ -90,3 +86,5 @@ export async function POST(req: NextRequest, _ctx: Params) {
   })
   return NextResponse.json({ ok: true, lead: updated, moved: move })
 }
+
+const STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTE_SENT', 'WON', 'LOST']

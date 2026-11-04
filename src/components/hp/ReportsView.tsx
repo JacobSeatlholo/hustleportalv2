@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Download, Loader2, LineChart, TrendingUp, Users, Wallet, ReceiptText } from 'lucide-react'
 
 type Report = {
-  funnel: { stage: string; count: number; value: number }[]
+  funnel: { stage: string; label: string; count: number; value: number }[]
   conversion: number
   pipelineValue: number
   recurringRevenue: number
@@ -19,6 +19,8 @@ type Report = {
   leadSources: { source: string; count: number }[]
 }
 
+// Fallback only — the API resolves each stage's label from the user's own
+// PIPELINE_STAGES renames so reports speak the board's language.
 const STAGE_LABELS: Record<string, string> = {
   NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified', QUOTE_SENT: 'Quote sent', WON: 'Won', LOST: 'Lost',
 }
@@ -102,7 +104,7 @@ export default function ReportsView() {
             {report.funnel.map((f) => (
               <div key={f.stage}>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span>{STAGE_LABELS[f.stage] || f.stage}</span>
+                  <span>{f.label || STAGE_LABELS[f.stage] || f.stage}</span>
                   <span className="text-muted-foreground">{f.count} · {randsPlain(f.value)}</span>
                 </div>
                 <div className="h-2.5 rounded-full bg-white/5 overflow-hidden">

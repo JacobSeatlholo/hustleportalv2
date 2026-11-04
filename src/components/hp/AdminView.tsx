@@ -1920,6 +1920,40 @@ function XPitchCard() {
     }
   }
 
+  // The Done tick — "I have DM'd them". One tap: the funnel moves to DM sent
+  // AND the lead lands in the boss's own pipeline under Contacted, ready for
+  // the follow-up work. Unticking mirrors back while the row is untouched.
+  async function doneTap(l: XPitchLead, done: boolean) {
+    setBusyHandle(l.handle)
+    try {
+      const res = await api<{ status: XPitchLead['status']; counts: Record<string, number>; lead: { stage: string; created: boolean; leftAlone: boolean } | null }>('/api/admin/exec/xpitch', {
+        method: 'POST',
+        body: JSON.stringify({ handle: l.handle, done }),
+      })
+      setData((d) => d ? { ...d, counts: res.counts, leads: d.leads.map((x) => x.handle === l.handle ? { ...x, status: res.status } : x) } : d)
+      const stageWord: Record<string, string> = { NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified', QUOTE_SENT: 'Quote Sent', WON: 'Won', LOST: 'Lost' }
+      if (done) {
+        toast({
+          title: `@${l.handle} done — DM sent ✓`,
+          description: res.lead?.created
+            ? `Added to your pipeline under ${stageWord[res.lead.stage] ?? res.lead.stage}.`
+            : res.lead
+              ? `Already in your pipeline (${stageWord[res.lead.stage] ?? res.lead.stage}) — nothing duplicated.`
+              : 'Marked as DM sent.',
+        })
+      } else if (res.lead?.leftAlone) {
+        toast({ title: `@${l.handle} back to to-DM`, description: `The pipeline lead stays in ${stageWord[res.lead.stage] ?? res.lead.stage} — you already worked it.` })
+      } else {
+        toast({ title: `@${l.handle} back to to-DM`, description: 'The pipeline lead moved back to New to match.' })
+      }
+    } catch {
+      toast({ title: 'Could not save that', description: 'Tap it again in a moment.' })
+      load()
+    } finally {
+      setBusyHandle('')
+    }
+  }
+
   function dmTemplate(l: XPitchLead) {
     const first = l.name.split(' ')[0] || 'there'
     const trade = l.trade || 'business'
@@ -1985,7 +2019,7 @@ function XPitchCard() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. Fresh chips show the account&apos;s last post — work the green ones first, the grey ones are years dead. DMs go from your own accounts, a handful a day. The WhatsApp button opens the chat with the opener already typed — you still tap send yourself{waCount > 0 ? ` (${waCount} leads have numbers)` : ''}.
+          Tap the copy icon for a ready cold DM, tap the status to walk a lead down the funnel. Tick <span className="text-foreground font-medium">Done</span> once you have DM&apos;d them — they land in your own pipeline under Contacted automatically. Fresh chips show the account&apos;s last post — work the green ones first, the grey ones are years dead. DMs go from your own accounts, a handful a day. The WhatsApp button opens the chat with the opener already typed — you still tap send yourself{waCount > 0 ? ` (${waCount} leads have numbers)` : ''}.
         </p>
         {loading ? (
           <Skeleton className="h-24 w-full" />
@@ -2003,6 +2037,25 @@ function XPitchCard() {
                   <Badge variant="outline" className="text-[9px] shrink-0">{l.trade}</Badge>
                   {l.followers > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{l.followers.toLocaleString()} followers</span>}
                   <Badge variant="outline" className={`text-[9px] shrink-0 ${FRESH_CLS[l.fresh ?? 'unknown'] ?? FRESH_CLS.unknown}`}>{freshLabel(l)}</Badge>
+                  {(() => {
+                    const isDone = l.status === 'dm' || l.status === 'replied' || l.status === 'joined'
+                    const locked = l.status === 'replied' || l.status === 'joined'
+                    return (
+                      <label
+                        className={`flex items-center gap-1 shrink-0 ${locked ? 'opacity-70' : 'cursor-pointer'}`}
+                        title={locked ? `Already past the DM (${XPITCH_LABEL[l.status]})` : 'I have DM\u2019d them — adds them to your pipeline under Contacted'}
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        <Checkbox
+                          checked={isDone}
+                          disabled={busyHandle === l.handle || locked}
+                          onCheckedChange={(v) => { if (v !== isDone) doneTap(l, v === true) }}
+                          className="h-3.5 w-3.5 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        <span className={`text-[10px] ${isDone ? 'text-emerald-400' : 'text-muted-foreground'}`}>Done</span>
+                      </label>
+                    )
+                  })()}
                   <Badge
                     variant="outline"
                     className={`ml-auto text-[9px] shrink-0 cursor-pointer ${XPITCH_CLS[l.status]}`}

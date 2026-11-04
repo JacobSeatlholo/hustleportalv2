@@ -12,16 +12,16 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/support/meeting — the member side of "talk to a human".
  *
- * The Support view lets a member book a call with the founder. The meeting
+ * The Support view lets a member book a call with the team. The meeting
  * happens on Discord, so the row carries the Discord invite as its meet link.
  * Nothing is auto-confirmed: the request waits PROPOSED until the owner takes
  * it (one tap on the Exec Dashboard's Meetings card), then the standard
  * confirm engine emails both sides the final details. A member can only have
- * one request waiting at a time, and exec accounts are refused — the founder
- * does not book meetings with himself.
+ * one request waiting at a time, and exec accounts are refused — the team's
+ * own desk does not book meetings with itself.
  *
- * The email law holds: the founder always sends messages himself; this only
- * places a request on his desk, it never sends anything to anyone else.
+ * The email law holds: the owner always sends messages himself; this only
+ * places a request on the desk, it never sends anything to anyone else.
  */
 
 const DISCORD_INVITE = 'https://discord.gg/kTnDEr7s7'
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       memberEmail: me.email,
       memberBusiness: me.businessName,
       memberPhone: me.phone,
-      guestName: 'The Founder — Business Hustle',
+      guestName: 'The Business Hustle Team',
       guestEmail: founder.email,
       startsAt,
       endsAt,
@@ -121,11 +121,14 @@ export async function POST(req: NextRequest) {
       `WHEN: ${meetingWhen(startsAt)}, ${meetingLength(startsAt, endsAt)}`,
       ...(note ? ['', `YOUR NOTE: ${note}`] : []),
       '',
-      'What happens next: the founder locks the time from his desk (usually within a day) and you get an email with the final details. The call happens on Discord:',
+      'What happens next: the team locks the time from the desk (usually within a day) and you get an email with the final details. The call happens on Discord:',
       DISCORD_INVITE,
       '',
       'Cannot wait? The Discord is the fastest way to reach a human:',
       DISCORD_INVITE,
+      '',
+      'Prefer WhatsApp? Message the team:',
+      'https://wa.me/27744815163',
       '',
       'The time does not suit you? Reply to this email or say so on Discord and we will move it.',
       '',

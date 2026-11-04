@@ -15,14 +15,19 @@ import { MessageCircle, CalendarClock, CheckCircle2, Copy, Loader2, LifeBuoy } f
 /**
  * SupportView — the member's door to a human.
  *
- * Two doors, one honest promise:
- *  1. Discord — the fastest way, one tap.
- *  2. Book a call with the founder — a real request that waits on the
- *     founder's desk; nothing is auto-confirmed and nothing auto-sends.
+ * Three ways to reach us, one honest promise:
+ *  1. Discord community — the fastest way, one tap.
+ *  2. Our Discord channel — updates and answers.
+ *  3. WhatsApp — chat with the team from the phone.
+ * Plus: book a call with the team — a real request that waits on the
+ * desk; nothing is auto-confirmed and nothing auto-sends.
  * The call itself happens on Discord.
  */
 
 const DISCORD_INVITE = 'https://discord.gg/kTnDEr7s7'
+const DISCORD_CHANNEL = 'https://discord.gg/8Vr5suMrm'
+const WHATSAPP_NUMBER = '27744815163'
+const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi HustlePortal team, I need a hand with something.')}`
 
 interface SupportMeeting {
   id: string
@@ -51,7 +56,7 @@ function StatusChip({ status }: { status: string }) {
     CONFIRMED: 'border-emerald-500/40 text-emerald-400',
     DECLINED: 'border-zinc-600/50 text-zinc-500',
   }
-  const label: Record<string, string> = { PROPOSED: 'awaiting founder', CONFIRMED: 'confirmed', DECLINED: 'moved on' }
+  const label: Record<string, string> = { PROPOSED: 'awaiting team', CONFIRMED: 'confirmed', DECLINED: 'moved on' }
   return (
     <Badge variant="outline" className={`text-[9px] shrink-0 ${map[status] ?? map.DECLINED}`}>
       {label[status] ?? status}
@@ -105,7 +110,7 @@ export default function SupportView() {
       })
       setRequested(sastWhen(r.startsAt))
       setTopic(''); setWhen(''); setNote('')
-      toast({ title: 'Request sent', description: 'The founder confirms it from his desk — you get an email with the final details. The call happens on Discord.' })
+      toast({ title: 'Request sent', description: 'The team confirms it from the desk — you get an email with the final details. The call happens on Discord.' })
       load()
     } catch (e) {
       toast({ title: 'Could not send that', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
@@ -123,39 +128,97 @@ export default function SupportView() {
           <LifeBuoy className="h-7 w-7 text-brand" /> Support
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Real humans, real help. Chat now on Discord, or book a call with the founder himself.
+          Real humans, real help. Chat on Discord or WhatsApp, or book a call with the team.
         </p>
+      </div>
+
+      {/* Three ways to reach a human — no forms, no waiting rooms. */}
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-brand" /> Discord community
+              <Badge variant="outline" className="text-[9px] border-indigo-500/40 text-indigo-400">fastest</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Ask a question, get unstuck, swap wins with other hustlers. The team is in there too.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a href={DISCORD_INVITE} target="_blank" rel="noreferrer">
+                <Button size="sm" className="h-8 bg-indigo-500 hover:bg-indigo-400 text-white">
+                  <MessageCircle className="h-3.5 w-3.5 mr-1" /> Open
+                </Button>
+              </a>
+              <Button size="sm" variant="outline" className="h-8" onClick={copyInvite}>
+                <Copy className="h-3.5 w-3.5 mr-1" /> Copy invite
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-brand" /> Our Discord channel
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              The Business Hustle channel — updates, wins and the stuff we post for members.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a href={DISCORD_CHANNEL} target="_blank" rel="noreferrer">
+                <Button size="sm" className="h-8 bg-indigo-500 hover:bg-indigo-400 text-white">
+                  <MessageCircle className="h-3.5 w-3.5 mr-1" /> Open the channel
+                </Button>
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(DISCORD_CHANNEL)
+                    toast({ title: 'Channel link copied', description: DISCORD_CHANNEL })
+                  } catch {
+                    window.open(DISCORD_CHANNEL, '_blank', 'noopener')
+                  }
+                }}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1" /> Copy link
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-emerald-500" /> WhatsApp
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Message the team straight from your phone — the chat opens with your question half typed.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+                <Button size="sm" className="h-8 bg-emerald-500 hover:bg-emerald-400 text-white">
+                  <MessageCircle className="h-3.5 w-3.5 mr-1" /> Chat on WhatsApp
+                </Button>
+              </a>
+            </div>
+            <div className="text-xs text-muted-foreground font-mono">+27 74 481 5163</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <MessageCircle className="h-4 w-4 text-brand" /> Chat now on Discord
-            <Badge variant="outline" className="text-[9px] border-indigo-500/40 text-indigo-400">fastest</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            Ask a question, get unstuck, swap wins with other hustlers. The founder is in there too.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <a href={DISCORD_INVITE} target="_blank" rel="noreferrer">
-              <Button className="bg-indigo-500 hover:bg-indigo-400 text-white">
-                <MessageCircle className="h-4 w-4 mr-1" /> Open the Discord
-              </Button>
-            </a>
-            <Button variant="outline" onClick={copyInvite}>
-              <Copy className="h-4 w-4 mr-1" /> Copy invite link
-            </Button>
-          </div>
-          <div className="text-xs text-muted-foreground font-mono break-all">{DISCORD_INVITE}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-brand" /> Book a call with the founder
+            <CalendarClock className="h-4 w-4 text-brand" /> Book a call with the team
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -165,9 +228,9 @@ export default function SupportView() {
                 <CheckCircle2 className="h-4 w-4" /> Request sent
               </div>
               <p className="text-xs text-muted-foreground">
-                We pencilled you in for <span className="font-medium text-foreground">{requested}</span> (South African time). The founder confirms
-                it from his desk and you get an email with the final details. The call happens on Discord. Need it sooner?{' '}
-                <a href={DISCORD_INVITE} target="_blank" rel="noreferrer" className="text-brand underline">Ping the Discord</a>.
+                We pencilled you in for <span className="font-medium text-foreground">{requested}</span> (South African time). The team confirms
+                it from the desk and you get an email with the final details. The call happens on Discord. Need it sooner?{' '}
+                <a href={DISCORD_INVITE} target="_blank" rel="noreferrer" className="text-brand underline">Ping the Discord</a> or <a href={WHATSAPP_LINK} target="_blank" rel="noreferrer" className="text-brand underline">WhatsApp us</a>.
               </p>
               <Button size="sm" variant="outline" className="h-7" onClick={() => setRequested(null)}>Book another</Button>
             </div>
@@ -175,7 +238,7 @@ export default function SupportView() {
             <>
               <p className="text-sm text-muted-foreground">
                 A 30 minute one-on-one: your pipeline, your numbers, your next move. You pick the topic and the time —
-                the founder confirms it from his desk (you get an email the moment it is locked). Nothing is automatic.
+                the team confirms it from the desk (you get an email the moment it is locked). Nothing is automatic.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -194,7 +257,7 @@ export default function SupportView() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">Anything the founder should look at first?</label>
+                <label className="text-xs text-muted-foreground">Anything the team should look at first?</label>
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -226,7 +289,7 @@ export default function SupportView() {
             )}
             {meetings !== null && mine.length === 0 && (
               <div className="px-4 py-5 text-sm text-muted-foreground">
-                No support calls yet. Book one above — or just say hi on the Discord.
+                No support calls yet. Book one above — or just say hi on the Discord or WhatsApp.
               </div>
             )}
             {mine.map((m) => (
