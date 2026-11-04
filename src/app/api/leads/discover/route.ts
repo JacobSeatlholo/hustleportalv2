@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
+import { geminiGenerate, parseJsonLoose, googleGroundDrained } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
 import { openrouterGenerate } from '@/lib/openrouter'
 import { zaiGenerate, getUserZaiKey, markPlatformSearchOutcome, platformPocketDown } from '@/lib/zai'
@@ -854,7 +854,11 @@ export async function POST(req: NextRequest) {
     // 2) BACKUP, Gemini with Google Search grounding when the z.ai engine could
     //    not answer. If the z.ai cause is money or the key, say so once, gently:
     //    the user can act on that, and it explains why the scan ran on Google.
-    ai = await runGeminiScan()
+    //    Drain pocket: a walk that already ended drained this half hour is
+    //    skipped - the seconds go to the directory lane instead of a 429 storm.
+    ai = googleGroundDrained()
+      ? { ok: false, error: 'Google grounded walk skipped: the daily search allowance drained minutes ago (instance memory).' }
+      : await runGeminiScan()
     leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) {
       return aiSearchResponse(leads, 'gemini', zaiWhy('Google') || ai.notice)
@@ -862,8 +866,14 @@ export async function POST(req: NextRequest) {
   } else {
     // 1) PRIMARY, Gemini with Google Search grounding (the established engine,
     //    when its free tier is in the mood). Deadline trimmed to 22s so a second
-    //    engine still gets its turn inside the 60s function budget.
-    ai = await runGeminiScan()
+    //    engine still gets its turn inside the 60s function budget. Drain
+    //    pocket: a walk that already ended drained this half hour is skipped
+    //    entirely - a day bucket will not refill before the early-morning
+    //    reset, so the walk's only product is a 429 storm that starves the
+    //    directory lane of its seconds.
+    ai = googleGroundDrained()
+      ? { ok: false, error: 'Google grounded walk skipped: the daily search allowance drained minutes ago (instance memory).' }
+      : await runGeminiScan()
     let leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
     if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
 
@@ -899,13 +909,26 @@ export async function POST(req: NextRequest) {
   //    instead of being skipped by a stale elapsed time check while the scan
   //    had plenty of budget left.
   const osmRunway = t0 + 50_000 - Date.now()
+  // The directory is the NEVER-EMPTY answer: keyless, free, immune to every
+  // quota the AI walks can hit. Eight seconds of runway is enough for a real
+  // fetch (the deadline below keeps it inside its slice), so a drained or slow
+  // web walk can no longer starve it out of its turn - the scan ends with
+  // real businesses or an honest scarce note, not an allowance error.
   const osm =
-    osmRunway > 16_000
-      ? await searchOsmLeads(area, definition, cap, { deadlineAt: t0 + 50_000, lat, lng })
+    osmRunway > 8_000
+      ? await searchOsmLeads(area, definition, cap, {
+          deadlineAt: Math.min(t0 + 50_000, Date.now() + osmRunway),
+          lat,
+          lng,
+        })
       : { leads: [], note: 'skipped, the web search used the time budget' }
   if (osm.leads.length > 0) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
-    const dirNotice = zaiWhy('the real business directory')
+    const dirNotice =
+      zaiWhy('the real business directory') ||
+      (!ai.ok && /allowance|drained/i.test(ai.error)
+        ? 'Heads up: the live web search allowance is out for now, so this scan ran on the real business directory instead. Everything below is still a real, verifiable business.'
+        : undefined)
     // Map ranking (GLM plain generation) and the People Pass (Gemini grounded)
     // draw on DIFFERENT engines and different quotas, so they run side by
     // side: the scan answers in the same time, with names AND reasons.

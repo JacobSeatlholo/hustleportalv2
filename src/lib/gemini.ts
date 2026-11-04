@@ -155,6 +155,21 @@ function quotaZeroLimit(raw: string): boolean {
   return /"limit":\s*"?0"?|limit:\s*0\b/i.test(raw)
 }
 
+// GROUNDED-SEARCH DRAIN POCKET. A day bucket never refills before the
+// early-morning reset, so once a walk ends drained there is nothing to win
+// by walking again - only seconds to lose for the free directory lane that
+// runs downstream. Per-instance memory (same shelf life as the benches),
+// self-healing by expiry: half an hour after the mark, one honest walk
+// re-checks Google instead of trusting the memory forever.
+const GROUND_DRAIN_TTL_MS = 30 * 60_000
+let groundDrainedUntil = 0
+export function markGoogleGroundDrained(): void {
+  groundDrainedUntil = Date.now() + GROUND_DRAIN_TTL_MS
+}
+export function googleGroundDrained(): boolean {
+  return Date.now() < groundDrainedUntil
+}
+
 export async function getUserGeminiKey(userId: string): Promise<string | null> {
   const row = await db.userSetting.findUnique({
     where: { userId_key: { userId, key: 'GEMINI_API_KEY' } },
@@ -539,6 +554,16 @@ async function callGemini(
         : 'Heads up: the daily AI allowance was out, so the free backup engine answered this one. It refills in the early morning, South African time.'
       return { ok: true, text: or.text, notice }
     }
+  }
+
+  // Daily-drain pocket: when the walk's quota failures name a DAY bucket (not
+  // a self-healing minute wall, not a permanent zero tier), remember it so the
+  // next scans on this instance skip the doomed walk - a drained day does not
+  // refill until the reset, and re-paying the 429 storm only steals the
+  // seconds the keyless directory lane needs to still answer with real leads.
+  if (failures.some((f) => f.cls === 'QUOTA' && !/PerMinute/i.test(f.detail) && !quotaZeroLimit(f.detail))) {
+    markGoogleGroundDrained()
+    trace?.push('google grounded day buckets drained, walk marked dead for 30 minutes (this instance)')
   }
 
   return { ok: false, error: bestError(failures) }
