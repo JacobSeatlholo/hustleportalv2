@@ -3024,3 +3024,16 @@ Work Log:
 
 Stage Summary:
 - Task 153 delivered in-conversation per boss's ask ("type it up for me here"). No prod writes, no credentials involved. Landing-page build is a separate quote; starter lead drop (Kabir-pattern exec door) only on boss's explicit nod.
+
+Task ID: 154
+Agent: Super Z (main)
+Task: Boss: where does the $12 go so search + AI Co-Founder never fail - z.ai credits or DeepSeek, given Google is too expensive long-run?
+
+Work Log:
+- Engine map re-verified from source: discover route = geminiGenerate -> zaiGenerate fallback (plus member-BYO deepseekGenerate ranker path at line 299); reveal route = gemini -> zai fallback; AI Co-Founder advisor route = GEMINI ONLY, no zai fallback, 502 on failure (advisor/route.ts 109 lines, NO_KEY_MSG path); ai/plan, parse-appointment, google-profile = gemini only. zai.ts MODEL_PREFERENCE = glm-4.6, glm-5.3, glm-5.3-flash, glm-4.5-flash, glm-4-flash; FREE_MODELS set knows glm-4.5-flash/glm-4-flash. DeepSeek = member BYO-key directory ranker (deepseek.ts, DEEPSEEK_MODEL deepseek-chat), not the platform engine.
+- Today's prices pulled from web (Nov 2026): z.ai GLM-4.6-class $0.60/$2.20 per 1M + web_search tool ~$0.01/use; GLM-5.3-Flash $0.08/$0.25; GLM-4.7-Flash/GLM-4.5-Flash free; cached input ~80% off. DeepSeek V4.1-Flash off-peak $0.15/$0.60 (peak 01:00-10:00 UTC = 03:00-12:00 SAST weekdays = doubles exactly over SA morning usage), standalone Search API $0.75/1K successful requests, cache hits $0.003/1M.
+- Math: z.ai scan on glm-4.6 ~2.05c incl search -> $12 ~ 585 scans; Co-Founder turn (4K in/0.8K out, no search) ~0.42c -> $12 ~ 2,800 turns; glm-5.3-flash scan ~1.1c -> ~1,060 scans. DeepSeek flash scan IF built ~0.5c off-peak but needs search+synthesize orchestration code (its Search is a standalone API, not an in-call tool) and peak doubling hits SA business hours.
+- Verdict delivered: $12 -> z.ai. Reasons: (1) scan+reveal fallback lanes already speak z.ai, credits work the moment they land, zero code; (2) search grounding rides inside one z.ai call vs DeepSeek orchestration build; (3) never-fail = lanes not vendors - Google free tier absorbs where it can, funded z.ai absorbs the rest; (4) DeepSeek's in-product role is already defined (member BYO ranker). GAP FOUND: advisor route has no z.ai fallback - small patch (mirror reveal/route.ts pattern) makes the Co-Founder two-lane; queued to join the parked deploy batch. DeepSeek revisited only as a bulk off-peak lane if scans ever exceed ~15K/month.
+
+Stage Summary:
+- Task 154 answered in-conversation: fund z.ai, skip DeepSeek for now, patch advisor fallback before the next deploy so all three user-facing AI surfaces have two lanes. No prod writes this window; no keys or passwords touched.
