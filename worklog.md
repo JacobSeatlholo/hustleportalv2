@@ -2996,3 +2996,18 @@ Work Log:
 
 Stage Summary:
 - Unblock is now one paste away: boss sends his exec account email + that same password (one line), plan run proves the seat and curates the picks in read-only mode, commit finishes project + 10 leads + read-back + the authorized email in about two minutes. Password rotation recommended after the run.
+
+Task ID: 152 (continued - DELIVERED)
+Agent: Super Z (main)
+Task: Boss supplied his own exec seat credentials (ceo@businesshustle.co.za). Deliver Avenzara to Kabir.
+
+Work Log:
+- Boss's personal exec seat opened every door (roster, lens, import, assign, client read-back, campaign, mail archive). Plan run: Kabir ACTIVE, HUSTLER plan (the only paying member), wallet R179.00, 11 leads in 1 project, no prior avenzara-live email. Pool lens: 25 unique outdoor faces, 22 treg-verified emails, 7 phones, 23 websites, 0 social faces (census).
+- Quality pass before commit (probe_faces script printed full why/tags per face): REJECTED five faces the score loved - Live Trekking (Italian agency, .it email, Italian reply, +39 phone), Flamingo Tours (Danish, flamingotours.dk, WTM London reply), Safaris & Travel (Italian GSA, "Buongiorno Frank"), SI Séminaire International (French, "Bonjour Franck"), Sunrise Tours and Travel (a CUSTOMER asking for SA itineraries, not a business), wild vision adventures (overseas reply, unclear SA base). Every delivered face is an SA-operating outdoor/tour/events business.
+- Structure fix: the import anchor must not repeat among assign picks (company would land twice - assign dedupes by company normKey). Cape Town Day Tours (verified email + phone + web, .co.za, tour operator since 2011) became the anchor OUTSIDE the 9 picks; executor guards updated (9-or-10 picks, anchor-not-in-picks die, total === 10, all delivered companies visible in rows).
+- DELIVERED: project "Avenzara" id=cmw1rvjyd000dl308jkl7av0k created on Kabir's account (team created, isDefault untouched). 10 leads: Cape Town Day Tours (anchor, CSV), Wanderer Tours & Travel, Event Affairs, Lelobu, Matthew Greeff Safaris, Go2Adventures, CK Afrika, NB Travel & Tours, Liphinaroyalprivatetours (9 via assign, source TEAM, stage NEW, rich pitch-starter notes), Into Tours (phone + website channel). Read-back triple-verified: project present, counts.leads=10, every company visible in pipeline rows.
+- Email SENT and archive-confirmed: "Your Avenzara project is live: 10 hand-picked outdoor leads" to wealthykabir@gmail.com, campaign=avenzara-live, logId=cmw1rvknq000jl308c0h3qegl, 2026-11-04T07:05:33Z, open-tracking pixel bound.
+- Credentials: boss's seat password rode OPS_EMAIL/OPS_PASS env only for five login calls across plan/probe/commit, never written to disk or worklog. Rotation recommended.
+
+Stage Summary:
+- Task 152 CLOSED. The only paying member has a live Avenzara project with 10 verified, SA-relevant outdoor leads and the notification email confirmed SENT. Executors remain: avenzara_exec.mjs (idempotent - rerun stops at the SENT check), avenzara_probe_faces.mjs (read-only quality probe). Awaited: password rotation on the boss's seat.
