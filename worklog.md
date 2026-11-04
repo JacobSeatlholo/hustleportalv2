@@ -3063,3 +3063,16 @@ Work Log:
 
 Stage Summary:
 - Never-fail batch is code-complete and parked for deploy (still needs the deploy key): all three user-facing AI surfaces (Lead Finder scans, People Pass reveals, AI Co-Founder) now have two independent doors, the prepaid bundle burns before cash, and a dry pocket costs five minutes of skipped knocks instead of a dead walk in every scan.
+
+Task ID: 157
+Agent: Super Z (main)
+Task: Boss asked (1) is the lead thing fixed, (2) nudge users to fill in their details on the lead form, (3) model the system past December on a $6 balance.
+
+Work Log:
+- Confirmed on disk: never-fail batch (bd8ac77) verified in source - advisor Door 2 with history + 55s guard, MODEL_PREFERENCE flash-first, platform pocket pre-flight in discover. Parked, waiting on deploy key; prod still runs origin/main without it.
+- PATCH 4 (profile nudge, committed 17e6072, 3 files): the discover route refuses scans that have no description AND no saved profile - now the member hears about it BEFORE burning a tap. auth/me session payload carries per-project website + profileReady; DiscoverDialog shows a dismissible amber tip ("Sharper leads start with your details") with a one-tap jump to Profile, and a saved profile website now prefills the scan's website box (typed-this-session wins), so members who filled their profile get grounded scans without retyping their URL. Fires only when the scan would run blind; steps aside the moment a description or profile exists.
+- Past-December model (scripts/dec_runway_model.py, all numbers computed): $6 = 600 z.ai scans (search fee is the only cash cost while the bundle covers tokens; 1c/search + 0.134c flash tokens = 1.13c/scan full price). Dec 1 with $6, no top-ups, 90 scans/day at the standing 75/25 Google/z.ai split: cash dry Dec 28; 100% z.ai share dry Dec 7; 50% Dec 14. After dry: no outage - overflow falls to the free keyless directory lane, Google free lane keeps carrying primaries, and the Co-Founder stays two-lane until Feb 4 because the GLM fallback burns bundle tokens, not cash. Feb 4 is the real cliff: bundle expires (72% unused if funded, ~92% if not) and $0 cash leaves the z.ai lane off - system degrades to Gemini + directory, advisor back to single-lane.
+- Steady state from Feb 5 (PAYG flash + search): trial $7.65/mo = 0.67 Operators, light launch 300 scans/day $25.50/mo = 2.24 Operators, growth 1200/day $102/mo = 9 Operators. $5 top-ups on each $2 Balance Alert (first would fire ~Nov 22) keep the full two-engine posture alive indefinitely at trial scale for ~$5-10/mo; the top-up sim served 2,640 scans on $26 with zero degraded scans.
+
+Stage Summary:
+- Deploy batch now 17 commits ahead: never-fail AI + profile nudge parked, deploy key still the only blocker. Past-December verdict: $6 alone degrades gracefully after ~Dec 28 but never hard-fails; one Operator sub or one $5 top-up restores full posture. Standing items unchanged: exec seat password rotation, burger client account-health check on signup.
