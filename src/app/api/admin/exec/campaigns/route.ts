@@ -5,6 +5,7 @@ import { normalizeCampaignFrom, isSesConfigured } from '@/lib/mailer'
 import {
   readCampaignStates, writeCampaignState, unsubscribeUrl, type CampaignState,
 } from '@/lib/campaignqueue'
+import { systemBlastAudience, fillMergeTags } from '@/lib/audience'
 
 /**
  * Campaign queues, the bulk path for outreach at real volume.
@@ -16,6 +17,14 @@ import {
  *
  * Rows reuse EmailLog (status QUEUED | SENT | FAILED | BOUNCED | SKIPPED) so
  * the read receipts, open tracking and pipeline moves all keep working.
+ *
+ * Audience: `leads` (pipeline ids, same access wall as every lead action),
+ * `emails` (raw pasted addresses) and `audience: 'system'` (every real
+ * account on the platform under the audience law in src/lib/audience.ts:
+ * the kloofstreet.online crew, internal seats, suspended and suppressed
+ * addresses never enter; paying subscribers stay out unless skipPaying is
+ * false). `personalize: true` fills {name} and {email} per recipient from
+ * their account, so one draft greets every person by their own name.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -32,7 +41,10 @@ export async function POST(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  let payload: { campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string; leads?: string[]; emails?: string[] }
+  let payload: {
+    campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string
+    leads?: string[]; emails?: string[]; audience?: string; skipPaying?: boolean; personalize?: boolean
+  }
   try {
     payload = await req.json()
   } catch {
@@ -90,6 +102,14 @@ export async function POST(req: NextRequest) {
     }
     if (!wanted.has(email)) wanted.set(email, { email, leadId: null })
   }
+  // The whole platform, one tap: the audience law lives in one lib, the same
+  // law the preview readout shows, so the counted number is the queued number.
+  if (payload.audience === 'system') {
+    const { rows } = await systemBlastAudience({ skipPaying: payload.skipPaying !== false })
+    for (const r of rows) {
+      if (!wanted.has(r.email)) wanted.set(r.email, { email: r.email, leadId: null })
+    }
+  }
 
   if (wanted.size === 0) {
     return NextResponse.json({ error: 'No valid recipients. Unlock contacts in Leads first, or paste addresses.' }, { status: 400 })
@@ -122,17 +142,37 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // One draft, greeted per person: when the draft carries {name} / {email},
+  // every queued row gets its own filled copy. The merge resolves from the
+  // account itself (first name, then business name), unknown addresses fall
+  // back to a plain honest "there" so nothing reads like a broken template.
+  const personal = payload.personalize === true
+  const namesByEmail = new Map<string, string>()
+  if (personal && toQueue.length > 0) {
+    const accounts = await db.user.findMany({
+      where: { email: { in: toQueue.map((r) => r.email) } },
+      select: { email: true, name: true, businessName: true },
+    })
+    for (const u of accounts) {
+      const first = (u.name || '').trim().split(/\s+/)[0]
+      namesByEmail.set(u.email.toLowerCase(), first || (u.businessName || '').trim() || 'there')
+    }
+  }
+
   await db.emailLog.createMany({
-    data: toQueue.map((r) => ({
-      userId: gate.me.id,
-      toEmail: r.email,
-      subject: subject.slice(0, 180),
-      body: body.slice(0, 4000),
-      status: 'QUEUED',
-      provider: 'PLATFORM',
-      campaign: tag,
-      leadId: r.leadId,
-    })),
+    data: toQueue.map((r) => {
+      const nm = namesByEmail.get(r.email) || 'there'
+      return {
+        userId: gate.me.id,
+        toEmail: r.email,
+        subject: (personal ? fillMergeTags(subject, nm, r.email) : subject).slice(0, 180),
+        body: (personal ? fillMergeTags(body, nm, r.email) : body).slice(0, 4000),
+        status: 'QUEUED',
+        provider: 'PLATFORM',
+        campaign: tag,
+        leadId: r.leadId,
+      }
+    }),
   })
 
   // Queues are born PAUSED. The draft gate lives in the structure of the thing:
@@ -149,6 +189,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     campaign: tag,
     queued: toQueue.length,
+    personalized: personal && toQueue.length > 0,
     skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
     skippedDuplicate: existingRows.length,
     invalid,

@@ -45,6 +45,15 @@ interface MailStatus {
   gmailConfigured: boolean
 }
 
+/** The "everyone on the system" roster readout, computed by src/lib/audience.ts. */
+interface SystemAudienceReadout {
+  total: number
+  eligible: number
+  neverLoggedIn: number
+  excluded: { kloofstreet: number; internal: number; suspended: number; suppressed: number; paying: number }
+  sample: { name: string; email: string } | null
+}
+
 /** Live airtime quote from /api/emails/status — what the next send costs RIGHT NOW. */
 interface SpendQuote {
   action: string
@@ -102,6 +111,12 @@ export default function MailView() {
   const [audienceSearch, setAudienceSearch] = useState('')
   const [pickIds, setPickIds] = useState<Set<string>>(new Set())
   const [paste, setPaste] = useState('')
+  // "Everyone on the system": the honest roster readout, fetched fresh every
+  // time the composer opens. The number shown is the number that queues, one
+  // law on both sides (src/lib/audience.ts).
+  const [systemAud, setSystemAud] = useState<SystemAudienceReadout | null>(null)
+  const [systemPick, setSystemPick] = useState(false)
+  const [systemIncludePaying, setSystemIncludePaying] = useState(false)
   const [cName, setCName] = useState('')
   const [cFrom, setCFrom] = useState('BlackBiz <blackbiz@hustleportal.online>')
   const [cSubject, setCSubject] = useState('')
@@ -126,6 +141,17 @@ export default function MailView() {
   }, [isAdmin])
 
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
+
+  // The roster readout rides along whenever the composer opens, so the boss
+  // always stages against today's numbers, never a stale count.
+  useEffect(() => {
+    if (!composerOpen) return
+    let dead = false
+    api<{ segments: SystemAudienceReadout }>('/api/admin/exec/campaigns/audience')
+      .then((res) => { if (!dead) setSystemAud(res.segments) })
+      .catch(() => { if (!dead) setSystemAud(null) })
+    return () => { dead = true }
+  }, [composerOpen])
 
   // While a queue is ACTIVE the open screen taps the engine every minute.
   // Closing the tab costs nothing: the cron heartbeat and the database clock
@@ -194,7 +220,14 @@ export default function MailView() {
 
   // ---- queue composer ----
   const pastedEmails = paste.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)
-  const pickCount = pickIds.size + pastedEmails.length
+  const systemCount = systemPick && systemAud
+    ? systemAud.eligible + (systemIncludePaying ? systemAud.excluded.paying : 0)
+    : 0
+  const pickCount = pickIds.size + pastedEmails.length + systemCount
+  const personalizable = /\{name\}|\{email\}/.test(cBody) || /\{name\}/.test(cSubject)
+  const sampleFill = (t: string) => t
+    .replace(/\{name\}/g, systemAud?.sample?.name || 'Thabo')
+    .replace(/\{email\}/g, systemAud?.sample?.email || 'you@example.co.za')
   const audienceLeads = leads
     .filter((l) => {
       const q = audienceSearch.trim().toLowerCase()
@@ -214,6 +247,7 @@ export default function MailView() {
 
   function resetComposer() {
     setComposerStep('audience'); setPickIds(new Set()); setPaste(''); setAudienceSearch('')
+    setSystemPick(false); setSystemIncludePaying(false)
     setCName(''); setCSubject(''); setCBody(''); setCPerHour('45')
     setCFrom('BlackBiz <blackbiz@hustleportal.online>'); setCProvider('RESEND')
   }
@@ -242,7 +276,7 @@ export default function MailView() {
     }
     setCreating(true)
     try {
-      const res = await api<{ campaign: string; queued: number; skippedSuppressed: number; skippedDuplicate: number; invalid: string[] }>('/api/admin/exec/campaigns', {
+      const res = await api<{ campaign: string; queued: number; personalized?: boolean; skippedSuppressed: number; skippedDuplicate: number; invalid: string[] }>('/api/admin/exec/campaigns', {
         method: 'POST',
         body: JSON.stringify({
           campaign: cName.trim() || cSubject.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40),
@@ -253,9 +287,12 @@ export default function MailView() {
           provider: cProvider,
           leads: [...pickIds],
           emails: pastedEmails,
+          ...(systemPick ? { audience: 'system', skipPaying: !systemIncludePaying } : {}),
+          personalize: personalizable || undefined,
         }),
       })
       const bits = [`${res.queued} contacts queued`]
+      if (res.personalized) bits.push('each one greeted by name')
       if (res.skippedDuplicate) bits.push(`${res.skippedDuplicate} already in this campaign`)
       if (res.skippedSuppressed) bits.push(`${res.skippedSuppressed} unsubscribed or bounced, refused`)
       if (res.invalid.length) bits.push(`${res.invalid.length} invalid address${res.invalid.length === 1 ? '' : 'es'} dropped`)
@@ -952,13 +989,49 @@ export default function MailView() {
             <DialogTitle className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-brand" /> New campaign</DialogTitle>
             <DialogDescription>
               {composerStep === 'audience'
-                ? 'Pick the audience. Contacts come from your pipeline, or paste any list.'
+                ? 'Pick the audience. The whole platform, your pipeline contacts, or paste any list.'
                 : 'Write the message and set the pace. Review the draft before it queues.'}
             </DialogDescription>
           </DialogHeader>
 
           {composerStep === 'audience' ? (
             <div className="space-y-3">
+              <label
+                className={`rounded-lg border p-3 flex items-start gap-2.5 cursor-pointer transition ${systemPick ? 'border-[var(--brand)] bg-[var(--brand)]/5' : 'hover:bg-muted/40'}`}
+              >
+                <input
+                  type="checkbox"
+                  className="accent-[var(--brand)] h-4 w-4 mt-0.5"
+                  checked={systemPick}
+                  onChange={(e) => setSystemPick(e.target.checked)}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium">Everyone on the system</span>
+                  {systemAud ? (
+                    <span className="block text-[11px] text-muted-foreground leading-relaxed">
+                      {systemAud.eligible} accounts ready for mail · {systemAud.neverLoggedIn} never signed in yet
+                      {systemAud.excluded.kloofstreet > 0 ? ` · ${systemAud.excluded.kloofstreet} on kloofstreet.online skipped, already mailed` : ''}
+                      {systemAud.excluded.paying > 0 ? ` · ${systemAud.excluded.paying} already paying` : ''}
+                      {systemAud.excluded.suspended + systemAud.excluded.suppressed + systemAud.excluded.internal > 0
+                        ? ` · ${systemAud.excluded.suspended + systemAud.excluded.suppressed + systemAud.excluded.internal} paused, unsubscribed or internal, refused`
+                        : ''}
+                    </span>
+                  ) : (
+                    <span className="block text-[11px] text-muted-foreground">Counting the roster…</span>
+                  )}
+                </span>
+              </label>
+              {systemPick && systemAud && systemAud.excluded.paying > 0 && (
+                <label className="flex items-center gap-2 pl-7 -mt-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-[var(--brand)] h-3.5 w-3.5"
+                    checked={systemIncludePaying}
+                    onChange={(e) => setSystemIncludePaying(e.target.checked)}
+                  />
+                  Include the {systemAud.excluded.paying} already paying too
+                </label>
+              )}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1059,6 +1132,7 @@ export default function MailView() {
                 <Label htmlFor="c-body">Message</Label>
                 <Textarea id="c-body" rows={8} value={cBody} onChange={(e) => setCBody(e.target.value)} placeholder="Write it the way you speak. Short lines win." />
                 <p className="text-[11px] text-muted-foreground">A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.</p>
+                <p className="text-[11px] text-muted-foreground">Type {'{name}'} in the greeting and {'{email}'} where their address goes. Every email is filled per person before it sends.</p>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
                 <p className="font-medium text-[13px]">Before it queues</p>
@@ -1068,9 +1142,9 @@ export default function MailView() {
               </div>
               {cSubject.trim() && cBody.trim() && (
                 <div className="rounded-lg border p-3">
-                  <p className="text-[11px] text-muted-foreground mb-1">Draft preview</p>
-                  <p className="text-[13px] font-medium">{cSubject}</p>
-                  <p className="text-xs whitespace-pre-wrap mt-1 max-h-36 overflow-y-auto hp-scroll">{cBody}</p>
+                  <p className="text-[11px] text-muted-foreground mb-1">Draft preview{personalizable ? ' · names filled with a sample account' : ''}</p>
+                  <p className="text-[13px] font-medium">{personalizable ? sampleFill(cSubject) : cSubject}</p>
+                  <p className="text-xs whitespace-pre-wrap mt-1 max-h-36 overflow-y-auto hp-scroll">{personalizable ? sampleFill(cBody) : cBody}</p>
                 </div>
               )}
               <div className="flex gap-2">
