@@ -397,11 +397,24 @@ export async function zaiGenerate(
         }
         opts.trace?.push(`${ep.id}/${model} → ${res.status} (${Date.now() - at}ms)`)
         const data = (await res.json()) as {
-          choices?: { message?: { content?: string } }[]
+          choices?: { message?: { content?: string; reasoning_content?: string }; finish_reason?: string }[]
           model?: string
         }
-        const text = data.choices?.[0]?.message?.content?.trim() || ''
+        const choice = data.choices?.[0]
+        const text = choice?.message?.content?.trim() || ''
         if (!text) {
+          // A 200 with no content is a budget artifact more often than a model
+          // fault: the rung spent its whole output cap on search rounds and
+          // thinking and never reached the answer (finish_reason "length").
+          // Say so in the trace, because an unexplained dark rung sends the
+          // next diagnosis hunting in the wrong place.
+          const why =
+            choice?.finish_reason === 'length'
+              ? 'hit its output cap before answering'
+              : 'returned no content'
+          opts.trace?.push(
+            `${ep.id}/${model} → empty answer, ${why}${choice?.message?.reasoning_content ? ' (thinking present)' : ''}`
+          )
           failures.push({ error: 'GLM returned an empty answer.', reason: 'EMPTY' })
           continue
         }
@@ -414,7 +427,11 @@ export async function zaiGenerate(
         if (timedOut) {
           // A hung model with the search tool attached is a known dead rung:
           // bench it for search walks so the next scan does not pay its wait.
-          if (opts.search) searchModelBench.set(model, Date.now() + SEARCH_BENCH_HANG_MS)
+          // But only when the rung burned its OWN cap - an abort by the walk
+          // clock is the deadline doing its job, and benching an innocent
+          // rung for that would sideline the paid step-up on busy afternoons.
+          if (opts.search && remaining >= attemptCap)
+            searchModelBench.set(model, Date.now() + SEARCH_BENCH_HANG_MS)
           failures.push({ error: 'GLM took too long to answer. One more try is usually quicker.', reason: 'BUSY' })
           continue
         }

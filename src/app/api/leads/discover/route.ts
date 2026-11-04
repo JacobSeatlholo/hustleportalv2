@@ -766,9 +766,13 @@ export async function POST(req: NextRequest) {
           ...buildSearch(),
           search: true,
           json: true,
-          // Small nets get small reports: a tighter request fits under the
-          // token ceilings that fresh GLM accounts start with.
-          maxTokens: cap <= 3 ? 900 : 1600,
+          // Output room to finish the job: a grounded scan spends completion
+          // tokens on search rounds BEFORE the JSON answer, and a tight cap
+          // truncates the rung mid work with an empty answer (the live walk
+          // proved it: flash 200 at 19s, zero content, at a 900 cap). The
+          // funded bundle prices these tokens at a rounding error; an empty
+          // rung costs the whole scan.
+          maxTokens: cap <= 3 ? 2048 : 3072,
           // Two doors plus a REAL 15 to 25 second grounded generation need
           // more runway than a single door ever did.
           timeoutMs: Math.min(34_000, remaining),
