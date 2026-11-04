@@ -19,11 +19,18 @@ import { sehOwnerId } from '@/lib/statements'
 //   * Synced lines carry sourceRef = "invoice:<id>" / "invoice:<id>:pay".
 //     Re-syncing UPSERTS by that ref: an edited invoice updates its line, it
 //     never duplicates. Manual lines (sourceRef null) are never touched.
-//   * The moment the boss edits a synced line by hand, the route clears its
-//     sourceRef — his correction wins and the line stops following the record.
-//   * Invoices that predate the sync (created before 2026-11-05) are NEVER
-//     auto-booked: their figures may already sit on the book by hand, and a
-//     doubled charge on a client statement is a lie we refuse to print.
+//   * The moment the boss edits a synced line by hand, the route turns its
+//     sourceRef into "hand:invoice:<id>" — his correction wins, the line
+//     stops following the record, and the sync sees the hand marker and
+//     never re-books that invoice anywhere on his book (a fresh synced line
+//     beside his correction would double the charge).
+//   * Invoices that predate the sync (created before 2026-11-04 00:00 UTC —
+//     everything from before the sync shipped) are NEVER auto-booked: their
+//     figures may already sit on the book by hand, and a doubled charge on a
+//     client statement is a lie we refuse to print.
+//     (Naively midnight of Nov 5 would have been IN THE FUTURE at deploy —
+//     every live invoice would read as "predates". Midnight Nov 4 UTC is the
+//     honest line: older than today = hand territory.)
 
 interface InvoiceLike {
   id: string
@@ -39,7 +46,7 @@ interface InvoiceLike {
   createdAt: Date
 }
 
-const SYNC_FROM = new Date('2026-11-05T00:00:00.000Z')
+const SYNC_FROM = new Date('2026-11-04T00:00:00.000Z')
 const BOOKABLE = ['SENT', 'OVERDUE', 'PAID']
 
 function norm(s: string): string {
@@ -119,40 +126,77 @@ export async function syncInvoiceToStatement(invoice: InvoiceLike): Promise<stri
 
     // Client renamed → the sync may now match a DIFFERENT account. Move means
     // move: clear this invoice's synced lines off any other account first, so
-    // the book never carries the same invoice twice.
+    // the book never carries the same invoice twice. Hand-corrected lines
+    // ("hand:invoice:...") are the boss's property — they never move, they
+    // never get deleted by the machine.
     await db.statementEntry.deleteMany({
       where: { sourceRef: { in: refs }, account: { ownerId: owner }, accountId: { not: accountId } },
     })
 
-    await upsertLine(accountId, refs[0], {
-      date: invoice.issuedAt,
-      product: firstItemDescription(invoice.items),
-      remarks: `Invoice ${invoice.number}`,
-      quantity: '1',
-      amount: Math.round(invoice.total * 100) / 100,
-      kind: 'CHARGE',
+    // Manual lock: if the boss took this invoice's line over by hand (the
+    // hand marker lives on any of his accounts), the record must not book it
+    // again — not here, not anywhere. His corrected line IS the record.
+    const handCharge = await db.statementEntry.findFirst({
+      where: { sourceRef: `hand:invoice:${invoice.id}`, account: { ownerId: owner } },
+      select: { id: true },
     })
-
-    let payNote = ''
-    if (invoice.status === 'PAID') {
-      await upsertLine(accountId, `invoice:${invoice.id}:pay`, {
-        date: invoice.paidAt || new Date(),
-        product: null,
-        remarks: `Payment received, thank you (${invoice.number})`,
-        quantity: null,
-        amount: -(Math.round(invoice.total * 100) / 100),
-        kind: 'PAYMENT',
+    let bookedCharge = false
+    if (!handCharge) {
+      await upsertLine(accountId, refs[0], {
+        date: invoice.issuedAt,
+        product: firstItemDescription(invoice.items),
+        remarks: `Invoice ${invoice.number}`,
+        quantity: '1',
+        amount: Math.round(invoice.total * 100) / 100,
+        kind: 'CHARGE',
       })
-      payNote = ' and its payment line'
+      bookedCharge = true
     }
-    return `Booked on statement ${refNo}${payNote} — it follows this invoice automatically.`
+
+    let bookedPay = false
+    if (invoice.status === 'PAID') {
+      const handPay = await db.statementEntry.findFirst({
+        where: { sourceRef: `hand:invoice:${invoice.id}:pay`, account: { ownerId: owner } },
+        select: { id: true },
+      })
+      if (!handPay) {
+        await upsertLine(accountId, `invoice:${invoice.id}:pay`, {
+          date: invoice.paidAt || new Date(),
+          product: null,
+          remarks: `Payment received, thank you (${invoice.number})`,
+          quantity: null,
+          amount: -(Math.round(invoice.total * 100) / 100),
+          kind: 'PAYMENT',
+        })
+        bookedPay = true
+      }
+    }
+
+    // The note must tell the truth about what actually happened on the book.
+    if (bookedCharge && bookedPay) {
+      return `Booked on statement ${refNo} and its payment line — it follows this invoice automatically.`
+    }
+    if (bookedCharge) {
+      return `Booked on statement ${refNo} — it follows this invoice automatically.`
+    }
+    if (bookedPay) {
+      return `Payment line booked on statement ${refNo} — the charge line stays as you corrected it by hand.`
+    }
+    if (handCharge) {
+      return `Statement sync: your hand-corrected line for Invoice ${invoice.number} stands — the record won't re-book it.`
+    }
+    return null
   } catch (e) {
     console.error('[statementSync] skipped:', e instanceof Error ? e.message : e)
     return null
   }
 }
 
-/** Remove every synced line an invoice owned. Never throws. */
+/**
+ * Remove every synced line an invoice owned. Never throws. Hand-corrected
+ * lines ("hand:invoice:...") are NOT touched — the boss's corrections are
+ * his own records, not the invoice's shadows; only he removes them.
+ */
 export async function desyncInvoice(userId: string, invoiceId: string): Promise<void> {
   try {
     const owner = await sehOwnerId()

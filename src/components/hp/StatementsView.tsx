@@ -628,7 +628,7 @@ export default function StatementsView() {
                     <td className={`px-3 py-2 text-right font-medium ${e.amount < 0 ? 'text-emerald-600' : ''}`}>{fmtPlain(e.amount)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {e.kind}
-                      {e.sourceRef ? <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-muted-foreground" title="This line follows its invoice — edit it to take it over."><Link2 className="h-3 w-3" />linked</span> : null}
+                      {e.sourceRef?.startsWith('invoice:') ? <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-muted-foreground" title="This line follows its invoice — edit it to take it over."><Link2 className="h-3 w-3" />linked</span> : null}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button onClick={() => (editingId === e.id ? cancelEdit() : startEdit(e))} disabled={busy} className="mr-2 text-muted-foreground hover:text-foreground" aria-label="Edit line">

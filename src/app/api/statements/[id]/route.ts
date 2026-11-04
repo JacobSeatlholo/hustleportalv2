@@ -162,9 +162,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to change.' }, { status: 400 })
 
   // Manual lock: the moment the boss edits a synced line, it stops following
-  // the record. His correction is the truth now; a re-sync must not undo it.
-  const wasLinked = !!entry.sourceRef
-  if (wasLinked) data.sourceRef = null
+  // the record. His correction is the truth now. The ref is kept as
+  // "hand:<old ref>" (never wiped) so the sync can SEE the line was taken
+  // over and never re-books that invoice on top of his correction — his
+  // edit would otherwise be joined by a fresh synced line: a doubled charge
+  // on a client statement, the one lie this book must never print.
+  const wasLinked = !!entry.sourceRef && !entry.sourceRef.startsWith('hand:')
+  if (wasLinked) data.sourceRef = `hand:${entry.sourceRef}`
 
   const updated = await db.statementEntry.update({ where: { id: entry.id }, data })
   return NextResponse.json({ ok: true, id: updated.id, unlinked: wasLinked })
