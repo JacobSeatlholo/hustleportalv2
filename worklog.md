@@ -3037,3 +3037,15 @@ Work Log:
 
 Stage Summary:
 - Task 154 answered in-conversation: fund z.ai, skip DeepSeek for now, patch advisor fallback before the next deploy so all three user-facing AI surfaces have two lanes. No prod writes this window; no keys or passwords touched.
+
+Task ID: 155
+Agent: Super Z (main)
+Task: Boss loaded z.ai funding and asked for confirmation (screenshot: cash $6, bonus $0, auto-recharge OFF, balance alert OFF; Flash 100M bundle already owned from prior purchase).
+
+Work Log:
+- Runway computed in code: $6 cash = ~600 z.ai-lane searches at ~$0.01/search (cash pays search + any glm-4.6 calls; bundle pays flash tokens, 7,400 scans' worth, untouched by cash). Scenarios at 90 scans/day: Google free tier covers most of 2,700/mo, ~25% overflow ~ $7/mo cash burn, worst-case all-z.ai $27/mo; 600 z.ai scans = 6.7 days of full z.ai coverage if Gemini ever went fully dark.
+- Advice given: turn Balance Alert ON (~$2 threshold) since auto-recharge is off and a dry cash balance kills the z.ai search lane (tokens alone cannot run scans); auto-recharge OFF matches the portal's own manual-renewal philosophy; $6 is a sound start because Google's free lane absorbs the bulk at trial volume.
+- Standing pending items unchanged: deploy batch (Co-Founder z.ai fallback patch, optional Flash-first MODEL_PREFERENCE order, Task 151 funding-aware pre-flight which also stops wasted search fees on dead walks) waiting on deploy key.
+
+Stage Summary:
+- Funding state recorded: z.ai account holds $6 cash + GLM-5.3-Flash 100M bundle (3-month validity). Trial-scale posture: Google free lane primary, z.ai funded fallback. No prod writes; no credentials in this window.
