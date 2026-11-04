@@ -177,7 +177,13 @@ function searchTool(endpoint: ZaiEndpointId) {
       type: 'web_search',
       web_search:
         endpoint === 'z.ai'
-          ? { enable: true, search_engine: 'search-prime', search_result: true, count: 10, content_size: 'medium' }
+          ? // The international door documents STRING values for these flags
+            // (its own samples send "True" and "5"); a boolean true can read as
+            // an unknown value and switch the tool OFF silently - the model
+            // then sees zero results and honestly answers with no leads, no
+            // error anywhere. The live empty-answer scans are exactly that
+            // shape, so the payload now matches the door's documented form.
+            { enable: 'True', search_engine: 'search-prime', search_result: 'True', count: '10', content_size: 'high' }
           : { enable: true, count: 10 },
     },
   ]
@@ -442,6 +448,18 @@ export async function zaiGenerate(
         }
         const choice = data.choices?.[0]
         const text = choice?.message?.content?.trim() || ''
+        // Did the door actually search? With search_result on, the answer body
+        // carries the result list beside choices; its size (or absence) is the
+        // truth about whether the tool ran - an honest {"leads":[]} cannot
+        // tell that story by itself, and a silently-off tool produces exactly
+        // that shape.
+        const ws = (data as { web_search?: unknown[] }).web_search
+        if (opts.search) {
+          const first = Array.isArray(ws) && ws.length ? ((ws[0] as { title?: string })?.title || '').slice(0, 80) : ''
+          opts.trace?.push(
+            `door search results: ${Array.isArray(ws) ? ws.length : 'no web_search field in answer'}${first ? ` (first: ${first})` : ''}`
+          )
+        }
         if (!text) {
           // A 200 with no content is a budget artifact more often than a model
           // fault: the rung spent its whole output cap on search rounds and
