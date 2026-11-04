@@ -48,6 +48,8 @@ export interface HpProjectRef {
   name: string
   isDefault: boolean
   counts: { id: string; leads: number; clients: number; invoices: number }
+  website?: string | null // saved business profile website, prefills the Lead Finder's website box
+  profileReady?: boolean // website, offerings or valueProp saved, scans ground on it (gates the fill-in tip)
 }
 
 export interface ProjectFull {

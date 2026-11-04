@@ -40,6 +40,14 @@ export async function GET() {
         name: p.name,
         isDefault: p.isDefault,
         counts: p.counts,
+        // The Lead Finder reads these two: website prefills its website box,
+        // profileReady decides whether to show the "fill in your details"
+        // tip (a scan with no description AND no saved profile runs blind).
+        // The member's own workspace data, back to their own session.
+        website: p.website,
+        profileReady: Boolean(
+          String(p.website || '').trim() || String(p.offerings || '').trim() || String(p.valueProp || '').trim()
+        ),
       })),
     })
   } catch (e) {

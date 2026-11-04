@@ -25,7 +25,7 @@ import { consumePendingLead } from './leadBus'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
-  ThumbsUp, ThumbsDown, RotateCcw, Pencil,
+  ThumbsUp, ThumbsDown, RotateCcw, Pencil, Lightbulb,
 } from 'lucide-react'
 
 // Where a lead came from, in words a member understands. Internal tooling
@@ -585,7 +585,7 @@ const DISCOVER_STEPS = [
 ]
 
 function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
-  const { session, activeProjectId } = useHp()
+  const { session, activeProjectId, setView } = useHp()
   const { toast } = useToast()
   const { paid } = usePlan()
   const [definition, setDefinition] = useState('')
@@ -614,6 +614,11 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
   // The dismiss flow: which card is showing its reason chips right now.
   const [dismissFor, setDismissFor] = useState<string | null>(null)
+  // Profile nudge: one gentle tip when BOTH the hunt description and the
+  // workspace's saved business profile are empty, the scan would run blind
+  // (or refuse at the server). Dismiss is per open, not per lifetime: the
+  // point is to teach once, not to nag forever.
+  const [nudgeClosed, setNudgeClosed] = useState(false)
 
   useEffect(() => {
     try { setAutoAdd(localStorage.getItem('hp_discover_autoadd') !== '0') } catch { /* default on */ }
@@ -627,13 +632,16 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     const mem = pid ? loadDiscMem(pid) : {}
     setDefinition(mem.definition || '')
     setCity(mem.city || session?.user.city || '')
-    setSiteUrl(mem.siteUrl || '')
+    // A saved business profile website grounds every scan, so it walks in
+    // front: typed-this-session wins, the workspace profile fills the rest.
+    setSiteUrl(mem.siteUrl || projects.find((p) => p.id === pid)?.website || '')
     setLimit(mem.limit || '5')
     setCoords(null)
     setResults([])
     setNote('')
     setMode('NONE')
     setAddedKeys(new Set())
+    setNudgeClosed(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -645,7 +653,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     const mem = loadDiscMem(id)
     setDefinition(mem.definition || '')
     setCity(mem.city || '')
-    setSiteUrl(mem.siteUrl || '')
+    setSiteUrl(mem.siteUrl || projects.find((p) => p.id === id)?.website || '')
     setLimit(mem.limit || '5')
     setCoords(null)
     setResults([])
@@ -768,6 +776,12 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     }
   }
 
+  // The nudge fires exactly when a scan would run blind: no hunt description
+  // typed, and the target workspace carries no website, offerings or value
+  // proposition it could fall back on. The moment either fills, it steps aside.
+  const activeProject = projects.find((p) => p.id === targetProject)
+  const showNudge = Boolean(open && !nudgeClosed && activeProject && !activeProject.profileReady && definition.trim() === '')
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -778,6 +792,29 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {showNudge && activeProject && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+              <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
+                <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  <span className="font-medium">Sharper leads start with your details.</span>{' '}
+                  The AI hunts best when it knows what you sell. Save your website &amp; offerings on “{activeProject.name}” and every scan grounds itself in your real business, not a guess.
+                </span>
+              </p>
+              <div className="flex items-center gap-2 pl-5">
+                <Button size="sm" className="h-7 text-xs" onClick={() => { setView('profile'); onOpenChange(false) }}>
+                  Fill in my details
+                </Button>
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground hover:underline"
+                  onClick={() => setNudgeClosed(true)}
+                >
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Save leads to</Label>
             <Select value={targetProject} onValueChange={pickProject}>
