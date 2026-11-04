@@ -3011,3 +3011,16 @@ Work Log:
 
 Stage Summary:
 - Task 152 CLOSED. The only paying member has a live Avenzara project with 10 verified, SA-relevant outdoor leads and the notification email confirmed SENT. Executors remain: avenzara_exec.mjs (idempotent - rerun stops at the SENT check), avenzara_probe_faces.mjs (read-only quality probe). Awaited: password rotation on the boss's seat.
+
+Task ID: 153
+Agent: Super Z (main)
+Task: Boss has a new prospective client raising R300,000 for a burger campaign; needs a call-ready, step-by-step "how Hustle Portal works for you" playbook typed in chat.
+
+Work Log:
+- All product facts re-grounded in source before the call, no invented UI: plans (plans.ts) - Operator R199/mo launch (R299 normal anchor, R1,990/yr) with 5 verified reveals/mo rolling over + 150 free sends/30d + unlimited AI Co-Founder; Boss R499/mo (R4,990/yr) with 12 reveals + 400 sends + 5 seats; NPO 30% off; reveal credit R15 (LEAD_REVEAL_PRICE_CENTS 1500); outreach email 50c beyond bundle (spend.ts), never debited on failure; Yoco checkout, manual renewal, never auto-charged, nudge 5 days out.
+- Member surface confirmed: stages NEW/CONTACTED/QUALIFIED/QUOTE_SENT/WON/LOST (renameable, shared.ts 280), per-stage rand totals + pipeline value, AI Lead Finder (LeadsView DiscoverDialog, AI_SEARCH/OSM/LIVE/POOL modes, save/dismiss signals train it, per-project memory), reveal door on lead detail, MailView with AI drafts + Video Studio pitch video attach (video/PitchVideo v4), Tasks/Calendar/Invoices/Reports/SetupChecklist/WelcomeTour, public business directory listing.
+- Funnel math computed in code: sponsor ladder 1xR50k + 4xR25k + 10xR10k + 20xR2.5k = R300k = 35 sponsors; 2-5% close = 700-1,750 contacts; 15-25 leads/day = ~6-23 weeks; Operator all-in example R424/mo at 20 reveals (R199 + 15 extra x R15).
+- Playbook delivered in chat (signup, day-one setup, daily 45-min routine, stage discipline, landing page as separate Business Hustle assist, optional done-with-you starter drop flagged as boss's call).
+
+Stage Summary:
+- Task 153 delivered in-conversation per boss's ask ("type it up for me here"). No prod writes, no credentials involved. Landing-page build is a separate quote; starter lead drop (Kabir-pattern exec door) only on boss's explicit nod.
