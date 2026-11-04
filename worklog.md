@@ -2983,3 +2983,16 @@ Work Log:
 
 Stage Summary:
 - Funding Google instead of Z.ai is the cheaper trial-scale lane (about 2c saved per scan under ~600 scans/day) and needs zero code; the honest answer is both, roughly $24/month total, because Google hard-caps at 1,500 grounded scans/day and the walk-speed fix is code, not cash.
+
+Task ID: 152 (continued)
+Agent: Super Z (main)
+Task: Boss: "the previous password i gave was for my exec account. use that."
+
+Work Log:
+- Boss's clarification re-aims the rejected string at his OWN exec account, not the ops seat. Two blockers stated honestly: (1) the string is GONE from the sandbox - it rode env only, never stored per red line, and the recycle wiped it; disk sweep proves it (.env holds only DATABASE_URL, no script/log/worklog line carries the value). (2) His exec account EMAIL is unknown - the string alone cannot log in; previous probe used the seat email only.
+- No credential attempts this window (fail gate 8/15min respected; no guessing loops).
+- Executor rebuilt THIRD time (recycle wiped scripts/ again): every door shape re-read from source and confirmed - roster row {id,email,accountStatus,walletCents,counts,poolCount}; import POST {targetEmail,projectName,teamName,leads[email,company,notes]} returns project.id+mapping, dedupes by email; pool GET params q/state/tag/take<=120 (top 200 head by verifyScore); assign POST {userId,projectId,poolIds<=100} server-dedupes by company normKey, 409 on SUSPENDED; campaign POST {to,subject,body>=20,campaign,leadId?,dryRun?} 120/hr; mail archive GET ?q= returns emails[] (idempotency door); client/[id] read-back projects[].counts.leads + pipeline.rows. Login = POST /api/auth {action:'login',email,password}, hp_session via headers.getSetCookie(); non-exec session gets 403 Forbidden, bad creds 401 - the plan run will distinguish them cleanly.
+- scripts/avenzara_exec.mjs rebuilt with all guards (node --check passed, empty-OPS_PASS guard tested): exact-10 picks, pre-write dup validation, added===10 && skipped===0 gate, read-back triple verify (project present, lead count = 10 + anchor-created, every company visible in rows), archive-confirmed SENT, idempotent stop if already SENT.
+
+Stage Summary:
+- Unblock is now one paste away: boss sends his exec account email + that same password (one line), plan run proves the seat and curates the picks in read-only mode, commit finishes project + 10 leads + read-back + the authorized email in about two minutes. Password rotation recommended after the run.
