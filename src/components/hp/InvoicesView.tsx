@@ -311,7 +311,7 @@ export default function InvoicesView() {
     }
     setCreating(true)
     try {
-      const res = await api<{ invoice: Invoice }>('/api/invoices', {
+      const res = await api<{ invoice: Invoice; statementNote?: string }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
           kind: docKind,
@@ -320,7 +320,7 @@ export default function InvoicesView() {
           bankDetails: bankLines(bank).join('\n'),
         }),
       })
-      toast({ title: `${res.invoice.number} created ✓`, description: status === 'SENT' ? 'Marked as sent.' : 'Saved as draft.' })
+      toast({ title: `${res.invoice.number} created ✓`, description: res.statementNote || (status === 'SENT' ? 'Marked as sent.' : 'Saved as draft.') })
       resetForm()
       setShowCreate(false)
       bumpRefresh()
@@ -335,8 +335,8 @@ export default function InvoicesView() {
   async function setStatus(inv: Invoice, status: 'SENT' | 'PAID' | 'ACCEPTED' | 'DECLINED') {
     const isFirstPaid = status === 'PAID' && inv.status !== 'PAID' && invoices.filter((i) => i.status === 'PAID').length === 0
     try {
-      await api(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
-      toast({ title: `${inv.number} → ${status}` })
+      const res = await api<{ invoice: Invoice; statementNote?: string }>(`/api/invoices/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+      toast({ title: `${inv.number} → ${status}`, description: res.statementNote || undefined })
       // Touchpoint: first money in, the natural moment to suggest reinvesting in growth.
       if (isFirstPaid && tpCanShow('first-paid')) {
         tpMarkShown('first-paid', 1)

@@ -986,6 +986,7 @@ model StatementAccount {
   recipientVat String?
   recipientReg String?
   balanceBfwd  Float    @default(0) // opening balance from before this book
+  autoSync     Boolean  @default(false) // when on, SENT/PAID invoices for this client book their lines here automatically
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1004,9 +1005,13 @@ model StatementEntry {
   quantity  String? // kept as printed text ("1", "4.2 hours")
   amount    Float // signed: + charge, - payment received
   kind      String   @default("CHARGE") // BFWD | CHARGE | PAYMENT
+  sourceRef String? // set when a line follows a record ("invoice:<id>" / "invoice:<id>:pay"); null = the boss's hand owns this line forever
   createdAt DateTime @default(now())
 
   account StatementAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, date])
+  // One synced line per record per account. NULL sourceRefs (hand lines) never
+  // collide — Postgres allows many NULLs in a unique index.
+  @@unique([accountId, sourceRef])
 }

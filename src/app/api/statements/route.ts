@@ -133,6 +133,7 @@ export async function GET() {
         recipientVat: a.recipientVat,
         recipientReg: a.recipientReg,
         balanceBfwd: a.balanceBfwd,
+        autoSync: a.autoSync,
         balance: Math.round(signed * 100) / 100,
         entries: a.entries.map((e) => ({
           id: e.id,
@@ -142,6 +143,7 @@ export async function GET() {
           quantity: e.quantity,
           amount: e.amount,
           kind: e.kind,
+          sourceRef: e.sourceRef,
         })),
       }
     }),

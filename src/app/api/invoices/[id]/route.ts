@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { syncInvoiceToStatement, desyncInvoice } from '@/lib/statementSync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -57,7 +58,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data.logoUrl = typeof body.logoUrl === 'string' && body.logoUrl.startsWith('data:image/') ? body.logoUrl : null
   }
   const invoice = await db.invoice.update({ where: { id }, data })
-  return NextResponse.json({ invoice: { ...invoice, items: JSON.parse(invoice.items || '[]') } })
+  // Statement sync: every bookable state (SENT/OVERDUE/PAID) keeps the client's
+  // statement line in step — sent books the charge, paid adds the payment line,
+  // a rename moves the lines to the right account. Never throws.
+  const statementNote = await syncInvoiceToStatement(invoice)
+  return NextResponse.json({ invoice: { ...invoice, items: JSON.parse(invoice.items || '[]') }, ...(statementNote ? { statementNote } : {}) })
 }
 
 // DELETE /api/invoices/[id]
@@ -67,6 +72,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params
   const existing = await db.invoice.findFirst({ where: { id, userId } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // The statement lines this invoice booked follow it out of the book.
+  await desyncInvoice(userId, id)
   await db.invoice.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

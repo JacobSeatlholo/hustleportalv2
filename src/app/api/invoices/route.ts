@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { resolveProject } from '@/lib/workspace'
+import { syncInvoiceToStatement } from '@/lib/statementSync'
 
 type Item = { description: string; quantity: number; unitPrice: number }
 
@@ -121,5 +122,8 @@ export async function POST(req: NextRequest) {
       dueAt,
     },
   })
-  return NextResponse.json({ invoice }, { status: 201 })
+  // Statement sync: an invoice sent at creation books its own line on the
+  // client's auto-sync statement account (never throws, note for the toast).
+  const statementNote = invoice.status === 'SENT' ? await syncInvoiceToStatement(invoice) : null
+  return NextResponse.json({ invoice, ...(statementNote ? { statementNote } : {}) }, { status: 201 })
 }

@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from './shared'
 import { useHp } from './store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
-import { Printer, Plus, Trash2, FileText, X } from 'lucide-react'
+import { Printer, Plus, Trash2, FileText, X, Pencil, Link2 } from 'lucide-react'
 
 // Statements — the Simple Eternity Holdings billing book. Internal door: the
 // master account, exec seats and the master's own team (server gated; the nav
@@ -16,6 +16,14 @@ import { Printer, Plus, Trash2, FileText, X } from 'lucide-react'
 // own 1004x1418 grid (every coordinate below is a template pixel), so what
 // prints is exactly what he has always sent — then "Save as PDF" replaces
 // Canva entirely.
+//
+// The book follows the records (the boss's law):
+//   * lines are editable in place — pencil on any row;
+//   * accounts with Auto-invoices on receive their client's sent/paid
+//     invoices as synced lines (marked linked) automatically;
+//   * editing a linked line takes it over — it stops following the invoice;
+//   * the print runs to PRINT DAY: everything dated up to today prints, so a
+//     line added minutes ago can never be missing from the paper.
 
 interface Entry {
   id: string
@@ -25,6 +33,7 @@ interface Entry {
   quantity: string | null
   amount: number
   kind: string
+  sourceRef?: string | null
 }
 
 interface Account {
@@ -38,6 +47,7 @@ interface Account {
   recipientVat: string | null
   recipientReg: string | null
   balanceBfwd: number
+  autoSync?: boolean
   balance: number
   entries: Entry[]
 }
@@ -58,9 +68,10 @@ function fmtPlain(n: number): string {
   return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${dec}`
 }
 
-function monthKeyOf(d: string | Date): string {
+function localDateInputValue(d: string | Date): string {
   const dt = typeof d === 'string' ? new Date(d) : d
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+  const p = (x: number) => String(x).padStart(2, '0')
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
 }
 
 function stamp(): string {
@@ -105,20 +116,18 @@ function RemarkText({ remark, waived }: { remark: string; waived: boolean }) {
 // className="statement-sheet" is the print hook: globals.css zooms this fixed
 // grid onto one A4 sheet and forces the template greys to print exact.
 // Exported for the print-fidelity test (scripts/printtest) only.
-export function StatementSheet({ account, monthKey, now }: { account: Account; monthKey: string; now: string }) {
-  const [y, m] = monthKey.split('-').map(Number)
-  const monthName = MONTHS[(m || 1) - 1]
-  const monthStart = new Date(y, m - 1, 1)
-  const monthEnd = new Date(y, m, 1)
+export function StatementSheet({ account, now }: { account: Account; now: string }) {
   const entries = [...account.entries].sort((a, b) => +new Date(a.date) - +new Date(b.date))
-  // Cumulative law — a statement is the running account as it stood at the end
-  // of the selected month, exactly like the boss's own Canva statements ("For
-  // the Month: Apr - Aug 2026"): every entry up to month end, the account's
-  // opening balance on top. WAIVED lines print for the record (struck through,
-  // like the archive's waived content-creation fee) but move no money.
+  // As-at law (the boss's call): the statement prints EVERYTHING up to print
+  // day. A line added minutes ago is on the paper — the sheet can never lag
+  // the book. Future-dated lines stay off (not yet real, not on the client's
+  // paper). The "For the Month" label spans the rows it actually carries,
+  // exactly like the archive's own "Apr - Aug 2026".
+  const endOfToday = new Date()
+  endOfToday.setHours(23, 59, 59, 999)
   const opening = account.balanceBfwd
   const rows = entries
-    .filter((e) => +new Date(e.date) < +monthEnd)
+    .filter((e) => +new Date(e.date) <= +endOfToday)
     .map((e) => ({ ...e, running: 0 }))
   {
     let run = opening
@@ -132,15 +141,20 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
   // opening balance; the archive's own B/f line is a ledger entry and prints
   // as a normal row.
   const hasBfRow = Math.abs(opening) >= 0.005
+  // The month the sheet talks about: the last row's month (or today's when the
+  // sheet is empty). Drives both the range label and the charges line.
+  const talk = rows.length ? new Date(rows[rows.length - 1].date) : new Date()
+  const monthStart = new Date(talk.getFullYear(), talk.getMonth(), 1)
 
-  // "For the Month": a range when the statement spans months, exactly like
-  // the archive's own "Apr - Aug 2026" — one year suffix, on the right.
+  // "For the Month": the span of the rows actually carried — first activity
+  // month to last, exactly like the archive's own "Apr - Aug 2026".
   const monthLabel = (() => {
-    const sel = `${MONTHS[(m || 1) - 1].slice(0, 3)} ${y}`
-    if (!rows.length) return sel
+    const tail = `${MONTHS[talk.getMonth()].slice(0, 3)} ${talk.getFullYear()}`
+    if (!rows.length) return tail
     const first = new Date(rows[0].date)
-    if (first.getFullYear() === y) return `${MONTHS[first.getMonth()].slice(0, 3)} - ${sel}`
-    return `${MONTHS[first.getMonth()].slice(0, 3)} ${first.getFullYear()} - ${sel}`
+    const head = MONTHS[first.getMonth()].slice(0, 3)
+    if (first.getFullYear() === talk.getFullYear()) return `${head} - ${tail}`
+    return `${head} ${first.getFullYear()} - ${tail}`
   })()
 
   // table geometry (template px): x 93..897, header 612..662, body to 988.
@@ -222,7 +236,7 @@ export function StatementSheet({ account, monthKey, now }: { account: Account; m
         </div>
         <div style={{ position: 'absolute', top: 40, left: 312, width: 61, height: 40, borderBottom: `1.5px solid ${BOX}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5 }}>{account.recipientReg || ''}</div>
         <div style={{ position: 'absolute', top: 90, left: 0, width: '100%', height: 39 }}>
-          <div style={{ position: 'absolute', top: 10, left: 8, fontSize: 14.5 }}>Charges Generated for {monthName} {y}</div>
+          <div style={{ position: 'absolute', top: 10, left: 8, fontSize: 14.5 }}>Charges Generated for {MONTHS[talk.getMonth()]} {talk.getFullYear()}</div>
         </div>
       </div>
 
@@ -338,7 +352,7 @@ export default function StatementsView() {
   const [printOpen, setPrintOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [now, setNow] = useState('')
-  const [monthKey, setMonthKey] = useState<string>('')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [refNo, setRefNo] = useState('')
   const [clientName, setClientName] = useState('')
@@ -370,19 +384,56 @@ export default function StatementsView() {
 
   const selected = accounts?.find((a) => a.id === selectedId) || null
 
-  const monthOptions = useMemo(() => {
-    if (!selected) return []
-    const keys = new Set(selected.entries.map((e) => monthKeyOf(e.date)))
-    if (keys.size === 0) keys.add(monthKeyOf(new Date()))
-    // newest entry's month first — the statement the boss is most likely to print
-    return [...keys].sort().reverse()
-  }, [selected])
+  async function toggleAutoSync(a: Account) {
+    setBusy(true)
+    try {
+      const r = await api<{ autoSync: boolean }>(`/api/statements/${a.id}`, { method: 'PATCH', body: JSON.stringify({ autoSync: !a.autoSync }) })
+      toast({ title: r.autoSync ? 'Auto-invoices on ✓' : 'Auto-invoices off', description: r.autoSync ? `Sent and paid invoices for ${a.clientName} now land on ${a.refNo} automatically.` : 'Nothing books itself on this statement anymore.' })
+      await load()
+    } catch (e) {
+      toast({ title: 'Could not change auto-sync', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally { setBusy(false) }
+  }
 
-  useEffect(() => {
-    if (!monthKey && monthOptions.length) setMonthKey(monthOptions[0])
-  }, [monthOptions, monthKey])
+  function startEdit(e: Entry) {
+    setEditingId(e.id)
+    setLineDate(localDateInputValue(e.date))
+    setLineProduct(e.product || '')
+    setLineRemarks(e.remarks)
+    setLineQty(e.quantity || '')
+    setLineAmount(String(e.amount))
+  }
 
-  const selectedMonth = monthKey || monthOptions[0] || monthKeyOf(new Date())
+  function cancelEdit() {
+    setEditingId(null)
+    setLineDate(''); setLineProduct(''); setLineRemarks(''); setLineQty(''); setLineAmount('')
+  }
+
+  async function saveEdit() {
+    if (!selected || !editingId) return
+    if (!lineRemarks.trim() || !lineAmount.trim()) {
+      toast({ title: 'A line needs a remark and an amount', description: 'Positive to bill the client, negative for a payment received.', variant: 'destructive' })
+      return
+    }
+    setBusy(true)
+    try {
+      const r = await api<{ ok: boolean; unlinked?: boolean }>(`/api/statements/${selected.id}?entry=${editingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          date: lineDate || localDateInputValue(new Date()),
+          product: lineProduct,
+          remarks: lineRemarks,
+          quantity: lineQty,
+          amount: Number(lineAmount),
+        }),
+      })
+      toast({ title: 'Line updated ✓', description: r.unlinked ? 'Saved. It no longer follows its invoice — your correction is the record now.' : undefined })
+      cancelEdit()
+      await load()
+    } catch (e) {
+      toast({ title: 'Could not update the line', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally { setBusy(false) }
+  }
 
   async function createAccount() {
     if (!refNo.trim() || !clientName.trim()) {
@@ -403,6 +454,7 @@ export default function StatementsView() {
 
   async function addLine() {
     if (!selected) return
+    if (editingId) return saveEdit()
     if (!lineRemarks.trim() || !lineAmount.trim()) {
       toast({ title: 'A line needs a remark and an amount', description: 'Positive to bill the client, negative for a payment received.', variant: 'destructive' })
       return
@@ -524,6 +576,16 @@ export default function StatementsView() {
               <div className="font-semibold text-sm">{a.refNo}</div>
               <div className="text-xs text-muted-foreground">{a.clientName}</div>
               <div className="text-xs mt-1">Balance: <span className={a.balance > 0 ? 'font-semibold text-amber-600' : 'font-semibold text-emerald-600'}>{fmtPlain(a.balance)}</span></div>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(ev) => { ev.stopPropagation(); if (selectedId === a.id) toggleAutoSync(a) }}
+                onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.stopPropagation(); if (selectedId === a.id) toggleAutoSync(a) } }}
+                className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${a.autoSync ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-600' : 'border-muted text-muted-foreground hover:bg-accent/40'}`}
+                title="When on, invoices you send or mark paid for this client land on this statement automatically. Lines already on the book are never touched."
+              >
+                <Link2 className="h-3 w-3" /> Auto-invoices: {a.autoSync ? 'On' : 'Off'}
+              </div>
             </button>
           ))}
         </div>
@@ -532,24 +594,11 @@ export default function StatementsView() {
       {selected && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Statement month</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setMonthKey(e.target.value)}
-                className="block rounded-lg border bg-card px-3 py-2 text-sm"
-              >
-                {monthOptions.map((k) => {
-                  const [yy, mm] = k.split('-').map(Number)
-                  return <option key={k} value={k}>{MONTHS[(mm || 1) - 1]} {yy}</option>
-                })}
-              </select>
-            </div>
             <Button onClick={printStatement} className="gap-2">
               <Printer className="h-4 w-4" /> Print statement
             </Button>
-            <p className="text-xs text-muted-foreground max-w-sm">
-              Prints exactly like the Canva template — in the print dialog, choose Save as PDF and send it.
+            <p className="text-xs text-muted-foreground max-w-md">
+              Prints everything up to today — a line you added minutes ago is on the paper. Template-exact: in the print dialog, choose Save as PDF and send it.
             </p>
           </div>
 
@@ -571,14 +620,20 @@ export default function StatementsView() {
                   <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No lines yet — add the first one below.</td></tr>
                 )}
                 {selected.entries.map((e) => (
-                  <tr key={e.id} className="border-b last:border-0">
+                  <tr key={e.id} className={`border-b last:border-0 ${editingId === e.id ? 'bg-brand/10' : ''}`}>
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(e.date).toLocaleDateString('en-ZA')}</td>
                     <td className="px-3 py-2">{e.product || '—'}</td>
                     <td className="px-3 py-2">{e.remarks}</td>
                     <td className="px-3 py-2">{e.quantity || ''}</td>
                     <td className={`px-3 py-2 text-right font-medium ${e.amount < 0 ? 'text-emerald-600' : ''}`}>{fmtPlain(e.amount)}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{e.kind}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                      {e.kind}
+                      {e.sourceRef ? <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-muted-foreground" title="This line follows its invoice — edit it to take it over."><Link2 className="h-3 w-3" />linked</span> : null}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button onClick={() => (editingId === e.id ? cancelEdit() : startEdit(e))} disabled={busy} className="mr-2 text-muted-foreground hover:text-foreground" aria-label="Edit line">
+                        <Pencil className="h-4 w-4" />
+                      </button>
                       <button onClick={() => removeLine(e.id)} disabled={busy} className="text-muted-foreground hover:text-destructive" aria-label="Remove line">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -590,7 +645,13 @@ export default function StatementsView() {
           </div>
 
           <div className="rounded-xl border bg-card p-4 space-y-3">
-            <div className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4" /> Add a line</div>
+            <div className="text-sm font-medium flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              {editingId ? 'Edit line' : 'Add a line'}
+              {editingId ? (
+                <Button size="sm" variant="ghost" onClick={cancelEdit} className="ml-auto h-7 px-2 text-xs">Cancel editing</Button>
+              ) : null}
+            </div>
             <div className="grid gap-3 md:grid-cols-6">
               <div>
                 <label className="text-xs text-muted-foreground">Date</label>
@@ -613,7 +674,7 @@ export default function StatementsView() {
                 <Input value={lineAmount} onChange={(e) => setLineAmount(e.target.value)} placeholder="-150" inputMode="decimal" />
               </div>
             </div>
-            <Button onClick={addLine} disabled={busy}>Add line</Button>
+            <Button onClick={addLine} disabled={busy}>{editingId ? 'Save changes' : 'Add line'}</Button>
           </div>
         </div>
       )}
@@ -621,7 +682,7 @@ export default function StatementsView() {
       {printOpen && selected && mounted && createPortal(
         <div id="statement-print-root" className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:p-0 print:z-auto">
           <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-black/80 text-white px-4 py-2 print:hidden">
-            <p className="text-sm">Statement preview — {selected.refNo}, {MONTHS[Number(selectedMonth.split('-')[1]) - 1]} {selectedMonth.split('-')[0]}. Choose Save as PDF in the print dialog.</p>
+            <p className="text-sm">Statement preview — {selected.refNo}, everything up to today. Choose Save as PDF in the print dialog.</p>
             <div className="flex gap-2">
               <Button size="sm" onClick={() => window.print()} className="gap-2"><Printer className="h-4 w-4" /> Print / Save PDF</Button>
               <Button size="sm" variant="outline" onClick={() => setPrintOpen(false)} className="gap-2"><X className="h-4 w-4" /> Close</Button>
@@ -629,7 +690,7 @@ export default function StatementsView() {
           </div>
           <div className="flex justify-center py-6 print:py-0">
             <div className="statement-preview-wrap shadow-2xl print:shadow-none">
-              <StatementSheet account={selected} monthKey={selectedMonth} now={now || stamp()} />
+              <StatementSheet account={selected} now={now || stamp()} />
             </div>
           </div>
         </div>,
