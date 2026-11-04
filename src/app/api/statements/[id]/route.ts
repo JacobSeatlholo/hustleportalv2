@@ -14,8 +14,13 @@ import { hasStatementAccess, sehOwnerId } from '@/lib/statements'
 //                  never gets overwritten by a re-sync.
 // PATCH (no ?entry) → { autoSync: boolean } — flip the account's invoice
 //                  auto-sync switch.
-// DELETE ?entry= → remove one entry by id (typos happen; money lines must be
+// DELETE ?entry=  → remove one entry by id (typos happen; money lines must be
 //                  fixable by the person who typed them).
+// DELETE ?confirm=<refNo> → close the whole account. The confirm param must
+//                  spell the account's own ref no exactly — a book with money
+//                  history is deleted on purpose or not at all. Entries go
+//                  with it (schema cascade); the synced invoices themselves
+//                  are untouched, they live in the invoice records.
 
 async function gate() {
   const userId = await getUserId()
@@ -180,10 +185,21 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const owner = await sehOwnerId()
   if (!owner) return NextResponse.json({ error: 'No book owner.' }, { status: 400 })
   const { id } = await params
-  const account = await db.statementAccount.findFirst({ where: { id, ownerId: owner }, select: { id: true } })
+  const account = await db.statementAccount.findFirst({ where: { id, ownerId: owner } })
   if (!account) return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
   const entryId = new URL(req.url).searchParams.get('entry')
-  if (!entryId) return NextResponse.json({ error: 'Which entry? Pass ?entry=<id>.' }, { status: 400 })
+
+  // ---- whole account: only with the ref no spelled back -----------------
+  if (!entryId) {
+    const confirm = new URL(req.url).searchParams.get('confirm') || ''
+    if (confirm.trim().toUpperCase() !== account.refNo.trim().toUpperCase()) {
+      return NextResponse.json({ error: `Type the account ref (${account.refNo}) as ?confirm= to close this account.` }, { status: 400 })
+    }
+    await db.statementEntry.deleteMany({ where: { accountId: account.id } })
+    await db.statementAccount.delete({ where: { id: account.id } })
+    return NextResponse.json({ ok: true, deleted: 'account', refNo: account.refNo })
+  }
+
   const entry = await db.statementEntry.findFirst({ where: { id: entryId, accountId: account.id }, select: { id: true } })
   if (!entry) return NextResponse.json({ error: 'Entry not found on this account.' }, { status: 404 })
   await db.statementEntry.delete({ where: { id: entry.id } })

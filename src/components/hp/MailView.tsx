@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +24,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip } from 'lucide-react'
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -66,6 +66,10 @@ export default function MailView() {
   const [sending, setSending] = useState(false)
   const [videoOpen, setVideoOpen] = useState(false)
   const [videoAttach, setVideoAttach] = useState<VideoAttach | null>(null)
+  // Uploaded attachments (PDFs, scans): base64 at pick time, ride the same
+  // send law as the video — sanitized and size-capped inside sendMail.
+  const [fileAttaches, setFileAttaches] = useState<{ filename: string; content: string; sizeBytes: number }[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [mailStatus, setMailStatus] = useState<MailStatus | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   // Airtime: the price chip state, refreshed with every load + after every send.
@@ -347,6 +351,10 @@ export default function MailView() {
     setSending(true)
     setSendError(null)
     try {
+      const atts = [
+        ...(videoAttach ? [{ filename: videoAttach.filename, content: videoAttach.base64 }] : []),
+        ...fileAttaches.map((f) => ({ filename: f.filename, content: f.content })),
+      ]
       const res = await api<{ email: EmailLogRow; notice?: string | null; freeRemaining?: number | null; bundleRemaining?: number | null; spend?: { chargedCents: number; balanceAfter: number } | null }>('/api/emails', {
         method: 'POST',
         body: JSON.stringify({
@@ -355,7 +363,7 @@ export default function MailView() {
           subject,
           body,
           projectId: activeProjectId,
-          attachments: videoAttach ? [{ filename: videoAttach.filename, content: videoAttach.base64 }] : undefined,
+          attachments: atts.length ? atts : undefined,
         }),
       })
       toast({
@@ -370,7 +378,7 @@ export default function MailView() {
               ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. After that, airtime keeps you sending.`
               : `${subject} → ${to}`),
       })
-      setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null)
+      setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null); setFileAttaches([])
       load()
     } catch (e) {
       // Calm inline card instead of a toast wall, details stay under the composer
@@ -388,6 +396,43 @@ export default function MailView() {
     } catch {
       // non-fatal
     }
+  }
+
+  // Same rails as the video: base64 at pick time, the sendMail sanitizer
+  // caps the total (8 MB decoded, max 3 files) and the send stays honest.
+  const MAX_ATTACH_BYTES = 8 * 1024 * 1024
+  const MAX_ATTACH_FILES = 3
+  async function onPickFiles(list: FileList | null) {
+    if (!list || !list.length) return
+    const used = fileAttaches.reduce((a, x) => a + x.sizeBytes, 0) + (videoAttach?.sizeBytes || 0)
+    const slots = MAX_ATTACH_FILES - fileAttaches.length - (videoAttach ? 1 : 0)
+    const picked: { filename: string; content: string; sizeBytes: number }[] = []
+    let bytes = used
+    for (const f of Array.from(list)) {
+      if (picked.length >= slots) {
+        toast({ title: 'Up to 3 attachments per email', description: 'Take one off to make room.', variant: 'destructive' })
+        break
+      }
+      if (bytes + f.size > MAX_ATTACH_BYTES) {
+        toast({ title: `${f.name} would push it over 8 MB`, description: 'Attachments ride up to 8 MB in total.', variant: 'destructive' })
+        continue
+      }
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result || ''))
+        r.onerror = () => rej(r.error)
+        r.readAsDataURL(f)
+      }).catch(() => '')
+      const content = dataUrl.split(',')[1] || ''
+      if (!content) continue
+      picked.push({ filename: f.name, content, sizeBytes: f.size })
+      bytes += f.size
+    }
+    if (picked.length) {
+      setFileAttaches((prev) => [...prev, ...picked])
+      toast({ title: picked.length === 1 ? `${picked[0].filename} attached ✓` : `${picked.length} files attached ✓`, description: 'They ride along when you press Send.' })
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   // One calm line: what will happen when I hit Send?
@@ -666,9 +711,30 @@ export default function MailView() {
               <Textarea id="m-body" rows={10} placeholder="Write it yourself, or let Gemini draft it from your business profile…" value={body} onChange={(e) => setBody(e.target.value)} />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                multiple
+                className="hidden"
+                onChange={(e) => onPickFiles(e.target.files)}
+                aria-label="Upload a file to attach"
+              />
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} type="button">
+                <Paperclip className="h-4 w-4 mr-1" /> Attach PDF
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setVideoOpen(true)} type="button">
                 <Clapperboard className="h-4 w-4 mr-1" /> Create a pitch video
               </Button>
+              {fileAttaches.map((f, i) => (
+                <span key={`${f.filename}-${i}`} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+                  <Paperclip className="h-3.5 w-3.5 text-brand" />
+                  {f.filename} · {(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB
+                  <button onClick={() => setFileAttaches((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove ${f.filename}`} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ))}
               {videoAttach && (
                 <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
                   <Film className="h-3.5 w-3.5 text-brand" />
