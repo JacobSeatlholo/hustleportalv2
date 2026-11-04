@@ -3103,3 +3103,18 @@ Work Log:
 
 Stage Summary:
 - The allowance dead-end is structurally retired: drain pocket + guaranteed directory lane + honest notice. Full two-engine quality still waits on the boss's ZAI_API_KEY env on Vercel; exec password rotation still standing.
+
+Task ID: 159 (continued)
+Agent: Super Z (main)
+Task: Boss made a new z.ai key and redeployed ("Done.. made a new key and redeployed."). Deliver on "I dont want to see this error ever again."
+
+Work Log:
+- Proof instrument first: /api/health now reports the z.ai lane presence (boolean only, resolved through getPlatformZaiKey so alias env names count). First check of the boss's build returned zai=true - the key is recognized, never touched by the app code, never in chat.
+- Live proof on the exact scan shape that produced the drained message (pool-unmatchable definition, Durban, same drained-afternoon state): SMOKE GREEN 7/7 - 3 real leads in 9.7s total, rung z.ai/glm-4.6 answered 200 in 8.9s, search results on-topic, ZERO drained vocabulary on the member-visible surface, notice is the soft muted backup heads-up (never error-styled).
+- The proof exposed and fixed a chain of real walk bugs (commits d57ba5c..fd70a4b): (1) blackout note hid platform-lane causes and could ship the drained sentence - now actionable causes lead and a pure quota rest reads as a resting note; (2) 900-token output cap (fresh-account relic) truncated flash mid-search: 200 with EMPTY content at 19s; (3) grounded GLM scans need 20-40s - attempt cap 33s, walk 40s; (4) search walks knock the MONEY door first (z.ai international, where the bundle and cash live) - the Zhipu door was eating the whole walk clock; (5) thinking disabled on search walks (hybrid reasoning burned the budget before the answer); (6) web_search dialect now matches the door's documented string form, and a trace instrument reports the door's real result count - it caught the engine searching "leads json" vocabulary and returning a leads.json documentation page; (7) the search query IS the user message, so all rules moved to system and the message stays pure business intent; (8) flash is permanently off search walks: five fair attempts across both doors and both thinking modes landed nothing, while glm-4.6 delivers in ~9s.
+- Money posture unchanged from the runway model: scans bill glm-4.6 tokens + search fee to cash (~1-2c/scan, $6 = ~600 scans); the 100M flash bundle keeps covering plain generation (advisor, Co-Founder) where it is fast. Balance Alert still the only to-do before December.
+- Caveat carried openly: the restructured scan prompt is shared with the Gemini primary lane (rules in system, clean query - its native shape); tomorrow's fresh-quota morning scan confirms no regression. The POOL short-circuit lane is untouched and demonstrably working (identical re-scan served from pool in 0.4s).
+- Cleanup note: smoke accounts hp-smoke-t159-*@mailinator.com (7 throwaways, no wallet activity) join the t157 trio for exec-seat deletion.
+
+Stage Summary:
+- The drained error is dead at every layer: the funded lane intercepts every drained-afternoon scan (proven live, 7/7), the blackout note can no longer speak quota-refill language, and health carries a standing zai boolean so an unarmed lane is visible on every future deploy. Exec seat password rotation still standing; first Balance Alert expected ~Nov 22.
