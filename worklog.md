@@ -3090,3 +3090,16 @@ Work Log:
 
 Stage Summary:
 - DEPLOYED: 17 commits live on www.hustleportal.online (d5fdb75) - never-fail AI batch + Lead Finder profile nudge. Remaining for full two-engine posture: ZAI_API_KEY env on Vercel from the bundle-holding z.ai account (boss, never via chat), then one funded scan to confirm. Exec seat password rotation still standing.
+
+Task ID: 159
+Agent: Super Z (main)
+Task: Boss hit the allowance dead-end on his own scan (16:03 SAST screenshot, "Design agencies" / Cape Town) and said "I dont want to see this error ever again."
+
+Work Log:
+- Root cause confirmed live: Google's grounded day buckets drain mid-afternoon SAST; the per-model benches are per-serverless-instance so they go cold between scans; a cold walk re-pays the 429 storm, eats the 50s budget, and the keyless directory lane (16s runway gate) got skipped - dead-ending in the allowance message with zero leads.
+- PATCH (committed 43ee507, deployed by Vercel in ~2 min): (1) gemini.ts grounded-drain pocket - a walk that ends naming a DAY bucket marks the instance for 30 minutes (minute walls and zero tiers never mark; expiry re-checks honestly); (2) discover route skips the doomed walk while the pocket is hot, in both the primary and backup seats; (3) the OSM directory gate drops 16s to 8s runway with an adaptive deadlineAt so it always gets a real turn; (4) when drained engines push the scan onto the directory, the notice says exactly that instead of an error.
+- Live verification with the boss's exact scan shape: scan 1 answered 200 in 50s with 2 real OSM businesses + the honest "ran on the real business directory" notice + a relevance-bar note - the allowance dead-end did not appear. Scan 2 hit the per-user scan pacing door (429 in 1s), the designed brake, not the old error. Remaining quality lever unchanged: ZAI_API_KEY on Vercel turns these degraded scans into Flash-bundle AI-grounded results (the directory catches are real but loose for niche trades like design agencies).
+- Cleanup note: smoke accounts now hp-smoke-t157a/b/c and hp-smoke-t159@mailinator.com (no leads saved, no wallet activity); exec seat can delete whenever.
+
+Stage Summary:
+- The allowance dead-end is structurally retired: drain pocket + guaranteed directory lane + honest notice. Full two-engine quality still waits on the boss's ZAI_API_KEY env on Vercel; exec password rotation still standing.
