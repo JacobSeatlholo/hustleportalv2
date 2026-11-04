@@ -3076,3 +3076,17 @@ Work Log:
 
 Stage Summary:
 - Deploy batch now 17 commits ahead: never-fail AI + profile nudge parked, deploy key still the only blocker. Past-December verdict: $6 alone degrades gracefully after ~Dec 28 but never hard-fails; one Operator sub or one $5 top-up restores full posture. Standing items unchanged: exec seat password rotation, burger client account-health check on signup.
+
+Task ID: 158
+Agent: Super Z (main)
+Task: Boss generated the deploy credential path ("lets use ssh generated here", then "added") - push the parked batch, verify prod, close the z.ai chapter.
+
+Work Log:
+- Deploy pipeline built from nothing: sandbox has git but no ssh binary, no root. Python/paramiko bridge (scripts/ssh_shim.py) masquerades as ssh for git: ed25519 keypair generated in-sandbox (public half only ever shown; private half under .ssh/, gitignored via info/exclude), GitHub host keys pinned from api.github.com/meta (never from memory), strict host-key policy, port 22 with documented ssh-over-443 alias fallback.
+- First push deadlocked twice at ~6min on both ports: the shim's stdout.read(65536) waits for 64KB or EOF, but a push's ref advertisement is ~200 bytes and the server closes only AFTER receiving the pack - git sat starved, session idled, GitHub dropped it. ls-remote only worked because its round-trip ends with a server close. Fix: stream on arrival via recv_ready() polling loop. Push then completed in 6.6s: ae39aa8..d5fdb75, all 17 commits.
+- Prod is Vercel (health route comment + vercel.json crons); push to main auto-deployed in ~4 minutes. Health: ok=true, db ping, all integrations green, build sha d5fdb75.
+- Live smoke through a throwaway member account (mailinator address so the welcome email bounces nowhere; password memory-only): signup PASS; auth/me carries per-project website+profileReady PASS; PATCH website flips profileReady PASS (nudge server-half fully verified); advisor PASS (Gemini primary answers, Door 2 non-regressive). Discover scan: Google grounding quota drained mid-afternoon SAST - the exact scenario the batch targets - and the system behaved per design: 200 in 35s, honest refill message, no stall, no crash. The backup stayed dark only because ZAI_API_KEY is not yet on Vercel; one key flip turns this exact scan into a Flash-bundle result.
+- Cleanup note: three throwaway accounts hp-smoke-t157(a/b/c)@mailinator.com exist on prod (no leads, no wallet activity, one advisor turn on the first). Exec seat can delete them whenever.
+
+Stage Summary:
+- DEPLOYED: 17 commits live on www.hustleportal.online (d5fdb75) - never-fail AI batch + Lead Finder profile nudge. Remaining for full two-engine posture: ZAI_API_KEY env on Vercel from the bundle-holding z.ai account (boss, never via chat), then one funded scan to confirm. Exec seat password rotation still standing.
