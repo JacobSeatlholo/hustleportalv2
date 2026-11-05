@@ -20,6 +20,7 @@ const ALLOWED_KEYS = [
   'WA_VERIFY_TOKEN',
   'WA_DISPLAY_NUMBER',
   'INVOICE_BANK',
+  'INVOICE_BUSINESS', // JSON BizDetails — the identity block (registered name, number, address) printed top-left of every invoice
   'PIPELINE_STAGES', // JSON {stageKey: customLabel} — Notion-style pipeline stage renames, per user
   'NAV_ORDER', // JSON ViewKey[], the user's personal sidebar menu order
   'MODULES', // JSON string[], disabled module keys (the tailored workspace)

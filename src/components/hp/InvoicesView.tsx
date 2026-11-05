@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,6 +54,80 @@ function parseBank(raw: string | null | undefined): BankDetails {
   } catch {
     return { ...EMPTY_BANK }
   }
+}
+
+type BizDetails = {
+  legalName: string
+  registration: string
+  address1: string
+  address2: string
+  city: string
+  province: string
+  postal: string
+}
+
+const EMPTY_BIZ: BizDetails = { legalName: '', registration: '', address1: '', address2: '', city: '', province: '', postal: '' }
+
+/** The identity block printed top-left of the document: registered name,
+ *  registration number, then the address lines — the paper-original look. */
+function bizLines(b: Partial<BizDetails>): string[] {
+  return [
+    b.legalName?.trim() || '',
+    b.registration?.trim() || '',
+    b.address1?.trim() || '',
+    b.address2?.trim() || '',
+    [b.city?.trim(), b.province?.trim()].filter(Boolean).join(', '),
+    b.postal?.trim() || '',
+  ].filter(Boolean)
+}
+
+function parseBiz(raw: string | null | undefined): BizDetails {
+  if (!raw) return { ...EMPTY_BIZ }
+  try {
+    const p = JSON.parse(raw) as Partial<BizDetails>
+    return {
+      legalName: String(p.legalName || ''), registration: String(p.registration || ''),
+      address1: String(p.address1 || ''), address2: String(p.address2 || ''),
+      city: String(p.city || ''), province: String(p.province || ''), postal: String(p.postal || ''),
+    }
+  } catch {
+    return { ...EMPTY_BIZ }
+  }
+}
+
+/** Clickable text on the document: [label](https://url) markdown links plus
+ *  bare URLs auto-linked, so a line item or note can carry its own product
+ *  link with zero editor chrome. Everything else renders exactly as typed. */
+function richText(text: string): ReactNode[] {
+  if (!text) return []
+  const nodes: ReactNode[] = []
+  let k = 0
+  const plain = (seg: string) => {
+    const urlRe = /(https?:\/\/[^\s<>"']+)/g
+    let l = 0
+    let u: RegExpExecArray | null
+    while ((u = urlRe.exec(seg))) {
+      if (u.index > l) nodes.push(seg.slice(l, u.index))
+      const url = u[0]
+      nodes.push(
+        <a key={`u${k++}`} href={url} target="_blank" rel="noreferrer" className="text-blue-700 underline underline-offset-2 break-all">{url}</a>,
+      )
+      l = u.index + url.length
+    }
+    if (l < seg.length) nodes.push(seg.slice(l))
+  }
+  const mdRe = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = mdRe.exec(text))) {
+    if (m.index > last) plain(text.slice(last, m.index))
+    nodes.push(
+      <a key={`m${k++}`} href={m[2]} target="_blank" rel="noreferrer" className="text-blue-700 underline underline-offset-2 break-all font-medium">{m[1]}</a>,
+    )
+    last = m.index + m[0].length
+  }
+  if (last < text.length) plain(text.slice(last))
+  return nodes
 }
 
 function itemsOf(inv: Invoice): Item[] {
@@ -175,6 +249,11 @@ export default function InvoicesView() {
   const [showBank, setShowBank] = useState(false)
   const [bankSaving, setBankSaving] = useState(false)
   const bankAutoRef = useRef(false)
+  // Business identity block (INVOICE_BUSINESS): saved once, printed top-left forever.
+  const [biz, setBiz] = useState<BizDetails>({ ...EMPTY_BIZ })
+  const [showBiz, setShowBiz] = useState(false)
+  const [bizSaving, setBizSaving] = useState(false)
+  const bizAutoRef = useRef(false)
 
   // create form
   const [clientName, setClientName] = useState('')
@@ -217,7 +296,11 @@ export default function InvoicesView() {
   const [emailBody, setEmailBody] = useState('')
   const [listedClient, setListedClient] = useState(false)
   const [emailAttach, setEmailAttach] = useState<{ filename: string; content: string; sizeBytes: number } | null>(null)
+  // PDFs of the user's own choosing (contract, brochure, spec sheet) riding along
+  // with the auto-built document. Two extras max — the engine takes 3 files total.
+  const [extraPdfs, setExtraPdfs] = useState<{ filename: string; content: string; sizeBytes: number }[]>([])
   const [attachBusy, setAttachBusy] = useState(false)
+  const extraPdfRef = useRef<HTMLInputElement>(null)
   const [sending, setSending] = useState(false)
   const [drafting, setDrafting] = useState(false)
   const [geminiDraftId, setGeminiDraftId] = useState<string | null>(null)
@@ -280,6 +363,13 @@ export default function InvoicesView() {
           bankAutoRef.current = true
           setShowBank(!bankLines(parsed).length)
         }
+        const bizRow = s.settings.find((r) => r.key === 'INVOICE_BUSINESS')
+        const parsedBiz = parseBiz(bizRow?.value)
+        setBiz(parsedBiz)
+        if (!bizAutoRef.current) {
+          bizAutoRef.current = true
+          setShowBiz(!bizLines(parsedBiz).length)
+        }
       } catch {
         bankAutoRef.current = true
       }
@@ -302,6 +392,9 @@ export default function InvoicesView() {
     const total = incl ? gross : Math.round(subtotal * (1 + rate / 100) * 100) / 100
     return { subtotal, total, vat: Math.round((total - subtotal) * 100) / 100 }
   }, [items, taxRate, vatMode])
+
+  // The identity block every sheet prints top-left (print modal AND emailed PDF).
+  const bizBlock = useMemo(() => bizLines(biz), [biz])
 
   function resetForm() {
     setClientName(''); setClientEmail('')
@@ -354,6 +447,19 @@ export default function InvoicesView() {
       toast({ title: 'Could not save banking details', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setBankSaving(false)
+    }
+  }
+
+  async function saveBiz() {
+    setBizSaving(true)
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key: 'INVOICE_BUSINESS', value: JSON.stringify(biz) }) })
+      toast({ title: 'Business details saved ✓', description: 'Printed top-left of every invoice from now on.' })
+      setShowBiz(false)
+    } catch (e) {
+      toast({ title: 'Could not save business details', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBizSaving(false)
     }
   }
 
@@ -455,6 +561,50 @@ export default function InvoicesView() {
     }
   }
 
+  /** A PDF of the user's own choosing rides along with the document —
+   *  contract, brochure, spec sheet. PDFs only, 2 extras max, and the
+   *  engine's 8 MB total attachment ceiling is named up front. */
+  async function onExtraPdfFiles(files: FileList | null) {
+    if (!files || !files.length) return
+    const incoming = Array.from(files)
+    if (incoming.some((f) => !/\.pdf$/i.test(f.name) && f.type !== 'application/pdf')) {
+      toast({ title: 'PDFs only', description: 'The extra attachments take PDF files — the document itself is built here either way.', variant: 'destructive' })
+      return
+    }
+    const room = 2 - extraPdfs.length
+    if (room <= 0) {
+      toast({ title: 'Two extra PDFs is the cap', description: 'The document PDF plus two of your own — mail caps attachments at 8 MB in total.', variant: 'destructive' })
+      return
+    }
+    const read = (f: File) =>
+      new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result))
+        r.onerror = () => rej(new Error(`Could not read ${f.name}`))
+        r.readAsDataURL(f)
+      })
+    const next: { filename: string; content: string; sizeBytes: number }[] = []
+    for (const f of incoming.slice(0, room)) {
+      if (f.size > 7 * 1024 * 1024) {
+        toast({ title: `${f.name} is too heavy`, description: 'Keep each extra PDF under 7 MB — mail caps all attachments at 8 MB together.', variant: 'destructive' })
+        continue
+      }
+      try {
+        const content = (await read(f)).split(',')[1] || ''
+        if (content) next.push({ filename: f.name, content, sizeBytes: Math.floor(content.length * 0.75) })
+      } catch (e) {
+        toast({ title: 'Could not read the file', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      }
+    }
+    if (next.length) {
+      setExtraPdfs((rows) => [...rows, ...next])
+      const total = [...extraPdfs, ...next].reduce((s, p) => s + p.sizeBytes, 0) + (emailAttach?.sizeBytes || 0)
+      if (total > 8 * 1024 * 1024) {
+        toast({ title: 'Attachments are heavy', description: 'Together they pass the 8 MB mail ceiling — the engine drops the biggest ones. Send the document first, the rest in a follow-up.', variant: 'destructive' })
+      }
+    }
+  }
+
   /** The Send icon's door: prefill the composer, build the PDF, fetch the sender identity + spend quote. */
   function openSend(inv: Invoice) {
     const isQuote = kindOf(inv) === 'QUOTE'
@@ -467,6 +617,7 @@ export default function InvoicesView() {
     setEmailSubject(`${isQuote ? 'Quote' : 'Invoice'} ${inv.number} — ${rands(inv.total * 100)}`)
     setEmailBody(invoiceEmailBody(inv, profile?.name || ''))
     setEmailAttach(null)
+    setExtraPdfs([])
     setGeminiDraftId(null)
     setSpendQuote(null)
     buildInvoicePdf(inv)
@@ -521,6 +672,10 @@ export default function InvoicesView() {
       toast({ title: 'Subject and message are required', description: 'Edit the draft however you like, but keep both.', variant: 'destructive' })
       return
     }
+    const attachmentsOut = [
+      ...(emailAttach ? [{ filename: emailAttach.filename, content: emailAttach.content }] : []),
+      ...extraPdfs.map((p) => ({ filename: p.filename, content: p.content })),
+    ]
     setSending(true)
     try {
       const res = await api<{
@@ -537,7 +692,7 @@ export default function InvoicesView() {
           fromLocal: fromLocal.trim(),
           subject: emailSubject.trim(),
           body: emailBody,
-          attachments: emailAttach ? [{ filename: emailAttach.filename, content: emailAttach.content }] : undefined,
+          attachments: attachmentsOut.length ? attachmentsOut : undefined,
           projectId: activeProjectId || undefined,
           draftId: geminiDraftId || undefined,
           updateCrm: listedClient,
@@ -568,7 +723,7 @@ export default function InvoicesView() {
       const spendBit = res.spend?.chargedCents ? `${rands(res.spend.chargedCents)} airtime spent · ${rands(res.spend.balanceAfter)} left in the wallet` : null
       toast({
         title: `${sendInv.number} emailed ✓`,
-        description: [crmBit, res.sentFrom ? `From ${res.sentFrom}` : null, spendBit, res.notice].filter(Boolean).join(' · ') || `${emailAttach ? emailAttach.filename : 'No PDF'} → ${emailTo.trim()}`,
+        description: [crmBit, res.sentFrom ? `From ${res.sentFrom}` : null, spendBit, res.notice].filter(Boolean).join(' · ') || `${attachmentsOut.length ? `${attachmentsOut.length} attachment${attachmentsOut.length === 1 ? '' : 's'}` : 'No PDF'} → ${emailTo.trim()}`,
       })
       setSendInv(null)
       setGeminiDraftId(null)
@@ -721,6 +876,77 @@ export default function InvoicesView() {
               <p className="text-[11px] text-muted-foreground">Stored privately on your account. Each invoice keeps a snapshot, so old invoices always show the details they were paid with.</p>
             </div>
           )}
+      </div>
+
+      {/* Business identity block, printed top-left of every document */}
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-medium text-sm">Your business details</h3>
+            <p className="text-xs text-muted-foreground">Registered name, number and address — saved once, printed top-left of every invoice and quote.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {bizLines(biz).length > 0 ? (
+              <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">ON INVOICES</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">NOT SET YET</Badge>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (!bizLines(biz).length && !showBiz && profile?.name) setBiz((b) => ({ ...b, legalName: profile.name }))
+                setShowBiz((s) => !s)
+              }}
+            >
+              {showBiz ? 'Hide' : bizLines(biz).length ? 'Edit' : 'Add business details'}
+            </Button>
+          </div>
+        </div>
+        {bizLines(biz).length > 0 && !showBiz && (
+          <div className="rounded-lg border border-brand/20 bg-brand/5 p-2.5 text-xs whitespace-pre-line">{bizLines(biz).join('\n')}</div>
+        )}
+        {showBiz && (
+          <div className="space-y-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-name">Registered name</Label>
+                <Input id="bz-name" placeholder="Acme Holdings (Pty) Ltd" value={biz.legalName} onChange={(e) => setBiz({ ...biz, legalName: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-reg">Registration number</Label>
+                <Input id="bz-reg" placeholder="K2017/652523/07" value={biz.registration} onChange={(e) => setBiz({ ...biz, registration: e.target.value })} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="bz-a1">Street address</Label>
+                <Input id="bz-a1" placeholder="123 Kloof Street" value={biz.address1} onChange={(e) => setBiz({ ...biz, address1: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-a2">Suburb / area</Label>
+                <Input id="bz-a2" placeholder="Gardens" value={biz.address2} onChange={(e) => setBiz({ ...biz, address2: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-city">City</Label>
+                <Input id="bz-city" placeholder="Cape Town" value={biz.city} onChange={(e) => setBiz({ ...biz, city: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-prov">Province</Label>
+                <Input id="bz-prov" placeholder="Western Cape" value={biz.province} onChange={(e) => setBiz({ ...biz, province: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bz-postal">Postal code</Label>
+                <Input id="bz-postal" placeholder="8001" value={biz.postal} onChange={(e) => setBiz({ ...biz, postal: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={saveBiz} disabled={bizSaving || !biz.legalName.trim()}>
+                {bizSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save business details'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowBiz(false)}>Cancel</Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Saved once on your account. It prints top-left of every document — the registered name in bold, then the registration number and address, exactly like a paper original.</p>
+          </div>
+        )}
       </div>
 
       {/* Business logo (Operator), uploaded once, printed on every invoice */}
@@ -888,6 +1114,7 @@ export default function InvoicesView() {
           <div className="space-y-1.5">
             <Label htmlFor="i-notes">Notes (optional)</Label>
             <Textarea id="i-notes" rows={2} placeholder="Payment due in 14 days. Banking: FNB 6284…, reference INV-number." value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">Tip: [Brand Launch Package](https://your-link) prints as a clickable link on the document — a bare link works too.</p>
           </div>
 
           <div className="flex gap-2">
@@ -1030,13 +1257,13 @@ export default function InvoicesView() {
 
       {/* Printable template lives OUTSIDE the print:hidden container above.
           Inside it, printing hid the invoice itself and produced a blank page. */}
-      {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
+      {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} bizBlock={bizBlock} onDone={() => setPrintable(null)} />}
 
       {/* The off-screen sheet the emailed PDF is captured from — the SAME DOM
           the printer gets, so the attachment is pixel-identical to the paper. */}
       {hiddenInv && (
         <div ref={hiddenInvRef} aria-hidden className="fixed top-0 -left-[9999px] -z-50">
-          <InvoiceSheet invoice={hiddenInv} profile={profile} bankFallback={bank} />
+          <InvoiceSheet invoice={hiddenInv} profile={profile} bankFallback={bank} bizBlock={bizBlock} />
         </div>
       )}
 
@@ -1115,7 +1342,7 @@ export default function InvoicesView() {
                   <span>Listed client — log this send on their CRM record automatically ('Email "{emailSubject.trim() || sendInv.number}" sent to {emailTo.trim() || 'them'}' lands on their timeline; if nobody matches, they're added as a new client).</span>
                 </label>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-1.5">
                     {attachBusy ? (
                       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Building {kindOf(sendInv) === 'QUOTE' ? 'quote' : 'invoice'} PDF…</span>
                     ) : emailAttach ? (
@@ -1132,6 +1359,25 @@ export default function InvoicesView() {
                         <Paperclip className="h-3.5 w-3.5" /> Attach the PDF
                       </button>
                     )}
+                    {extraPdfs.map((p, i) => (
+                      <span key={`${p.filename}-${i}`} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs min-w-0">
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{p.filename}</span>
+                        <span className="text-muted-foreground shrink-0">{(p.sizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
+                        <button onClick={() => setExtraPdfs((rows) => rows.filter((_, j) => j !== i))} aria-label={`Remove ${p.filename}`} className="text-muted-foreground hover:text-foreground shrink-0">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                    {extraPdfs.length < 2 && (
+                      <div>
+                        <button type="button" onClick={() => extraPdfRef.current?.click()} className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline">
+                          <Paperclip className="h-3.5 w-3.5" /> Add a PDF of your own
+                        </button>
+                        <input ref={extraPdfRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => { onExtraPdfFiles(e.target.files); e.target.value = '' }} />
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">The document PDF builds itself. Up to 2 extra PDFs of your choosing ride along — contracts, brochures, spec sheets. Mail caps everything at 8 MB together.</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button variant="outline" onClick={() => { setSendInv(null); setGeminiDraftId(null) }}>Cancel</Button>
@@ -1158,7 +1404,7 @@ export default function InvoicesView() {
   )
 }
 
-function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; onDone: () => void }) {
+function InvoicePrint({ invoice, profile, bankFallback, bizBlock, onDone }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; bizBlock: string[]; onDone: () => void }) {
   // Print law v2, no :has() dependency: announce on body while the sheet is
   // mounted so browsers WITHOUT :has() still get sheet only printing. The class
   // leaves with the sheet, so ordinary printing is untouched.
@@ -1172,7 +1418,7 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
   // future chrome physically cannot reach the paper. Only the invoice prints.
   return createPortal(
     <div id="invoice-print-root" className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:text-black print:p-0 print:z-auto">
-      <InvoiceSheet invoice={invoice} profile={profile} bankFallback={bankFallback} />
+      <InvoiceSheet invoice={invoice} profile={profile} bankFallback={bankFallback} bizBlock={bizBlock} />
       <div className="max-w-[820px] mx-auto flex justify-end gap-2 py-3 print:hidden">
         <Button variant="outline" onClick={onDone}>Close</Button>
         <Button onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
@@ -1184,7 +1430,7 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
 
 /** The printable sheet itself — shared by the print modal and the emailed-PDF
  *  capture, so the paper and the attachment can never drift apart. */
-function InvoiceSheet({ invoice, profile, bankFallback }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null }) {
+function InvoiceSheet({ invoice, profile, bankFallback, bizBlock }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; bizBlock: string[] }) {
   const items = itemsOf(invoice)
   const vat = invoice.total - invoice.subtotal
   const isQuote = kindOf(invoice) === 'QUOTE'
@@ -1202,10 +1448,24 @@ function InvoiceSheet({ invoice, profile, bankFallback }: { invoice: Invoice; pr
               {invoice.logoUrl
                 ? <img src={invoice.logoUrl} alt="Business logo" className="h-14 mb-2" />
                 : <div className="font-display text-3xl tracking-wide">HUSTLE<span className="text-yellow-500">PORTAL</span></div>}
-              <p className="text-sm font-semibold mt-1">{profile?.name || 'Your business'}</p>
-              {profile?.website && <p className="text-xs text-neutral-500">{profile.website}</p>}
-              {profile?.contactEmail && <p className="text-xs text-neutral-500">{profile.contactEmail}</p>}
-              {profile?.contactPhone && <p className="text-xs text-neutral-500">{profile.contactPhone}</p>}
+              {bizBlock.length > 0 ? (
+                <div className="mt-1">
+                  <p className="text-sm font-bold tracking-wide">{bizBlock[0]}</p>
+                  {bizBlock.slice(1).map((line, i) => (
+                    <p key={i} className="text-xs text-neutral-600 mt-0.5">{line}</p>
+                  ))}
+                  {(profile?.website || profile?.contactEmail || profile?.contactPhone) && (
+                    <p className="text-xs text-neutral-400 mt-1.5">{[profile?.website, profile?.contactEmail, profile?.contactPhone].filter(Boolean).join(' · ')}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-1">
+                  <p className="text-sm font-semibold">{profile?.name || 'Your business'}</p>
+                  {profile?.website && <p className="text-xs text-neutral-500">{profile.website}</p>}
+                  {profile?.contactEmail && <p className="text-xs text-neutral-500">{profile.contactEmail}</p>}
+                  {profile?.contactPhone && <p className="text-xs text-neutral-500">{profile.contactPhone}</p>}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className="font-display text-3xl">{isQuote ? 'QUOTE' : 'INVOICE'}</div>
@@ -1236,7 +1496,7 @@ function InvoiceSheet({ invoice, profile, bankFallback }: { invoice: Invoice; pr
             <tbody>
               {items.map((it, i) => (
                 <tr key={i} className="border-b border-neutral-100">
-                  <td className="py-2.5 pr-2">{it.description}</td>
+                  <td className="py-2.5 pr-2 break-words">{richText(it.description)}</td>
                   <td className="py-2.5 text-right">{it.quantity}</td>
                   <td className="py-2.5 text-right">{randsPlain(it.unitPrice)}</td>
                   <td className="py-2.5 text-right">{randsPlain(it.quantity * it.unitPrice)}</td>
@@ -1258,14 +1518,17 @@ function InvoiceSheet({ invoice, profile, bankFallback }: { invoice: Invoice; pr
 
           {bankBlock && (
             <div className="mt-6 rounded border border-neutral-200 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1.5">Banking details</p>
+              <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1.5">Payment information</p>
               <div className="text-xs text-neutral-700 whitespace-pre-line font-mono">{bankBlock}</div>
             </div>
           )}
           {isQuote && (
             <p className="mt-4 text-xs text-neutral-500">Quote valid until the valid-until date above. Accept to kick off the work — an invoice follows.</p>
           )}
-          {invoice.notes && <div className="mt-6 text-xs text-neutral-500 whitespace-pre-line">{invoice.notes}</div>}
+          {isQuote && (
+            <p className="mt-5 text-xs text-neutral-600">Signed &amp; accepted by ____________________________&nbsp;&nbsp;&nbsp; Date ____________________</p>
+          )}
+          {invoice.notes && <div className="mt-6 text-xs text-neutral-600 whitespace-pre-line break-words">{richText(invoice.notes)}</div>}
           <p className="mt-8 text-center text-[10px] text-neutral-400">
             Powered by Business Hustle · www.businesshustle.co.za
           </p>
