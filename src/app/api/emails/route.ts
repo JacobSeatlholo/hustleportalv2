@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { sendMail } from '@/lib/mailer'
+import { sendMail, sanitizeCcInput, sanitizeFromLocal } from '@/lib/mailer'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, spendCredits, addCredits, formatRands } from '@/lib/wallet'
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
 import { matchLead, type LeadMatch } from '@/lib/leadMatch'
+import { resolveProject } from '@/lib/workspace'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest) {
   const mailBody = String(body.body || '').trim()
   if (!to || !to.includes('@')) return NextResponse.json({ error: 'A valid recipient email is required.' }, { status: 400 })
   if (!subject || !mailBody) return NextResponse.json({ error: 'Subject and body are required.' }, { status: 400 })
+  // The composer's sender pick + copies: cc is sanitized to real addresses
+  // (max 5), fromLocal is collapsed to a clean local part on OUR sending
+  // domain — the user only ever edits the part before the @, the domain the
+  // engine signs never moves.
+  const cc = sanitizeCcInput(typeof body.cc === 'string' ? body.cc : '')
+  const fromLocal = sanitizeFromLocal(typeof body.fromLocal === 'string' ? body.fromLocal : '') || undefined
 
   // AIRTIME LAW for email (the boss's prepaid model — prices live in ONE
   // place, src/lib/spend.ts):
@@ -86,18 +93,24 @@ export async function POST(req: NextRequest) {
       }))
     : undefined
 
-  const result = await sendMail(userId, { to, subject, body: mailBody, attachments })
+  const result = await sendMail(userId, { to, subject, body: mailBody, attachments, ...(cc.length ? { cc } : {}), ...(fromLocal ? { fromLocal } : {}) })
   const provider = result.ok ? result.provider : 'NONE'
 
   // If this send belongs to a logged draft, update it; otherwise log the send
   let email
+  const logData = {
+    toEmail: to,
+    ccEmail: cc.length ? cc.join(', ') : null,
+    subject,
+    body: mailBody,
+    status: result.ok ? 'SENT' : 'FAILED',
+    provider,
+    error: result.ok ? null : result.error,
+  }
   if (body.draftId) {
     const draft = await db.emailLog.findFirst({ where: { id: body.draftId, userId } })
     if (draft) {
-      email = await db.emailLog.update({
-        where: { id: draft.id },
-        data: { toEmail: to, subject, body: mailBody, status: result.ok ? 'SENT' : 'FAILED', provider, error: result.ok ? null : result.error },
-      })
+      email = await db.emailLog.update({ where: { id: draft.id }, data: logData })
     }
   }
   if (!email) {
@@ -105,12 +118,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId,
         projectId: body.projectId || null,
-        toEmail: to,
-        subject,
-        body: mailBody,
-        status: result.ok ? 'SENT' : 'FAILED',
-        provider,
-        error: result.ok ? null : result.error,
+        ...logData,
       },
     })
   }
@@ -118,14 +126,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error, email }, { status: 400 })
   }
 
-  // The statement→lead bridge (opt-in: only the statements flow asks). After
-  // a successful send, try to find the pipeline lead this recipient belongs
-  // to and hand the match back — the CLIENT decides with the boss whether to
-  // apply it (the "Update lead?" prompt). Nothing is written here; matching
-  // never fails the send that already went out.
-  let leadMatch: LeadMatch | null = null
-  if (body.matchLead) {
-    leadMatch = await matchLead(userId, to, typeof body.leadName === 'string' ? body.leadName : null)
+  // The statement→lead bridge (opt-in). Two doors, both explicit:
+  //  - matchLead: ONLY the matching runs here, the match is handed back and
+  //    the CLIENT decides with the boss whether to apply it (the "Update
+  //    lead?" prompt). Nothing is written.
+  //  - updateCrm: the ticked "listed client" box (invoices). The tick IS the
+  //    consent, so this door writes in one atomic motion after the send:
+  //    ONE match → pin the email to that lead's timeline; NO match → the
+  //    client is added as a new lead with the send recorded; TWO+ matches →
+  //    NOTHING is touched, no guessing in the boss's pipeline. Ever.
+  // A matching or CRM stumble never fails the send that already went out.
+  const wantsMatch = body.matchLead === true || body.updateCrm === true
+  let leadMatch: LeadMatch | null = wantsMatch
+    ? await matchLead(userId, to, typeof body.leadName === 'string' ? body.leadName : null)
+    : null
+
+  let crm: { linked?: boolean; created?: boolean; ambiguous?: boolean; lead?: { id: string; company: string; stage: string }; error?: string } | null = null
+  if (body.updateCrm === true && leadMatch) {
+    try {
+      if (leadMatch.kind === 'ONE') {
+        await db.emailLog.update({ where: { id: email.id }, data: { leadId: leadMatch.lead.id } })
+        crm = { linked: true, lead: { id: leadMatch.lead.id, company: leadMatch.lead.company, stage: leadMatch.lead.stage } }
+      } else if (leadMatch.kind === 'NONE') {
+        const project = await resolveProject(userId, typeof body.projectId === 'string' ? body.projectId : null)
+        const label = (typeof body.leadName === 'string' && body.leadName.trim()) || to.split('@')[0]
+        const lead = await db.lead.create({
+          data: {
+            userId,
+            projectId: project.id,
+            company: label,
+            email: to,
+            stage: 'CONTACTED',
+            source: 'MANUAL',
+            value: Number(body.dealValue) > 0 ? Number(body.dealValue) : 0,
+            notes: `Added from ${typeof body.docLabel === 'string' ? body.docLabel : 'an emailed document'} — "${subject}" sent to ${to}.`,
+          },
+        })
+        await db.emailLog.update({ where: { id: email.id }, data: { leadId: lead.id } })
+        crm = { created: true, lead: { id: lead.id, company: lead.company, stage: lead.stage } }
+      } else {
+        crm = { ambiguous: true }
+      }
+    } catch (e) {
+      // The email went out; the CRM write failing is a note, never an error page.
+      crm = { error: e instanceof Error ? e.message : 'CRM update failed' }
+    }
   }
 
   // The debit lands ONLY after the send actually went out (honesty law —
@@ -144,7 +189,7 @@ export async function POST(req: NextRequest) {
       spend = { chargedCents: priceCents, balanceAfter: after.balance }
     }
   }
-  return NextResponse.json({ email, notice: result.notice || null, freeRemaining: freeRemaining ?? null, bundleRemaining: bundleRemaining ?? null, spend, leadMatch })
+  return NextResponse.json({ email, notice: result.notice || null, sentFrom: result.ok ? (result.from || null) : null, freeRemaining: freeRemaining ?? null, bundleRemaining: bundleRemaining ?? null, spend, leadMatch, crm })
 }
 
 // DELETE /api/emails?id= → remove a draft/log row

@@ -30,8 +30,49 @@ function memberFooter(): string {
 export type MailCreds = { user: string; appPassword: string }
 
 export type MailSendResult =
-  | { ok: true; provider: 'GMAIL' | 'PLATFORM'; notice?: string }
+  | { ok: true; provider: 'GMAIL' | 'PLATFORM'; notice?: string; from?: string }
   | { ok: false; error: string }
+
+/** The mail payload every path understands. cc is a sanitized list; fromLocal
+ *  is the sender's own pick of the part BEFORE the @ on our sending domain —
+ *  the domain itself never moves (it is the one Resend signs). */
+export type OutgoingMail = {
+  to: string
+  cc?: string[]
+  fromLocal?: string
+  subject: string
+  body: string
+  attachments?: MailAttachment[]
+}
+
+const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/
+
+/** "a@x.co.za, b@y.co; c@z.com" → up to five valid, de-duplicated addresses. */
+export function sanitizeCcInput(raw: string): string[] {
+  return Array.from(
+    new Set(
+      String(raw || '')
+        .split(/[,;\s]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => EMAIL_ADDRESS_RE.test(s)),
+    ),
+  ).slice(0, 5)
+}
+
+/** Only the part before the @ is the user's to edit. "accounts", or even a
+ *  full address they pasted, collapses to a clean local part on our domain. */
+export function sanitizeFromLocal(raw: string): string | null {
+  let s = String(raw || '').trim().toLowerCase()
+  const at = s.indexOf('@')
+  if (at > 0) s = s.slice(0, at)
+  const local = s
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30)
+    .replace(/-+$/, '')
+  return local || null
+}
 
 /** Branded sender, works the moment hustleportal.online verifies in Resend. */
 const BRANDED_FROM = 'HustlePortal <noreply@hustleportal.online>'
@@ -344,8 +385,8 @@ function sanitizeAttachments(list?: MailAttachment[]): MailAttachment[] | undefi
 
 async function sendViaUserGmail(
   creds: MailCreds,
-  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
-): Promise<{ ok: true; provider: 'GMAIL' } | { ok: false; error: string }> {
+  mail: OutgoingMail,
+): Promise<{ ok: true; provider: 'GMAIL'; from: string } | { ok: false; error: string }> {
   try {
     const nodemailer = await import('nodemailer')
     const transport = nodemailer.createTransport({
@@ -357,13 +398,14 @@ async function sendViaUserGmail(
     await transport.sendMail({
       from: `"HustlePortal" <${creds.user}>`,
       to: mail.to,
+      ...(mail.cc?.length ? { cc: mail.cc } : {}),
       subject: mail.subject,
       text: mail.body,
       ...(mail.attachments?.length
         ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content, 'base64') })) }
         : {}),
     })
-    return { ok: true, provider: 'GMAIL' }
+    return { ok: true, provider: 'GMAIL', from: creds.user }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to send email'
     return { ok: false, error: classifyGmailError(msg) }
@@ -397,13 +439,14 @@ async function resendSend(
   apiKey: string,
   from: string,
   userId: string,
-  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
+  mail: OutgoingMail,
 ): Promise<{ ok: true } | { ok: false; raw: string }> {
   // Reply-To the sender's real account so client responses reach THEM
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
   return resendPost(apiKey, {
     from,
     to: [mail.to],
+    ...(mail.cc?.length ? { cc: mail.cc } : {}),
     subject: mail.subject,
     text: mail.body,
     ...(mail.attachments?.length ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content })) } : {}),
@@ -419,8 +462,8 @@ async function resendSend(
  */
 async function sendViaPlatform(
   userId: string,
-  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
-): Promise<{ ok: true; provider: 'PLATFORM'; viaFallback?: boolean } | { ok: false; error: string }> {
+  mail: OutgoingMail,
+): Promise<{ ok: true; provider: 'PLATFORM'; viaFallback?: boolean; from: string } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
     return {
@@ -429,9 +472,16 @@ async function sendViaPlatform(
         'Email is not switched on yet. HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
     }
   }
-  // USER mail goes out from the business's own identity on our domain; the
-  // RESEND_FROM env (operator override) still wins when explicitly set.
-  const branded = process.env.RESEND_FROM?.trim() || (await userSendingIdentity(userId)).from
+  // USER mail goes out from the business's own identity on our domain. A
+  // per-send fromLocal pick (the sender the user chose in the composer) wins
+  // over everything — the operator RESEND_FROM env and the identity default.
+  // The domain never moves: only the part before the @ is theirs to edit, and
+  // that is the part Resend's verified domain signs for.
+  const identity = await userSendingIdentity(userId)
+  const local = mail.fromLocal ? sanitizeFromLocal(mail.fromLocal) : null
+  const branded = local
+    ? `${identity.label} <${local}@${sendingDomain()}>`
+    : process.env.RESEND_FROM?.trim() || identity.from
   // Member and team sends from our domain carry one quiet delivery line.
   const payload = { ...mail, body: mail.body + memberFooter() }
   const first = await resendSend(apiKey, branded, userId, payload)
@@ -444,12 +494,12 @@ async function sendViaPlatform(
       rows: [{ name: d, status: 'verified' }, ...(domainCache?.rows || []).filter((r) => r.name !== d)],
     }
     await stampDomainProof()
-    return { ok: true, provider: 'PLATFORM' }
+    return { ok: true, provider: 'PLATFORM', from: branded }
   }
   // From-domain rejection (unverified) → retry once with the test sender
   if (/from|domain|verif|422|403/i.test(first.raw)) {
     const second = await resendSend(apiKey, SANDBOX_FROM, userId, payload)
-    if (second.ok) return { ok: true, provider: 'PLATFORM', viaFallback: true }
+    if (second.ok) return { ok: true, provider: 'PLATFORM', viaFallback: true, from: SANDBOX_FROM }
     return { ok: false, error: classifyPlatformError(second.raw, await readDomainProof()) }
   }
   return { ok: false, error: classifyPlatformError(first.raw, await readDomainProof()) }
@@ -464,12 +514,15 @@ async function sendViaPlatform(
  */
 export async function sendMail(
   userId: string,
-  mail: { to: string; subject: string; body: string; attachments?: MailAttachment[] },
+  mail: OutgoingMail,
 ): Promise<MailSendResult> {
   const attachments = sanitizeAttachments(mail.attachments)
   const payload = { ...mail, attachments } // no signature: the sender's voice stays theirs
   const creds = await getUserMailCreds(userId)
-  if (creds && !gmailOnCooldown(userId)) {
+  // A chosen sender on our domain can ONLY come from the platform engine —
+  // Gmail always sends as the connected account, no masquerading. When the
+  // user picked their From in the composer, the pick wins and Gmail waits.
+  if (creds && !gmailOnCooldown(userId) && !mail.fromLocal) {
     const r = await sendViaUserGmail(creds, payload)
     if (r.ok) {
       clearGmailFailure(userId)
@@ -482,6 +535,7 @@ export async function sendMail(
       return {
         ok: true,
         provider: 'PLATFORM',
+        from: fb.from,
         notice: fb.viaFallback
           ? 'Sent via HustlePortal\'s test sender. Your Gmail login was rejected and the sending domain is still verifying, so replies route to your account email. Both fixes are one tap: Integrations (Gmail) + resend.com/domains.'
           : 'Sent via the HustlePortal engine. Your Gmail login was rejected, so replies route to your account email. Fix it in about a minute under Integrations → Test Gmail connection.',
@@ -493,8 +547,13 @@ export async function sendMail(
     }
   }
   const fb = await sendViaPlatform(userId, payload)
-  if (fb.ok && creds && fb.viaFallback) {
+  if (fb.ok && creds && !mail.fromLocal && fb.viaFallback) {
     return { ...fb, notice: 'Sent via HustlePortal\'s test sender. Your Gmail login is cooling down and the sending domain is still verifying, so this reached only your own account inbox. Both fixes: Integrations (Gmail) + resend.com/domains.' }
+  }
+  if (fb.ok && creds && mail.fromLocal) {
+    // Honest footnote: their Gmail exists but was bypassed on purpose, because
+    // the sender they picked can only leave from our verified domain.
+    return { ...fb, notice: `Sent from ${fb.from || mail.fromLocal} — the sender you picked. (Your connected Gmail always sends as its own address, so the engine took this one.)` }
   }
   return fb
 }

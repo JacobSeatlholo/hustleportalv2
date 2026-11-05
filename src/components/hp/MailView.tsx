@@ -871,7 +871,7 @@ export default function MailView() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{e.subject}</p>
-                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
+                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge

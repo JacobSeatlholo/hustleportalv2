@@ -474,6 +474,7 @@ model EmailLog {
   projectId  String?
   leadId     String?
   toEmail    String
+  ccEmail    String? // comma-joined carbon copies, the log stays honest about who else saw it
   subject    String
   body       String
   status     String    @default("DRAFT") // DRAFT | QUEUED | SENT | FAILED | BOUNCED | SKIPPED

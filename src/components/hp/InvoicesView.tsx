@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { api, rands, randsPlain, type Invoice, type ProjectFull, type IntegrationSetting } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Plus, ReceiptText, FileText, Printer, Send, Trash2, Upload, X, Lock, Check, Ban } from 'lucide-react'
+import { Loader2, Plus, ReceiptText, FileText, Printer, Send, Trash2, Upload, X, Lock, Check, Ban, Sparkles, Paperclip } from 'lucide-react'
 import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
@@ -74,6 +75,36 @@ const STATUS_STYLES: Record<string, string> = {
 export function kindOf(inv: Pick<Invoice, 'kind'>): 'INVOICE' | 'QUOTE' {
   return inv.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE'
 }
+
+/** The sending domain is the verified one the engine signs — only the part
+ *  before the @ is the user's to edit (the composer keeps it that way). */
+const FROM_DOMAIN = 'hustleportal.online'
+
+/** The honest default draft: what was sent, for how much, when it's due. */
+function invoiceEmailBody(inv: Invoice, bizName: string): string {
+  const isQuote = kindOf(inv) === 'QUOTE'
+  const items = itemsOf(inv)
+  const first = items.find((i) => i.description.trim())?.description.trim()
+  const due = inv.dueAt ? new Date(inv.dueAt).toLocaleDateString('en-ZA') : null
+  return [
+    `Hi ${inv.clientName},`,
+    '',
+    `Please find ${isQuote ? 'quote' : 'invoice'} ${inv.number} attached${first ? ` — ${first}` : ''}. The total comes to ${rands(inv.total * 100)}${isQuote ? '' : due ? `, due ${due}` : ''}.`,
+    '',
+    isQuote
+      ? 'If everything looks right, accept the quote and I will get started.'
+      : 'Banking details are on the document. Payment is due by the date above.',
+    inv.notes?.trim() ? `\n${inv.notes.trim()}` : '',
+    '',
+    'Any questions, just reply to this email.',
+    '',
+    'Kind regards,',
+    bizName || 'Me',
+  ].filter((line) => line !== '').join('\n')
+}
+
+/** Suggested local parts for the sender picker — the identity slug is added at open. */
+const FROM_IDEAS = ['accounts', 'invoices', 'sales', 'hello', 'team']
 
 /**
  * Notion style document name: the client name on an invoice or quote is
@@ -169,6 +200,32 @@ export default function InvoicesView() {
   const [reqOpen, setReqOpen] = useState(false)
   const [reqService, setReqService] = useState<RequestedService | null>(null)
   const [reqPreset, setReqPreset] = useState<string | undefined>(undefined)
+
+  // ---- Email the invoice/quote (campaigns-style composer) ----
+  // The Send icon now opens a real composer: edit the message, pick the
+  // sender's local part (the domain stays the verified one), copy the
+  // accountant in, Gemini-draft it, and tick "listed client" so the CRM
+  // record hears about the send on its own. Nothing sends until Send is
+  // pressed — the icon is a door, not a trigger.
+  const [sendInv, setSendInv] = useState<Invoice | null>(null)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailCc, setEmailCc] = useState('')
+  const [showCc, setShowCc] = useState(false)
+  const [fromLocal, setFromLocal] = useState('')
+  const [identityLocal, setIdentityLocal] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [listedClient, setListedClient] = useState(false)
+  const [emailAttach, setEmailAttach] = useState<{ filename: string; content: string; sizeBytes: number } | null>(null)
+  const [attachBusy, setAttachBusy] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [drafting, setDrafting] = useState(false)
+  const [geminiDraftId, setGeminiDraftId] = useState<string | null>(null)
+  const [spendQuote, setSpendQuote] = useState<{ mode: 'ALLOWANCE' | 'AIRTIME' | 'EMPTY'; priceCents: number; allowanceRemaining: number; balanceCents: number } | null>(null)
+  // The off-screen sheet the PDF is captured from — statements' one-sheet law:
+  // the PDF is pixel-identical to the print preview by construction.
+  const [hiddenInv, setHiddenInv] = useState<Invoice | null>(null)
+  const hiddenInvRef = useRef<HTMLDivElement>(null)
 
   // Workspace focus: follows the active workspace (top nav switcher) until the user picks explicitly.
   const [invProject, setInvProject] = useState('')
@@ -300,7 +357,7 @@ export default function InvoicesView() {
     }
   }
 
-  async function create(status: 'DRAFT' | 'SENT') {
+  async function create() {
     if (!clientName.trim()) {
       toast({ title: 'Who is this for?', description: 'Add a client name.', variant: 'destructive' })
       return
@@ -316,15 +373,18 @@ export default function InvoicesView() {
         body: JSON.stringify({
           kind: docKind,
           clientName, clientEmail, items, taxRate, pricesIncludeVat: vatMode === 'incl', notes, logoUrl,
-          status, projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
+          status: 'DRAFT', projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
           bankDetails: bankLines(bank).join('\n'),
         }),
       })
-      toast({ title: `${res.invoice.number} created ✓`, description: res.statementNote || (status === 'SENT' ? 'Marked as sent.' : 'Saved as draft.') })
+      toast({ title: `${res.invoice.number} created ✓`, description: res.statementNote || 'Saved as draft.' })
       resetForm()
       setShowCreate(false)
       bumpRefresh()
       load() // load() re-derives the invoice-logo touchpoint from the fresh list
+      // "Create & send" was checked → the composer opens on the fresh document.
+      // Nothing is marked SENT until the email itself actually goes out.
+      if (sendAfter) openSend(res.invoice)
     } catch (e) {
       toast({ title: 'Could not create invoice', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -345,6 +405,179 @@ export default function InvoicesView() {
       load()
     } catch (e) {
       toast({ title: 'Update failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    }
+  }
+
+  // ---- Email the document: build the PDF from the REAL printable sheet ----
+  // (statements' law: pixel-identical to the print preview by construction),
+  // sliced across A4 pages when a long document outgrows one sheet.
+  async function buildInvoicePdf(inv: Invoice) {
+    setAttachBusy(true)
+    try {
+      const filename = `${kindOf(inv) === 'QUOTE' ? 'Quote' : 'Invoice'}-${inv.number}.pdf`
+      setHiddenInv(inv)
+      await new Promise((r) => setTimeout(r, 80)) // let React commit the sheet
+      const el = hiddenInvRef.current?.querySelector('.invoice-sheet') as HTMLElement | null
+      if (!el) throw new Error('The document sheet did not render.')
+      const imgs = Array.from(el.querySelectorAll('img'))
+      await Promise.all(imgs.map((im) => (im.complete && im.naturalWidth > 0 ? null : new Promise<void>((res) => { im.onload = () => res(); im.onerror = () => res() }))))
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false })
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait', compress: true })
+      // A4 at the canvas's own resolution: slice tall documents page by page.
+      const pageH = Math.floor(canvas.width * (841.89 / 595.28))
+      const pages = Math.max(1, Math.ceil(canvas.height / pageH))
+      for (let p = 0; p < pages; p++) {
+        if (p > 0) pdf.addPage()
+        const sliceH = Math.min(pageH, canvas.height - p * pageH)
+        if (pages === 1) {
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 595.28, 841.89)
+        } else {
+          const slice = document.createElement('canvas')
+          slice.width = canvas.width
+          slice.height = pageH
+          const ctx = slice.getContext('2d')
+          if (!ctx) throw new Error('The PDF could not be assembled.')
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, slice.width, slice.height)
+          ctx.drawImage(canvas, 0, p * pageH, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+          pdf.addImage(slice.toDataURL('image/png'), 'PNG', 0, 0, 595.28, 841.89)
+        }
+      }
+      const content = (pdf.output('datauristring') || '').split(',')[1] || ''
+      if (!content) throw new Error('The PDF came out empty.')
+      setEmailAttach({ filename, content, sizeBytes: Math.floor(content.length * 0.75) })
+    } catch (e) {
+      toast({ title: 'Could not build the PDF', description: e instanceof Error ? e.message : 'You can still send without it.', variant: 'destructive' })
+    } finally {
+      setHiddenInv(null)
+      setAttachBusy(false)
+    }
+  }
+
+  /** The Send icon's door: prefill the composer, build the PDF, fetch the sender identity + spend quote. */
+  function openSend(inv: Invoice) {
+    const isQuote = kindOf(inv) === 'QUOTE'
+    setSendInv(inv)
+    setEmailTo(inv.clientEmail || '')
+    setEmailCc(localStorage.getItem('hp-invoice-cc') || '')
+    setShowCc(!!localStorage.getItem('hp-invoice-cc'))
+    setFromLocal(localStorage.getItem('hp-invoice-from') || '')
+    setListedClient(localStorage.getItem('hp-invoice-listed') === '1')
+    setEmailSubject(`${isQuote ? 'Quote' : 'Invoice'} ${inv.number} — ${rands(inv.total * 100)}`)
+    setEmailBody(invoiceEmailBody(inv, profile?.name || ''))
+    setEmailAttach(null)
+    setGeminiDraftId(null)
+    setSpendQuote(null)
+    buildInvoicePdf(inv)
+    // Best-effort garnish: the user's own address on our domain + the airtime
+    // truth BEFORE the button. The composer works without both.
+    api<{ status: { sendingAs?: string; sendingDomain: string }; spend?: { mode: 'ALLOWANCE' | 'AIRTIME' | 'EMPTY'; priceCents: number; allowanceRemaining: number; balanceCents: number } | null }>('/api/emails/status')
+      .then((s) => {
+        const slug = s.status?.sendingAs?.split('@')[0] || ''
+        setIdentityLocal(slug)
+        if (!localStorage.getItem('hp-invoice-from') && slug) setFromLocal(slug)
+        setSpendQuote(s.spend ?? null)
+      })
+      .catch(() => { /* cosmetic */ })
+  }
+
+  /** Gemini draft, right there in the composer — same door the Mail screen uses. */
+  async function draftWithGemini() {
+    if (!sendInv) return
+    setDrafting(true)
+    try {
+      const isQuote = kindOf(sendInv) === 'QUOTE'
+      const lines = itemsOf(sendInv).map((i) => i.description.trim()).filter(Boolean).join(', ')
+      const due = sendInv.dueAt && !isQuote ? ` The due date is ${new Date(sendInv.dueAt).toLocaleDateString('en-ZA')}.` : ''
+      const goal = `Email a${isQuote ? ' quote' : 'n invoice'} (${sendInv.number}) to ${sendInv.clientName} for ${rands(sendInv.total * 100)}${lines ? `, covering ${lines}` : ''}.${due} The PDF document is attached — mention it, keep the email short and professional, banking details are on the document.`
+      const res = await api<{ draft: { id: string; subject: string; body: string } }>('/api/ai/generate-email', {
+        method: 'POST',
+        body: JSON.stringify({ to: emailTo || undefined, goal, clientName: sendInv.clientName, projectId: activeProjectId || undefined }),
+      })
+      setEmailSubject(res.draft.subject)
+      setEmailBody(res.draft.body)
+      setGeminiDraftId(res.draft.id)
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Gemini draft failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  /** One press, the whole loop: send → log → flip the book's status → update the CRM (if ticked). */
+  async function sendInvoiceEmail() {
+    if (!sendInv) return
+    if (!emailTo.trim().includes('@')) {
+      toast({ title: 'Add the recipient', description: 'A valid email address is needed for this to go out.', variant: 'destructive' })
+      return
+    }
+    if (!fromLocal.trim()) {
+      toast({ title: 'Pick the sender', description: `Type the part before the @ — e.g. accounts — or keep your default.`, variant: 'destructive' })
+      return
+    }
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      toast({ title: 'Subject and message are required', description: 'Edit the draft however you like, but keep both.', variant: 'destructive' })
+      return
+    }
+    setSending(true)
+    try {
+      const res = await api<{
+        email: { id: string }
+        notice?: string | null
+        sentFrom?: string | null
+        spend?: { chargedCents: number; balanceAfter: number } | null
+        crm?: { linked?: boolean; created?: boolean; ambiguous?: boolean; lead?: { company: string }; error?: string } | null
+      }>('/api/emails', {
+        method: 'POST',
+        body: JSON.stringify({
+          to: emailTo.trim(),
+          cc: emailCc.trim() || undefined,
+          fromLocal: fromLocal.trim(),
+          subject: emailSubject.trim(),
+          body: emailBody,
+          attachments: emailAttach ? [{ filename: emailAttach.filename, content: emailAttach.content }] : undefined,
+          projectId: activeProjectId || undefined,
+          draftId: geminiDraftId || undefined,
+          updateCrm: listedClient,
+          leadName: sendInv.clientName,
+          dealValue: sendInv.total,
+          docLabel: `${kindOf(sendInv) === 'QUOTE' ? 'quote' : 'invoice'} ${sendInv.number}`,
+        }),
+      })
+      // The book follows the email: a draft (or a declined quote being re-sent)
+      // walks to SENT only once the email is actually out. Never the other way.
+      if (sendInv.status === 'DRAFT' || sendInv.status === 'DECLINED') {
+        try {
+          await api(`/api/invoices/${sendInv.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'SENT' }) })
+        } catch { /* the email went out; a status stumble must not read as failure */ }
+      }
+      localStorage.setItem('hp-invoice-cc', emailCc.trim())
+      localStorage.setItem('hp-invoice-from', fromLocal.trim())
+      localStorage.setItem('hp-invoice-listed', listedClient ? '1' : '0')
+      const crmBit = res.crm?.linked
+        ? `Logged on ${res.crm.lead?.company}'s CRM record ✓`
+        : res.crm?.created
+          ? `Added ${res.crm.lead?.company} to your CRM as a new client ✓`
+          : res.crm?.ambiguous
+            ? 'Two or more CRM clients match this address — the record was left alone, no guessing.'
+            : res.crm?.error
+              ? `Heads up: the CRM update failed (${res.crm.error}).`
+              : null
+      const spendBit = res.spend?.chargedCents ? `${rands(res.spend.chargedCents)} airtime spent · ${rands(res.spend.balanceAfter)} left in the wallet` : null
+      toast({
+        title: `${sendInv.number} emailed ✓`,
+        description: [crmBit, res.sentFrom ? `From ${res.sentFrom}` : null, spendBit, res.notice].filter(Boolean).join(' · ') || `${emailAttach ? emailAttach.filename : 'No PDF'} → ${emailTo.trim()}`,
+      })
+      setSendInv(null)
+      setGeminiDraftId(null)
+      bumpRefresh()
+      load()
+    } catch (e) {
+      toast({ title: 'The email did not go out', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally {
+      setSending(false)
     }
   }
 
@@ -648,7 +881,7 @@ export default function InvoicesView() {
             </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={sendAfter} onChange={(e) => setSendAfter(e.target.checked)} className="accent-yellow-400" />
-              Mark as sent immediately
+              Open the email as soon as it's created
             </label>
           </div>
 
@@ -658,11 +891,11 @@ export default function InvoicesView() {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={() => create(sendAfter ? 'SENT' : 'DRAFT')} disabled={creating}>
+            <Button onClick={() => create()} disabled={creating}>
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : docKind === 'QUOTE' ? <FileText className="h-4 w-4" /> : <ReceiptText className="h-4 w-4" />}
               {docKind === 'QUOTE'
-                ? `Create quote${sendAfter ? ' & send' : ' draft'}`
-                : `Create ${sendAfter ? '& send' : 'draft'}`}
+                ? `Create quote${sendAfter ? ' & email it' : ' draft'}`
+                : `Create ${sendAfter ? '& email' : 'draft'}`}
             </Button>
             <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
           </div>
@@ -747,7 +980,12 @@ export default function InvoicesView() {
                       <Badge variant="outline" className={STATUS_STYLES[inv.status] ?? ''}>{inv.status}</Badge>
                       <div className="flex items-center gap-1.5">
                         {inv.status === 'DRAFT' && (
-                          <button onClick={() => setStatus(inv, 'SENT')} title="Mark as sent" className="rounded-full border p-1.5 hover:border-brand transition">
+                          <button onClick={() => openSend(inv)} title={`Email this ${isQuote ? 'quote' : 'invoice'}`} className="rounded-full border p-1.5 hover:border-brand transition">
+                            <Send className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {!isQuote && inv.status === 'OVERDUE' && (
+                          <button onClick={() => openSend(inv)} title="Email again (payment reminder)" className="rounded-full border p-1.5 hover:border-brand transition">
                             <Send className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -767,7 +1005,7 @@ export default function InvoicesView() {
                           </>
                         )}
                         {isQuote && inv.status === 'DECLINED' && (
-                          <button onClick={() => setStatus(inv, 'SENT')} title="Send again (revised quote)" className="rounded-full border p-1.5 hover:border-brand transition">
+                          <button onClick={() => openSend(inv)} title="Send again (revised quote)" className="rounded-full border p-1.5 hover:border-brand transition">
                             <Send className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -793,20 +1031,134 @@ export default function InvoicesView() {
       {/* Printable template lives OUTSIDE the print:hidden container above.
           Inside it, printing hid the invoice itself and produced a blank page. */}
       {printable && <InvoicePrint invoice={printable} profile={profile} bankFallback={bank} onDone={() => setPrintable(null)} />}
+
+      {/* The off-screen sheet the emailed PDF is captured from — the SAME DOM
+          the printer gets, so the attachment is pixel-identical to the paper. */}
+      {hiddenInv && (
+        <div ref={hiddenInvRef} aria-hidden className="fixed top-0 -left-[9999px] -z-50">
+          <InvoiceSheet invoice={hiddenInv} profile={profile} bankFallback={bank} />
+        </div>
+      )}
+
+      {/* The composer the Send icon opens: campaigns-style, nothing sends until Send. */}
+      <Dialog open={!!sendInv} onOpenChange={(o) => { if (!o) { setSendInv(null); setGeminiDraftId(null) } }}>
+        <DialogContent className="sm:max-w-xl">
+          {sendInv && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Email {kindOf(sendInv) === 'QUOTE' ? 'quote' : 'invoice'} — {sendInv.number}</DialogTitle>
+                <DialogDescription>
+                  Edit anything, pick the sender, copy the accountant in. Nothing sends until you press Send — the PDF rides along.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">To</label>
+                  <Input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="client@email.co.za" />
+                  {!sendInv.clientEmail && (
+                    <p className="text-[11px] text-muted-foreground">No email on the document yet — type where it must go.</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {!showCc ? (
+                    <button type="button" onClick={() => setShowCc(true)} className="text-xs text-brand hover:underline inline-flex items-center gap-1">
+                      <Paperclip className="h-3 w-3 rotate-45" /> Copy someone in (CC)
+                    </button>
+                  ) : (
+                    <>
+                      <label className="text-xs text-muted-foreground">Cc — copies land in their inbox too</label>
+                      <Input
+                        type="text"
+                        value={emailCc}
+                        onChange={(e) => setEmailCc(e.target.value)}
+                        placeholder="accounts@businesshustle.co.za"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Comma-separate for more than one. Remembered for next time.</p>
+                    </>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">From — type the part before the @</label>
+                  <div className="flex items-stretch rounded-md border overflow-hidden focus-within:ring-1 focus-within:ring-brand">
+                    <Input
+                      className="border-0 rounded-none focus-visible:ring-0"
+                      value={fromLocal}
+                      onChange={(e) => setFromLocal(e.target.value)}
+                      placeholder="accounts"
+                      aria-label="Sender email name"
+                      list="invoice-from-ideas"
+                    />
+                    <span className="flex items-center px-2.5 text-xs text-muted-foreground bg-white/5 border-l select-none">@{FROM_DOMAIN}</span>
+                  </div>
+                  <datalist id="invoice-from-ideas">
+                    {identityLocal && <option value={identityLocal} />}
+                    {FROM_IDEAS.map((idea) => <option key={idea} value={idea} />)}
+                  </datalist>
+                  <p className="text-[11px] text-muted-foreground">Only the part before the @ is yours — the domain stays the verified one, so every send signs properly. Replies route to your account email.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} placeholder="Subject" />
+                    <Button type="button" variant="outline" size="sm" onClick={draftWithGemini} disabled={drafting} className="shrink-0 gap-1.5">
+                      {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-brand" />}
+                      Gemini
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Tap Gemini for a first draft of the message — then edit it like your own.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Message</label>
+                  <Textarea rows={10} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} />
+                </div>
+                <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <input type="checkbox" checked={listedClient} onChange={(e) => setListedClient(e.target.checked)} className="mt-0.5 accent-yellow-400" />
+                  <span>Listed client — log this send on their CRM record automatically ('Email "{emailSubject.trim() || sendInv.number}" sent to {emailTo.trim() || 'them'}' lands on their timeline; if nobody matches, they're added as a new client).</span>
+                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    {attachBusy ? (
+                      <span className="inline-flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Building {kindOf(sendInv) === 'QUOTE' ? 'quote' : 'invoice'} PDF…</span>
+                    ) : emailAttach ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs min-w-0">
+                        <FileText className="h-3.5 w-3.5 text-brand shrink-0" />
+                        <span className="truncate">{emailAttach.filename}</span>
+                        <span className="text-muted-foreground shrink-0">{(emailAttach.sizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
+                        <button onClick={() => setEmailAttach(null)} aria-label="Remove PDF" className="text-muted-foreground hover:text-foreground shrink-0">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => buildInvoicePdf(sendInv)} className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline">
+                        <Paperclip className="h-3.5 w-3.5" /> Attach the PDF
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button variant="outline" onClick={() => { setSendInv(null); setGeminiDraftId(null) }}>Cancel</Button>
+                    <Button onClick={sendInvoiceEmail} disabled={sending || attachBusy} className="gap-2">
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send
+                    </Button>
+                  </div>
+                </div>
+                {spendQuote && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {spendQuote.mode === 'ALLOWANCE'
+                      ? `${spendQuote.allowanceRemaining} included send${spendQuote.allowanceRemaining === 1 ? '' : 's'} left this cycle.`
+                      : spendQuote.mode === 'AIRTIME'
+                        ? `${rands(spendQuote.priceCents)} airtime per send · wallet ${rands(spendQuote.balanceCents)}. A failed send never costs a cent.`
+                        : 'This send needs airtime — load credits in the Wallet.'}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
 
 function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null; onDone: () => void }) {
-  const items = itemsOf(invoice)
-  const vat = invoice.total - invoice.subtotal
-  const isQuote = kindOf(invoice) === 'QUOTE'
-  // Prefer the snapshot saved on the invoice; fall back to current settings for older invoices.
-  const bankBlock = invoice.bankDetails?.trim()
-    ? invoice.bankDetails.trim()
-    : bankFallback
-      ? bankLines(bankFallback).join('\n')
-      : ''
   // Print law v2, no :has() dependency: announce on body while the sheet is
   // mounted so browsers WITHOUT :has() still get sheet only printing. The class
   // leaves with the sheet, so ordinary printing is untouched.
@@ -820,7 +1172,30 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
   // future chrome physically cannot reach the paper. Only the invoice prints.
   return createPortal(
     <div id="invoice-print-root" className="fixed inset-0 z-[60] bg-black/70 overflow-auto p-4 print:static print:bg-white print:text-black print:p-0 print:z-auto">
-      <div className="max-w-[820px] mx-auto bg-white text-black rounded-lg shadow-2xl print:shadow-none print:rounded-none print:max-w-none">
+      <InvoiceSheet invoice={invoice} profile={profile} bankFallback={bankFallback} />
+      <div className="max-w-[820px] mx-auto flex justify-end gap-2 py-3 print:hidden">
+        <Button variant="outline" onClick={onDone}>Close</Button>
+        <Button onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+/** The printable sheet itself — shared by the print modal and the emailed-PDF
+ *  capture, so the paper and the attachment can never drift apart. */
+function InvoiceSheet({ invoice, profile, bankFallback }: { invoice: Invoice; profile: ProjectFull | null; bankFallback: BankDetails | null }) {
+  const items = itemsOf(invoice)
+  const vat = invoice.total - invoice.subtotal
+  const isQuote = kindOf(invoice) === 'QUOTE'
+  // Prefer the snapshot saved on the invoice; fall back to current settings for older invoices.
+  const bankBlock = invoice.bankDetails?.trim()
+    ? invoice.bankDetails.trim()
+    : bankFallback
+      ? bankLines(bankFallback).join('\n')
+      : ''
+  return (
+      <div className="max-w-[820px] mx-auto bg-white text-black rounded-lg shadow-2xl print:shadow-none print:rounded-none print:max-w-none invoice-sheet">
         <div className="p-8 md:p-10">
           <div className="flex items-start justify-between gap-6 border-b pb-6">
             <div>
@@ -896,11 +1271,5 @@ function InvoicePrint({ invoice, profile, bankFallback, onDone }: { invoice: Inv
           </p>
         </div>
       </div>
-      <div className="max-w-[820px] mx-auto flex justify-end gap-2 py-3 print:hidden">
-        <Button variant="outline" onClick={onDone}>Close</Button>
-        <Button onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
-      </div>
-    </div>,
-    document.body
   )
 }

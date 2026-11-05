@@ -112,6 +112,7 @@ export interface Invoice {
 export interface EmailLogRow {
   id: string
   toEmail: string
+  ccEmail?: string | null
   subject: string
   body: string
   status: string
