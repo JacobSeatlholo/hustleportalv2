@@ -3,6 +3,7 @@ import { Bebas_Neue, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import GaAnalytics from "@/components/hp/GaAnalytics";
+import PostHogAnalytics from "@/components/hp/PostHogAnalytics";
 
 // Bold & confident display — condensed caps, poster energy. This IS the brand voice.
 // (Anti-slop work lives in the warm ink neutrals + mono eyebrows, not the font.)
@@ -205,6 +206,7 @@ export default function RootLayout({
         {children}
         <Toaster />
         <GaAnalytics />
+        <PostHogAnalytics />
       </body>
     </html>
   );
