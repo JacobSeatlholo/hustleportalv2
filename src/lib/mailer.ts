@@ -13,6 +13,7 @@
 import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
 import { campaignHtml, flattenMarkdownLinks } from '@/lib/campaignhtml'
+import { themedEmailHtml, type MailThemeId } from '@/lib/mailthemes'
 
 /**
  * Member mail carries NO ads, NO product pitch and NO referral link, ever.
@@ -86,21 +87,25 @@ const SANDBOX_FROM = 'HustlePortal <onboarding@resend.dev>'
  * legal links (Terms, Privacy & POPIA, Cookie Policy, PAIA Manual) and the
  * copyright. Plain text, no images, quiet and professional.
  */
-function legalFooter(): string {
+/**
+ * The legal footer lines, shared by the plain text side and the themed html
+ * side so both stays word-for-word the same.
+ */
+export function legalFooterLines(): string[] {
   const year = new Date().getFullYear()
   return [
-    '',
-    '',
     'HustlePortal · Simple Eternity Holdings (Pty) Ltd · businesshustle.co.za',
     'This email is confidential. If it reached you in error, notify team@businesshustle.co.za and delete it.',
-    '',
     'Terms: https://businesshustle.co.za/terms',
     'Privacy & POPIA: https://businesshustle.co.za/privacy',
     'Cookie Policy: https://businesshustle.co.za/cookies',
     'PAIA Manual: https://app.businesshustle.co.za/wp-content/uploads/2025/12/BHW-PAIA-Manual-Integrated-with-POPIA.pdf',
-    '',
     `© ${year} Simple Eternity Holdings (Pty) Ltd. All rights reserved.`,
-  ].join('\n')
+  ]
+}
+
+function legalFooter(): string {
+  return ['', '', ...legalFooterLines()].join('\n')
 }
 
 /**
@@ -601,10 +606,50 @@ export function normalizeCampaignFrom(raw?: string): string {
 
 // Campaign HTML rendering (bare URL + phrase links, video poster, open pixel)
 // lives in src/lib/campaignhtml.ts — pure and unit testable, shared by every
-// lane that sends html.
+// lane that sends html. The branded chrome lives in src/lib/mailthemes.ts.
+
+/** The look fields a campaign send can carry, on top of the letter itself. */
+type ThemedCampaignFields = {
+  /** Defaults to 'goldrush'. 'plain' restores the legacy unbranded look exactly. */
+  theme?: MailThemeId
+  /** Caps accent line under the hero, e.g. "GOOD TO HAVE YOU BACK". */
+  headline?: string
+  /** Bulletproof CTA button shown after the body. */
+  ctaLabel?: string
+  ctaUrl?: string
+  /** Hidden inbox preview text. */
+  preheader?: string
+}
+
+/**
+ * One html decision for both campaign transports: themed chrome by default so
+ * every platform campaign ships branded, the legacy plain look kept as an
+ * explicit escape hatch with its exact old behavior (body+tail as blocks,
+ * html only when a pixel is present).
+ */
+function campaignMailHtml(
+  mail: ThemedCampaignFields & { body: string; pixelUrl?: string; unsubscribeUrl?: string },
+  tail: string,
+): string | undefined {
+  if (mail.theme === 'plain') {
+    return mail.pixelUrl ? campaignHtml(mail.body + tail, mail.pixelUrl) : undefined
+  }
+  return themedEmailHtml(mail.body, {
+    theme: mail.theme ?? 'goldrush',
+    headline: mail.headline,
+    ctaLabel: mail.ctaLabel,
+    ctaUrl: mail.ctaUrl,
+    preheader: mail.preheader,
+    unsubscribeUrl: mail.unsubscribeUrl,
+    footerLines: legalFooterLines(),
+    pixelUrl: mail.pixelUrl,
+  })
+}
 
 export async function sendCampaignMail(
-  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
+  mail: ThemedCampaignFields & {
+    to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string
+  },
 ): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) return { ok: false, error: 'Email engine is not configured.' }
@@ -617,7 +662,7 @@ export async function sendCampaignMail(
   // raw markdown ever reaches a plain text reader; the html side renders them
   // as real anchors.
   const body = flattenMarkdownLinks(mail.body) + tail
-  const html = mail.pixelUrl ? campaignHtml(mail.body + tail, mail.pixelUrl) : undefined
+  const html = campaignMailHtml(mail, tail)
   const res = await resendPost(apiKey, {
     from, to: [mail.to], subject: mail.subject, text: body,
     ...(html ? { html } : {}),
@@ -692,7 +737,9 @@ function sesSigV4Headers(key: string, secret: string, region: string, host: stri
 }
 
 export async function sendCampaignMailViaSes(
-  mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
+  mail: ThemedCampaignFields & {
+    to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string
+  },
 ): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
   const key = process.env.SES_AWS_KEY?.trim()
   const secret = process.env.SES_AWS_SECRET?.trim()
@@ -705,7 +752,7 @@ export async function sendCampaignMailViaSes(
   // raw markdown ever reaches a plain text reader; the html side renders them
   // as real anchors.
   const body = flattenMarkdownLinks(mail.body) + tail
-  const html = mail.pixelUrl ? campaignHtml(mail.body + tail, mail.pixelUrl) : undefined
+  const html = campaignMailHtml(mail, tail)
   const configSet = process.env.SES_CONFIG_SET?.trim()
   const payload = {
     FromEmailAddress: from,
@@ -781,7 +828,11 @@ export async function sendSystemMail(
   }
   const from = process.env.RESEND_FROM?.trim() || BRANDED_FROM
   const body = mail.body + legalFooter()
-  const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
+  // Transactional mail gets the quiet Boardroom chrome: same words, branded
+  // frame, no pixel (system sends carry no EmailLog row) and no unsubscribe
+  // (a password reset is not bulk mail).
+  const html = themedEmailHtml(mail.body, { theme: 'boardroom', footerLines: legalFooterLines() })
+  const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, html, reply_to: TEAM_INBOX })
   if (first.ok) {
     // Branded from accepted → domain verified; keep the status cache truthful.
     const d = sendingDomain()
@@ -794,7 +845,7 @@ export async function sendSystemMail(
     return { ok: true }
   }
   if (/from|domain|verif|422|403/i.test(first.raw)) {
-    const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: body, reply_to: TEAM_INBOX })
+    const second = await resendPost(apiKey, { from: SANDBOX_FROM, to: [mail.to], subject: mail.subject, text: body, html, reply_to: TEAM_INBOX })
     if (second.ok) {
       await stampLastSystemSend({ to: mail.to, subject: mail.subject.slice(0, 120), ok: true, via: 'sandbox-sender' })
       return { ok: true }

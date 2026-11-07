@@ -89,6 +89,14 @@ export async function POST(req: NextRequest) {
         to: m.email,
         subject: mail.subject,
         body: mail.body,
+        // The branded look: Gold Rush chrome, the honey badger hero, the
+        // boss's own closing line as the caps headline, his "come see" line
+        // as the button. Copy stays verbatim; the chrome only frames it.
+        theme: 'goldrush',
+        headline: 'GOOD TO HAVE YOU BACK',
+        ctaLabel: "Come see what we've been building",
+        ctaUrl: APP_BASE,
+        preheader: 'One login for your whole business. Quite a bit has changed.',
         pixelUrl: `${APP_BASE}/api/mail/open/${log.id}`,
         unsubscribeUrl: unsubscribeUrl(log.id),
       })

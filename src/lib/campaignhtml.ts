@@ -32,7 +32,15 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-export function campaignHtml(text: string, pixelUrl: string): string {
+/**
+ * The body renderer every mail look shares: text lines -> escaped, linkified
+ * blocks with the video-poster line swapped for a clickable thumbnail. Pure
+ * text in, html fragment out (no page chrome, no pixel) so the plain look and
+ * the themed looks in mailthemes.ts all render the exact same content.
+ * linkColor lets each theme carry its own palette while the legacy default
+ * keeps the historic blue.
+ */
+export function renderTextBlocks(text: string, linkColor = '#0b57d0'): string {
   // Stash phrase links before escaping/linkify can mangle them.
   const links: { text: string; url: string }[] = []
   const stashed = text.replace(MD_LINK, (_m, t: string, u: string) => {
@@ -51,14 +59,18 @@ export function campaignHtml(text: string, pixelUrl: string): string {
       continue
     }
     let esc = escapeHtml(line)
-    esc = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0b57d0">$1</a>')
+    esc = esc.replace(/(https?:\/\/[^\s<]+)/g, `<a href="$1" style="color:${linkColor}">$1</a>`)
     esc = esc.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => {
       const l = links[Number(i)]
       if (!l) return ''
-      return `<a href="${l.url}" style="color:#0b57d0">${escapeHtml(l.text)}</a>`
+      return `<a href="${l.url}" style="color:${linkColor}">${escapeHtml(l.text)}</a>`
     })
     blocks.push(esc)
   }
-  const brd = blocks.join('<br>\n')
+  return blocks.join('<br>\n')
+}
+
+export function campaignHtml(text: string, pixelUrl: string): string {
+  const brd = renderTextBlocks(text)
   return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9"><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">${brd}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none" /></div></body></html>`
 }
