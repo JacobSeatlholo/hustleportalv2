@@ -17,7 +17,15 @@ export const maxDuration = 60
  */
 
 const DOOR_TOKEN = '05b965c45e88946644c256f91703554d'
-const ENDPOINT = 'https://overpass-api.de/api/interpreter'
+// overpass-api.de 502s datacenter IPs under load; prod walks the public
+// mirror ring per query until one answers. Swiss-only osm.ch is excluded
+// on purpose — a valid-but-empty SA answer from it would lie.
+const ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.osm.jp/api/interpreter',
+]
 
 function tokenOk(got: string | null): boolean {
   if (!got) return false
@@ -51,22 +59,24 @@ export async function POST(req: NextRequest) {
 
   for (const q of queries) {
     if (Date.now() > deadline) { leftover.push(q); continue }
-    try {
-      const r = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'HustlePortalBot/1.0 (lead discovery)' },
-        body: 'data=' + encodeURIComponent(q),
-        signal: AbortSignal.timeout(50_000),
-      })
-      if (!r.ok) {
-        results.push({ ql: q.slice(0, 120), elements: [], error: `overpass HTTP ${r.status}` })
-        continue
-      }
-      const data = await r.json()
-      results.push({ ql: q.slice(0, 120), elements: data.elements || [] })
-    } catch (e) {
-      results.push({ ql: q.slice(0, 120), elements: [], error: String(e).slice(0, 120) })
+    let answered = false
+    for (const ep of ENDPOINTS) {
+      if (Date.now() > deadline) { leftover.push(q); answered = true; break }
+      try {
+        const r = await fetch(ep, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'HustlePortalBot/1.0 (lead discovery)' },
+          body: 'data=' + encodeURIComponent(q),
+          signal: AbortSignal.timeout(20_000),
+        })
+        if (!r.ok) { continue } // next mirror
+        const data = await r.json()
+        results.push({ ql: q.slice(0, 120), elements: data.elements || [], via: ep.replace('https://', '').split('/')[0] })
+        answered = true
+        break
+      } catch { /* next mirror */ }
     }
+    if (!answered) results.push({ ql: q.slice(0, 120), elements: [], error: 'all mirrors failed' })
   }
 
   return NextResponse.json({ ok: true, results, leftover })
