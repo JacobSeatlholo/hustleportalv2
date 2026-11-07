@@ -12,6 +12,7 @@
  */
 import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
+import { campaignHtml, flattenMarkdownLinks } from '@/lib/campaignhtml'
 
 /**
  * Member mail carries NO ads, NO product pitch and NO referral link, ever.
@@ -598,35 +599,9 @@ export function normalizeCampaignFrom(raw?: string): string {
   return `${label} <${address}>`
 }
 
-/**
- * Campaign HTML: the plain text body rendered as clean readable mail (short
- * lines, clickable links, no images that can break) plus the invisible 1x1
- * open tracker. The marker line "See it in motion: <url>" renders as a big
- * clickable video thumbnail instead of a text line, email clients refuse
- * inline <video>, so the poster opens the clip in the browser. Reading clients
- * that load images fire the pixel; plain-text only readers do not, so open
- * counts are a floor, never a ceiling.
- */
-const CAMPAIGN_VIDEO_POSTER = 'https://www.hustleportal.online/campaign/blackbiz-intro-video.jpg'
-
-function campaignHtml(text: string, pixelUrl: string): string {
-  const blocks: string[] = []
-  for (const line of text.split('\n')) {
-    const video = line.match(/^See it in motion: (https:\/\/\S+)$/)
-    if (video) {
-      blocks.push(
-        `<a href="${video[1]}" target="_blank" style="text-decoration:none">` +
-        `<img src="${CAMPAIGN_VIDEO_POSTER}" width="640" alt="Watch: HustlePortal in motion. Tap to play." ` +
-        `style="display:block;width:100%;max-width:640px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;margin:18px 0" /></a>`,
-      )
-      continue
-    }
-    const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    blocks.push(esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0b57d0">$1</a>'))
-  }
-  const brd = blocks.join('<br>\n')
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9"><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">${brd}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none" /></div></body></html>`
-}
+// Campaign HTML rendering (bare URL + phrase links, video poster, open pixel)
+// lives in src/lib/campaignhtml.ts — pure and unit testable, shared by every
+// lane that sends html.
 
 export async function sendCampaignMail(
   mail: { to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string },
@@ -637,8 +612,12 @@ export async function sendCampaignMail(
   // Bulk sender law (Gmail, Yahoo, Microsoft): every campaign mail carries a
   // one click unsubscribe header plus a plain link a human can tap.
   const unsub = mail.unsubscribeUrl?.trim()
-  const body = mail.body + (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
-  const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
+  const tail = (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
+  // The text side flattens phrase links ("HustlePortal (https://...)") so no
+  // raw markdown ever reaches a plain text reader; the html side renders them
+  // as real anchors.
+  const body = flattenMarkdownLinks(mail.body) + tail
+  const html = mail.pixelUrl ? campaignHtml(mail.body + tail, mail.pixelUrl) : undefined
   const res = await resendPost(apiKey, {
     from, to: [mail.to], subject: mail.subject, text: body,
     ...(html ? { html } : {}),
@@ -721,8 +700,12 @@ export async function sendCampaignMailViaSes(
   if (!key || !secret) return { ok: false, error: 'SES lane is not configured.' }
   const from = normalizeCampaignFrom(mail.from)
   const unsub = mail.unsubscribeUrl?.trim()
-  const body = mail.body + (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
-  const html = mail.pixelUrl ? campaignHtml(body, mail.pixelUrl) : undefined
+  const tail = (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
+  // The text side flattens phrase links ("HustlePortal (https://...)") so no
+  // raw markdown ever reaches a plain text reader; the html side renders them
+  // as real anchors.
+  const body = flattenMarkdownLinks(mail.body) + tail
+  const html = mail.pixelUrl ? campaignHtml(mail.body + tail, mail.pixelUrl) : undefined
   const configSet = process.env.SES_CONFIG_SET?.trim()
   const payload = {
     FromEmailAddress: from,

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireExec } from '@/lib/admin'
-import { sendSystemMail } from '@/lib/mailer'
+import { sendCampaignMail } from '@/lib/mailer'
+import { unsubscribeUrl } from '@/lib/campaignqueue'
 import {
   getWinbackAudience, alreadySentThisCampaign, buildWinbackEmail,
   WINBACK_CAMPAIGN, WINBACK_QUIET_DAYS, WINBACK_MAX_PER_RUN,
 } from '@/lib/winback'
+
+const APP_BASE = 'https://www.hustleportal.online'
 
 // The win-back door, exec only.
 //
@@ -16,6 +19,13 @@ import {
 //        already emailed in this campaign, anyone on the Suppression list, and
 //        logs every send (good or failed) into EmailLog under the campaign tag
 //        so the archive shows exactly what went out.
+//
+// The send rides the campaign lane (sendCampaignMail), not the system lane:
+// bulk mail carries the one click unsubscribe law, and the log-first row binds
+// the open pixel so open counts are finally measured. The row starts as DRAFT
+// (not counted by the one touch guard), flips to SENT or FAILED after the
+// provider answers — a FAILED row is a retry target, a crash leaves a harmless
+// DRAFT behind.
 
 export async function GET() {
   const gate = await requireExec()
@@ -59,24 +69,42 @@ export async function POST(req: NextRequest) {
     const email = m.email.toLowerCase().trim()
     if (sent.has(email)) { skippedN += 1; continue }
     const mail = buildWinbackEmail({ name: m.name, businessName: m.businessName })
-    // The provider counts requests per second; a back-to-back loop trips it
-    // and drops live mail as FAILED. Breathe between sends, retry a 429 once.
-    let r = await sendSystemMail({ to: m.email, subject: mail.subject, body: mail.body })
-    if (!r.ok && (r.error || '').includes('429')) {
-      await new Promise((resolve) => setTimeout(resolve, 1_600))
-      r = await sendSystemMail({ to: m.email, subject: mail.subject, body: mail.body })
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    await db.emailLog.create({
+    // Log first so the open pixel and the one tap unsubscribe link can carry
+    // the row id. DRAFT is invisible to the one touch guard until the send
+    // actually lands.
+    const log = await db.emailLog.create({
       data: {
         userId: m.id,
         toEmail: m.email,
-        subject: mail.subject,
-        body: mail.body,
-        status: r.ok ? 'SENT' : 'FAILED',
+        subject: mail.subject.slice(0, 180),
+        body: mail.body.slice(0, 4000),
+        status: 'DRAFT',
         provider: 'PLATFORM',
         campaign: WINBACK_CAMPAIGN,
-        error: r.ok ? null : (r.error || 'Send failed'),
+      },
+      select: { id: true },
+    })
+    const sendOnce = () =>
+      sendCampaignMail({
+        to: m.email,
+        subject: mail.subject,
+        body: mail.body,
+        pixelUrl: `${APP_BASE}/api/mail/open/${log.id}`,
+        unsubscribeUrl: unsubscribeUrl(log.id),
+      })
+    // The provider counts requests per second; a back to back loop trips it
+    // and drops live mail as FAILED. Breathe between sends, retry a 429 once.
+    let r = await sendOnce()
+    if (!r.ok && (r.error || '').includes('429')) {
+      await new Promise((resolve) => setTimeout(resolve, 1_600))
+      r = await sendOnce()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await db.emailLog.update({
+      where: { id: log.id },
+      data: {
+        status: r.ok ? 'SENT' : 'FAILED',
+        error: r.ok ? null : (r.error || 'Send failed').slice(0, 500),
         sentAt: r.ok ? new Date() : null,
       },
     })

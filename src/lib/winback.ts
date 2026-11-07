@@ -49,8 +49,11 @@ function firstName(name: string, businessName: string | null): string {
 }
 
 /**
- * The win-back email, in the boss's voice. Dash free, no fake urgency, no made
- * up numbers. The legal footer is appended by the platform send path itself.
+ * The win-back email, in the boss's voice — his own rewrite, carried verbatim
+ * (Nov 7). One phrase link on HustlePortal renders as a real anchor in html
+ * and flattens to "HustlePortal (https://...)" in plain text. Dash free, no
+ * fake urgency, no made up numbers. The legal footer is appended by the
+ * platform send path itself.
  */
 export function buildWinbackEmail(user: { name: string; businessName: string | null }): WinbackDraft {
   const hi = firstName(user.name, user.businessName)
@@ -59,19 +62,55 @@ export function buildWinbackEmail(user: { name: string; businessName: string | n
     body: [
       `Hi ${hi},`,
       '',
-      'You checked in a while back and I wanted you to know the app has moved since then. The idea never changed, one login for the whole hustle, but the tools got a lot better.',
+      'You checked out HustlePortal a while back. Quite a bit has changed since then.',
       '',
-      'Here is what is new. The lead engine now hunts the internet for you. Tell it who your customer is, something like medical practices in Johannesburg that need contract cleaning, and it goes through directories and maps, throws out anything that has nothing to do with your trade, checks the phone numbers and websites, and drops the good ones in your pipeline. The free plan gives you 25 searches a day, and a search that comes back empty costs you nothing. When you want the contact details of a verified lead it is R15, and 50 cents lands an email in a real inbox.',
+      "The original idea remains the same: one login for everything you need to run your business. But the platform has grown considerably, and we'd like you to see what's new.",
       '',
-      'The rest of the app grew around that. A board for your jobs and tasks with due dates and a calendar for the month. A pipeline that moves every lead from New to Won with notes attached. Invoices and quotes you can fix with a click. And if you work with a team, you can tag each other inside a task and it lands in their inbox.',
+      'First, the lead engine.',
       '',
-      'Your data stays yours, never sold, never shared. The free plan needs no card, so nothing here is a gamble.',
+      'Instead of spending hours searching for potential customers, you can now put [HustlePortal](https://www.hustleportal.online) to work.',
       '',
-      'Log in and have a look: https://www.hustleportal.online',
+      "Tell it who you're looking for. For example: medical practices in Johannesburg that need contract cleaning.",
       '',
-      'Something broken or something you hate? Reply to this mail and it comes straight to the team. We would rather hear it from you than lose you quietly.',
+      'It searches business directories and maps, filters out irrelevant results, checks available contact information and websites, and brings matching businesses straight into your sales pipeline.',
       '',
-      'The HustlePortal team',
+      "Here's the best part:",
+      '',
+      '25 free searches per day. No credit card required.',
+      '',
+      'R0 for empty searches. If a search returns nothing, you pay nothing.',
+      '',
+      'R15 per verified lead when you want to unlock its contact details.',
+      '',
+      '50 cents per email delivered to a real inbox.',
+      '',
+      "And that's just the beginning.",
+      '',
+      'Your entire business workflow now lives in one place.',
+      '',
+      'Tasks & Projects: Organise jobs, assign due dates and keep track of everything with a monthly calendar.',
+      '',
+      'Sales Pipeline: Move prospects from New to Won, with notes and activity attached to every lead.',
+      '',
+      'Quotes & Invoices: Create, manage and update your business documents without the administrative headache.',
+      '',
+      'Team Collaboration: Tag teammates in tasks and send updates directly to their inboxes.',
+      '',
+      'No more jumping between disconnected tools just to keep your business moving.',
+      '',
+      "Your data stays yours. We don't sell or share it. And you can explore the free plan without entering payment details or committing to anything.",
+      '',
+      "Come see what we've been building:",
+      '',
+      'https://www.hustleportal.online',
+      '',
+      'Already have an account? Simply log in and pick up where you left off.',
+      '',
+      "Found something broken? Have an idea? Something you don't like? Just reply to this email. It goes straight to our team. We're building this to be genuinely useful, and your feedback helps us get there.",
+      '',
+      'Good to have you back.',
+      '',
+      'The HustlePortal Team',
     ].join('\n'),
   }
 }
@@ -83,7 +122,20 @@ async function latestActivityByUser(): Promise<Map<string, Date>> {
     db.invoice.groupBy({ by: ['userId'], _max: { createdAt: true } }),
     db.clientPoolLead.groupBy({ by: ['userId'], _max: { createdAt: true } }),
     db.project.groupBy({ by: ['userId'], _max: { createdAt: true } }),
-    db.emailLog.groupBy({ by: ['userId'], _max: { createdAt: true } }),
+    db.emailLog.groupBy({
+      by: ['userId'],
+      _max: { createdAt: true },
+      // Mail we sent TO a member is not the member working the app: winback
+      // rows must never reset the quiet clock (the engine would blind itself
+      // to exactly the people it exists to reach), and a staged DRAFT is not
+      // work either. The member's own sends still count.
+      where: {
+        AND: [
+          { status: { not: 'DRAFT' } },
+          { OR: [{ campaign: null }, { campaign: { not: { startsWith: 'winback-' } } }] },
+        ],
+      },
+    }),
     db.creditTx.groupBy({ by: ['userId'], _max: { createdAt: true } }),
   ])
   const latest = new Map<string, Date>()
