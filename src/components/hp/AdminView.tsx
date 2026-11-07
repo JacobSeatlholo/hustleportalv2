@@ -3090,6 +3090,8 @@ interface WinbackFeed {
   template: { subject: string; body: string }
   /** Non-null once the boss has saved his own edit; sends use it until reset. */
   override: { subject: string; body: string; savedAt: string } | null
+  /** Addresses the boss removed from THIS campaign with one click (restorable). */
+  excluded: { email: string; savedAt: string }[]
 }
 
 export function WinBackCard() {
@@ -3104,6 +3106,10 @@ export function WinBackCard() {
   const [edit, setEdit] = useState<{ subject: string; body: string } | null>(null)
   const [savingDraft, setSavingDraft] = useState(false)
   const [resetting, setResetting] = useState(false)
+  // One-click removal from this campaign's list: which address is mid-flight
+  // for exclude / restore, so a button spins instead of firing twice.
+  const [excludingEmail, setExcludingEmail] = useState<string | null>(null)
+  const [restoringEmail, setRestoringEmail] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -3153,6 +3159,34 @@ export function WinBackCard() {
       toast({ title: 'Reset failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setResetting(false)
+    }
+  }
+
+  // One click takes a member off THIS win-back list. Not suppression — the
+  // address just sits this campaign out, and a restore puts it straight back.
+  async function excludeMember(email: string) {
+    setExcludingEmail(email)
+    try {
+      await api('/api/admin/exec/winback/exclude', { method: 'POST', body: JSON.stringify({ email }) })
+      toast({ title: 'Removed from the win-back list', description: `${email} will not be emailed in this campaign. Restore any time.` })
+      load()
+    } catch (e) {
+      toast({ title: 'Could not remove them', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setExcludingEmail(null)
+    }
+  }
+
+  async function restoreExcluded(email: string) {
+    setRestoringEmail(email)
+    try {
+      await api(`/api/admin/exec/winback/exclude?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
+      toast({ title: 'Back on the list', description: `${email} is quiet-list material again and goes out on the next send.` })
+      load()
+    } catch (e) {
+      toast({ title: 'Could not restore them', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setRestoringEmail(null)
     }
   }
 
@@ -3217,11 +3251,52 @@ export function WinBackCard() {
                 </span>
                 <Badge variant="outline" className="shrink-0 border-amber-500/40 text-amber-500">{m.daysQuiet}d quiet</Badge>
                 {m.sentThisCampaign && <Badge variant="outline" className="shrink-0 border-emerald-500/40 text-emerald-500">emailed</Badge>}
+                {!m.sentThisCampaign && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-7 px-2 shrink-0 text-rose-500 border-rose-500/40 hover:bg-rose-500/10"
+                    disabled={excludingEmail === m.email}
+                    onClick={() => excludeMember(m.email)}
+                    title="Remove from this win-back list"
+                    aria-label={`Remove ${m.email} from the win-back list`}
+                  >
+                    {excludingEmail === m.email ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </Button>
+                )}
               </div>
             ))}
           </div>
         )}
       </CardContent>
+
+      {/* The one-click removals: honest, visible, restorable. These addresses
+          sit THIS campaign out; nothing is deleted and nobody is suppressed. */}
+      {feed && feed.excluded.length > 0 && (
+        <div className="px-4 pb-3">
+          <div className="rounded-lg border border-dashed px-3 py-2 space-y-1.5">
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <X className="h-3 w-3 shrink-0" />
+              Removed from this campaign — they stay out until you restore them:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {feed.excluded.map((x) => (
+                <span key={x.email} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                  {x.email}
+                  <button
+                    onClick={() => restoreExcluded(x.email)}
+                    disabled={restoringEmail === x.email}
+                    className="text-brand hover:underline inline-flex items-center gap-0.5 disabled:opacity-50"
+                    title="Put them back on the list"
+                    aria-label={`Restore ${x.email} to the win-back list`}
+                  >
+                    {restoringEmail === x.email ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} restore
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {feed?.override && (
         <div className="px-4 pb-2">

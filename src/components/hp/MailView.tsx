@@ -121,6 +121,9 @@ export default function MailView() {
   const [taskRow, setTaskRow] = useState<CampaignRow | null>(null)
   const [task, setTask] = useState({ title: '', dueDate: '', dueTime: '', priority: 'MEDIUM', notes: '' })
   const [taskSaving, setTaskSaving] = useState(false)
+  // One-click removal: the id of the queued row currently being pulled out of
+  // its campaign, so the × button spins instead of firing twice.
+  const [removingRowId, setRemovingRowId] = useState<string | null>(null)
 
   // queue composer state
   const [composerOpen, setComposerOpen] = useState(false)
@@ -323,6 +326,22 @@ export default function MailView() {
       toast({ title: 'Could not build the queue', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setCreating(false)
+    }
+  }
+
+  // Pull ONE queued email out of a campaign with a single click. The row is
+  // marked SKIPPED with an honest note (never deleted), the engine never sends
+  // it, and the counters resync straight after.
+  async function removeRow(tag: string, rowId: string) {
+    setRemovingRowId(rowId)
+    try {
+      await api('/api/admin/exec/campaigns', { method: 'PATCH', body: JSON.stringify({ campaign: tag, action: 'removeRow', rowId }) })
+      toast({ title: 'Removed from the campaign', description: 'That email is out of the queue and will not send. The log keeps the record.' })
+      loadCampaigns()
+    } catch (e) {
+      toast({ title: 'Could not remove it', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setRemovingRowId(null)
     }
   }
 
@@ -694,6 +713,18 @@ export default function MailView() {
                               <Badge variant="outline" className="text-[10px] text-rose-500 border-rose-500/40 shrink-0">failed</Badge>
                             ) : (
                               <Badge variant="outline" className="text-[10px] shrink-0">sent</Badge>
+                            )}
+                            {r.status === 'QUEUED' && r.campaign && (
+                              <Button
+                                size="sm" variant="outline"
+                                className="h-7 px-2 shrink-0 text-rose-500 border-rose-500/40 hover:bg-rose-500/10"
+                                disabled={removingRowId === r.id}
+                                onClick={() => removeRow(r.campaign as string, r.id)}
+                                title="Remove this email from the campaign queue"
+                                aria-label={`Remove ${r.toEmail} from the campaign queue`}
+                              >
+                                {removingRowId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                              </Button>
                             )}
                             {r.lead?.id && r.status !== 'QUEUED' && r.status !== 'SKIPPED' && (
                               <div className="flex items-center gap-1 shrink-0">

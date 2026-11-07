@@ -13,7 +13,8 @@ import { systemBlastAudience, fillMergeTags } from '@/lib/audience'
  * POST   create a queue (recipients are staged as QUEUED rows; NOTHING sends
  *        until the operator presses Start, the draft gate is structural)
  * GET    every campaign with its queue state and honest counters
- * PATCH  start / pause / resume / cancel a queue
+ * PATCH  start / pause / resume / cancel a queue, or removeRow to pull ONE
+ *        queued email out of the list with a click
  *
  * Rows reuse EmailLog (status QUEUED | SENT | FAILED | BOUNCED | SKIPPED) so
  * the read receipts, open tracking and pipeline moves all keep working.
@@ -244,7 +245,7 @@ export async function PATCH(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  let payload: { campaign?: string; action?: string }
+  let payload: { campaign?: string; action?: string; rowId?: string }
   try {
     payload = await req.json()
   } catch {
@@ -252,6 +253,38 @@ export async function PATCH(req: NextRequest) {
   }
   const tag = slugTag(payload.campaign)
   const action = payload.action || ''
+
+  // One click, one email out of the queue. The row is never deleted: it flips
+  // to SKIPPED with an honest note, so the archive still shows it existed and
+  // the engine simply never sends it. Sent mail stays untouchable — history
+  // does not get rewritten after the fact.
+  if (action === 'removeRow') {
+    const rowId = String(payload.rowId || '')
+    if (!rowId) return NextResponse.json({ error: 'rowId is required.' }, { status: 400 })
+    const row = await db.emailLog.findUnique({ where: { id: rowId }, select: { id: true, campaign: true, status: true, toEmail: true } })
+    if (!row || row.campaign !== tag) {
+      return NextResponse.json({ error: 'That email is not part of this campaign.' }, { status: 404 })
+    }
+    if (row.status !== 'QUEUED') {
+      return NextResponse.json({ error: 'Only queued emails can be removed — this one has already left the queue.' }, { status: 400 })
+    }
+    await db.emailLog.update({
+      where: { id: row.id },
+      data: { status: 'SKIPPED', error: `Removed by operator · ${new Date().toISOString().slice(0, 10)}` },
+    })
+    const [queued, sent, failed, bounced, skipped] = await Promise.all([
+      db.emailLog.count({ where: { campaign: tag, status: 'QUEUED' } }),
+      db.emailLog.count({ where: { campaign: tag, status: 'SENT' } }),
+      db.emailLog.count({ where: { campaign: tag, status: 'FAILED' } }),
+      db.emailLog.count({ where: { campaign: tag, status: 'BOUNCED' } }),
+      db.emailLog.count({ where: { campaign: tag, status: 'SKIPPED' } }),
+    ])
+    return NextResponse.json({
+      ok: true,
+      removed: row.toEmail,
+      summary: { queued, sent, failed, bounced, skipped, opened: 0, total: queued + sent + failed + bounced + skipped },
+    })
+  }
 
   const states = await readCampaignStates()
   const current: CampaignState = states[tag] || {
@@ -286,5 +319,5 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, campaign: tag, state: next, stopped: stopped.count })
   }
 
-  return NextResponse.json({ error: 'Unknown action. Use start, pause or cancel.' }, { status: 400 })
+  return NextResponse.json({ error: 'Unknown action. Use start, pause, cancel or removeRow.' }, { status: 400 })
 }

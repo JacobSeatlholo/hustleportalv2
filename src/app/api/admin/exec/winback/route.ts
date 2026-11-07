@@ -6,6 +6,7 @@ import { unsubscribeUrl } from '@/lib/campaignqueue'
 import {
   getWinbackAudience, alreadySentThisCampaign, renderWinbackEmail,
   readWinbackOverride, saveWinbackOverride, clearWinbackOverride,
+  readWinbackExclusions,
   WINBACK_CAMPAIGN, WINBACK_QUIET_DAYS, WINBACK_MAX_PER_RUN,
 } from '@/lib/winback'
 
@@ -15,9 +16,10 @@ const APP_BASE = 'https://www.hustleportal.online'
 //
 // GET    → the quiet list plus the exact email each member would receive,
 //          the editable template ({firstName} tokens) and whether an edited
-//          draft is saved. Nothing leaves the platform. The draft review step
-//          is the whole point: nobody sends a word of this until the boss has
-//          read it and pressed the button.
+//          draft is saved. Also the addresses the boss removed from this
+//          campaign with one click (restorable). Nothing leaves the platform.
+//          The draft review step is the whole point: nobody sends a word of
+//          this until the boss has read it and pressed the button.
 // PUT    → { subject, body } saves the boss's edited draft. Every send after
 //          that uses his words until he resets.
 // DELETE → back to the verbatim copy in code.
@@ -37,7 +39,9 @@ export async function GET() {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  const [audience, sent, override] = await Promise.all([getWinbackAudience(), alreadySentThisCampaign(), readWinbackOverride()])
+  const [audience, sent, override, excluded] = await Promise.all([
+    getWinbackAudience(), alreadySentThisCampaign(), readWinbackOverride(), readWinbackExclusions(),
+  ])
   // The draft preview is the same email the first member would get.
   const sample = renderWinbackEmail({ name: audience[0]?.name || 'there', businessName: audience[0]?.businessName ?? null }, override)
   // The editor's copy: what is in the box when the boss opens the editor —
@@ -55,6 +59,7 @@ export async function GET() {
     draft: sample,
     template,
     override: override ? { subject: override.subject, body: override.body, savedAt: override.savedAt } : null,
+    excluded,
   })
 }
 

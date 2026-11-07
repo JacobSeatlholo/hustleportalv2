@@ -49,6 +49,63 @@ export interface WinbackDraft {
 export const WINBACK_DRAFT_KEY = 'WINBACK_DRAFT_OVERRIDE'
 export const WINBACK_NAME_TOKEN = '{firstName}'
 
+/**
+ * The boss's one-click removals from THIS campaign's list. Not the Suppression
+ * list (that one is law for everything, forever): an exclusion just takes one
+ * address out of the win-back audience until the boss restores it. Stored in
+ * PlatformConfig like the draft override — runtime editable, no redeploy.
+ */
+export const WINBACK_EXCLUSIONS_KEY = 'WINBACK_EXCLUSIONS'
+
+export interface WinbackExclusion {
+  email: string
+  savedAt: string
+}
+
+export async function readWinbackExclusions(): Promise<WinbackExclusion[]> {
+  try {
+    const row = await db.platformConfig.findUnique({ where: { key: WINBACK_EXCLUSIONS_KEY } })
+    if (!row?.value) return []
+    const v = JSON.parse(row.value) as unknown
+    if (!Array.isArray(v)) return []
+    const out: WinbackExclusion[] = []
+    for (const item of v) {
+      if (item && typeof item === 'object' && typeof (item as WinbackExclusion).email === 'string') {
+        const e = item as WinbackExclusion
+        out.push({ email: e.email, savedAt: typeof e.savedAt === 'string' ? e.savedAt : '' })
+      }
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export async function addWinbackExclusion(email: string): Promise<WinbackExclusion[]> {
+  const clean = email.toLowerCase().trim()
+  const current = await readWinbackExclusions()
+  if (current.some((x) => x.email === clean)) return current
+  const next = [...current, { email: clean, savedAt: new Date().toISOString() }]
+  const value = JSON.stringify(next)
+  await db.platformConfig.upsert({
+    where: { key: WINBACK_EXCLUSIONS_KEY },
+    create: { key: WINBACK_EXCLUSIONS_KEY, value },
+    update: { value },
+  })
+  return next
+}
+
+export async function removeWinbackExclusion(email: string): Promise<void> {
+  const clean = email.toLowerCase().trim()
+  const next = (await readWinbackExclusions()).filter((x) => x.email !== clean)
+  const value = JSON.stringify(next)
+  await db.platformConfig.upsert({
+    where: { key: WINBACK_EXCLUSIONS_KEY },
+    create: { key: WINBACK_EXCLUSIONS_KEY, value },
+    update: { value },
+  })
+}
+
 export interface WinbackOverride {
   subject: string
   body: string
@@ -219,20 +276,25 @@ async function latestActivityByUser(): Promise<Map<string, Date>> {
  */
 export async function getWinbackAudience(): Promise<WinbackMember[]> {
   const cutoff = new Date(Date.now() - QUIET_MS)
-  const [users, activity, suppressed] = await Promise.all([
+  const [users, activity, suppressed, exclusions] = await Promise.all([
     db.user.findMany({
       where: { accountStatus: 'ACTIVE' },
       select: { id: true, name: true, businessName: true, email: true, city: true, lastLoginAt: true, createdAt: true },
     }),
     latestActivityByUser(),
     db.suppression.findMany({ select: { email: true } }),
+    readWinbackExclusions(),
   ])
   const dead = new Set(suppressed.map((r) => r.email.toLowerCase().trim()))
+  // The boss's own removals: these addresses sit this campaign out until he
+  // restores them. One map read, zero drama, the send path never sees them.
+  const excluded = new Set(exclusions.map((x) => x.email.toLowerCase().trim()))
   const now = Date.now()
   const out: WinbackMember[] = []
   for (const u of users) {
     const email = u.email.toLowerCase().trim()
     if (dead.has(email)) continue // bounced, complained or unsubscribed: the list is law
+    if (excluded.has(email)) continue // removed from this campaign by the boss
     if (isProbeEmail(email) || isInternalEmail(email) || isExecEmail(email)) continue
     const activityAt = activity.get(u.id) || null
     // The newest truth wins: a fresh login counts even when the tables are empty,
