@@ -13,6 +13,7 @@
 import { db } from '@/lib/db'
 import { sendSystemMail, TEAM_INBOX } from '@/lib/mailer'
 import {
+  addToCalendarLink,
   confirmedEmail,
   confirmedExecEmail,
   meetingWhen,
@@ -29,9 +30,17 @@ export async function confirmAndNotify(meeting: MeetingLike & { id: string }) {
 
   const toMember = confirmedEmail(meeting, meeting.memberName)
   const toGuest = confirmedEmail(meeting, meeting.guestName || meeting.guestEmail)
+  // The PostHog treatment for the confirmation: eyebrow, big headline, the
+  // calendar as the one tap that matters. Body stays verbatim.
+  const confirmChrome = {
+    headline: 'MEETING CONFIRMED',
+    title: 'You are booked in',
+    ctaLabel: 'Add to Google Calendar',
+    ctaUrl: addToCalendarLink(meeting),
+  }
   const [a, b] = await Promise.all([
-    sendSystemMail({ to: meeting.memberEmail, ...toMember }),
-    sendSystemMail({ to: meeting.guestEmail, ...toGuest }),
+    sendSystemMail({ to: meeting.memberEmail, ...toMember, ...confirmChrome }),
+    sendSystemMail({ to: meeting.guestEmail, ...toGuest, ...confirmChrome }),
   ])
 
   await db.meeting

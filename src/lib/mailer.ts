@@ -819,7 +819,17 @@ export async function sendCampaignMailViaSes(
  * the domain verifies.
  */
 export async function sendSystemMail(
-  mail: { to: string; subject: string; body: string },
+  mail: {
+    to: string; subject: string; body: string
+    /** Optional structured chrome (PostHog-style): caps eyebrow, big headline, */
+    /** highlighted value box, CTA button, hidden preheader.                    */
+    headline?: string
+    title?: string
+    value?: { text: string; caption?: string }
+    ctaLabel?: string
+    ctaUrl?: string
+    preheader?: string
+  },
 ): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
@@ -831,7 +841,16 @@ export async function sendSystemMail(
   // Transactional mail gets the quiet Boardroom chrome: same words, branded
   // frame, no pixel (system sends carry no EmailLog row) and no unsubscribe
   // (a password reset is not bulk mail).
-  const html = themedEmailHtml(mail.body, { theme: 'boardroom', footerLines: legalFooterLines() })
+  const html = themedEmailHtml(mail.body, {
+    theme: 'boardroom',
+    footerLines: legalFooterLines(),
+    headline: mail.headline,
+    title: mail.title,
+    value: mail.value,
+    ctaLabel: mail.ctaLabel,
+    ctaUrl: mail.ctaUrl,
+    preheader: mail.preheader,
+  })
   const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, html, reply_to: TEAM_INBOX })
   if (first.ok) {
     // Branded from accepted → domain verified; keep the status cache truthful.

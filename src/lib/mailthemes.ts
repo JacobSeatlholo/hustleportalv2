@@ -51,6 +51,8 @@ interface MailTheme {
   muted: string
   buttonBg: string
   buttonText: string
+  /** Soft tinted box behind big values (codes, amounts). */
+  softBox: string
   radius: number
   hero?: { src: string; alt: string; bg: string }
   /** Decorative brand band above the footer. */
@@ -79,6 +81,7 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     muted: '#6B7280',
     buttonBg: NAVY,
     buttonText: '#FFFFFF',
+    softBox: '#EEF1F5',
     radius: 10,
     band: false,
   },
@@ -99,6 +102,7 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     muted: '#857B5E',
     buttonBg: GOLD,
     buttonText: INK,
+    softBox: '#F8EFD4',
     radius: 14,
     hero: {
       src: '/email/mascot-wave.jpg',
@@ -124,6 +128,7 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     muted: '#6B7280',
     buttonBg: GOLD,
     buttonText: INK,
+    softBox: '#EEF1F5',
     radius: 14,
     hero: {
       src: '/email/mascot-night.jpg',
@@ -149,6 +154,7 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     muted: '#6b7280',
     buttonBg: '#0b57d0',
     buttonText: '#ffffff',
+    softBox: '#f1f3f5',
     radius: 0,
     band: false,
   },
@@ -160,6 +166,10 @@ export interface ThemedMailOptions {
   pixelUrl?: string
   /** Caps accent line under the hero, PostHog "SECURITY REQUEST" style. */
   headline?: string
+  /** Big bold headline under the eyebrow — PostHog "Are you who you say you are?" style. */
+  title?: string
+  /** The big highlighted value (a login code, a credit amount) in a soft rounded box. */
+  value?: { text: string; caption?: string }
   /** Bulletproof CTA button between body and footer. */
   ctaLabel?: string
   ctaUrl?: string
@@ -203,6 +213,36 @@ function headlineRow(text: string | undefined, t: MailTheme): string {
     `<tr><td align="center" style="padding:24px 30px 0 30px">` +
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;letter-spacing:2.5px;color:${t.accent}">${esc}</div>` +
     `</td></tr>`
+  )
+}
+
+function titleRow(text: string | undefined, t: MailTheme, hasEyebrow: boolean): string {
+  if (!text) return ''
+  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return (
+    `<tr><td align="center" style="padding:${hasEyebrow ? '8px' : '26px'} 30px 0 30px">` +
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:bold;line-height:1.25;color:${t.text}">${esc}</div>` +
+    `</td></tr>`
+  )
+}
+
+function valueRow(value: ThemedMailOptions['value'], t: MailTheme): string {
+  if (!value?.text) return ''
+  const esc = value.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const spacing = value.text.length <= 6 ? 8 : 2
+  const caption = value.caption
+    ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${t.muted};padding-top:10px">${value.caption
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')}</div>`
+    : ''
+  return (
+    `<tr><td align="center" style="padding:20px 30px 4px 30px">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+    `<td bgcolor="${t.softBox}" style="background:${t.softBox};border-radius:12px;padding:16px 34px;text-align:center">` +
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:32px;font-weight:bold;letter-spacing:${spacing}px;color:${t.text}">${esc}</div>` +
+    caption +
+    `</td></tr></table></td></tr>`
   )
 }
 
@@ -283,7 +323,9 @@ ${preheader}
 ${banner(t, assetBase)}
 ${heroRow(t, assetBase)}
 ${headlineRow(opts.headline, t)}
-<tr><td style="padding:${opts.headline ? '18px' : '28px'} 30px 6px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${t.text}">${blocks}</td></tr>
+${titleRow(opts.title, t, !!opts.headline)}
+<tr><td style="padding:${opts.headline ? '18px' : opts.title ? '12px' : '28px'} 30px 6px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${t.text}">${blocks}</td></tr>
+${valueRow(opts.value, t)}
 ${ctaRow(opts.ctaLabel, opts.ctaUrl, t)}
 ${bandRow(t, assetBase)}
 ${footerRow(opts, t)}

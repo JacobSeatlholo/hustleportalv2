@@ -99,6 +99,11 @@ export async function POST(req: NextRequest) {
         await sendSystemMail({
           to: normalized,
           subject: `Welcome${first !== 'there' ? ` ${first}` : ''}, your R${creditRand} lead credit is ready`,
+          // The PostHog treatment: eyebrow, big headline, the credit as the
+          // hero number. Copy stays verbatim; the chrome only frames it.
+          headline: 'WELCOME ABOARD',
+          title: 'Your Business OS is live',
+          value: { text: `R${creditRand}`, caption: 'Lead credits already loaded in your wallet' },
           body: [
             `Hi ${first},`,
             '',
@@ -237,6 +242,11 @@ export async function POST(req: NextRequest) {
         const sent = await sendSystemMail({
           to: user.email,
           subject: 'Reset your HustlePortal password',
+          headline: 'SECURITY REQUEST',
+          title: 'Reset your password',
+          ctaLabel: 'Reset my password',
+          ctaUrl: resetUrl,
+          preheader: 'The link works for 30 minutes and can be used once.',
           body: [
             `Hi ${user.name || 'there'},`,
             '',
