@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, type CreditTx, type TopUpPack } from './shared'
-import { SPEND_ACTIONS } from '@/lib/spend'
+import { SPEND_ACTIONS, COMING_SOON_SKUS, TOPUP_MIN_CENTS, TOPUP_MAX_CENTS, bonusForLoad, creditsForLoad } from '@/lib/spend'
 import { LEAD_REVEAL_PRICE_CENTS } from '@/lib/plans'
 import { useHp } from './store'
 import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift, Coins } from 'lucide-react'
@@ -24,6 +25,16 @@ export default function WalletView() {
   const [data, setData] = useState<WalletData | null>(null)
   const [buying, setBuying] = useState<string | null>(null)
   const [returnNote, setReturnNote] = useState<string | null>(null)
+  const [customRands, setCustomRands] = useState('')
+
+  // Custom load derived state: rands -> cents -> ladder bonus -> pack shape
+  // identical to the fixed packs, so the same topUp() path serves both.
+  const customCents = Math.round(Number(customRands || 0) * 100)
+  const customPack: TopUpPack | null =
+    customCents >= TOPUP_MIN_CENTS && customCents <= TOPUP_MAX_CENTS
+      ? { id: 'custom', name: 'Custom load', amountCents: customCents, creditCents: creditsForLoad(customCents), bonus: bonusForLoad(customCents) }
+      : null
+  const isValidCustom = customPack !== null
 
   async function load() {
     try {
@@ -57,7 +68,7 @@ export default function WalletView() {
     try {
       const res = await api<{ ok: boolean; redirectUrl?: string; sandbox?: boolean }>(
         '/api/wallet/topup',
-        { method: 'POST', body: JSON.stringify({ packageId: pack.id }) }
+        { method: 'POST', body: JSON.stringify({ packageId: pack.id, ...(pack.id === 'custom' ? { amountCents: Math.round(Number(customRands) * 100) } : {}) }) }
       )
       if (res.redirectUrl) {
         // Live Yoco Checkout, hand off to the hosted payment page.
@@ -121,7 +132,16 @@ export default function WalletView() {
             <span className="font-display text-brand shrink-0 w-16">{rands(LEAD_REVEAL_PRICE_CENTS)}</span>
             <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free.</span>
           </li>
+          {COMING_SOON_SKUS.map((sku) => (
+            <li key={sku.key} className="flex gap-3 text-muted-foreground">
+              <span className="font-display shrink-0 w-16">{rands(sku.cents)}</span>
+              <span><span className="font-medium">{sku.label}</span> <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">soon</Badge> — {sku.outcome}</span>
+            </li>
+          ))}
         </ul>
+        <p className="text-xs text-muted-foreground mt-3 border-t pt-3">
+          On a plan? Your monthly send bundle rides first — Operator carries 150 emails a month, Boss 400. Airtime only starts spending once your free monthly sends are done, and failed deliveries never cost a cent.
+        </p>
       </div>
 
       {/* Packs */}
@@ -157,6 +177,42 @@ export default function WalletView() {
             </Card>
           ))}
         </div>
+
+        {/* Custom load: any amount from R50, ladder bonus exactly like the packs. */}
+        <Card className="mt-3">
+          <CardContent className="p-5 space-y-3">
+            <div className="font-medium text-sm">Load your own amount</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[160px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R</span>
+                <Input
+                  type="number"
+                  min={TOPUP_MIN_CENTS / 100}
+                  max={TOPUP_MAX_CENTS / 100}
+                  step="10"
+                  placeholder="e.g. 250"
+                  value={customRands}
+                  onChange={(e) => setCustomRands(e.target.value)}
+                  className="pl-7"
+                  aria-label="Custom top-up amount in rands"
+                />
+              </div>
+              <Button
+                variant="outline"
+                disabled={buying !== null || !isValidCustom}
+                onClick={() => customPack && topUp(customPack)}
+              >
+                {buying === 'custom' ? <Loader2 className="h-4 w-4 animate-spin" /> : `Load ${customRands ? rands(creditsForLoad(customCents)) : 'airtime'}`}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {customRands && isValidCustom && bonusForLoad(customCents) > 0
+                ? <>You load <span className="font-medium text-foreground">{rands(customCents)}</span> and your wallet grows by <span className="font-medium text-emerald-600">{rands(creditsForLoad(customCents))}</span> — a {bonusForLoad(customCents)}% bonus airtime.</>
+                : <>Minimum R50. Bonus airtime from R1,500 (+10%) and R5,000 (+15%) — the same ladder the packs ride.</>}
+            </p>
+          </CardContent>
+        </Card>
+
         <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
           Paid securely with Yoco (card, Apple Pay, Google Pay). Credits land in your wallet the moment your payment clears.

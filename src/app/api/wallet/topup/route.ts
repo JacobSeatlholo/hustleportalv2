@@ -3,6 +3,7 @@ import { getUserId } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { addCredits } from '@/lib/wallet'
 import { getConfigJson, CONFIG_KEYS } from '@/lib/config'
+import { bonusForLoad, creditsForLoad, TOPUP_MIN_CENTS, TOPUP_MAX_CENTS } from '@/lib/spend'
 import { awardXp } from '@/lib/gamification'
 import { getYocoSecretKey, getYocoKeyMode, createYocoCheckout, YocoError } from '@/lib/yoco'
 
@@ -25,13 +26,33 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const account = await db.user.findUnique({ where: { id: userId }, select: { email: true } })
   const isQaAccount = Boolean(account?.email?.toLowerCase().endsWith(QA_SANDBOX_DOMAIN))
-  const { packageId } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const { packageId, amountCents: rawCustom } = body
   const packs = await getConfigJson<{ id: string; name: string; amountCents: number; creditCents: number; bonus: number }[]>(
     CONFIG_KEYS.TOPUP_PACKS,
     []
   )
-  const pack = packs.find((p) => p.id === packageId)
-  if (!pack) return NextResponse.json({ error: 'Unknown package.' }, { status: 400 })
+
+  // Custom loads: the user picks ANY amount between R50 and R10,000 and the
+  // ladder bonus applies exactly as it would on a pack of the same size —
+  // one ladder, no surprises. The fixed packs stay boss-editable config and
+  // ride the same tiers (Starter R500 0%, Growth R1,500 +10%, Scale R5,000 +15%).
+  let pack: { id: string; name: string; amountCents: number; creditCents: number; bonus: number }
+  if (packageId === 'custom') {
+    const amountCents = Math.round(Number(rawCustom))
+    if (!Number.isFinite(amountCents) || amountCents < TOPUP_MIN_CENTS) {
+      return NextResponse.json({ error: 'The smallest load is R50 — below that the card fee eats more than it should.' }, { status: 400 })
+    }
+    if (amountCents > TOPUP_MAX_CENTS) {
+      return NextResponse.json({ error: 'Loads top out at R10,000. For bigger amounts, load twice or talk to us.' }, { status: 400 })
+    }
+    const bonus = bonusForLoad(amountCents)
+    pack = { id: 'custom', name: 'Custom load', amountCents, creditCents: creditsForLoad(amountCents), bonus }
+  } else {
+    const found = packs.find((p) => p.id === packageId)
+    if (!found) return NextResponse.json({ error: 'Unknown package.' }, { status: 400 })
+    pack = found
+  }
   if (pack.amountCents < 200) return NextResponse.json({ error: 'Yoco minimum payment is R2.00.' }, { status: 400 })
 
   const reference = `HP-${Date.now().toString(36).toUpperCase()}`
