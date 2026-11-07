@@ -28,6 +28,9 @@ export interface CampaignState {
   perHour: number
   from?: string
   provider?: 'RESEND' | 'SES'
+  /** The mail look the sends ride in (boardroom | goldrush | nightshift | plain).
+   *  Undefined = the engine default (goldrush branded). Editable per campaign. */
+  theme?: string
   createdAt: string
   startedAt?: string
   completedAt?: string
@@ -193,6 +196,9 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       subject: queued.subject,
       body: queued.body,
       from: state.from,
+      // The campaign's chosen look rides the state, so Edit draft can re-skin
+      // a queue without touching a single row. Undefined = engine default.
+      theme: (state.theme || undefined) as Parameters<typeof sendCampaignMail>[0]['theme'],
       pixelUrl: `${APP_BASE}/api/mail/open/${queued.id}`,
       unsubscribeUrl: unsubscribeUrl(queued.id),
     }

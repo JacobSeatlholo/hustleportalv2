@@ -13,8 +13,10 @@ import { systemBlastAudience, fillMergeTags } from '@/lib/audience'
  * POST   create a queue (recipients are staged as QUEUED rows; NOTHING sends
  *        until the operator presses Start, the draft gate is structural)
  * GET    every campaign with its queue state and honest counters
- * PATCH  start / pause / resume / cancel a queue, or removeRow to pull ONE
- *        queued email out of the list with a click
+ * PATCH  start / pause / resume / cancel a queue, removeRow to pull ONE
+ *        queued email out of the list with a click, or editDraft to rewrite
+ *        the letter (subject, body, sender, pace, look) on every still-QUEUED
+ *        row — the boss's edit handle on a queue that already exists.
  *
  * Rows reuse EmailLog (status QUEUED | SENT | FAILED | BOUNCED | SKIPPED) so
  * the read receipts, open tracking and pipeline moves all keep working.
@@ -208,7 +210,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       take: 2000,
       select: {
-        id: true, campaign: true, toEmail: true, subject: true, status: true, error: true,
+        id: true, campaign: true, toEmail: true, subject: true, body: true, status: true, error: true,
         openedAt: true, openCount: true, sentAt: true, createdAt: true,
         lead: { select: { id: true, company: true, stage: true } },
       },
@@ -245,7 +247,11 @@ export async function PATCH(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  let payload: { campaign?: string; action?: string; rowId?: string }
+  let payload: {
+    campaign?: string; action?: string; rowId?: string
+    // editDraft fields: rewrite the letter on every still-QUEUED row.
+    subject?: string; body?: string; from?: string; perHour?: number; theme?: string
+  }
   try {
     payload = await req.json()
   } catch {
@@ -283,6 +289,69 @@ export async function PATCH(req: NextRequest) {
       ok: true,
       removed: row.toEmail,
       summary: { queued, sent, failed, bounced, skipped, opened: 0, total: queued + sent + failed + bounced + skipped },
+    })
+  }
+
+  // Edit the draft of a queue that already exists: subject, body, sender,
+  // pace, look. Every still-QUEUED row gets the new letter; rows that already
+  // left (SENT / FAILED / BOUNCED / SKIPPED) are history and stay untouched —
+  // the log never gets rewritten after the fact. Works paused or active: on
+  // an active queue the engine simply picks the new draft up from the next
+  // send on.
+  if (action === 'editDraft') {
+    const subject = typeof payload.subject === 'string' ? payload.subject.trim() : undefined
+    const body = typeof payload.body === 'string' ? payload.body : undefined
+    if (subject !== undefined && !subject) {
+      return NextResponse.json({ error: 'Subject cannot be empty.' }, { status: 400 })
+    }
+    if (body !== undefined && body.trim().length < 20) {
+      return NextResponse.json({ error: 'Body is too short — a real letter is at least 20 characters.' }, { status: 400 })
+    }
+    const nextPerHour = payload.perHour == null
+      ? undefined
+      : Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
+    const nextFrom = payload.from === undefined ? undefined : normalizeCampaignFrom(payload.from)
+    const THEMES = ['boardroom', 'goldrush', 'nightshift', 'plain']
+    const nextTheme = payload.theme === undefined || payload.theme === null || payload.theme === ''
+      ? undefined
+      : (THEMES.includes(String(payload.theme)) ? String(payload.theme) : undefined)
+    if (payload.theme != null && payload.theme !== '' && !nextTheme) {
+      return NextResponse.json({ error: 'Unknown look. Use boardroom, goldrush, nightshift or plain.' }, { status: 400 })
+    }
+
+    const statesNow = await readCampaignStates()
+    const current = statesNow[tag]
+    if (!current) {
+      return NextResponse.json({ error: 'No queue exists under this campaign tag.' }, { status: 404 })
+    }
+
+    const data: { subject?: string; body?: string } = {}
+    if (subject !== undefined) data.subject = subject.slice(0, 180)
+    if (body !== undefined) data.body = body.slice(0, 4000)
+    let updatedRows = 0
+    if (Object.keys(data).length > 0) {
+      const res = await db.emailLog.updateMany({
+        where: { campaign: tag, status: 'QUEUED' },
+        data,
+      })
+      updatedRows = res.count
+    }
+
+    const next: CampaignState = { ...current }
+    if (nextFrom !== undefined) next.from = nextFrom
+    if (nextPerHour !== undefined) next.perHour = nextPerHour
+    if (payload.theme !== undefined) next.theme = nextTheme
+    await writeCampaignState(tag, next)
+
+    return NextResponse.json({
+      ok: true,
+      campaign: tag,
+      updatedRows,
+      queuedLeft: await db.emailLog.count({ where: { campaign: tag, status: 'QUEUED' } }),
+      state: next,
+      note: nextFrom !== undefined && nextFrom !== (payload.from || '').trim()
+        ? 'Sender was normalized: the campaign domain carries the address (anything @hustleportal.online).'
+        : undefined,
     })
   }
 

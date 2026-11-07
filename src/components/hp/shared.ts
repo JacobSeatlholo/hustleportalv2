@@ -190,6 +190,7 @@ export interface CampaignRow {
   campaign: string | null
   toEmail: string
   subject: string
+  body: string // the queued letter itself — Edit draft pre-fills from a QUEUED row
   status: string // QUEUED | SENT | FAILED | BOUNCED | SKIPPED | DRAFT
   error: string | null
   openedAt: string | null
@@ -214,6 +215,7 @@ export interface CampaignState {
   perHour: number
   from?: string
   provider?: 'RESEND' | 'SES' // the transport lane, free lane by default, SES when its keys are in
+  theme?: string // the mail look the sends ride in; undefined = engine default (goldrush)
   createdAt: string
   startedAt?: string
   completedAt?: string

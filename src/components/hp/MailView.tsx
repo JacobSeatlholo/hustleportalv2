@@ -25,7 +25,20 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette, Pencil, ShoppingCart } from 'lucide-react'
+
+// Abandoned checkouts readout (exec): Yoco checkouts that opened and never
+// finished — the follow-up list. amountRands/creditRands come from the TopUp row.
+type AbandonedCheckouts = {
+  campaignTag: string
+  inflight: number
+  paidLast30d: number
+  alreadyQueuedCount: number
+  abandoned: {
+    id: string; email: string; name: string; amountRands: number; creditRands: number
+    packageId: string; reference: string; ageHours: number; alreadyQueued: boolean
+  }[]
+}
 
 // The looks a sender can give their email, in the composer's "Look" row.
 // Plain is the honest default (text only, exactly as always); the three
@@ -124,6 +137,17 @@ export default function MailView() {
   // One-click removal: the id of the queued row currently being pulled out of
   // its campaign, so the × button spins instead of firing twice.
   const [removingRowId, setRemovingRowId] = useState<string | null>(null)
+  // Edit draft: rewrite the letter (subject, body, sender, pace, look) on every
+  // still-queued row of a live queue. The sender is shown on the card itself so
+  // what goes out is never a surprise again.
+  const [editTag, setEditTag] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState({ subject: '', body: '', from: '', perHour: 45, theme: 'engine' })
+  const [editSaving, setEditSaving] = useState(false)
+  // Abandoned checkouts (exec): Yoco checkouts that opened and never finished.
+  const [abandoned, setAbandoned] = useState<AbandonedCheckouts | null>(null)
+  const [abandonOpen, setAbandonOpen] = useState(false)
+  const [abandonDraft, setAbandonDraft] = useState({ subject: '', body: '' })
+  const [abandonBusy, setAbandonBusy] = useState(false)
 
   // queue composer state
   const [composerOpen, setComposerOpen] = useState(false)
@@ -161,6 +185,18 @@ export default function MailView() {
   }, [isAdmin])
 
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
+
+  // Abandoned checkouts readout, refreshed with the campaigns.
+  const loadAbandoned = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const res = await api<AbandonedCheckouts>('/api/admin/exec/abandoned-checkouts')
+      setAbandoned(res)
+    } catch {
+      setAbandoned(null)
+    }
+  }, [isAdmin])
+  useEffect(() => { loadAbandoned() }, [loadAbandoned, loadCampaigns])
 
   // The roster readout rides along whenever the composer opens, so the boss
   // always stages against today's numbers, never a stale count.
@@ -342,6 +378,81 @@ export default function MailView() {
       toast({ title: 'Could not remove it', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setRemovingRowId(null)
+    }
+  }
+
+  // ---- Edit draft: the boss's handle on a queue that already exists ----
+  function openEdit(tag: string) {
+    const info = campaigns.find((c) => c.tag === tag)
+    const queued = (campaignRows || []).find((r) => r.campaign === tag && r.status === 'QUEUED')
+    setEditDraft({
+      subject: queued?.subject || '',
+      body: queued?.body || '',
+      from: info?.state?.from || 'BlackBiz <blackbiz@hustleportal.online>',
+      perHour: info?.state?.perHour || 45,
+      theme: info?.state?.theme || 'engine',
+    })
+    setEditTag(tag)
+  }
+
+  async function saveEdit() {
+    if (!editTag) return
+    setEditSaving(true)
+    try {
+      const res = await api<{ updatedRows: number; queuedLeft: number; note?: string }>('/api/admin/exec/campaigns', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          campaign: editTag,
+          action: 'editDraft',
+          subject: editDraft.subject,
+          body: editDraft.body,
+          from: editDraft.from,
+          perHour: Number(editDraft.perHour) || undefined,
+          theme: editDraft.theme === 'engine' ? '' : editDraft.theme,
+        }),
+      })
+      toast({
+        title: `Draft updated · ${res.updatedRows} email${res.updatedRows === 1 ? '' : 's'} rewritten`,
+        description: res.note || `${res.queuedLeft} still queued. Sent mail stays history — the log is never rewritten.`,
+      })
+      setEditTag(null)
+      loadCampaigns()
+    } catch (e) {
+      toast({ title: 'Could not save the draft', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  // ---- Abandoned checkout follow-up blast ----
+  const ABANDON_DEFAULT_SUBJECT = 'Your top-up is still open — nothing was charged'
+  const ABANDON_DEFAULT_BODY = `Hi {name},\n\nQuick one — you started loading your HustlePortal wallet and the checkout never finished. No money left your card.\n\nTwo doors, your pick:\n\n• Finish the top-up — your credits land the moment you pay: HustlePortal Wallet (https://www.hustleportal.online)\n• Or just log in and keep working — the free tools stay open either way: HustlePortal (https://www.hustleportal.online)\n\nIf the card gave you trouble, reply to this email and a human will sort it out by hand.\n\nThe Business Hustle team`
+
+  function openAbandon() {
+    setAbandonDraft({ subject: ABANDON_DEFAULT_SUBJECT, body: ABANDON_DEFAULT_BODY })
+    setAbandonOpen(true)
+  }
+
+  async function queueFollowup() {
+    setAbandonBusy(true)
+    try {
+      const res = await api<{ campaign: string; queued: number; skippedSuppressed: number; skippedDuplicate: number }>('/api/admin/exec/abandoned-checkouts', {
+        method: 'POST',
+        body: JSON.stringify({ subject: abandonDraft.subject, body: abandonDraft.body }),
+      })
+      toast({
+        title: res.queued > 0 ? `Follow-up queued · ${res.queued} abandoned checkout${res.queued === 1 ? '' : 's'}` : 'Nothing new to queue',
+        description: res.queued > 0
+          ? `Campaign ${res.campaign} waits PAUSED — edit the draft or press Start on the card.`
+          : `${res.skippedDuplicate || 0} already queued or sent, ${res.skippedSuppressed || 0} suppressed.`,
+      })
+      setAbandonOpen(false)
+      loadCampaigns()
+      loadAbandoned()
+    } catch (e) {
+      toast({ title: 'Could not queue the follow-up', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setAbandonBusy(false)
     }
   }
 
@@ -585,6 +696,52 @@ export default function MailView() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-medium text-sm flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-brand" /> Abandoned checkouts
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Card checkouts that opened and never finished — no money moved. A nudge usually lands it.
+              </p>
+            </div>
+            <Button size="sm" className="gap-1 shrink-0" disabled={!abandoned || abandoned.abandoned.filter((a) => !a.alreadyQueued).length === 0} onClick={openAbandon}>
+              <Plus className="h-3.5 w-3.5" /> Queue follow-up
+            </Button>
+          </div>
+          {abandoned === null ? (
+            <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-10 rounded-md bg-white/5 animate-pulse" />)}</div>
+          ) : abandoned.abandoned.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3 text-center">
+              None right now — {abandoned.inflight} checkout{abandoned.inflight === 1 ? '' : 's'} still open, {abandoned.paidLast30d} paid in the last 30 days.
+            </p>
+          ) : (
+            <div className="divide-y rounded-lg border max-h-64 overflow-y-auto hp-scroll">
+              {abandoned.abandoned.map((a) => (
+                <div key={a.id} className="p-2.5 flex items-center gap-2 text-sm">
+                  <Coins className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium">{a.name || a.email}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{a.email} · {a.reference} · left open {a.ageHours}h ago</p>
+                  </div>
+                  <span className="text-xs font-medium shrink-0">{rands(a.amountRands)}</span>
+                  {a.alreadyQueued
+                    ? <Badge variant="outline" className="text-[10px] text-muted-foreground shrink-0">follow-up queued</Badge>
+                    : <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500 shrink-0">waiting</Badge>}
+                </div>
+              ))}
+            </div>
+          )}
+          {abandoned && abandoned.abandoned.length > 0 && (
+            <p className="text-[10px] text-muted-foreground">
+              {abandoned.paidLast30d} paid in the last 30 days · {abandoned.inflight} in flight right now (under 30 min, not counted) · follow-ups queue under {abandoned.campaignTag}, born paused.
+            </p>
+          )}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-medium text-sm flex items-center gap-2">
                 <Megaphone className="h-4 w-4 text-brand" /> Campaigns
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">Batch sends paced like a human. Build the audience, review the draft, press Start.</p>
@@ -649,9 +806,9 @@ export default function MailView() {
                         style={{ width: `${Math.max(progress, sum.opened ? rate : progress)}%` }}
                       />
                     </div>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-[10px] text-muted-foreground truncate">
                       {sum.queued > 0 && state
-                        ? `${state.perHour} per hour · queue clears in ${finishEstimate(sum.queued, state.perHour)} · ${rate}% read so far`
+                        ? `${state.perHour} per hour · from ${state.from || 'default sender'} · clears in ${finishEstimate(sum.queued, state.perHour)} · ${rate}% read so far`
                         : `${rate}% opened · green bar grows as they read`}
                     </p>
                   </button>
@@ -671,6 +828,9 @@ export default function MailView() {
                               Pause
                             </Button>
                           )}
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openEdit(key)}>
+                            <Pencil className="h-3 w-3" /> Edit draft
+                          </Button>
                           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-rose-500 border-rose-500/40 hover:bg-rose-500/10" disabled={actingTag === key} onClick={() => control(key, 'cancel')}>
                             {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
                             Cancel
@@ -1305,6 +1465,110 @@ export default function MailView() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit draft: the boss's handle on a queue that already exists. Rewrites
+          every still-queued email; sent mail is history and stays untouched. */}
+      <Dialog open={!!editTag} onOpenChange={(o) => { if (!o) setEditTag(null) }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto hp-scroll">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-brand" /> Edit draft — {editTag ? campaignLabel(editTag) : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Rewrites every email still in the queue. Sent mail stays history — the log is never rewritten.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-from">From — the sender their inbox shows</Label>
+              <Input
+                id="ed-from"
+                value={editDraft.from}
+                onChange={(e) => setEditDraft({ ...editDraft, from: e.target.value })}
+                placeholder='You <you@hustleportal.online>'
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Any label and address on the hustleportal.online domain works — the domain is verified with the mail provider.
+                A different domain needs its DNS verified first; say the word and it gets wired.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-subject">Subject</Label>
+              <Input id="ed-subject" value={editDraft.subject} onChange={(e) => setEditDraft({ ...editDraft, subject: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-body">Message</Label>
+              <Textarea id="ed-body" rows={10} value={editDraft.body} onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })} />
+              <p className="text-[11px] text-muted-foreground">
+                Type {'{name}'} in the greeting and it fills per person where the account exists. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ed-perhour">Sends per hour</Label>
+                <Input
+                  id="ed-perhour" type="number" min={1} max={600} value={editDraft.perHour}
+                  onChange={(e) => setEditDraft({ ...editDraft, perHour: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Look</Label>
+                <Select value={editDraft.theme} onValueChange={(v) => setEditDraft({ ...editDraft, theme: v })}>
+                  <SelectTrigger><SelectValue placeholder="Engine default" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="engine">Engine default (Gold Rush)</SelectItem>
+                    {LOOKS.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setEditTag(null)} disabled={editSaving}>Close</Button>
+              <Button className="flex-1" onClick={saveEdit} disabled={editSaving || !editDraft.subject.trim() || editDraft.body.trim().length < 20}>
+                {editSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
+                Save & rewrite queue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Abandoned checkout follow-up: the editable recovery letter. Queues
+          under abandoned-cart-<month>, born paused, {name} fills per account. */}
+      <Dialog open={abandonOpen} onOpenChange={(o) => { if (!o) setAbandonOpen(false) }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto hp-scroll">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4 text-brand" /> Follow-up blast — abandoned checkouts
+            </DialogTitle>
+            <DialogDescription>
+              {abandoned ? `${abandoned.abandoned.filter((a) => !a.alreadyQueued).length} abandoned checkout${abandoned.abandoned.filter((a) => !a.alreadyQueued).length === 1 ? '' : 's'} get the nudge · {name} fills per account` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ab-subject">Subject</Label>
+              <Input id="ab-subject" value={abandonDraft.subject} onChange={(e) => setAbandonDraft({ ...abandonDraft, subject: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ab-body">Message</Label>
+              <Textarea id="ab-body" rows={10} value={abandonDraft.body} onChange={(e) => setAbandonDraft({ ...abandonDraft, body: e.target.value })} />
+              <p className="text-[11px] text-muted-foreground">
+                These are real accounts, so {'{name}'} fills with their own first name. One tap unsubscribe and the legal footer ride along automatically.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setAbandonOpen(false)} disabled={abandonBusy}>Close</Button>
+              <Button className="flex-1" onClick={queueFollowup} disabled={abandonBusy || !abandonDraft.subject.trim() || abandonDraft.body.trim().length < 20}>
+                {abandonBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Megaphone className="h-4 w-4 mr-1" />}
+                Queue the follow-up
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
