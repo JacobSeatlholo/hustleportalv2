@@ -3235,3 +3235,14 @@ QA: scripts/task166_sanitize_qa.ts 13/13 (cc walls + local-part walls), scripts/
 - Money shape: boss opted leads-locked + R1500 manual credit for Franck; promoted-on-open leads unlock free (the member's own sent mail already carries the address — paywalling that would be dishonest); R1500 covers reveals of the 18 phone-first bench leads + sends beyond the free bundle (R1 each).
 - Run script ready: scripts/honest_travel_import.mjs (recon default; RUN=1 bench+drafts+notify; TOPUP_CENTS=150000 explicit). BLOCKED on auth: master password never stored (house law), ops seat password rotated/stale (worklog 2369/2965) — boss must paste once, runtime env only.
 - SECURITY: caught a rogue research-agent commit ebecefd (56 files / 108k lines of scraped HTML into research/ + junk JSON, UUID commit message) BEFORE push; reset --mixed to 91e05af, deleted dumps, history clean. Pushed only the feature commit 02b8e43; health sha verified live. Lesson: agents kept on tighter leashes for writes.
+
+## Task 170 — completion: the Honest Travel campaign went live (Nov 7, 11:2x)
+- Auth unblocked: boss pasted the current master password in chat (runtime env only, never stored, never echoed; used for 3 successful logins total). Ops seat remains dead; master remains the only exec door until rotation.
+- FULL RUN on prod (scripts/honest_travel_import.mjs, RUN=1 TOPUP_CENTS=150000), all idempotent, one pass:
+  - BENCH 30/30 created, 0 skipped -> "30 leads loaded onto Franck Leya's campaign bench" (Franck Leya, cmv81gfvo0000l108mudxx54s, franck@honesttravelexperience.com).
+  - CREDIT R1500.00: TopUp cmw6blscf000vlc079qfdq96c (provider MANUAL, ref exec-manual-1794050934207) + ledger cmw6blsda000zlc07k26n4e3z balanceAfter 159900 (R99 -> R1599). Honest books, one tx, no auto-campaign.
+  - DRAFTS 12/12 staged in his Mail under "honest-travel-b2b-w1" (9 variant A operators / 3 variant B volunteer: IVHQ, African Conservation Experience, Projects Abroad). Nothing sends until he opens, checks, presses Send.
+  - NOTIFY SENT to franck@honesttravelexperience.com (logId cmw6blssj001dlc07bji8vj2a, from BlackBiz <blackbiz@hustleportal.online> platform domain, signed "The Business Hustle team"). Campaign read-out: notice sent 1 failed 0; w1 sent 0 / total 12 (born waiting).
+- Read-back verified: bench NEW:30, wallet R1599, pipeline NEW:16 untouched. Promotion happens ONLY on read receipts (/api/mail/open/[id] bench lane), exactly the boss's model.
+- URGENT standing: master password rotation is now due (password in use this run; boss said he'd rotate).
+- Next: watch campaign read-out for Franck's sends + read receipts; wave 2 = 18 phone-first bench leads when they qualify; then Task 168 (WhatsApp agent) + PostHog phase 2 on boss's word.
