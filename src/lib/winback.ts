@@ -39,6 +39,54 @@ export interface WinbackDraft {
   body: string
 }
 
+/**
+ * The boss's edited draft, kept in PlatformConfig (runtime editable, no
+ * redeploy). The stored copy is a TEMPLATE: wherever it says {firstName}, the
+ * member's greeting name is substituted at send time. The verbatim copy below
+ * stays in code as the original of record — the override sits on top of it and
+ * a DELETE (reset) falls straight back to it.
+ */
+export const WINBACK_DRAFT_KEY = 'WINBACK_DRAFT_OVERRIDE'
+export const WINBACK_NAME_TOKEN = '{firstName}'
+
+export interface WinbackOverride {
+  subject: string
+  body: string
+  savedAt: string
+}
+
+/** The saved override, or null when the boss never edited (or reset) the draft. */
+export async function readWinbackOverride(): Promise<WinbackOverride | null> {
+  try {
+    const row = await db.platformConfig.findUnique({ where: { key: WINBACK_DRAFT_KEY } })
+    if (!row?.value) return null
+    const v = JSON.parse(row.value) as { subject?: unknown; body?: unknown; savedAt?: unknown }
+    if (typeof v.subject !== 'string' || typeof v.body !== 'string') return null
+    if (!v.subject.trim() || !v.body.trim()) return null
+    return { subject: v.subject, body: v.body, savedAt: typeof v.savedAt === 'string' ? v.savedAt : '' }
+  } catch {
+    return null
+  }
+}
+
+/** Persist the boss's edited draft. Validation lives in the exec route; this
+ *  is the one write, so read and send always agree on the shape. */
+export async function saveWinbackOverride(subject: string, body: string): Promise<WinbackOverride> {
+  const savedAt = new Date().toISOString()
+  const value = JSON.stringify({ subject, body, savedAt })
+  await db.platformConfig.upsert({
+    where: { key: WINBACK_DRAFT_KEY },
+    create: { key: WINBACK_DRAFT_KEY, value },
+    update: { value },
+  })
+  return { subject, body, savedAt }
+}
+
+/** Back to the verbatim copy in code. */
+export async function clearWinbackOverride(): Promise<void> {
+  await db.platformConfig.deleteMany({ where: { key: WINBACK_DRAFT_KEY } })
+}
+
 /** First name for the greeting, falls back through business name to "there". */
 function firstName(name: string, businessName: string | null): string {
   const n = (name || '').trim().split(/\s+/)[0]
@@ -49,14 +97,25 @@ function firstName(name: string, businessName: string | null): string {
 }
 
 /**
- * The win-back email, in the boss's voice — his own rewrite, carried verbatim
- * (Nov 7). One phrase link on HustlePortal renders as a real anchor in html
- * and flattens to "HustlePortal (https://...)" in plain text. Dash free, no
- * fake urgency, no made up numbers. The legal footer is appended by the
- * platform send path itself.
+ * The win-back email for ONE member: the boss's edited draft when he has saved
+ * one, otherwise his verbatim rewrite carried word for word (Nov 7). One
+ * phrase link on HustlePortal renders as a real anchor in html and flattens to
+ * "HustlePortal (https://...)" in plain text. The override's {firstName} tokens
+ * become the member's greeting name; a token the boss chose to leave out stays
+ * out — his copy, his call. Dash free, no fake urgency, no made up numbers.
+ * The legal footer is appended by the platform send path itself.
  */
-export function buildWinbackEmail(user: { name: string; businessName: string | null }): WinbackDraft {
+export function renderWinbackEmail(
+  user: { name: string; businessName: string | null },
+  override: WinbackOverride | null,
+): WinbackDraft {
   const hi = firstName(user.name, user.businessName)
+  if (override) {
+    return {
+      subject: override.subject.split(WINBACK_NAME_TOKEN).join(hi),
+      body: override.body.split(WINBACK_NAME_TOKEN).join(hi),
+    }
+  }
   return {
     subject: `It has been a while, ${hi}. Come and see what is new`,
     body: [
@@ -113,6 +172,12 @@ export function buildWinbackEmail(user: { name: string; businessName: string | n
       'The HustlePortal Team',
     ].join('\n'),
   }
+}
+
+/** Convenience wrapper: reads the saved override itself. The exec routes read
+ *  it once and call renderWinbackEmail directly, so a batch never re-reads. */
+export async function buildWinbackEmail(user: { name: string; businessName: string | null }): Promise<WinbackDraft> {
+  return renderWinbackEmail(user, await readWinbackOverride())
 }
 
 /** Newest activity timestamp per user across the everyday tables. */

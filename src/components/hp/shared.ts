@@ -117,6 +117,8 @@ export interface EmailLogRow {
   body: string
   status: string
   error: string | null
+  /** The look the sender picked: boardroom | goldrush | nightshift | plain (null = legacy send). */
+  theme?: string | null
   createdAt: string
 }
 

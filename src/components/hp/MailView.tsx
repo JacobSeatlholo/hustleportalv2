@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
+import type { MailThemeId } from '@/lib/mailthemes'
 import { useHp } from './store'
 import { WinBackCard } from './AdminView'
 import { usePlan, requestUpgrade } from './useUpgrade'
@@ -24,7 +25,17 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette } from 'lucide-react'
+
+// The looks a sender can give their email, in the composer's "Look" row.
+// Plain is the honest default (text only, exactly as always); the three
+// branded looks frame the sender's own words with the HustlePortal chrome.
+const LOOKS: { id: MailThemeId; label: string; dot: string; blurb: string }[] = [
+  { id: 'plain', label: 'Plain', dot: '#9CA3AF', blurb: 'No frame — your email goes out as clean text, exactly as you write it.' },
+  { id: 'boardroom', label: 'Boardroom', dot: '#16305C', blurb: 'Navy and quiet. Quotes, follow-ups and professional correspondence.' },
+  { id: 'goldrush', label: 'Gold Rush', dot: '#F5C518', blurb: 'Warm gold, the honey badger up front. Pitches and announcements that get remembered.' },
+  { id: 'nightshift', label: 'Nightshift', dot: '#0B0E14', blurb: 'Dark and bold. Big offers and after-hours energy.' },
+]
 
 const GOALS = [
   'Introduce my business and book a call',
@@ -94,6 +105,12 @@ export default function MailView() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [draftId, setDraftId] = useState<string | null>(null)
+  // The look this email arrives in (the composer's Look row). Plain sends text
+  // only; a branded look rides the same words as html on whichever lane wins.
+  const [theme, setTheme] = useState<MailThemeId>('plain')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
 
   // Campaigns (exec): batch queues with read receipts, build the audience,
   // review the draft, press Start, and the engine paces the sends like a human.
@@ -380,6 +397,26 @@ export default function MailView() {
     }
   }
 
+  // The look preview: the exact html the engine would build, rendered in a
+  // sandboxed frame — the sender checks the frame BEFORE the email exists.
+  async function openPreview() {
+    if (!body.trim()) return
+    setPreviewing(true)
+    setPreviewOpen(true)
+    try {
+      const r = await api<{ themed: boolean; html: string | null }>('/api/emails/preview', {
+        method: 'POST',
+        body: JSON.stringify({ body, theme }),
+      })
+      setPreviewHtml(r.html)
+    } catch (e) {
+      toast({ title: 'Preview failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      setPreviewOpen(false)
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   async function send() {
     if (!to.includes('@')) {
       toast({ title: 'Add a recipient', description: 'Enter a valid email address.', variant: 'destructive' })
@@ -399,6 +436,7 @@ export default function MailView() {
           to,
           subject,
           body,
+          theme,
           projectId: activeProjectId,
           attachments: atts.length ? atts : undefined,
         }),
@@ -415,7 +453,7 @@ export default function MailView() {
               ? `${res.freeRemaining} free email${res.freeRemaining === 1 ? '' : 's'} left this plan. After that, airtime keeps you sending.`
               : `${subject} → ${to}`),
       })
-      setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null); setFileAttaches([])
+      setSubject(''); setBody(''); setTo(''); setDraftId(null); setVideoAttach(null); setFileAttaches([]); setTheme('plain')
       load()
     } catch (e) {
       // Calm inline card instead of a toast wall, details stay under the composer
@@ -437,6 +475,7 @@ export default function MailView() {
     setSubject(e.subject)
     setBody(e.body)
     setDraftId(e.id)
+    setTheme((LOOKS.some((l) => l.id === e.theme) ? e.theme : 'plain') as MailThemeId)
     toast({ title: 'Draft loaded', description: 'Check it, edit anything, then press Send. It only goes out when you press.' })
   }
 
@@ -761,6 +800,29 @@ export default function MailView() {
               <Label htmlFor="m-body">Message</Label>
               <Textarea id="m-body" rows={10} placeholder="Write it yourself, or let Gemini draft it from your business profile…" value={body} onChange={(e) => setBody(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="m-look" className="flex items-center gap-1.5"><Palette className="h-3.5 w-3.5 text-brand" /> The look your email arrives in</Label>
+              <div className="flex flex-wrap items-center gap-1.5" id="m-look" role="radiogroup" aria-label="Email look">
+                {LOOKS.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => setTheme(l.id)}
+                    title={l.blurb}
+                    aria-pressed={theme === l.id}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${theme === l.id ? 'border-brand bg-brand/10 text-foreground' : 'border-border text-muted-foreground hover:border-brand/40 hover:text-foreground'}`}
+                  >
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-black/10" style={{ background: l.dot }} />
+                    {l.label}
+                  </button>
+                ))}
+                <Button size="sm" variant="outline" type="button" className="h-7 rounded-full gap-1 text-xs" disabled={!body.trim() || previewing} onClick={openPreview}>
+                  {previewing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                  Preview
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">{LOOKS.find((l) => l.id === theme)?.blurb}</p>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 ref={fileInputRef}
@@ -950,6 +1012,34 @@ export default function MailView() {
               )}
               <div className="rounded-lg border bg-card px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed break-words">{reading.body || '(empty body)'}</div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Look preview: the recipient's exact view of the picked look, in a
+          sandboxed frame. Plain has no chrome and says so in words. */}
+      <Dialog open={previewOpen} onOpenChange={(o) => { if (!o) setPreviewOpen(false) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto hp-scroll">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Eye className="h-4 w-4 text-brand" /> Preview · {LOOKS.find((l) => l.id === theme)?.label} look
+            </DialogTitle>
+            <DialogDescription>
+              How the HustlePortal engine frames this email. Your words stay yours; the frame is the look you picked.
+            </DialogDescription>
+          </DialogHeader>
+          {previewHtml ? (
+            <iframe
+              title="Email look preview"
+              sandbox=""
+              srcDoc={previewHtml}
+              className="w-full rounded-lg border bg-white"
+              style={{ height: 480 }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              The Plain look has no frame — your email goes out as clean text, exactly as you wrote it.
+            </p>
           )}
         </DialogContent>
       </Dialog>

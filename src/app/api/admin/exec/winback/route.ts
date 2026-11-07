@@ -4,7 +4,8 @@ import { requireExec } from '@/lib/admin'
 import { sendCampaignMail } from '@/lib/mailer'
 import { unsubscribeUrl } from '@/lib/campaignqueue'
 import {
-  getWinbackAudience, alreadySentThisCampaign, buildWinbackEmail,
+  getWinbackAudience, alreadySentThisCampaign, renderWinbackEmail,
+  readWinbackOverride, saveWinbackOverride, clearWinbackOverride,
   WINBACK_CAMPAIGN, WINBACK_QUIET_DAYS, WINBACK_MAX_PER_RUN,
 } from '@/lib/winback'
 
@@ -12,13 +13,18 @@ const APP_BASE = 'https://www.hustleportal.online'
 
 // The win-back door, exec only.
 //
-// GET  → the quiet list plus the exact email each member would receive, nothing
-//        leaves the platform. The draft review step is the whole point: nobody
-//        sends a word of this until the boss has read it and pressed the button.
-// POST → { confirm: true } sends the win-back to the quiet list. Skips anyone
-//        already emailed in this campaign, anyone on the Suppression list, and
-//        logs every send (good or failed) into EmailLog under the campaign tag
-//        so the archive shows exactly what went out.
+// GET    → the quiet list plus the exact email each member would receive,
+//          the editable template ({firstName} tokens) and whether an edited
+//          draft is saved. Nothing leaves the platform. The draft review step
+//          is the whole point: nobody sends a word of this until the boss has
+//          read it and pressed the button.
+// PUT    → { subject, body } saves the boss's edited draft. Every send after
+//          that uses his words until he resets.
+// DELETE → back to the verbatim copy in code.
+// POST   → { confirm: true } sends the win-back to the quiet list. Skips anyone
+//          already emailed in this campaign, anyone on the Suppression list, and
+//          logs every send (good or failed) into EmailLog under the campaign tag
+//          so the archive shows exactly what went out.
 //
 // The send rides the campaign lane (sendCampaignMail), not the system lane:
 // bulk mail carries the one click unsubscribe law, and the log-first row binds
@@ -31,9 +37,14 @@ export async function GET() {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
 
-  const [audience, sent] = await Promise.all([getWinbackAudience(), alreadySentThisCampaign()])
+  const [audience, sent, override] = await Promise.all([getWinbackAudience(), alreadySentThisCampaign(), readWinbackOverride()])
   // The draft preview is the same email the first member would get.
-  const sample = buildWinbackEmail({ name: audience[0]?.name || 'there', businessName: audience[0]?.businessName ?? null })
+  const sample = renderWinbackEmail({ name: audience[0]?.name || 'there', businessName: audience[0]?.businessName ?? null }, override)
+  // The editor's copy: what is in the box when the boss opens the editor —
+  // his saved edit, or the original with {firstName} tokens in the greeting.
+  const template = override
+    ? { subject: override.subject, body: override.body }
+    : renderWinbackEmail({ name: '{firstName}', businessName: null }, null)
 
   return NextResponse.json({
     campaign: WINBACK_CAMPAIGN,
@@ -42,7 +53,32 @@ export async function GET() {
     alreadySent: sent.size,
     audience: audience.map((m) => ({ ...m, sentThisCampaign: sent.has(m.email.toLowerCase().trim()) })),
     draft: sample,
+    template,
+    override: override ? { subject: override.subject, body: override.body, savedAt: override.savedAt } : null,
   })
+}
+
+/** Save the boss's edited draft. His words win; the tokens do the personalising. */
+export async function PUT(req: NextRequest) {
+  const gate = await requireExec()
+  if (!gate.ok) return gate.res
+  const b = await req.json().catch(() => ({}))
+  const subject = String(b?.subject || '').trim()
+  const body = String(b?.body || '').trim()
+  if (!subject) return NextResponse.json({ error: 'The subject line is required.' }, { status: 400 })
+  if (subject.length > 200) return NextResponse.json({ error: 'Keep the subject under 200 characters.' }, { status: 400 })
+  if (body.length < 40) return NextResponse.json({ error: 'That body is too short to be the win-back email.' }, { status: 400 })
+  if (body.length > 12000) return NextResponse.json({ error: 'The body is over 12,000 characters — trim it down first.' }, { status: 400 })
+  const saved = await saveWinbackOverride(subject, body)
+  return NextResponse.json({ ok: true, override: saved })
+}
+
+/** Reset: the verbatim copy in code is the draft again. */
+export async function DELETE() {
+  const gate = await requireExec()
+  if (!gate.ok) return gate.res
+  await clearWinbackOverride()
+  return NextResponse.json({ ok: true })
 }
 
 export async function POST(req: NextRequest) {
@@ -60,6 +96,9 @@ export async function POST(req: NextRequest) {
   }
 
   const slice = audience.slice(0, WINBACK_MAX_PER_RUN)
+  // One read for the whole batch: the boss's edited draft (or null) decides
+  // every email in this run, greeting personalised per member.
+  const override = await readWinbackOverride()
   let sentN = 0
   let failedN = 0
   let skippedN = audience.length - slice.length
@@ -68,7 +107,7 @@ export async function POST(req: NextRequest) {
   for (const m of slice) {
     const email = m.email.toLowerCase().trim()
     if (sent.has(email)) { skippedN += 1; continue }
-    const mail = buildWinbackEmail({ name: m.name, businessName: m.businessName })
+    const mail = renderWinbackEmail({ name: m.name, businessName: m.businessName }, override)
     // Log first so the open pixel and the one tap unsubscribe link can carry
     // the row id. DRAFT is invisible to the one touch guard until the send
     // actually lands.

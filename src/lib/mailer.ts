@@ -25,7 +25,7 @@ import { themedEmailHtml, type MailThemeId } from '@/lib/mailthemes'
  * footers stay on platform ORIGINATED mail: campaign and lifecycle sends
  * append them in their own send paths.
  */
-function memberFooter(): string {
+export function memberFooter(): string {
   return '\n\nDelivered by HustlePortal (hustleportal.online)'
 }
 
@@ -45,6 +45,22 @@ export type OutgoingMail = {
   subject: string
   body: string
   attachments?: MailAttachment[]
+  /** The mail look the sender picked in the composer. Undefined/'plain' sends
+   *  exactly as always (text only); a branded look rides the same body as html
+   *  alongside the plain text, on BOTH member lanes (their Gmail + the engine). */
+  theme?: MailThemeId
+}
+
+/**
+ * The themed html for a member send: the look the sender chose frames THEIR
+ * words, nothing else. No legal footer, no unsubscribe, no pitch — the member
+ * law holds (this is their business email to their contact; the platform adds
+ * only the quiet "Delivered by HustlePortal" line on engine sends, which is
+ * part of the body text and renders as the closing block). Pure function.
+ */
+export function memberThemedHtml(body: string, theme?: MailThemeId): string | undefined {
+  if (!theme || theme === 'plain') return undefined
+  return themedEmailHtml(body, { theme, footerLines: [] })
 }
 
 const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/
@@ -401,12 +417,14 @@ async function sendViaUserGmail(
       secure: true,
       auth: { user: creds.user, pass: creds.appPassword },
     })
+    const themed = memberThemedHtml(mail.body, mail.theme)
     await transport.sendMail({
       from: `"HustlePortal" <${creds.user}>`,
       to: mail.to,
       ...(mail.cc?.length ? { cc: mail.cc } : {}),
       subject: mail.subject,
       text: mail.body,
+      ...(themed ? { html: themed } : {}),
       ...(mail.attachments?.length
         ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content, 'base64') })) }
         : {}),
@@ -449,12 +467,14 @@ async function resendSend(
 ): Promise<{ ok: true } | { ok: false; raw: string }> {
   // Reply-To the sender's real account so client responses reach THEM
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+  const themed = memberThemedHtml(mail.body, mail.theme)
   return resendPost(apiKey, {
     from,
     to: [mail.to],
     ...(mail.cc?.length ? { cc: mail.cc } : {}),
     subject: mail.subject,
     text: mail.body,
+    ...(themed ? { html: themed } : {}),
     ...(mail.attachments?.length ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content })) } : {}),
     ...(user?.email ? { reply_to: user.email } : {}),
   })

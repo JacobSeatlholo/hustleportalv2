@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { sendMail, sanitizeCcInput, sanitizeFromLocal } from '@/lib/mailer'
+import type { MailThemeId } from '@/lib/mailthemes'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, spendCredits, addCredits, formatRands } from '@/lib/wallet'
@@ -23,6 +24,10 @@ export async function GET() {
 
 // POST /api/emails → send a draft (or ad-hoc mail), plug & play:
 // user's own Gmail if connected, otherwise the HustlePortal mail engine sends for them.
+
+/** The looks a member can pick in the composer. 'plain' is the honest no-theme
+ *  default: the email goes out exactly as it always has, text only. */
+const MAIL_THEMES: readonly MailThemeId[] = ['boardroom', 'goldrush', 'nightshift', 'plain']
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -46,6 +51,10 @@ export async function POST(req: NextRequest) {
   // engine signs never moves.
   const cc = sanitizeCcInput(typeof body.cc === 'string' ? body.cc : '')
   const fromLocal = sanitizeFromLocal(typeof body.fromLocal === 'string' ? body.fromLocal : '') || undefined
+  // The look the sender picked (Mail composer "Look" row). An unknown value
+  // never errors the send — it just falls back to plain, same as before.
+  const pickedTheme: MailThemeId | null = MAIL_THEMES.includes(body.theme) ? body.theme : null
+  const sendTheme: MailThemeId | undefined = pickedTheme && pickedTheme !== 'plain' ? pickedTheme : undefined
 
   // AIRTIME LAW for email (the boss's prepaid model — prices live in ONE
   // place, src/lib/spend.ts):
@@ -93,7 +102,7 @@ export async function POST(req: NextRequest) {
       }))
     : undefined
 
-  const result = await sendMail(userId, { to, subject, body: mailBody, attachments, ...(cc.length ? { cc } : {}), ...(fromLocal ? { fromLocal } : {}) })
+  const result = await sendMail(userId, { to, subject, body: mailBody, attachments, ...(cc.length ? { cc } : {}), ...(fromLocal ? { fromLocal } : {}), ...(sendTheme ? { theme: sendTheme } : {}) })
   const provider = result.ok ? result.provider : 'NONE'
 
   // If this send belongs to a logged draft, update it; otherwise log the send
@@ -105,6 +114,9 @@ export async function POST(req: NextRequest) {
     body: mailBody,
     status: result.ok ? 'SENT' : 'FAILED',
     provider,
+    // The look rides the log so the archive can show it and a re-opened draft
+    // restores the picker exactly as the sender left it.
+    theme: pickedTheme,
     error: result.ok ? null : result.error,
   }
   if (body.draftId) {

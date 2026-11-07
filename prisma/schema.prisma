@@ -481,6 +481,7 @@ model EmailLog {
   provider   String    @default("GMAIL")
   error      String?
   campaign   String? // bulk send grouping, e.g. blackbiz-intro
+  theme      String? // the mail look the sender picked in the composer: boardroom | goldrush | nightshift | plain (null = legacy send)
   providerId String? // provider message id — matches bounce/complaint webhooks back to this row
   openedAt   DateTime? // first open of the tracking pixel
   openCount  Int       @default(0)

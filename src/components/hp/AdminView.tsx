@@ -28,8 +28,8 @@ import {
   Loader2, KeyRound, Users, Target, Coins, Eye, EyeOff, Save, TrendingUp, Crown, Gift,
   Repeat2, Trophy, UserPlus, Wallet, Search, Play, Pause, Plus, RefreshCw, Briefcase,
   Building2, ReceiptText, History, CircleDot, Sparkles, X, Check, CreditCard, ShieldCheck,
-  Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare, Copy,
-  Mail, MailOpen, MailX, Send, ThumbsUp, ThumbsDown, Gauge,
+  Flame, ExternalLink, HandCoins, CalendarClock, Link2, MessageSquare, Copy, PenLine, RotateCcw,
+  Mail, MailX, Send, ThumbsUp, ThumbsDown, Gauge,
 } from 'lucide-react'
 
 // =================== Executive Dashboard ===================
@@ -3086,6 +3086,10 @@ interface WinbackFeed {
   alreadySent: number
   audience: WinbackMemberRow[]
   draft: { subject: string; body: string }
+  /** The editor's copy: the boss's saved edit, or the original with {firstName} tokens. */
+  template: { subject: string; body: string }
+  /** Non-null once the boss has saved his own edit; sends use it until reset. */
+  override: { subject: string; body: string; savedAt: string } | null
 }
 
 export function WinBackCard() {
@@ -3095,6 +3099,11 @@ export function WinBackCard() {
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [draftOpen, setDraftOpen] = useState(false)
+  // The editor's working copy: seeded from the feed's template when the dialog
+  // opens, saved with PUT, reset to the verbatim copy with DELETE.
+  const [edit, setEdit] = useState<{ subject: string; body: string } | null>(null)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -3105,6 +3114,47 @@ export function WinBackCard() {
   }, [toast])
 
   useEffect(load, [load])
+
+  function openEditor() {
+    setEdit(feed?.template ? { subject: feed.template.subject, body: feed.template.body } : null)
+    setDraftOpen(true)
+  }
+
+  async function saveDraft() {
+    if (!edit) return
+    if (!edit.subject.trim()) {
+      toast({ title: 'Subject needed', description: 'The email needs a subject line before it can be saved.', variant: 'destructive' })
+      return
+    }
+    setSavingDraft(true)
+    try {
+      await api('/api/admin/exec/winback', {
+        method: 'PUT',
+        body: JSON.stringify({ subject: edit.subject, body: edit.body }),
+      })
+      toast({ title: 'Draft saved', description: 'The next win-back send uses your edited copy, greeting personalised per member.' })
+      setDraftOpen(false)
+      load()
+    } catch (e) {
+      toast({ title: 'Draft not saved', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  async function resetDraft() {
+    setResetting(true)
+    try {
+      await api('/api/admin/exec/winback', { method: 'DELETE' })
+      toast({ title: 'Back to the original', description: 'The verbatim Nov 7 copy is the draft again.' })
+      setDraftOpen(false)
+      load()
+    } catch (e) {
+      toast({ title: 'Reset failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setResetting(false)
+    }
+  }
 
   async function send() {
     setSending(true)
@@ -3134,8 +3184,8 @@ export function WinBackCard() {
             {feed && <span className="text-xs text-muted-foreground font-normal">{pending} member{pending === 1 ? '' : 's'} quiet {feed.quietDays}+ days</span>}
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={!feed || pending === 0} onClick={() => setDraftOpen(true)}>
-              <MailOpen className="h-3.5 w-3.5 mr-1" /> Read the draft
+            <Button variant="outline" size="sm" disabled={!feed || pending === 0} onClick={openEditor}>
+              <PenLine className="h-3.5 w-3.5 mr-1" /> Edit the draft
             </Button>
             <Button size="sm" disabled={!feed || pending === 0 || sending} onClick={() => setConfirmOpen(true)}>
               {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />} Send win-back
@@ -3173,22 +3223,60 @@ export function WinBackCard() {
         )}
       </CardContent>
 
-      {/* Draft review: exactly what each member would receive. */}
-      <Dialog open={draftOpen} onOpenChange={setDraftOpen}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto hp-scroll">
+      {feed?.override && (
+        <div className="px-4 pb-2">
+          <p className="text-[11px] text-amber-500/90 flex items-center gap-1.5">
+            <PenLine className="h-3 w-3 shrink-0" />
+            Edited draft saved {feed.override.savedAt ? new Date(feed.override.savedAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''} — sends use your words until you reset.
+          </p>
+        </div>
+      )}
+
+      {/* Draft editor: the boss's words win. {firstName} tokens personalise the
+          greeting per member; Save stores it, Reset falls back to the verbatim
+          copy. Nothing sends from here — Send stays its own explicit gate. */}
+      <Dialog open={draftOpen} onOpenChange={(o) => { if (!o) setDraftOpen(false) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto hp-scroll">
           <DialogHeader>
-            <DialogTitle className="text-base">The win-back email</DialogTitle>
+            <DialogTitle className="text-base">Edit the win-back email</DialogTitle>
             <DialogDescription>
-              Personal greeting per member. The legal footer (Terms, Privacy &amp; POPIA, company line) is appended automatically on send. Campaign tag: {feed?.campaign || 'winback'}.
+              Use {'{firstName}'} where the member&apos;s name goes — it is replaced per member at send time. Blank lines split paragraphs; a link is [text](url). The legal footer is appended automatically on send. Campaign tag: {feed?.campaign || 'winback'}.
             </DialogDescription>
           </DialogHeader>
-          {feed && (
+          {edit && (
             <div className="space-y-3">
-              <div className="rounded-lg border bg-card px-3 py-2 text-sm">
-                <span className="text-muted-foreground text-xs">Subject: </span>
-                <span className="font-medium">{feed.draft.subject}</span>
+              <div className="space-y-1.5">
+                <Label htmlFor="wb-subject">Subject</Label>
+                <Input
+                  id="wb-subject"
+                  value={edit.subject}
+                  onChange={(e) => setEdit({ ...edit, subject: e.target.value })}
+                  maxLength={200}
+                />
+                <p className="text-[11px] text-muted-foreground">{edit.subject.length}/200</p>
               </div>
-              <div className="rounded-lg border bg-card px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed">{feed.draft.body}</div>
+              <div className="space-y-1.5">
+                <Label htmlFor="wb-body">Email body</Label>
+                <Textarea
+                  id="wb-body"
+                  rows={18}
+                  value={edit.body}
+                  onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+                  className="font-mono text-[13px] leading-relaxed"
+                />
+                <p className="text-[11px] text-muted-foreground">{edit.body.length.toLocaleString()} characters · goes out word for word to every member on the quiet list</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={saveDraft} disabled={savingDraft || !edit.subject.trim() || edit.body.trim().length < 40}>
+                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Save draft
+                </Button>
+                {feed?.override && (
+                  <Button variant="outline" onClick={resetDraft} disabled={resetting || savingDraft}>
+                    {resetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />} Reset to the original
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={() => setDraftOpen(false)} disabled={savingDraft || resetting}>Cancel</Button>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -3200,7 +3288,7 @@ export function WinBackCard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Send the win-back to {pending} member{pending === 1 ? '' : 's'}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Each of them gets the email you just reviewed, at their own greeting. Members already emailed in this campaign
+              Each of them gets the draft as it stands right now {feed?.override ? '(your edited copy)' : '(the original copy)'}, at their own greeting. Members already emailed in this campaign
               ({feed?.alreadySent ?? 0} so far), anyone on the do-not-send list, and suspended accounts are skipped automatically.
               Real email leaves the platform the moment you confirm.
             </AlertDialogDescription>
