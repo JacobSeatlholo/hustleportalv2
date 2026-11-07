@@ -53,9 +53,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No valid specs.' }, { status: 400 })
   }
 
-  const apiKey = ((await getConfig(CONFIG_KEYS.EXPLEE_API_KEY)) || '').trim()
+  // Key priority: platform config first (the Exec Dashboard seat), then the
+  // environment variable the health row reports on. Either is valid; neither
+  // is an honest stop.
+  const apiKey = (((await getConfig(CONFIG_KEYS.EXPLEE_API_KEY)) || '').trim() || process.env.EXPLEE_API_KEY?.trim() || '')
   if (apiKey.length <= 5) {
-    return NextResponse.json({ error: 'No Explee key configured on the platform.', results: [] }, { status: 503 })
+    return NextResponse.json({ error: 'No Explee key configured on the platform (config and env both empty).', results: [] }, { status: 503 })
   }
 
   const results: unknown[] = []
