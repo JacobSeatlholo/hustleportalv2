@@ -426,6 +426,20 @@ export default function MailView() {
     }
   }
 
+  // Drafts staged for this member (a client campaign run by the team) wait
+  // here as DRAFT rows. Opening one loads the composer exactly as if the
+  // member wrote it: they check it, edit anything, and press Send themself.
+  // Nothing auto-sends — the press of Send is the approval, the airtime law
+  // and the failed-send-no-charge promise apply like every other send.
+  function openDraft(e: EmailLogRow) {
+    setReading(null)
+    setTo(e.toEmail)
+    setSubject(e.subject)
+    setBody(e.body)
+    setDraftId(e.id)
+    toast({ title: 'Draft loaded', description: 'Check it, edit anything, then press Send. It only goes out when you press.' })
+  }
+
   async function remove(id: string) {
     try {
       await api(`/api/emails?id=${id}`, { method: 'DELETE' })
@@ -855,6 +869,11 @@ export default function MailView() {
           <h3 className="font-medium text-sm flex items-center gap-2 mb-3">
             <Inbox className="h-4 w-4 text-brand" /> Email log
           </h3>
+          {!loading && emails.some((e) => e.status === 'DRAFT') && (
+            <p className="text-[11px] text-amber-500/90 -mt-1.5 mb-2.5">
+              {emails.filter((e) => e.status === 'DRAFT').length} draft{emails.filter((e) => e.status === 'DRAFT').length === 1 ? '' : 's'} waiting for your approval — press <span className="font-medium">Edit &amp; send</span>, check it, hit Send. Only you press Send.
+            </p>
+          )}
           {loading ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
           ) : emails.length === 0 ? (
@@ -874,6 +893,15 @@ export default function MailView() {
                       <p className="truncate text-xs text-muted-foreground">to {e.toEmail}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {e.status === 'DRAFT' && (
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); openDraft(e) }}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-brand transition text-[11px] font-medium whitespace-nowrap"
+                          aria-label="Edit and send this draft"
+                        >
+                          Edit &amp; send
+                        </button>
+                      )}
                       <Badge
                         variant="outline"
                         className={
