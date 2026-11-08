@@ -56,9 +56,10 @@ function leadRows(body: unknown): { total: unknown; rows: unknown[] } {
 }
 
 const SEARCHES: { name: string; filters: Record<string, unknown>; limit: number }[] = [
+  { name: 'us_sanity', filters: { countries: ['United States'], requireEmail: true }, limit: 3 },
+  { name: 'sa_no_reqemail', filters: { countries: ['South Africa'] }, limit: 3 },
+  { name: 'sa_founder_only', filters: { countries: ['South Africa'], jobTitles: ['Founder'] }, limit: 3 },
   { name: 'sa_owner_jobtitle', filters: { countries: ['South Africa'], jobTitles: ['Owner'], requireEmail: true }, limit: 5 },
-  { name: 'sa_founder_seniority', filters: { countries: ['South Africa'], seniority: ['owner', 'founder'], requireEmail: true }, limit: 5 },
-  { name: 'sa_any_email', filters: { countries: ['South Africa'], requireEmail: true }, limit: 3 },
 ]
 
 export async function POST(req: NextRequest) {
@@ -78,7 +79,8 @@ export async function POST(req: NextRequest) {
     try {
       const r = await tregCall('dropleads.people.search', { filters: s.filters, pagination: { page: 1, limit: s.limit } })
       const { total, rows } = leadRows(r.body)
-      searches[s.name] = { status: r.status, total, returned: rows.length, rows: rows.slice(0, 5) }
+      const rawText = typeof r.body === 'string' ? r.body : JSON.stringify(r.body)
+      searches[s.name] = { status: r.status, total, returned: rows.length, rows: rows.slice(0, 5), raw: rawText.slice(0, 1200) }
       if (!pilotRow && rows.length) {
         const first = rows[0] as Record<string, unknown>
         // pick the first row that carries an id + org/domain we can enrich on
