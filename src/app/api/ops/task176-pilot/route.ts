@@ -49,9 +49,11 @@ async function tregCall(endpointId: string, args: Record<string, unknown>, timeo
 
 function leadRows(body: unknown): { total: unknown; rows: unknown[] } {
   const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
-  const data = (b.data ?? {}) as Record<string, unknown>
-  const rows = (data.leads ?? b.leads ?? []) as unknown[]
-  const total = data.total ?? b.total ?? null
+  // treg envelope: { call_id, status, endpoint_id, body: { success, data: { leads, total }, pagination } }
+  const provider = (typeof b.body === 'object' && b.body !== null ? b.body : b) as Record<string, unknown>
+  const data = (provider.data ?? {}) as Record<string, unknown>
+  const rows = (data.leads ?? provider.leads ?? []) as unknown[]
+  const total = data.total ?? provider.total ?? null
   return { total, rows }
 }
 
@@ -81,9 +83,9 @@ export async function POST(req: NextRequest) {
       const { total, rows } = leadRows(r.body)
       const rawText = typeof r.body === 'string' ? r.body : JSON.stringify(r.body)
       searches[s.name] = { status: r.status, total, returned: rows.length, rows: rows.slice(0, 5), raw: rawText.slice(0, 1200) }
-      if (!pilotRow && rows.length) {
+      if (!pilotRow && rows.length && s.name.startsWith('sa_')) {
         const first = rows[0] as Record<string, unknown>
-        // pick the first row that carries an id + org/domain we can enrich on
+        // pick the first SA row that carries an id/org we can enrich on
         if (first && (first.id || first.domain || first.organization_name)) pilotRow = first
       }
     } catch (e) {
