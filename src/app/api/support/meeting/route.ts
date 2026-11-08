@@ -111,6 +111,8 @@ export async function POST(req: NextRequest) {
   // Receipt to the member: honest about what happens next, Discord for the impatient.
   const memberMail = await sendSystemMail({
     to: me.email,
+    // "Request received, you are sorted" — the thumbs-up badger is the picture.
+    mascot: 'thumbs',
     subject: `Support request received: ${topic}`,
     body: [
       `Hi ${me.name || 'there'},`,

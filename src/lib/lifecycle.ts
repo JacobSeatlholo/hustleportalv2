@@ -91,6 +91,8 @@ async function sendMilestone(
   body: string,
   tag: string,
   push: { title: string; body: string; url: string },
+  /** Mascot override from the library — the picture matches the news. */
+  mascot?: string,
 ): Promise<boolean> {
   if (await alreadySent(user.id, tag)) return false
   if (await isSuppressed(user.email)) {
@@ -103,7 +105,7 @@ async function sendMilestone(
     })
     return false
   }
-  const res = await sendSystemMail({ to: user.email, subject, body })
+  const res = await sendSystemMail({ to: user.email, subject, body, mascot })
   await recordSend(user.id, user.email, subject, body, tag, res.ok, res.error)
   await sendPushToUser(user.id, { ...push, tag }).catch(() => {})
   return true
@@ -181,6 +183,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
           : await sendMilestone(
               u, subject, body, 'lifecycle-day7',
               { title: 'Still there?', body: 'Reply with your city and trade and we run your first lead search together.', url: `${APP_ORIGIN}/?view=leads` },
+              'search',
             )
         report.day7.push(u.email)
         if (sent) dry ? report.wouldSend++ : report.sent++
@@ -210,6 +213,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
         : await sendMilestone(
             u, subject, body, 'lifecycle-day3',
             { title: 'Your lead credits are waiting', body: `Your R${rand} is untouched. One search finds real businesses around you.`, url: `${APP_ORIGIN}/?view=leads` },
+            'search',
           )
       report.day3.push(u.email)
       if (sent) dry ? report.wouldSend++ : report.sent++
@@ -252,6 +256,7 @@ export async function runLifecycleSweep(dry = false): Promise<LifecycleReport> {
       : await sendMilestone(
           u, subject, body, tag,
           { title: 'One step from live', body: 'Your subscription is waiting. No money has left your card.', url: `${APP_ORIGIN}/?view=grow` },
+          'coins',
         )
     if (sent) dry ? report.wouldSend++ : report.sent++
   }

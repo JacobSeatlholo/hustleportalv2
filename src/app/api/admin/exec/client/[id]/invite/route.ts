@@ -97,6 +97,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const sent = await sendSystemMail({
     to: email,
+    // Hand-picked leads are the news — the badger with the magnifier is the picture.
+    mascot: 'search',
     subject: `Your HustlePortal account is ready${first !== 'there' ? `, ${first}` : ''}`,
     body: [
       `Hi ${first},`,
