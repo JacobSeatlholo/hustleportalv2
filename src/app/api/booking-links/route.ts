@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { parseAvail } from '@/lib/booking'
+import { parseAvail, KIND_IDS } from '@/lib/booking'
 
 /**
  * Booking links — the owner's side of the shareable booking page.
@@ -20,8 +20,6 @@ import { parseAvail } from '@/lib/booking'
  */
 
 const MAX_LINKS = 12
-
-const KINDS = ['MEETING', 'BOOKING', 'DEMO']
 
 /** Same law as invoice-logo: strip everything an SVG could smuggle onto a page. */
 function sanitizeSvg(raw: string): string | null {
@@ -71,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   const title = String(body.title || '').trim().slice(0, 80)
   if (title.length < 2) return NextResponse.json({ error: 'Give the booking a name, e.g. "Consultation".' }, { status: 400 })
-  const kind = KINDS.includes(String(body.kind)) ? String(body.kind) : 'MEETING'
+  const kind = KIND_IDS.includes(String(body.kind)) ? String(body.kind) : 'MEETING'
   const durationMin = Math.max(10, Math.min(480, Math.round(Number(body.durationMin) || 30)))
   const bufferMin = Math.max(0, Math.min(120, Math.round(Number(body.bufferMin) || 0)))
   const location = String(body.location || '').trim().slice(0, 160) || null
@@ -117,7 +115,7 @@ export async function PATCH(req: NextRequest) {
     if (title.length < 2) return NextResponse.json({ error: 'A booking needs a name.' }, { status: 400 })
     data.title = title
   }
-  if (body.kind !== undefined && KINDS.includes(String(body.kind))) data.kind = String(body.kind)
+  if (body.kind !== undefined && KIND_IDS.includes(String(body.kind))) data.kind = String(body.kind)
   if (body.durationMin !== undefined) data.durationMin = Math.max(10, Math.min(480, Math.round(Number(body.durationMin) || 30)))
   if (body.bufferMin !== undefined) data.bufferMin = Math.max(0, Math.min(120, Math.round(Number(body.bufferMin) || 0)))
   if (body.location !== undefined) data.location = String(body.location).trim().slice(0, 160) || null

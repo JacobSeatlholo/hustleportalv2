@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { parseAvail, computeSlots, humanSlot } from '@/lib/booking'
+import { parseAvail, computeSlots, humanSlot, bookingKind } from '@/lib/booking'
+import { jitsiMeetLink } from '@/lib/meet'
 import { rateLimit, clientIp, tooMany } from '@/lib/ratelimit'
 import { sendSystemMail } from '@/lib/mailer'
 import { gcalInsert } from '@/lib/gcal'
@@ -43,6 +44,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   const slotStart = new Date(String(body.slotStart || ''))
   if (Number.isNaN(slotStart.getTime())) return NextResponse.json({ error: 'Pick a time slot first.' }, { status: 400 })
 
+  // Kind-specific law: a phone call needs a number to ring.
+  const kind = bookingKind(link.kind)
+  if (kind.id === 'PHONE' && phone.replace(/\D/g, '').length < 6) {
+    return NextResponse.json({ error: 'A phone number is required — this is a phone call.' }, { status: 400 })
+  }
+  // An online meeting mints its own room the moment the booking lands.
+  const meetLink = kind.id === 'VIDEO' ? jitsiMeetLink(link.title) : null
+
   // Re-derive the offer fresh: the slot must be in the CURRENT free set.
   const avail = parseAvail(link.avail)
   const durationMs = link.durationMin * 60_000
@@ -71,7 +80,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
   const ownerName = link.user.businessName?.trim() || link.user.name
   const venue = link.location?.trim() || ''
-  const notesLine = [notes, phone ? `Phone: ${phone}` : '', venue ? `Venue: ${venue}` : ''].filter(Boolean).join(' · ')
+  const notesLine = [notes, phone ? `Phone: ${phone}` : '', venue ? `Venue: ${venue}` : '', meetLink ? `Join: ${meetLink}` : ''].filter(Boolean).join(' · ')
 
   const appointment = await db.appointment.create({
     data: {
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       notes: notesLine || null,
       startsAt: slotStart,
       endsAt: slotEnd,
+      meetLink,
       source: 'BOOKING',
       bookingLinkId: link.id,
     },
@@ -94,7 +104,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       title: appointment.title,
       startsAt: slotStart,
       endsAt: slotEnd,
-      description: notesLine || undefined,
+      description: [notes, meetLink ? `Join the online meeting: ${meetLink}` : null].filter(Boolean).join(' ') || undefined,
       location: venue || undefined,
     })
     if (inserted.ok) {
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     title: `${link.title} — ${ownerName}`,
     startsAt: slotStart,
     endsAt: slotEnd,
-    description: `Booked with ${ownerName} via HustlePortal.${notes ? ` Note: ${notes}` : ''}`,
+    description: [`Booked with ${ownerName} via HustlePortal.`, notes ? `Note: ${notes}` : '', meetLink ? `Join: ${meetLink}` : ''].filter(Boolean).join(' '),
     location: venue || undefined,
   })
   const icsUrl = `https://www.hustleportal.online/api/book/ics/${appointment.id}`
@@ -119,13 +129,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   // Owner: the whole point. A booking exists BEFORE the guest hangs up the page.
   const ownerMail = sendSystemMail({
     to: link.user.email,
-    subject: `New booking: ${link.title} — ${when}`,
+    subject: `New ${kind.label.toLowerCase()}: ${link.title} — ${when}`,
     headline: 'NEW BOOKING',
     title: `${link.title} — ${when}`,
     body: [
       `${name} just booked through your booking page.${venue ? ` Venue: ${venue}.` : ''}`,
       `Guest: ${name} · ${email}${phone ? ` · ${phone}` : ''}`,
       notes ? `They said: ${notes}` : '',
+      kind.id === 'PHONE' ? `Phone call — dial ${phone} at the booked time.` : '',
+      meetLink ? `Join the online meeting: ${meetLink}` : '',
       'It is already on your calendar in HustlePortal — nothing to confirm.',
     ].filter(Boolean).join('\n'),
     ctaLabel: 'Open HustlePortal',
@@ -139,10 +151,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     subject: `Confirmed: ${link.title} with ${ownerName} — ${when}`,
     headline: 'BOOKING CONFIRMED',
     title: `${link.title} with ${ownerName}`,
-    value: { text: when, caption: venue || 'Time in South African time (SAST)' },
+    value: { text: when, caption: venue || (kind.id === 'VIDEO' ? 'Online meeting — the join link is in this email' : 'Time in South African time (SAST)') },
     body: [
       `Hi ${name.split(/\s+/)[0]}, your booking is in ${ownerName}'s calendar.`,
       link.description || '',
+      meetLink ? `Join the online meeting at the booked time: ${meetLink}` : '',
+      kind.id === 'PHONE' ? `Keep your phone handy — ${ownerName} will call the number you left.` : '',
       'Tap below to add it to Google Calendar, or download the calendar file for any other app.',
     ].filter(Boolean).join('\n'),
     ctaLabel: 'Add to Google Calendar',
@@ -155,6 +169,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     ok: true,
     appointment: { id: appointment.id, startsAt: appointment.startsAt, endsAt: appointment.endsAt },
     when,
+    meetLink,
     gcalLink: detailsLink,
     icsUrl,
     ownerNotified: ownerSent.ok,

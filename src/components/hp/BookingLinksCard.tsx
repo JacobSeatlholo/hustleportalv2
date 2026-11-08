@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { api } from './shared'
 import { useToast } from '@/hooks/use-toast'
+import { BOOKING_KINDS, bookingKind } from '@/lib/booking'
 import { CalendarCheck, Copy, Loader2, Plus, Trash2, ExternalLink, Pencil } from 'lucide-react'
 
 /**
@@ -75,7 +76,11 @@ const DAY_ROWS: Array<{ key: string; label: string; dow: string }> = [
   { key: '0', label: 'Sun', dow: '0' },
 ]
 
-const KIND_LABEL: Record<string, string> = { MEETING: 'Meeting', BOOKING: 'Booking', DEMO: 'Demo booking' }
+const KIND_HINT: Record<string, string> = {
+  PHONE: 'Guests must leave a number — you call them at the booked time.',
+  VIDEO: 'A video-call link is created automatically and sent with both confirmations.',
+  HOUSE_CALL: 'You travel to the guest — put the area you cover in the venue field.',
+}
 
 function freshDraft(): Draft {
   return {
@@ -233,7 +238,7 @@ export default function BookingLinksCard() {
                     <p className="text-xs text-muted-foreground truncate">{url}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge variant="outline" className="text-[10px]">{KIND_LABEL[l.kind] || l.kind}</Badge>
+                    <Badge variant="outline" className="text-[10px]">{bookingKind(l.kind).icon} {bookingKind(l.kind).label}</Badge>
                     {!l.active && <Badge variant="outline" className="text-[10px] text-muted-foreground">paused</Badge>}
                     {l.bookings > 0 && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">{l.bookings} booked</Badge>}
                     <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => copyLink(l)} aria-label="Copy link"><Copy className="h-3.5 w-3.5" /></Button>
@@ -280,9 +285,9 @@ export default function BookingLinksCard() {
                   value={draft.kind}
                   onChange={(e) => setDraft({ ...draft, kind: e.target.value })}
                 >
-                  <option value="MEETING">Meeting</option>
-                  <option value="BOOKING">Booking</option>
-                  <option value="DEMO">Demo booking</option>
+                  {BOOKING_KINDS.map((k) => (
+                    <option key={k.id} value={k.id}>{k.icon} {k.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -294,9 +299,12 @@ export default function BookingLinksCard() {
                 <Input id="bl-buf" type="number" min={0} max={120} step={5} value={draft.bufferMin} onChange={(e) => setDraft({ ...draft, bufferMin: Number(e.target.value) || 0 })} />
               </div>
             </div>
+            {KIND_HINT[draft.kind] && (
+              <p className="text-[11px] text-muted-foreground -mt-2">{KIND_HINT[draft.kind]}</p>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="bl-loc">Location (optional)</Label>
-              <Input id="bl-loc" placeholder="Rooms 4, Gardens, Cape Town" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} maxLength={160} />
+              <Input id="bl-loc" placeholder={bookingKind(draft.kind).locationPlaceholder} value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} maxLength={160} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="bl-desc">What should guests know? (optional)</Label>

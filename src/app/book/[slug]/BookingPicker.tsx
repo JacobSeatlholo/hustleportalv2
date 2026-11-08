@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { bookingKind } from '@/lib/booking'
 
 /**
  * The guest-side picker island for /book/<slug>. Gold Rush chrome, three
@@ -30,12 +31,14 @@ const SOFT = '#F8EFD4'
 
 interface BookedResult {
   when: string
+  meetLink: string | null
   gcalLink: string
   icsUrl: string
   guestNotified: boolean
 }
 
 export default function BookingPicker(p: PickerProps) {
+  const kind = bookingKind(p.kind) // unknown / legacy ids read as MEETING
   const [dayIdx, setDayIdx] = useState(0)
   const [slot, setSlot] = useState<{ start: string; label: string } | null>(null)
   const [name, setName] = useState('')
@@ -45,6 +48,9 @@ export default function BookingPicker(p: PickerProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<BookedResult | null>(null)
+
+  const phoneRequired = kind.id === 'PHONE'
+  const phoneOk = !phoneRequired || phone.replace(/\D/g, '').length >= 6
 
   const day = p.days[dayIdx]
   const totalSlots = useMemo(() => p.days.reduce((n, d) => n + d.slots.length, 0), [p.days])
@@ -65,7 +71,7 @@ export default function BookingPicker(p: PickerProps) {
         setBusy(false)
         return
       }
-      setDone({ when: json.when, gcalLink: json.gcalLink, icsUrl: json.icsUrl, guestNotified: json.guestNotified })
+      setDone({ when: json.when, meetLink: json.meetLink || null, gcalLink: json.gcalLink, icsUrl: json.icsUrl, guestNotified: json.guestNotified })
     } catch {
       setError('Network hiccup — try again.')
       setBusy(false)
@@ -96,8 +102,8 @@ export default function BookingPicker(p: PickerProps) {
           </span>
         )}
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 2.5, color: ACCENT }}>{p.kind === 'DEMO' ? 'DEMO BOOKING' : p.kind === 'BOOKING' ? 'BOOKING' : 'MEETING REQUEST'}</div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: TEXT, lineHeight: 1.25 }}>{p.ownerName} is requesting a meeting</div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 2.5, color: ACCENT }}>{kind.icon} {kind.eyebrow}</div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: TEXT, lineHeight: 1.25 }}>{p.ownerName} {kind.requestLine}</div>
         </div>
       </div>
       <div style={{ fontSize: 15, color: TEXT, marginTop: 10 }}>
@@ -115,9 +121,15 @@ export default function BookingPicker(p: PickerProps) {
             <p style={{ fontSize: 13, color: MUTED, marginTop: 10, lineHeight: 1.6 }}>
               It is in {p.ownerName}&apos;s calendar already. A confirmation email is on its way
               {done.guestNotified ? '' : ' (or check your spam folder)'}.
+              {kind.id === 'PHONE' ? ` Keep your phone handy — ${p.ownerName} will call the number you left.` : ''}
             </p>
           </div>
-          <a href={done.gcalLink} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', marginTop: 14, background: GOLD, color: INK, fontWeight: 700, fontSize: 15, borderRadius: 9, padding: '13px 30px', textDecoration: 'none' }}>
+          {done.meetLink && (
+            <a href={done.meetLink} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', marginTop: 14, background: INK, color: GOLD, fontWeight: 700, fontSize: 15, borderRadius: 9, padding: '13px 30px', textDecoration: 'none' }}>
+              🎥 Join the online meeting
+            </a>
+          )}
+          <a href={done.gcalLink} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', marginTop: done.meetLink ? 10 : 14, background: GOLD, color: INK, fontWeight: 700, fontSize: 15, borderRadius: 9, padding: '13px 30px', textDecoration: 'none' }}>
             Add to Google Calendar
           </a>
           <a href={done.icsUrl} style={{ display: 'block', textAlign: 'center', marginTop: 10, fontSize: 13, color: ACCENT, textDecoration: 'underline' }}>
@@ -200,13 +212,13 @@ export default function BookingPicker(p: PickerProps) {
               <div style={{ display: 'grid', gap: 8 }}>
                 <input style={inputStyle} placeholder="Your name *" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
                 <input style={inputStyle} type="email" placeholder="Email for your confirmation *" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} />
-                <input style={inputStyle} placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={30} />
+                <input style={inputStyle} type="tel" placeholder={phoneRequired ? 'Phone number * — you will be called' : 'Phone (optional)'} value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={30} />
                 <textarea style={{ ...inputStyle, minHeight: 58 }} placeholder={`Anything ${p.ownerName.split(/\s+/)[0]} should know? (optional)`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
               </div>
               {error && <p style={{ fontSize: 13, color: '#C0392B', marginTop: 8 }}>{error}</p>}
               <button
                 onClick={submit}
-                disabled={busy || name.trim().length < 2 || !email.includes('@')}
+                disabled={busy || name.trim().length < 2 || !email.includes('@') || !phoneOk}
                 style={{
                   width: '100%',
                   marginTop: 12,
@@ -218,7 +230,7 @@ export default function BookingPicker(p: PickerProps) {
                   borderRadius: 9,
                   padding: '13px 30px',
                   cursor: busy ? 'wait' : 'pointer',
-                  opacity: busy || name.trim().length < 2 || !email.includes('@') ? 0.55 : 1,
+                  opacity: busy || name.trim().length < 2 || !email.includes('@') || !phoneOk ? 0.55 : 1,
                 }}
               >
                 {busy ? 'Booking…' : `Confirm ${day.label} at ${slot.label}`}

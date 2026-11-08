@@ -449,7 +449,7 @@ model BookingLink {
   userId      String
   slug        String   @unique // the unguessable half of the public URL /book/<slug>
   title       String // "Consultation", "Check-in", "Demo" — what the guest is booking
-  kind        String   @default("MEETING") // MEETING | BOOKING | DEMO — label + icon only, the title is the real name
+  kind        String   @default("MEETING") // MEETING | BOOKING | DEMO | PHONE | VIDEO | CONSULT | FOLLOWUP | HOUSE_CALL | GROUP — Notion-style label + icon (booking.ts BOOKING_KINDS); PHONE requires the guest number, VIDEO mints a Jitsi link; the title is the real name
   durationMin Int      @default(30)
   bufferMin   Int      @default(0) // breathing room after each slot, appointments + bookings respect it
   location    String? // "Rooms 4, Gardens, Cape Town" — shown on the page, rides into the calendar notes

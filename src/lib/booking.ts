@@ -179,3 +179,41 @@ export function humanSlot(startIso: string): string {
   const p = sastParts(t)
   return `${day}, ${String(p.hh).padStart(2, '0')}:${String(p.mm).padStart(2, '0')}`
 }
+
+// ============ KINDS — the Notion-style type of a booking page ============
+//
+// One catalog drives the owner dialog, the list badges and the public page,
+// so a new type is a data line, not a hunt through five files. Mostly these
+// are words + an icon, but two kinds change behaviour on purpose:
+//   PHONE — the guest's number becomes required (a call needs a number to ring)
+//   VIDEO — a Jitsi link is minted the moment the booking lands
+// Unknown ids fall back to MEETING everywhere (bookingKind), so an old row or
+// a mistyped kind can never render a broken page.
+
+export interface BookingKind {
+  id: string
+  label: string // owner UI + list badge
+  icon: string // emoji chip on the public page and in the dialog
+  eyebrow: string // small-caps label above the owner's name on /book/<slug>
+  requestLine: string // completes "{owner} …" on the public page
+  locationPlaceholder: string // hint the owner dialog shows for the venue field
+}
+
+export const BOOKING_KINDS: BookingKind[] = [
+  { id: 'MEETING', label: 'Meeting', icon: '🤝', eyebrow: 'MEETING REQUEST', requestLine: 'is requesting a meeting', locationPlaceholder: 'Rooms 4, Gardens, Cape Town' },
+  { id: 'BOOKING', label: 'Booking', icon: '📅', eyebrow: 'BOOKING', requestLine: 'is inviting you to book a time', locationPlaceholder: 'Rooms 4, Gardens, Cape Town' },
+  { id: 'DEMO', label: 'Demo booking', icon: '🖥️', eyebrow: 'DEMO BOOKING', requestLine: 'is inviting you to book a demo', locationPlaceholder: 'Online, or your client\'s offices' },
+  { id: 'PHONE', label: 'Phone call', icon: '📞', eyebrow: 'PHONE CALL', requestLine: 'is requesting a phone call', locationPlaceholder: 'Optional — e.g. "I will call you"' },
+  { id: 'VIDEO', label: 'Online meeting', icon: '🎥', eyebrow: 'ONLINE MEETING', requestLine: 'is requesting an online meeting', locationPlaceholder: 'Optional — a video link joins the confirmations' },
+  { id: 'CONSULT', label: 'Consultation', icon: '🩺', eyebrow: 'CONSULTATION', requestLine: 'is requesting a consultation', locationPlaceholder: 'Practice rooms, e.g. Suite 7, Rondebosch' },
+  { id: 'FOLLOWUP', label: 'Follow-up', icon: '🔁', eyebrow: 'FOLLOW-UP', requestLine: 'is requesting a follow-up', locationPlaceholder: 'Practice rooms, or "phone follow-up"' },
+  { id: 'HOUSE_CALL', label: 'House call', icon: '🏠', eyebrow: 'HOUSE CALL', requestLine: 'is requesting a house call', locationPlaceholder: 'The area you cover, e.g. Southern Suburbs' },
+  { id: 'GROUP', label: 'Group session', icon: '👥', eyebrow: 'GROUP SESSION', requestLine: 'is inviting you to join a session', locationPlaceholder: 'Studio or hall, e.g. Kloof Street Studio' },
+]
+
+export const KIND_IDS = BOOKING_KINDS.map((k) => k.id)
+
+/** Never throws: an unknown or legacy id is a MEETING for every consumer. */
+export function bookingKind(id: string): BookingKind {
+  return BOOKING_KINDS.find((k) => k.id === id) || BOOKING_KINDS[0]
+}
