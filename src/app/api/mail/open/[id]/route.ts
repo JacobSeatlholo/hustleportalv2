@@ -11,6 +11,9 @@ import { resolveProject } from '@/lib/workspace'
 // the first open instead upgrades the matching pool row: the mailbox answered,
 // a human glanced, so the contact earns the OPENED segment and a real verify
 // score. That is the hand earned path from cold list to verified pool face.
+// Exec-staged blasts (the owner's own treg/OSM harvest) queue raw addresses
+// with no leadId — their opens first try the sender's OWN bench (Lead rows
+// matching the sender's userId, NEW -> CONTACTED) before the pool upgrade.
 // For a member's campaign send to a bench lead (exec staged, ClientPoolLead),
 // the read receipt is the promotion moment: the bench row joins the pipeline
 // as a real CONTACTED lead, unlocked — the member's own sent mail already
@@ -87,27 +90,46 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
             await db.clientPoolLead.update({ where: { id: bench.id }, data: { leadId: lead.id } })
           }
         } else {
-          // Campaign send with no pipeline lead: the open feeds the pool instead.
-          // The mailbox is real and a human looked, the strongest cold list signal
-          // there is. Score jumps to 85 (open beats every passive check but never
-          // a 100), state goes active, and the row moves to the OPENED segment so
-          // the exec can distribute exactly the ones who engaged.
-          const pool = await db.leadPool.findFirst({
-            where: { email: log.toEmail.toLowerCase(), active: true },
-            orderBy: { lastSeenAt: 'desc' },
-            select: { id: true, poolTag: true, verifyScore: true },
+          // Platform bench: exec-staged blasts (the owner's own treg/OSM/POOL
+          // harvest) queue as raw addresses with no leadId on the row, but the
+          // address usually sits on the sender's own bench as a Lead row. Same
+          // ownership law as the direct branch and the bench promotion: an open
+          // only ever moves a row the SENDER owns (userId match), only ever
+          // forward (NEW -> CONTACTED), and only on a real read receipt.
+          const plat = await db.lead.findFirst({
+            where: { userId: log.userId, email: log.toEmail.toLowerCase(), stage: 'NEW' },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
           })
-          if (pool) {
-            const base = (pool.poolTag || '').replace(/-OPENED$/i, '')
-            await db.leadPool.update({
-              where: { id: pool.id },
-              data: {
-                verifyScore: Math.max(pool.verifyScore || 0, 85),
-                verifyState: 'active',
-                lastVerifiedAt: new Date(),
-                poolTag: base ? `${base}-OPENED` : null,
-              },
+          if (plat) {
+            // The updateMany where-stage guard is the race guard, same as above.
+            await db.lead.updateMany({
+              where: { id: plat.id, stage: 'NEW' },
+              data: { stage: 'CONTACTED' },
             })
+          } else {
+            // Campaign send with no pipeline lead: the open feeds the pool instead.
+            // The mailbox is real and a human looked, the strongest cold list signal
+            // there is. Score jumps to 85 (open beats every passive check but never
+            // a 100), state goes active, and the row moves to the OPENED segment so
+            // the exec can distribute exactly the ones who engaged.
+            const pool = await db.leadPool.findFirst({
+              where: { email: log.toEmail.toLowerCase(), active: true },
+              orderBy: { lastSeenAt: 'desc' },
+              select: { id: true, poolTag: true, verifyScore: true },
+            })
+            if (pool) {
+              const base = (pool.poolTag || '').replace(/-OPENED$/i, '')
+              await db.leadPool.update({
+                where: { id: pool.id },
+                data: {
+                  verifyScore: Math.max(pool.verifyScore || 0, 85),
+                  verifyState: 'active',
+                  lastVerifiedAt: new Date(),
+                  poolTag: base ? `${base}-OPENED` : null,
+                },
+              })
+            }
           }
         }
       }
