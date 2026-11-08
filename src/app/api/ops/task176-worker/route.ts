@@ -67,7 +67,7 @@ const DOMAIN_BLOCK = [/\.gov\.za$/i, /(^|\.)yoco\.com$/i, /(^|\.)justice\.gov\.z
 
 const SEARCH_FILTERS = {
   countries: ['South Africa'],
-  jobTitles: ['Chief Executive Officer', 'Managing Director', 'Managing Member', 'Director', 'Proprietor'],
+  seniority: ['owner', 'founder', 'partner'],
   requireEmail: true,
 }
 
