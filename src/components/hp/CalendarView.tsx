@@ -13,10 +13,11 @@ import {
 import { api, type Appointment } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
+import { bookingPhoneFromNotes, bookingVenueFromNotes, waReminderLink } from '@/lib/whatsapp'
 import ScanDiaryDialog from './ScanDiaryDialog'
 import BookingLinksCard from './BookingLinksCard'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle,
 } from 'lucide-react'
 
 type SpeechRecognitionLike = {
@@ -497,6 +498,24 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
                 <a href={icsHref([a])} download={`${a.title.replace(/\s+/g, '-').toLowerCase()}.ics`} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition">
                   <Download className="h-3 w-3" /> .ics
                 </a>
+                {!past && bookingPhoneFromNotes(a.notes) && (
+                  <a
+                    href={waReminderLink({
+                      guestPhone: bookingPhoneFromNotes(a.notes)!,
+                      guestName: a.clientName,
+                      title: a.title,
+                      when: localDT(a.startsAt),
+                      venue: bookingVenueFromNotes(a.notes),
+                      meetLink: a.meetLink,
+                    })}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Opens WhatsApp with the reminder written — one tap to send"
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/20 transition"
+                  >
+                    <MessageCircle className="h-3 w-3" /> WhatsApp reminder
+                  </a>
+                )}
                 <button onClick={() => onDelete(a.id)} className="ml-auto text-muted-foreground hover:text-rose-400 transition" aria-label="Delete appointment">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

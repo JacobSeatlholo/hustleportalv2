@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { sendSystemMail } from '@/lib/mailer'
+import { isExecEmail } from '@/lib/admin'
 import { searchOsmLeads } from '@/lib/osm'
 import { openrouterGenerate } from '@/lib/openrouter'
 import { parseJsonLoose } from '@/lib/gemini'
@@ -325,6 +327,67 @@ export async function runWelcomeSweep(userId: string, opts: { force?: boolean } 
     })
   }
   await logScanRun(userId, topicFp, 'WELCOME', ship.length, false)
+
+  // The leads-ready mail: the sweep's whole promise delivered to the inbox.
+  // One per account ever (EmailLog campaign tag dedupe), real humans only,
+  // suppression checked, and a mail hiccup never breaks the sweep or its
+  // honest zero — a shipped sweep is what earns the mail.
+  try {
+    if (!isProbeEmail(user.email) && !isInternalEmail(user.email) && !isExecEmail(user.email)) {
+      const tag = 'welcome-leads-ready'
+      const [already, suppressed] = await Promise.all([
+        db.emailLog.findFirst({ where: { userId, campaign: tag }, select: { id: true } }),
+        db.suppression.findUnique({ where: { email: user.email.toLowerCase() }, select: { email: true } }),
+      ])
+      if (!already && !suppressed) {
+        const first = String(user.name || '').trim().split(/\s+/)[0] || 'there'
+        const APP = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://www.hustleportal.online'
+        const subject = `Good news, ${first}: ${ship.length} real ${ship.length === 1 ? 'lead is' : 'leads are'} already in your pipeline`
+        const body = [
+          `Hi ${first},`,
+          '',
+          `While you were setting up your account, we ran your first search: ${built.target} in ${user.city.trim()}.`,
+          '',
+          `${ship.length} ${ship.length === 1 ? 'business' : 'businesses'} cleared every relevance check and ${ship.length === 1 ? 'is' : 'are'} already sitting in your pipeline — name, phone number where the directory has one, and the reason each one fits what you sell.`,
+          '',
+          ship.map((l) => `- ${l.company}${l.city || user.city ? ` (${l.city || user.city})` : ''}`).join('\n'),
+          '',
+          'No padding, no ghosts: what passed the checks is what landed. Five strong beats thirty hopeless.',
+          '',
+          `Open them here: ${APP}/?view=leads`,
+          '',
+          'They are warmest today. If any one of them buys what you sell, call before somebody else does.',
+          '',
+          'Go get paid,',
+          'The HustlePortal team',
+          'Business Hustle · businesshustle.co.za',
+        ].join('\n')
+        const r = await sendSystemMail({
+          to: user.email,
+          subject,
+          headline: 'YOUR LEADS ARE WAITING',
+          title: `We found your first ${ship.length} while you signed up`,
+          value: { text: String(ship.length), caption: `real businesses matched to ${user.city.trim()}` },
+          mascot: 'search',
+          ctaLabel: 'Open my pipeline',
+          ctaUrl: `${APP}/?view=leads`,
+          preheader: 'Relevance-checked and already in your pipeline — no padding.',
+          body,
+        })
+        await db.emailLog.create({
+          data: {
+            userId, toEmail: user.email, subject, body,
+            status: r.ok ? 'SENT' : 'FAILED',
+            provider: 'PLATFORM', campaign: tag, sentAt: new Date(),
+            ...(r.error ? { error: r.error.slice(0, 200) } : {}),
+          },
+        })
+        console.log(`[welcome-sweep-mail] ${user.email}: ${r.ok ? 'sent' : `FAILED ${r.error}`}`)
+      }
+    }
+  } catch (e) {
+    console.error('[welcome-sweep-mail] failed (sweep unaffected)', e)
+  }
   return { ok: true, shipped: ship.length, companies: ship.map((l) => l.company), stats: { raw: raw.length, ranked: verdicts.length, afterFloors: passing.length, shipped: ship.length, ranker: rankerTrace } }
 }
 

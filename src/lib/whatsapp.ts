@@ -255,4 +255,50 @@ export function waGreeting(name: string, businessName?: string | null): string {
   return `Hi ${first}!${from}`
 }
 
+// ---------- booking reminders ----------
+
+/** The guest phone the booking flow stashes in the notes line ("Phone: …"),
+ *  normalized for wa.me. Null when the guest left no usable number. */
+export function bookingPhoneFromNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null
+  const m = notes.match(/Phone:\s*([+\d][\d\s()./-]{5,})/i)
+  if (!m) return null
+  const n = normalizePhone(m[1])
+  return n.valid ? n.e164 : null
+}
+
+/** The venue the booking flow stashed in the notes line ("Venue: …"). */
+export function bookingVenueFromNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null
+  const m = notes.match(/Venue:\s*([^·\n]+)/i)
+  return m ? m[1].trim() || null : null
+}
+
+/**
+ * The SA-native no-show killer: the owner taps once, WhatsApp opens with the
+ * reminder already written. No template approvals, no Meta 24-hour window,
+ * no sending infrastructure — the way South Africa actually confirms bookings
+ * (the kloofstreet.online instinct, brought home).
+ */
+export function waReminderLink(opts: {
+  guestPhone: string // e164 digits (bookingPhoneFromNotes output)
+  guestName?: string | null
+  title: string
+  when: string
+  venue?: string | null
+  meetLink?: string | null
+}): string {
+  const first = (opts.guestName || '').trim().split(/\s+/)[0] || ''
+  const lines = [
+    first ? `Hi ${first} — a quick reminder of our booking.` : 'A quick reminder of our booking.',
+    '',
+    opts.title,
+    opts.when,
+  ]
+  if (opts.venue) lines.push(opts.venue)
+  if (opts.meetLink) lines.push(`Join online: ${opts.meetLink}`)
+  lines.push('', 'Need to move it? Reply here and we will sort it out.')
+  return waLink(opts.guestPhone, lines.join('\n'))
+}
+
 export const MAX_IMPORT_BATCH = 500
