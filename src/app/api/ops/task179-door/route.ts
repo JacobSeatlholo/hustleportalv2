@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   if (action === 'mkDemoLink') {
     const master = await db.user.findUnique({
-      where: { email: 'seatlholojacob@gmail.com' },
+      where: { email: 'ceo@businesshustle.co.za' },
       select: { id: true, name: true, businessName: true },
     })
     if (!master) return NextResponse.json({ error: 'master seat not found' }, { status: 404 })
