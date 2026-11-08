@@ -116,6 +116,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   }
 
   const when = humanSlot(slotStart.toISOString())
+  // The picture matches the news: a call booked shows the badger on the phone,
+  // a video meeting shows him on a video call, everything else the calendar.
+  const mascot = kind.id === 'PHONE' ? 'phone' : kind.id === 'VIDEO' ? 'video' : 'calendar'
   const detailsLink = gcalTemplateLink({
     uid: appointment.id,
     title: `${link.title} — ${ownerName}`,
@@ -143,6 +146,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     ctaLabel: 'Open HustlePortal',
     ctaUrl: 'https://www.hustleportal.online',
     preheader: `${name} booked ${link.title} for ${when}`,
+    mascot,
   })
 
   // Guest: the confirmation they can put in their own calendar.
@@ -162,6 +166,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     ctaLabel: 'Add to Google Calendar',
     ctaUrl: detailsLink,
     preheader: `${link.title} confirmed for ${when}`,
+    mascot,
   })
   const [ownerSent, guestSent] = await Promise.all([ownerMail, guestMail])
 

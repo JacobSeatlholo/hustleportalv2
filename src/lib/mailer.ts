@@ -849,6 +849,11 @@ export async function sendSystemMail(
     ctaLabel?: string
     ctaUrl?: string
     preheader?: string
+    /** Mascot from the library (mailthemes MASCOTS id) — the picture that */
+    /** matches the news. Defaults to the badger waving.                   */
+    mascot?: string
+    /** Chrome override; system mail rides the full Gold Rush print by default. */
+    theme?: MailThemeId
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
@@ -858,11 +863,12 @@ export async function sendSystemMail(
   }
   const from = process.env.RESEND_FROM?.trim() || BRANDED_FROM
   const body = mail.body + legalFooter()
-  // Transactional mail gets the quiet Boardroom chrome: same words, branded
-  // frame, no pixel (system sends carry no EmailLog row) and no unsubscribe
-  // (a password reset is not bulk mail).
+  // System mail wears the FULL theme print: banner, badger hero, gold accents —
+  // the same voice from welcome to forgot password (boss law: every system
+  // email shows the character). No pixel (system sends carry no EmailLog row)
+  // and no unsubscribe (a password reset is not bulk mail).
   const html = themedEmailHtml(mail.body, {
-    theme: 'boardroom',
+    theme: mail.theme ?? 'goldrush',
     footerLines: legalFooterLines(),
     headline: mail.headline,
     title: mail.title,
@@ -870,6 +876,7 @@ export async function sendSystemMail(
     ctaLabel: mail.ctaLabel,
     ctaUrl: mail.ctaUrl,
     preheader: mail.preheader,
+    mascot: mail.mascot,
   })
   const first = await resendPost(apiKey, { from, to: [mail.to], subject: mail.subject, text: body, html, reply_to: TEAM_INBOX })
   if (first.ok) {

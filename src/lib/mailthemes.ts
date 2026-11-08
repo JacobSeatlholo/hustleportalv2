@@ -30,6 +30,40 @@ export type MailThemeId = 'boardroom' | 'goldrush' | 'nightshift' | 'plain'
 /** Where the brand images live in production. */
 export const MAIL_ASSET_BASE = 'https://www.hustleportal.online'
 
+// ============ MASCOT LIBRARY — the badger, per occasion ============
+//
+// Every image shows the same idea: our honey badger in his mustard-yellow
+// vest with the BH monogram stitched on the chest. One file per occasion so
+// an email's picture matches its news — a booking lands, a call is set, a
+// payment cleared, a password needs guarding. Themes carry a default hero;
+// any send can override with `mascot: MASCOTS.<key>`-style id.
+
+export interface MascotImage {
+  /** Short id used in `mascot:` options. */
+  id: string
+  label: string // for pickers + previews
+  src: string // under MAIL_ASSET_BASE
+  alt: string
+  bg: string // cell background behind the image
+}
+
+export const MASCOTS: Record<string, MascotImage> = {
+  wave: { id: 'wave', label: 'Waving hello', src: '/email/mascot-wave-bh.jpg', alt: 'The HustlePortal honey badger waving with a laptop under his arm, BH on his vest', bg: '#F8CD6E' },
+  calendar: { id: 'calendar', label: 'Booking confirmed', src: '/email/mascot-calendar.jpg', alt: 'The honey badger holding up a calendar page with a thumbs up, BH on his vest', bg: '#F8CD6E' },
+  phone: { id: 'phone', label: 'Phone call', src: '/email/mascot-phone.jpg', alt: 'The honey badger taking a phone call, BH on his vest', bg: '#F8CD6E' },
+  video: { id: 'video', label: 'Online meeting', src: '/email/mascot-video.jpg', alt: 'The honey badger waving at a video call on his laptop, BH on his vest', bg: '#F8CD6E' },
+  thumbs: { id: 'thumbs', label: 'All done', src: '/email/mascot-thumbs.jpg', alt: 'The honey badger giving a big thumbs up, BH on his vest', bg: '#F8CD6E' },
+  coins: { id: 'coins', label: 'Money', src: '/email/mascot-coins.jpg', alt: 'The honey badger holding up a gold BH coin', bg: '#F8CD6E' },
+  search: { id: 'search', label: 'Looking', src: '/email/mascot-search.jpg', alt: 'The honey badger peering through a magnifying glass, BH on his vest', bg: '#F8CD6E' },
+  lock: { id: 'lock', label: 'Security', src: '/email/mascot-lock.jpg', alt: 'The honey badger holding a padlock and a key, BH on his vest', bg: '#F8CD6E' },
+  night: { id: 'night', label: 'Night scene', src: '/email/mascot-night-bh.jpg', alt: 'The HustlePortal honey badger reading good news on his phone at night, BH badge on his hoodie', bg: '#202E4B' },
+}
+
+/** Never throws: an unknown mascot id renders nothing special, just the default. */
+export function mascotImage(id: string | undefined): MascotImage | undefined {
+  return id ? MASCOTS[id] : undefined
+}
+
 interface MailTheme {
   id: MailThemeId
   /** Human label, for the exec dashboard picker. */
@@ -105,8 +139,8 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     softBox: '#F8EFD4',
     radius: 14,
     hero: {
-      src: '/email/mascot-wave.jpg',
-      alt: 'The HustlePortal honey badger, waving with a laptop under his arm',
+      src: '/email/mascot-wave-bh.jpg',
+      alt: 'The HustlePortal honey badger, waving with a laptop under his arm, BH on his vest',
       bg: '#F8CD6E',
     },
     band: true,
@@ -131,8 +165,8 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
     softBox: '#EEF1F5',
     radius: 14,
     hero: {
-      src: '/email/mascot-night.jpg',
-      alt: 'The HustlePortal honey badger reading good news on his phone at night',
+      src: '/email/mascot-night-bh.jpg',
+      alt: 'The HustlePortal honey badger reading good news on his phone at night, BH badge on his hoodie',
       bg: '#202E4B',
     },
     band: true,
@@ -177,6 +211,8 @@ export interface ThemedMailOptions {
   preheader?: string
   /** One-click unsubscribe link for bulk mail (footer). */
   unsubscribeUrl?: string
+  /** Mascot override from the library (MASCOTS ids) — the picture above the headline. */
+  mascot?: string
   /** Legal footer lines (from mailer.legalFooterLines). */
   footerLines?: string[]
   /** Base for brand images; tests and previews override it. */
@@ -196,12 +232,13 @@ function banner(t: MailTheme, assetBase: string): string {
   )
 }
 
-function heroRow(t: MailTheme, assetBase: string): string {
-  if (!t.hero) return ''
-  const src = `${assetBase}${t.hero.src}`
+function heroRow(t: MailTheme, assetBase: string, mascot?: string): string {
+  const m = mascotImage(mascot) || t.hero
+  if (!m) return ''
+  const src = `${assetBase}${m.src}`
   return (
-    `<tr><td bgcolor="${t.hero.bg}" style="background:${t.hero.bg};padding:0">` +
-    `<img src="${src}" width="600" alt="${t.hero.alt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none" />` +
+    `<tr><td bgcolor="${m.bg}" style="background:${m.bg};padding:0">` +
+    `<img src="${src}" width="600" alt="${m.alt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none" />` +
     `</td></tr>`
   )
 }
@@ -321,7 +358,7 @@ ${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${t.pageBg};padding:26px 12px"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:${t.cardBg};border-radius:${t.radius}px;overflow:hidden">
 ${banner(t, assetBase)}
-${heroRow(t, assetBase)}
+${heroRow(t, assetBase, opts.mascot)}
 ${headlineRow(opts.headline, t)}
 ${titleRow(opts.title, t, !!opts.headline)}
 <tr><td style="padding:${opts.headline ? '18px' : opts.title ? '12px' : '28px'} 30px 6px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${t.text}">${blocks}</td></tr>

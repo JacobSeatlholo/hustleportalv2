@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
           headline: 'WELCOME ABOARD',
           title: 'Your Business OS is live',
           value: { text: `R${creditRand}`, caption: 'Lead credits already loaded in your wallet' },
+          mascot: 'wave',
           body: [
             `Hi ${first},`,
             '',
@@ -247,6 +248,7 @@ export async function POST(req: NextRequest) {
           ctaLabel: 'Reset my password',
           ctaUrl: resetUrl,
           preheader: 'The link works for 30 minutes and can be used once.',
+          mascot: 'lock',
           body: [
             `Hi ${user.name || 'there'},`,
             '',

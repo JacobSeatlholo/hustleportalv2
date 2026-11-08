@@ -37,6 +37,7 @@ export async function confirmAndNotify(meeting: MeetingLike & { id: string }) {
     title: 'You are booked in',
     ctaLabel: 'Add to Google Calendar',
     ctaUrl: addToCalendarLink(meeting),
+    mascot: 'calendar',
   }
   const [a, b] = await Promise.all([
     sendSystemMail({ to: meeting.memberEmail, ...toMember, ...confirmChrome }),

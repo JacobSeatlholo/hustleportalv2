@@ -179,11 +179,11 @@ export async function POST(req: NextRequest) {
       passwordUrl: passwordUrl as string,
       proposedWhen: meetingWhen(startsAt),
     })
-    const sent = await sendSystemMail({ to: memberEmail, ...w })
+    const sent = await sendSystemMail({ to: memberEmail, ...w, mascot: 'wave' })
     if (!sent.ok) welcomeError = sent.error || 'Welcome email failed'
   }
   const inv = inviteEmail(meeting)
-  const invite = await sendSystemMail({ to: memberEmail, ...inv })
+  const invite = await sendSystemMail({ to: memberEmail, ...inv, mascot: 'calendar' })
 
   return NextResponse.json(
     {

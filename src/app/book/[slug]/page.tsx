@@ -5,8 +5,11 @@ import BookingPicker, { type PickerProps } from './BookingPicker'
 /**
  * /book/<slug> — the public booking page, the guest-facing face of the
  * calendar. Styled after the Gold Rush email look on purpose: warm paper,
- * ink banner, the BH mark, gold actions — the same brand the confirmation
- * email arrives in, so page and mail read as one voice.
+ * ink banner, the BH mark, gold actions, and the SAME full-width mascot hero
+ * the confirmation email arrives with — page and mail read as one voice.
+ * The picture matches the kind: a phone-call page shows the badger on the
+ * phone, an online-meeting page shows him on a video call, everything else
+ * the calendar scene.
  *
  * The owner's availability turns into real free slots here (next 14 days,
  * their existing calendar respected, 2h lead time). The guest picks, signs
@@ -14,6 +17,13 @@ import BookingPicker, { type PickerProps } from './BookingPicker'
  * calendar before the page finishes saying so.
  */
 export const dynamic = 'force-dynamic'
+
+/** The mascot that matches the occasion (mirrors the mail's kind-aware pick). */
+function heroForKind(kind: string): { src: string; alt: string } {
+  if (kind === 'PHONE') return { src: '/email/mascot-phone.jpg', alt: 'The HustlePortal honey badger taking a phone call, BH on his vest' }
+  if (kind === 'VIDEO') return { src: '/email/mascot-video.jpg', alt: 'The HustlePortal honey badger waving at a video call on his laptop, BH on his vest' }
+  return { src: '/email/mascot-calendar.jpg', alt: 'The HustlePortal honey badger holding up a calendar page, BH on his vest' }
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -36,6 +46,10 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
     include: { user: { select: { name: true, businessName: true } } },
   })
 
+  // Hero picked before any early return: the shell needs it even for the
+  // not-available card, and an unknown kind simply reads as the calendar.
+  const hero = heroForKind(link?.kind || '')
+
   const shell = (children: React.ReactNode) => (
     <main style={{ minHeight: '100vh', background: '#FBF3DC', padding: '26px 12px' }}>
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
@@ -44,6 +58,11 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
           <span style={{ color: '#FFFFFF', fontWeight: 700, fontSize: 17, letterSpacing: 0.4 }}>HustlePortal</span>
         </div>
         <div style={{ height: 4, background: '#f5c518' }} />
+        {/* The full theme print: the same mascot hero the emails carry. */}
+        <div style={{ background: '#F8CD6E', fontSize: 0, lineHeight: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={hero.src} alt={hero.alt} style={{ display: 'block', width: '100%', height: 'auto', border: 0 }} />
+        </div>
         {children}
       </div>
     </main>
