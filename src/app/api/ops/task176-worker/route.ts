@@ -40,7 +40,7 @@ const CURSOR_KEY = 'TASK176_CURSOR'
 const TOTALS_KEY = 'TASK176_TOTALS'
 const BALANCE_FLOOR_USD = 4.0
 const MAX_VERIFIED = 1150
-const MAX_PAGES = 60
+const MAX_PAGES = 80
 const PER_HIT_MS = 40_000
 
 const SUBJECT = 'Still hunting clients the hard way?'
@@ -67,7 +67,7 @@ const DOMAIN_BLOCK = [/\.gov\.za$/i, /(^|\.)yoco\.com$/i, /(^|\.)justice\.gov\.z
 
 const SEARCH_FILTERS = {
   countries: ['South Africa'],
-  jobTitles: ['Owner', 'Business Owner', 'Co-Owner', 'Founder', 'Co-Founder', 'Director', 'Managing Director', 'Proprietor'],
+  jobTitles: ['Chief Executive Officer', 'Managing Director', 'Managing Member', 'Director', 'Proprietor'],
   requireEmail: true,
 }
 
@@ -166,12 +166,17 @@ async function bumpCounter(key: string, by: number): Promise<number> {
 
 // ---------------- collect ----------------
 
-async function collect(): Promise<NextResponse> {
+async function collect(resetPage?: number): Promise<NextResponse> {
   const started = Date.now()
   const master = await db.user.findFirst({ where: { email: MASTER_EMAIL }, select: { id: true } })
   if (!master) return NextResponse.json({ error: `Master ${MASTER_EMAIL} not found` }, { status: 503 })
 
   const cursor = await readConfigJson<Cursor>(CURSOR_KEY, { page: 1, done: false })
+  if (typeof resetPage === 'number' && resetPage >= 1) {
+    cursor.page = resetPage
+    cursor.done = false
+    await writeConfigJson(CURSOR_KEY, cursor)
+  }
   const totals = await readConfigJson<Totals>(TOTALS_KEY, { verified: 0, inserted: 0, missed: 0, pages: 0, dupes: 0, skipped: 0 })
 
   let enrichedThisHit = 0
@@ -203,7 +208,7 @@ async function collect(): Promise<NextResponse> {
       const id = String(x.id ?? '')
       if (!id || known.has(`dropleads:${id}`)) { totals.dupes++; return false }
       const size = Number(x.companySize ?? 999)
-      if (Number.isFinite(size) && size > 60) { totals.skipped++; return false } // not a small business
+      if (Number.isFinite(size) && size > 100) { totals.skipped++; return false } // not a small business
       return true
     })
 
@@ -437,9 +442,9 @@ export async function POST(req: NextRequest) {
   if (!tokenOk(url.searchParams.get('token'))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  const body = (await req.json().catch(() => ({}))) as { action?: string }
+  const body = (await req.json().catch(() => ({}))) as { action?: string; page?: number }
   switch (body.action) {
-    case 'collect': return collect()
+    case 'collect': return collect(typeof body.page === 'number' ? body.page : undefined)
     case 'stage': return stage()
     case 'harden': return harden()
     case 'status': return status()
