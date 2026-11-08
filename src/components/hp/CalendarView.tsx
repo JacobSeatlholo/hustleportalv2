@@ -14,6 +14,7 @@ import { api, type Appointment } from './shared'
 import { useHp } from './store'
 import { useToast } from '@/hooks/use-toast'
 import ScanDiaryDialog from './ScanDiaryDialog'
+import BookingLinksCard from './BookingLinksCard'
 import {
   Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off,
 } from 'lucide-react'
@@ -347,6 +348,8 @@ export default function CalendarView() {
       </div>
 
       <IcsImportDialog open={icsOpen} onOpenChange={setIcsOpen} onImported={load} />
+
+      <BookingLinksCard />
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Create */}

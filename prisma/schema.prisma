@@ -82,6 +82,7 @@ model User {
   leadSignals        LeadSignal[]
   meetingsOwned      Meeting[]           @relation("MeetingOwner")
   meetingsAsMember   Meeting[]           @relation("MeetingMember")
+  bookingLinks       BookingLink[]
 }
 
 // ============ FACILITATED MEETINGS (Executive Dashboard) ============
@@ -417,19 +418,53 @@ model Appointment {
   notes       String?
   startsAt    DateTime
   endsAt      DateTime?
-  meetLink    String? // Jitsi link (meet.ts)
-  source      String    @default("MANUAL") // MANUAL | VOICE | ICS
-  gcalEventId String? // set when synced to Google Calendar
-  externalId  String? // iCalendar UID or feed identity — the import/sync dedupe key
-  icsFeed     Boolean   @default(false) // true when this row came from an ICS feed sync
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  meetLink      String? // Jitsi link (meet.ts)
+  source        String    @default("MANUAL") // MANUAL | VOICE | ICS | BOOKING (guest booked via a booking link)
+  gcalEventId   String? // set when synced to Google Calendar
+  externalId    String? // iCalendar UID or feed identity — the import/sync dedupe key
+  icsFeed       Boolean   @default(false) // true when this row came from an ICS feed sync
+  bookingLinkId String? // set when a guest booked this slot through a shareable booking page
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
 
   @@index([userId, startsAt])
   @@index([projectId])
+}
+
+// ============ BOOKING LINKS (shareable self-serve booking pages) ============
+
+// The calendar's front door for the practitioner who loses hours to phone tag:
+// a doctor, a therapist, anyone whose clients arrive at the wrong time or the
+// wrong day. The owner sets which week windows they make available; the guest
+// opens the page, picks a slot that is actually free, and the booking lands
+// on the owner's calendar CONFIRMED — no phone call, no "I didn't know you
+// were coming". Availability is wall-clock times in SAST (+02:00, no DST),
+// the one timezone the platform's home market lives in.
+model BookingLink {
+  id          String   @id @default(cuid())
+  userId      String
+  slug        String   @unique // the unguessable half of the public URL /book/<slug>
+  title       String // "Consultation", "Check-in", "Demo" — what the guest is booking
+  kind        String   @default("MEETING") // MEETING | BOOKING | DEMO — label + icon only, the title is the real name
+  durationMin Int      @default(30)
+  bufferMin   Int      @default(0) // breathing room after each slot, appointments + bookings respect it
+  location    String? // "Rooms 4, Gardens, Cape Town" — shown on the page, rides into the calendar notes
+  description String? // what the guest should know / bring
+  avail       String // JSON weekly map {"1":[{"s":"09:00","e":"13:00"}],...} keys 0=Sun..6=Sat, SAST wall times
+  logoUrl     String?  // sanitized SVG data URL (invoice-logo pattern) — the practitioner's own face on the page
+  bookings    Int      @default(0) // lifetime count of confirmed bookings through this link
+  active      Boolean  @default(true) // off = the page shows an honest "not taking bookings" card, nothing bookable
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([userId])
 }
 
 // ============ INVOICES ============
