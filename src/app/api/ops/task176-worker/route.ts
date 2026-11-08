@@ -67,7 +67,7 @@ const DOMAIN_BLOCK = [/\.gov\.za$/i, /(^|\.)yoco\.com$/i, /(^|\.)justice\.gov\.z
 
 const SEARCH_FILTERS = {
   countries: ['South Africa'],
-  seniority: ['owner', 'founder', 'partner'],
+  industries: ['health, wellness & fitness', 'wellness and fitness services', 'beauty services', 'hospitality', 'retail', 'education management', 'real estate and property', 'construction', 'food and beverage services', 'events services'],
   requireEmail: true,
 }
 
