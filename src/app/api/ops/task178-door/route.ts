@@ -30,8 +30,18 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-  if (String(body.action || '') !== 'status') {
+  if (String(body.action || '') !== 'status' && String(body.action || '') !== 'complaints') {
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+  }
+
+  if (String(body.action) === 'complaints') {
+    const rows = await db.suppression.findMany({
+      where: { reason: { in: ['COMPLAINT', 'UNSUB'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { email: true, reason: true, note: true, createdAt: true },
+    })
+    return NextResponse.json({ ok: true, now: new Date().toISOString(), rows })
   }
 
   const since = new Date(READ_SINCE)
