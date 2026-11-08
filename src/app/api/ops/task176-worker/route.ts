@@ -41,7 +41,7 @@ const TOTALS_KEY = 'TASK176_TOTALS'
 const BALANCE_FLOOR_USD = 4.0
 const MAX_VERIFIED = 1150
 const MAX_PAGES = 60
-const PER_HIT_MS = 36_000
+const PER_HIT_MS = 40_000
 
 const SUBJECT = 'Still hunting clients the hard way?'
 
@@ -207,16 +207,16 @@ async function collect(): Promise<NextResponse> {
       return true
     })
 
-    // enrich in chunks of 6, $0.0036 each, billed per success only
-    for (let i = 0; i < candidates.length; i += 6) {
+    // enrich in chunks of 12, $0.0036 each, billed per success only
+    for (let i = 0; i < candidates.length; i += 12) {
       if (Date.now() - started >= PER_HIT_MS || totals.verified >= MAX_VERIFIED) break
-      const chunk = candidates.slice(i, i + 6)
+      const chunk = candidates.slice(i, i + 12)
       const results = await Promise.all(chunk.map(async (person) => {
         const args: Record<string, unknown> = { email_verification_type: 'valid_and_catchall' }
         for (const k of ['id', 'first_name', 'firstName', 'last_name', 'lastName', 'name', 'organization_name', 'companyName', 'domain', 'linkedin_url']) {
           if (person[k] != null && person[k] !== '') args[k] = person[k]
         }
-        const er = await tregCall('dropleads.people.enrich.verified', args, 25_000)
+        const er = await tregCall('dropleads.people.enrich.verified', args, 20_000)
         if (!er.ok) return { miss: true, person }
         const eb = (typeof er.body === 'object' && er.body !== null ? er.body : {}) as Record<string, unknown>
         const pb = (typeof eb.body === 'object' && eb.body !== null ? eb.body : eb) as Record<string, unknown>
