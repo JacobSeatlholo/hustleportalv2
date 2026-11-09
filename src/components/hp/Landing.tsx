@@ -10,23 +10,11 @@ import { api } from './shared'
 import { useHp } from './store'
 import CityField from './CityField'
 import ThemeToggle from './ThemeToggle'
-import { useCurrency } from './useCurrency'
 import {
-  Target, Zap, Wallet, BrainCircuit, Loader2, ArrowRight, Check,
-  TrendingUp, Camera, Handshake, Brain, Sparkles, Gift, Crown, Rocket, MailCheck,
+  Zap, Wallet, Loader2, ArrowRight, Check, Handshake, Sparkles, Gift, MailCheck,
   MessageSquareText, Timer, BookOpen, BadgeCheck, MessageCircleOff, Calculator, Clock,
-  Hammer, MonitorSmartphone, Compass, Twitter, Instagram,
+  Twitter, Instagram, Star,
 } from 'lucide-react'
-import { BH_SERVICES } from '@/data/services'
-
-const SERVICE_ICONS: Record<string, React.ReactNode> = {
-  target: <Target className="h-5 w-5" />,
-  laptop: <MonitorSmartphone className="h-5 w-5" />,
-  'trending-up': <TrendingUp className="h-5 w-5" />,
-  camera: <Camera className="h-5 w-5" />,
-  handshake: <Handshake className="h-5 w-5" />,
-  brain: <Brain className="h-5 w-5" />,
-}
 
 const INDUSTRIES = [
   'Creative Agency', 'Freelancer', 'Tech / SaaS', 'Retail', 'Consulting', 'Construction',
@@ -58,48 +46,44 @@ const STAT_TILES = [
   { icon: BadgeCheck, big: 'R0', small: 'to start, and no card is needed' },
 ]
 
-const PROBLEMS = [
+/** Real Google reviews, verbatim from the Business Hustle Google listing
+ *  (4.8 ★, 12 reviews, 99 Kloof St, Gardens, Cape Town — verified Nov 2026).
+ *  Nothing here is invented; quotes render exactly as they appear on Google. */
+const GOOGLE_RATING = { stars: '4.8', count: 12 }
+const GOOGLE_REVIEWS_URL = 'https://www.google.com/maps/search/Business+Hustle+99+Kloof+St+Gardens+Cape+Town'
+const GOOGLE_REVIEWS = [
   {
-    icon: MessageCircleOff, title: 'Leads slip through the cracks',
-    desc: 'Good leads sitting in WhatsApp, DMs and missed calls. Nobody tracks them, nobody calls back, and the deal goes cold.',
+    name: 'Pako Mahumo', role: 'HustlePortal user',
+    quote: 'I love this app, it’s convenient and easy to use.',
   },
   {
-    icon: Calculator, title: 'Profit is a guess, not a number',
-    desc: 'Invoices in one place, expenses in another. You never really know which jobs made you money until the month is over.',
+    name: 'Ronald Menoe', role: 'Gabonewe',
+    quote: 'I did not only get a landing page for my business, I found a like-minded family that supports my vision and dream. Great partnership.',
   },
   {
-    icon: Clock, title: 'Admin eats the evenings',
-    desc: 'Quotes, schedules and filing all wait for you after hours. The small stuff eats the hours you should be billing for.',
+    name: 'Franck Leya', role: 'Client',
+    quote: 'What a pleasant experience! 100% will recommend!!',
   },
 ]
 
-const STORE_HIGHLIGHTS = [
+const PROBLEMS = [
   {
-    icon: Hammer, title: 'Project Execution', price: 'From R5,000',
-    desc: 'Brand, website or launch, we build it and hand it over in days.',
-    url: 'https://businesshustle.co.za',
+    icon: MessageCircleOff, title: 'Leads slip through the cracks',
+    desc: 'In WhatsApp, DMs and missed calls — nobody calls back, the deal goes cold.',
   },
   {
-    icon: BookOpen, title: 'Hustle Basics eBook', price: 'R270',
-    desc: 'The essential business toolkit. 20% off this month.',
-    url: 'https://app.businesshustle.co.za/product/hustle-basics-ebook/',
+    icon: Calculator, title: 'Profit is a guess, not a number',
+    desc: 'Invoices here, expenses there — you never really know which jobs made money.',
   },
   {
-    icon: MonitorSmartphone, title: 'Landing Page', price: 'R1,950',
-    desc: 'A clean, fast website that works beautifully on phones.',
-    url: 'https://app.businesshustle.co.za/product/landing-page/',
-  },
-  {
-    icon: Compass, title: 'Strategy & Structuring', price: 'From R2,500',
-    desc: 'Business plans, company registration and advice on taking your product to market.',
-    url: 'https://businesshustle.co.za',
+    icon: Clock, title: 'Admin eats the evenings',
+    desc: 'Quotes, schedules and filing wait until after hours — the hours you should be billing.',
   },
 ]
 
 export default function Landing() {
-  const { loadSession, setView } = useHp()
+  const { loadSession } = useHp()
   const { toast } = useToast()
-  const currency = useCurrency()
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register')
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
@@ -142,13 +126,6 @@ export default function Landing() {
         })
       }
       await loadSession(true)
-      // Charge now: a plan chosen on the landing page rides through signup.
-      // The app opens straight on the Grow view, where its checkout fires.
-      const intent = localStorage.getItem('hp_plan_intent')
-      if (intent === 'HUSTLER' || intent === 'BOSS') {
-        try { window.history.replaceState({}, '', '/?view=grow') } catch { /* private mode */ }
-        setView('grow')
-      }
     } catch (e) {
       toast({ title: 'Couldn’t sign you in', description: e instanceof Error ? e.message : 'Please check your details and try again.', variant: 'destructive' })
     } finally {
@@ -205,10 +182,8 @@ export default function Landing() {
               <span className="text-brand">We find your customers.</span>
             </h1>
             <p className="text-muted-foreground mt-4 text-lg max-w-xl">
-              Tell us what you sell and we go find real businesses near you that need it.
-              We check their details and drop them straight into your pipeline, so all
-              that’s left for you is to call, quote and get paid. No cold guessing.
-              No spreadsheets.
+              Tell us what you sell and we find real businesses near you that need it —
+              details checked, loaded into your pipeline, ready to call, quote and get paid.
             </p>
           </div>
 
@@ -216,6 +191,15 @@ export default function Landing() {
             <div className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-brand" /> Proudly South African</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> R99 in free credits when you join</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> Secure payments by Yoco</div>
+            <a
+              href={GOOGLE_REVIEWS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-brand hover:underline"
+              aria-label="Business Hustle on Google: 4.8 stars"
+            >
+              <Star className="h-4 w-4 fill-brand text-brand" /> {GOOGLE_RATING.stars}★ on Google
+            </a>
           </div>
 
           {refApplied && (
@@ -430,16 +414,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== The problem ===== */}
+      {/* ===== The problem (three one-liners, no essay) ===== */}
       <section id="problem" className="space-y-5">
         <div>
           <div className="hp-eyebrow text-brand">The problem</div>
           <h2 className="font-display text-3xl md:text-4xl mt-2">Being scattered costs real money</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Your leads live in WhatsApp. Your invoices live in Word. Your expenses live in your head
-            and a drawer full of slips. By the time you catch up, the month is gone, and the money
-            with it.
-          </p>
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
           {PROBLEMS.map((p) => (
@@ -451,86 +430,71 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          HustlePortal pulls all of it into <span className="text-brand font-medium">one home</span>. Leads, invoices,
-          tasks, appointments and an AI helper that knows your numbers, all under one roof, built
-          for South African businesses of any size.
+          HustlePortal pulls all of it into <span className="text-brand font-medium">one home</span>.
         </p>
       </section>
 
-      {/* ===== Our Solutions (Store highlights, like hustleportal.online) ===== */}
-      <section id="solutions" className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      {/* ===== Google reviews: real words from the Business Hustle listing ===== */}
+      <section id="reviews" className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
-            <div className="hp-eyebrow text-brand">Our Solutions</div>
-            <h2 className="font-display text-3xl md:text-4xl mt-2">Everything your business needs</h2>
+            <div className="hp-eyebrow text-brand">Google reviews</div>
+            <h2 className="font-display text-3xl md:text-4xl mt-2">Rated {GOOGLE_RATING.stars} out of 5</h2>
+            <p className="text-sm text-muted-foreground mt-1">Real words from the Business Hustle Google listing · {GOOGLE_RATING.count} reviews.</p>
           </div>
           <a
-            href="https://app.businesshustle.co.za/shop"
+            href={GOOGLE_REVIEWS_URL}
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-medium text-brand hover:underline inline-flex items-center gap-1"
+            className="inline-flex items-center gap-2 rounded-lg border px-4 h-10 text-sm font-medium hover:border-brand transition shrink-0"
           >
-            Browse the full store <ArrowRight className="h-4 w-4" />
+            <Star className="h-4 w-4 fill-brand text-brand" />
+            {GOOGLE_RATING.stars} · Read on Google
           </a>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {STORE_HIGHLIGHTS.map((s) => (
-            <a
-              key={s.title}
-              href={s.url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-border bg-card p-4 hover:border-brand/60 transition group"
-            >
-              <div className="rounded-lg bg-brand/10 p-2 w-fit"><s.icon className="h-4 w-4 text-brand" /></div>
-              <div className="font-semibold text-sm mt-2.5 group-hover:text-brand transition">{s.title}</div>
-              <div className="font-display text-brand text-lg mt-0.5">{s.price}</div>
-              <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{s.desc}</div>
-            </a>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {GOOGLE_REVIEWS.map((r) => (
+            <figure key={r.name} className="rounded-xl border bg-card p-5 flex flex-col gap-3">
+              <div className="flex gap-0.5" aria-label="Rated on Google">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Star key={i} className="h-3.5 w-3.5 fill-brand text-brand" />
+                ))}
+              </div>
+              <blockquote className="text-sm leading-relaxed">“{r.quote}”</blockquote>
+              <figcaption className="mt-auto">
+                <div className="text-sm font-medium">{r.name}</div>
+                <div className="text-[11px] text-muted-foreground">{r.role} · Google review</div>
+              </figcaption>
+            </figure>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Inside the app there&apos;s a full store with 15 packages from R249 to R21,000, plus a hub of more than 50 free tools and guides.
-        </p>
       </section>
 
-      {/* ===== Services by Business Hustle (like hustleportal.online Services page) ===== */}
-      <section id="services" className="space-y-5">
+      {/* ===== Done-for-you work: one line — the catalogue lives inside the app ===== */}
+      <section id="services" className="rounded-2xl border bg-card p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="hp-eyebrow text-brand">Services</div>
-          <h2 className="font-display text-3xl md:text-4xl mt-2">Expert services, done for you</h2>
-          <p className="text-sm text-muted-foreground mt-1">Quoted per project and delivered by <a href="https://businesshustle.co.za" target="_blank" rel="noreferrer" className="text-brand hover:underline">Business Hustle</a>.</p>
+          <div className="font-display text-xl">Need it built for you?</div>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+            Websites, brands, business plans and done-for-you projects by Business Hustle —
+            the full Store and Services live inside the platform.
+          </p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {BH_SERVICES.map((svc) => (
-            <a
-              key={svc.id}
-              href={`https://wa.me/27744815163?text=${encodeURIComponent(svc.waMsg)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-border bg-card p-4 hover:border-brand/60 transition group"
-            >
-              <div className="rounded-lg p-2 inline-flex" style={{ background: `${svc.color}1f`, color: svc.color }}>
-                {SERVICE_ICONS[svc.icon]}
-              </div>
-              <div className="font-semibold text-sm mt-2.5 group-hover:text-brand transition">{svc.title}</div>
-              <div className="text-xs text-brand/80">{svc.desc}</div>
-              <div className="text-xs font-medium mt-2.5 inline-flex items-center gap-1 text-brand">Enquire on WhatsApp <ArrowRight className="h-3 w-3" /></div>
-            </a>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Not sure what you need? Send us a WhatsApp and we will look at your business for free, then tell you straight what will help.
-        </p>
+        <a
+          href="https://wa.me/27744815163"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border px-5 h-10 inline-flex items-center text-sm font-medium hover:border-brand transition shrink-0"
+        >
+          Ask on WhatsApp <ArrowRight className="h-4 w-4 ml-1.5" />
+        </a>
       </section>
       {/* ===== Pipeline promise ===== */}
       <section id="trust" className="rounded-2xl border border-brand/25 bg-brand/5 p-6 md:p-8 space-y-3">
         <div className="hp-eyebrow text-brand">Your pipeline, handled</div>
         <h2 className="font-display text-3xl md:text-4xl mt-2">We feed your pipeline. You run your business.</h2>
         <p className="text-sm text-muted-foreground max-w-3xl">
-          HustlePortal is <span className="text-brand font-medium">not just another leads list</span>. It is where your
-          business actually runs: clients, invoices, calendar, mail and reports in one place, an AI
-          helper that knows your numbers, and verified leads landing in your pipeline while you work.
+          Clients, invoices, calendar and mail in one place, an AI helper that knows your numbers —
+          and verified leads landing in your pipeline while you work.
         </p>
         <div className="flex flex-wrap gap-6 pt-1 text-sm">
           <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> Contact details checked before you pay a cent</div>
@@ -539,61 +503,22 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== Final CTA: pricing ===== */}
-      <section id="pricing" className="space-y-5">
-        <div className="text-center space-y-2">
-          <div className="text-xs font-semibold tracking-[0.3em] uppercase text-brand">Go further, faster</div>
-          <h2 className="font-display text-3xl md:text-4xl">Plans that pay for themselves</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Start free. Upgrade when the work picks up. One closed deal covers the whole month.
+      {/* ===== Pricing: one calm line — the numbers live inside the platform ===== */}
+      <section id="pricing" className="rounded-2xl border bg-card p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="font-display text-xl">Simple plans, no lock-in</div>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+            Start free — no card needed. Plans and credits live inside the platform, under{' '}
+            <span className="text-brand font-medium">Store and Services</span>. Take a look once you&apos;re in.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          {[
-            {
-              name: 'Operator', priceCents: 19900, normalCents: 29900, icon: <Rocket className="h-5 w-5 text-brand" />,
-              tagline: 'For one person hustling to build steady momentum.',
-              perks: ['Unlimited AI helper and email drafts', '5 verified lead reveals a month, and unused ones roll over', 'Invoices, calendar, reports and exports', 'R50 credit for every business owner you bring in'],
-            },
-            {
-              name: 'Boss', priceCents: 49900, icon: <Crown className="h-5 w-5 text-brand" />, highlight: true,
-              tagline: 'For small teams ready to grow past the competition.',
-              perks: ['Everything in Operator', '12 verified lead reveals a month at the best price per lead, and unused ones roll over', 'Up to 5 team seats and a shared pipeline', 'Priority AI with faster and longer answers'],
-            },
-          ].map((p) => (
-            <div key={p.name} className={`rounded-2xl border p-6 space-y-4 ${p.highlight ? 'border-brand/50 bg-brand/5' : 'bg-card'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">{p.icon}<h3 className="font-display text-xl">{p.name}</h3></div>
-                <div className="text-right">
-                  <div className="font-display text-3xl">{currency.price(p.priceCents)}</div>
-                  <div className="text-[10px] text-muted-foreground">per month</div>
-                  {'normalCents' in p && p.normalCents ? (
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Normally <span className="line-through">{currency.price(p.normalCents)}</span>, launch special price</div>
-                  ) : null}
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{p.tagline}</p>
-              <ul className="space-y-2">
-                {p.perks.map((perk) => (
-                  <li key={perk} className="flex items-start gap-2 text-sm"><Check className="h-4 w-4 text-brand shrink-0 mt-0.5" />{perk}</li>
-                ))}
-              </ul>
-              <Button className="w-full bg-brand text-black hover:bg-brand/90 font-semibold" onClick={() => { try { localStorage.setItem('hp_plan_intent', p.name === 'Operator' ? 'HUSTLER' : 'BOSS') } catch { /* private mode */ } document.getElementById('a-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('a-email')?.focus() }}>
-                Start with {p.name}<ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-        <p className="text-center text-xs text-muted-foreground">
-          Pay for the year upfront and get two months free: {currency.price(199000)} Operator instead of <span className="line-through">{currency.price(299000)}</span>, and {currency.price(499000)} for Boss. Registered nonprofits pay 30% less with an NPO number.
-        </p>
-        <p className="text-center text-xs text-muted-foreground max-w-2xl mx-auto">
-          Every plan includes every module. Inside the app you decide which tools sit on your menu: keep what you use,
-          hide the rest, and each tool comes with its own guided tutorial. Payments run securely through Yoco. We never
-          charge your card without your say so, you can pause anytime, and your data is always yours to download. The
-          platform has to earn you every month. It does not lock you in.
-        </p>
-        {currency.note && <p className="text-center text-[11px] text-muted-foreground/80">{currency.note}</p>}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); document.getElementById('a-email')?.focus({ preventScroll: false }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+          className="rounded-lg bg-brand px-5 h-10 inline-flex items-center text-sm font-semibold text-black hover:bg-brand/90 transition shrink-0"
+        >
+          Start free <ArrowRight className="h-4 w-4 ml-1.5" />
+        </a>
       </section>
 
       {/* ===== Demo: a working preview, built by Business Hustle ===== */}
@@ -602,9 +527,8 @@ export default function Landing() {
           <div className="hp-eyebrow text-brand">Look inside</div>
           <h2 className="font-display text-3xl md:text-4xl mt-2">See it work before you spend a cent</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            This is a working demo of your workspace, built by Business Hustle. Leads come in,
-            contacts get verified, quotes and invoices go out, and the money gets tracked.
-            All in one place, on your phone or your laptop.
+            A working demo of your workspace, built by Business Hustle — leads come in,
+            quotes go out, the money gets tracked. On your phone or your laptop.
           </p>
         </div>
 
@@ -671,11 +595,8 @@ export default function Landing() {
 
         <div className="max-w-3xl mx-auto rounded-xl border border-brand/25 bg-brand/5 p-5 md:p-6 text-sm space-y-2">
           <p>
-            Credits work like airtime. You load them once and spend them where it counts:
-            R15 to reveal a verified contact, 50 cents to land an email in a real inbox.
-            If a lookup comes back empty, you pay nothing at all. Plans top up your credits
-            every month, and you can add more whenever you run low. No contracts and no
-            surprises.
+            Credits work like airtime — load once, spend where it counts. If a lookup comes
+            back empty, you pay nothing at all.
           </p>
         </div>
 
