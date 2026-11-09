@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
       error: r.error,
       provider: r.provider,
       campaign: r.campaign,
+      theme: r.theme,
       openCount: r.openCount,
       openedAt: r.openedAt,
       sentAt: r.sentAt,

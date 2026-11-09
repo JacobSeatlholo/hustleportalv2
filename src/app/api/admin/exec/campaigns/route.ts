@@ -212,6 +212,9 @@ export async function GET() {
       select: {
         id: true, campaign: true, toEmail: true, subject: true, body: true, status: true, error: true,
         openedAt: true, openCount: true, sentAt: true, createdAt: true,
+        // The look on record — the preview replays the exact send from it
+        // (null rows rode the engine default, the client falls back).
+        theme: true,
         lead: { select: { id: true, company: true, stage: true } },
       },
     }),

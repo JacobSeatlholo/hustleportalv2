@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { memberThemedHtml, memberFooter } from '@/lib/mailer'
-import type { MailThemeId } from '@/lib/mailthemes'
+import { replaySentHtml } from '@/lib/mailer'
+import { unsubscribeUrl } from '@/lib/campaignqueue'
+import { db } from '@/lib/db'
+import { requireExec } from '@/lib/admin'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 
-// POST /api/emails/preview → what the recipient sees for a given look.
+// POST /api/emails/preview → what the recipient saw for a given look.
 //
-// The composer's "Preview" button posts the draft body plus the picked look;
-// this renders the exact html the platform engine would build for it (the
-// member's words framed by the theme, the quiet delivery line as the closing
-// block). Nothing is stored, nothing is sent — a pure look-and-feel render,
-// so the sender checks the frame BEFORE the email exists.
+// Two jobs, one door:
+//   1. The composer's "Preview" button posts the draft body plus the picked
+//      look — the exact html the engine would build for it, checked BEFORE
+//      the email exists. Nothing stored, nothing sent.
+//   2. The sent-mail preview (mail log, campaign rows, lead activity, exec
+//      archive) posts the logged body + theme + row context — replaySentHtml
+//      rebuilds the html that actually went out. Campaign rows get their
+//      signed unsubscribe link back, but never the open pixel: a preview
+//      must not count as a read.
 //
 // 'plain' (and any unknown value) returns html: null — the honest answer that
 // the plain look has no chrome, and the client says so in words.
 
-const LOOKS: readonly MailThemeId[] = ['boardroom', 'goldrush', 'nightshift', 'plain']
+const LOOKS: readonly string[] = ['boardroom', 'goldrush', 'nightshift', 'plain']
 
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
@@ -29,8 +35,29 @@ export async function POST(req: NextRequest) {
   if (!bodyText.trim()) {
     return NextResponse.json({ error: 'Nothing to preview yet — write the message first.' }, { status: 400 })
   }
-  const theme: MailThemeId = LOOKS.includes(b?.theme) ? b.theme : 'plain'
-  // The engine lane's exact output: member's words + the delivery line, framed.
-  const html = memberThemedHtml(bodyText + memberFooter(), theme)
-  return NextResponse.json({ themed: !!html, html: html || null })
+  const theme = LOOKS.includes(b?.theme) ? (b.theme as string) : null
+  const isCampaign = b?.campaign != null && b?.campaign !== false && b?.campaign !== ''
+
+  // The signed unsubscribe link only comes back for rows the caller may see:
+  // execs replay any campaign row, members only their own. The link itself is
+  // inert in a preview frame (sandboxed, never navigated).
+  let unsubUrl: string | null = null
+  if (isCampaign && typeof b?.rowId === 'string' && b.rowId) {
+    const execGate = await requireExec()
+    if (execGate.ok) {
+      unsubUrl = unsubscribeUrl(b.rowId)
+    } else {
+      const own = await db.emailLog.findFirst({ where: { id: b.rowId, userId }, select: { id: true } })
+      if (own) unsubUrl = unsubscribeUrl(b.rowId)
+    }
+  }
+
+  const html = replaySentHtml({
+    body: bodyText,
+    theme,
+    provider: typeof b?.provider === 'string' ? b.provider : null,
+    campaign: isCampaign ? (typeof b?.campaign === 'string' ? b.campaign : 'campaign') : null,
+    unsubUrl,
+  })
+  return NextResponse.json({ html: html || null })
 }

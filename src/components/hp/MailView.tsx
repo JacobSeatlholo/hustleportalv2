@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo } from './shared'
+import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo, type CampaignState } from './shared'
+import { EmailPreviewDialog } from './EmailPreviewDialog'
 import type { MailThemeId } from '@/lib/mailthemes'
 import { useHp } from './store'
 import { WinBackCard } from './AdminView'
@@ -534,9 +535,11 @@ export default function MailView() {
     setPreviewing(true)
     setPreviewOpen(true)
     try {
-      const r = await api<{ themed: boolean; html: string | null }>('/api/emails/preview', {
+      const r = await api<{ html: string | null }>('/api/emails/preview', {
         method: 'POST',
-        body: JSON.stringify({ body, theme }),
+        // The composer previews the ENGINE lane: the quiet delivery line is
+        // part of what a platform send appends, so the render carries it.
+        body: JSON.stringify({ body, theme, provider: 'PLATFORM' }),
       })
       setPreviewHtml(r.html)
     } catch (e) {
@@ -607,6 +610,20 @@ export default function MailView() {
     setDraftId(e.id)
     setTheme((LOOKS.some((l) => l.id === e.theme) ? e.theme : 'plain') as MailThemeId)
     toast({ title: 'Draft loaded', description: 'Check it, edit anything, then press Send. It only goes out when you press.' })
+  }
+
+  // A campaign row into the read view's shape. A row with no look on record
+  // rode the campaign state's pick — 'plain' stays plain, anything else falls
+  // to the engine default the queue actually sent with (goldrush).
+  function readRow(r: CampaignRow, state?: CampaignState | null): EmailLogRow {
+    const theme = r.theme || state?.theme || null
+    return {
+      id: r.id, toEmail: r.toEmail, subject: r.subject, body: r.body,
+      status: r.status, error: r.error, theme,
+      provider: 'RESEND', campaign: r.campaign,
+      openCount: r.openCount, openedAt: r.openedAt, sentAt: r.sentAt,
+      createdAt: r.createdAt,
+    }
   }
 
   async function remove(id: string) {
@@ -844,7 +861,13 @@ export default function MailView() {
                         {rows.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-4 text-center">No sends recorded under this label.</p>
                         ) : rows.map((r) => (
-                          <div key={r.id} className="p-2.5 flex items-start gap-2 text-sm">
+                          <div
+                            key={r.id}
+                            onClick={() => setReading(readRow(r, state))}
+                            className="p-2.5 flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/40 transition"
+                            role="button"
+                            aria-label={`Read the email sent to ${r.toEmail}`}
+                          >
                             <MailCheck className={`h-4 w-4 mt-0.5 shrink-0 ${r.openedAt ? 'text-emerald-500' : 'text-muted-foreground/50'}`} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-medium">{r.lead?.company || r.toEmail}</p>
@@ -879,7 +902,7 @@ export default function MailView() {
                                 size="sm" variant="outline"
                                 className="h-7 px-2 shrink-0 text-rose-500 border-rose-500/40 hover:bg-rose-500/10"
                                 disabled={removingRowId === r.id}
-                                onClick={() => removeRow(r.campaign as string, r.id)}
+                                onClick={(ev) => { ev.stopPropagation(); removeRow(r.campaign as string, r.id) }}
                                 title="Remove this email from the campaign queue"
                                 aria-label={`Remove ${r.toEmail} from the campaign queue`}
                               >
@@ -887,7 +910,7 @@ export default function MailView() {
                               </Button>
                             )}
                             {r.lead?.id && r.status !== 'QUEUED' && r.status !== 'SKIPPED' && (
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center gap-1 shrink-0" onClick={(ev) => ev.stopPropagation()}>
                                 <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openContact(r)} title="Open this contact in Leads" aria-label="Open contact">
                                   <User className="h-3.5 w-3.5" />
                                 </Button>
@@ -1184,28 +1207,10 @@ export default function MailView() {
         </div>
       </div>
 
-      {/* Read view: the whole email, exactly as it went out. */}
-      <Dialog open={!!reading} onOpenChange={(o) => { if (!o) setReading(null) }}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto hp-scroll">
-          {reading && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-base leading-snug">{reading.subject || '(no subject)'}</DialogTitle>
-                <DialogDescription>
-                  to {reading.toEmail} · {new Date(reading.createdAt).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </DialogDescription>
-              </DialogHeader>
-              <Badge variant="outline" className={`w-fit text-[10px] ${reading.status === 'SENT' ? 'border-emerald-500/40 text-emerald-500' : reading.status === 'FAILED' ? 'border-rose-500/40 text-rose-500' : 'border-yellow-500/40 text-yellow-500'}`}>
-                {reading.status}
-              </Badge>
-              {reading.status === 'FAILED' && reading.error && (
-                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{reading.error}</div>
-              )}
-              <div className="rounded-lg border bg-card px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed break-words">{reading.body || '(empty body)'}</div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Read view: the whole email, exactly as it went out — replayed from
+          the log row, branded sends in a sandboxed frame, one tap to the
+          plain words. Serves the mail log AND the campaign read-out. */}
+      <EmailPreviewDialog row={reading} onOpenChange={(o) => { if (!o) setReading(null) }} />
 
       {/* Look preview: the recipient's exact view of the picked look, in a
           sandboxed frame. Plain has no chrome and says so in words. */}

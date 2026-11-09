@@ -35,6 +35,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       select: {
         id: true, subject: true, campaign: true, status: true,
         openedAt: true, openCount: true, createdAt: true,
+        // Click-to-preview: the logged words + look replay the exact send.
+        toEmail: true, body: true, theme: true, provider: true, error: true,
       },
     }),
     db.task.findMany({

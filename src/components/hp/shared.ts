@@ -120,6 +120,13 @@ export interface EmailLogRow {
   /** The look the sender picked: boardroom | goldrush | nightshift | plain (null = legacy send). */
   theme?: string | null
   createdAt: string
+  // Sent-mail preview context (optional: the read dialog replays the exact
+  // look from these, and the campaign/lead surfaces map into this shape too).
+  provider?: string | null
+  campaign?: string | null
+  openCount?: number | null
+  openedAt?: string | null
+  sentAt?: string | null
 }
 
 export interface IntegrationSetting {
@@ -182,6 +189,12 @@ export interface LeadEmailLog {
   openedAt: string | null
   openCount: number
   createdAt: string
+  // Click-to-preview: the logged words + look replay the exact send.
+  toEmail: string
+  body: string
+  theme?: string | null
+  provider?: string | null
+  error?: string | null
 }
 
 // Campaign read-out (exec): one row per send, grouped by campaign client side.
@@ -197,6 +210,8 @@ export interface CampaignRow {
   openCount: number
   sentAt: string | null
   createdAt: string
+  /** The look this row rides: null = engine default (goldrush), 'plain' = legacy text. */
+  theme?: string | null
   lead: { id: string; company: string; stage: string } | null
 }
 

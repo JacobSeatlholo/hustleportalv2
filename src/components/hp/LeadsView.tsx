@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, STAGES, FEEDBACK_REASON_LABELS, type Lead, type LeadEmailLog, type Task, type TopUpPack } from './shared'
+import { EmailPreviewDialog } from './EmailPreviewDialog'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
@@ -1286,6 +1287,9 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
   const [taskOpen, setTaskOpen] = useState(false)
   const [task, setTask] = useState({ title: '', dueDate: '', dueTime: '', priority: 'MEDIUM', notes: '', dest: 'personal' })
   const [taskSaving, setTaskSaving] = useState(false)
+  // Click an email in the activity list → the exact mail that went out,
+  // replayed from the log. Quick reference while on the phone with them.
+  const [previewEmail, setPreviewEmail] = useState<LeadEmailLog | null>(null)
 
   const leadId = lead?.id || ''
 
@@ -1544,7 +1548,13 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
             ) : (
               <div className="rounded-lg border bg-card p-3 space-y-2.5">
                 {info.emails.map((m) => (
-                  <div key={m.id} className="flex items-start gap-2 text-sm">
+                  <div
+                    key={m.id}
+                    onClick={() => setPreviewEmail(m)}
+                    className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/40 rounded-md p-1 -m-1 transition"
+                    role="button"
+                    aria-label={`Read: ${m.subject || '(no subject)'}`}
+                  >
                     <MailCheck className={`h-4 w-4 mt-0.5 shrink-0 ${m.openedAt ? 'text-emerald-500' : 'text-muted-foreground'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px]">{m.subject || '(no subject)'}</div>
@@ -1752,6 +1762,9 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Click-to-read: the exact mail that went out, from any row here. */}
+        <EmailPreviewDialog row={previewEmail} onOpenChange={(o) => { if (!o) setPreviewEmail(null) }} />
       </DialogContent>
     </Dialog>
   )

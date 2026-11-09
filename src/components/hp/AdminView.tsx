@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands } from './shared'
+import { EmailPreviewDialog } from './EmailPreviewDialog'
 import { isProbeEmail, isInternalEmail } from '@/lib/probe'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -3391,6 +3392,8 @@ interface AdminMailRow {
   error: string | null
   provider: string
   campaign: string | null
+  /** The look on record — the read view replays the exact send from it. */
+  theme?: string | null
   openCount: number
   openedAt: string | null
   sentAt: string | null
@@ -3499,34 +3502,18 @@ function SentMailCard() {
         )}
       </CardContent>
 
-      {/* Read view: the whole email, exactly as it went out. */}
-      <Dialog open={!!open} onOpenChange={(o) => { if (!o) setOpen(null) }}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto hp-scroll">
-          {open && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-base leading-snug">{open.subject || '(no subject)'}</DialogTitle>
-                <DialogDescription className="space-y-0.5">
-                  <div>to <span className="text-foreground font-medium">{open.toEmail}</span>{open.leadCompany ? ` · ${open.leadCompany}` : ''}</div>
-                  <div>
-                    from {open.sender ? `${open.sender.businessName || open.sender.name} (${open.sender.email})` : 'unknown sender'} ·{' '}
-                    {open.sentAt ? `sent ${fmtDate(open.sentAt)}` : `created ${fmtDate(open.createdAt)}`} · via {open.provider}
-                  </div>
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="outline" className={`text-[10px] ${statusChip(open.status)}`}>{open.status}</Badge>
-                {open.campaign && <Badge variant="outline" className="text-[10px]">{open.campaign}</Badge>}
-                {open.openCount > 0 && <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">opened {open.openCount}×</Badge>}
-              </div>
-              {open.status === 'FAILED' && open.error && (
-                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{open.error}</div>
-              )}
-              <div className="rounded-lg border bg-card px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed break-words">{open.body || '(empty body)'}</div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Read view: the whole email, exactly as it went out — replayed from the
+          log row, branded sends in a sandboxed frame, one tap to plain words. */}
+      <EmailPreviewDialog
+        row={open}
+        onOpenChange={(o) => { if (!o) setOpen(null) }}
+        extraDescription={open ? (
+          <div>
+            <div>from {open.sender ? `${open.sender.businessName || open.sender.name} (${open.sender.email})` : 'unknown sender'}</div>
+            <div>via {open.provider}{open.leadCompany ? ` · ${open.leadCompany}` : ''}</div>
+          </div>
+        ) : null}
+      />
     </Card>
   )
 }

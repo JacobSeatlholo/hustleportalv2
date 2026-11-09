@@ -63,6 +63,48 @@ export function memberThemedHtml(body: string, theme?: MailThemeId): string | un
   return themedEmailHtml(body, { theme, footerLines: [] })
 }
 
+/**
+ * Replay the exact html a SENT email wore, from its EmailLog row alone.
+ *
+ * The log stores the words (body) plus the look (theme) — the html the
+ * recipient actually saw is rebuilt deterministically from those:
+ *   - member Gmail send → their words in the picked look, nothing added;
+ *   - member engine send → the quiet "Delivered by HustlePortal" line was part
+ *     of the text at send time, so the replay appends it again;
+ *   - campaign row → the full bulk chrome (unsub line + legal footer + branded
+ *     frame), reconstructed with the signed link from the row id. The open
+ *     pixel is deliberately left OUT — a preview must never count as a read.
+ * 'plain' and legacy rows return undefined: the honest answer that the send
+ * was text only, and the preview shows the words as they went.
+ */
+export function replaySentHtml(opts: {
+  body: string
+  theme?: string | null
+  provider?: string | null
+  campaign?: string | null
+  /** Campaign rows only: the signed one-tap unsubscribe link of that row. */
+  unsubUrl?: string | null
+}): string | undefined {
+  const bodyText = String(opts.body || '')
+  if (!bodyText.trim()) return undefined
+  // Rows that already store full html (defensive: nothing writes that today,
+  // but a preview must never escape-render html as text).
+  if (/<html[\s>]|<!doctype\s+html/i.test(bodyText)) return bodyText
+  const theme = (opts.theme || undefined) as MailThemeId | undefined
+  if (opts.campaign) {
+    // Legacy 'plain' campaign rows shipped text + pixel only; the replay has
+    // no pixel (a preview must not fire the read receipt), so plain = text.
+    if (!theme || theme === 'plain') return undefined
+    const tail =
+      '\n\nPrefer not to hear from us again? One tap and you are out: ' +
+      (opts.unsubUrl || '') +
+      legalFooter()
+    return campaignMailHtml({ body: flattenMarkdownLinks(bodyText), theme }, tail)
+  }
+  if (!theme || theme === 'plain') return undefined
+  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme)
+}
+
 const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/
 
 /** "a@x.co.za, b@y.co; c@z.com" → up to five valid, de-duplicated addresses. */
