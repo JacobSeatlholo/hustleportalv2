@@ -17,7 +17,7 @@ import { bookingPhoneFromNotes, bookingVenueFromNotes, waReminderLink } from '@/
 import ScanDiaryDialog from './ScanDiaryDialog'
 import BookingLinksCard from './BookingLinksCard'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle, Apple as AppleIcon,
 } from 'lucide-react'
 
 type SpeechRecognitionLike = {
@@ -495,8 +495,15 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
                 <a href={gcalTemplate(a)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition">
                   <CalendarDays className="h-3 w-3" /> Google
                 </a>
-                <a href={icsHref([a])} download={`${a.title.replace(/\s+/g, '-').toLowerCase()}.ics`} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition">
-                  <Download className="h-3 w-3" /> .ics
+                {/* Apple Calendar, one tap: a real text/calendar file from the server.
+                    Mac + iPhone Safari both hand it straight to Calendar to add. */}
+                <a
+                  href={`/api/appointments/ics/${a.id}`}
+                  download={`${a.title.replace(/\s+/g, '-').toLowerCase()}.ics`}
+                  title="One tap: Apple Calendar (Mac or iPhone) offers to add it"
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition"
+                >
+                  <AppleIcon className="h-3 w-3" /> Apple Calendar
                 </a>
                 {!past && bookingPhoneFromNotes(a.notes) && (
                   <a
