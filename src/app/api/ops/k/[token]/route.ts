@@ -23,13 +23,24 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     orderBy: { sentAt: 'asc' },
   })
   const leadIds = logs.map((l) => l.leadId).filter((x): x is string => !!x)
-  const leads = await db.lead.findMany({
-    where: { id: { in: leadIds } },
-    select: {
-      id: true, company: true, contactName: true, role: true, phone: true, email: true,
-      website: true, address: true, city: true, industry: true, stage: true,
-      notes: true, score: true, emailBouncedAt: true,
-    },
-  })
-  return Response.json({ logs, leads })
+  const emails = Array.from(new Set(logs.map((l) => l.toEmail.toLowerCase())))
+  const [leads, leadsByEmail] = await Promise.all([
+    db.lead.findMany({
+      where: { id: { in: leadIds } },
+      select: {
+        id: true, company: true, contactName: true, role: true, phone: true, email: true,
+        website: true, address: true, city: true, industry: true, stage: true,
+        notes: true, score: true, emailBouncedAt: true,
+      },
+    }),
+    db.lead.findMany({
+      where: { email: { in: emails } },
+      select: {
+        id: true, company: true, contactName: true, role: true, phone: true, email: true,
+        website: true, address: true, city: true, industry: true, stage: true,
+        notes: true, score: true, emailBouncedAt: true,
+      },
+    }),
+  ])
+  return Response.json({ logs, leads, leadsByEmail })
 }
