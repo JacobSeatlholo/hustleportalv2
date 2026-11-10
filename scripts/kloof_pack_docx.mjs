@@ -101,6 +101,7 @@ children.push(table(
     ["Opened", "30 inboxes (46%), 29 companies. Blondie Bar removed at your instruction, 28 companies on the list"],
     ["Total opens", "77, up from 68 on 8 Nov and 71 on 9 Nov. People keep coming back to the email. 76 on your list without Blondie Bar"],
     ["Removed", "Blondie Bar, capetown@blondie.bar: 1 open. Off the list and on the do-not-send register for every future campaign"],
+    ["Also off the email drafts", "Mount Nelson Hotel: Elri clicked unsubscribe after the first mail. The register carries them; the phone is your judgment call"],
     ["Parked", "34 inboxes never opened, no second touch yet"],
   ],
   [22, 78],
@@ -160,7 +161,7 @@ children.push(rich([t("\u201cJust email me instead.\u201d ", { bold: true }), t(
 children.push(h1("5. The follow up email"));
 children.push(rich([
   t("Greeting law: ", { bold: true }),
-  t("use the greeting the campaign already used for that inbox, it is in the Email drafts sheet of the workbook. Ameer, Daniel, Bryan, Elri, Sonia, Julian, Lauren, Zaheer and Kylie and Enver got named greetings. Everyone else starts \u201cHi there,\u201d."),
+  t("use the greeting the campaign already used for that inbox, it is in the Email drafts sheet of the workbook. Ameer, Daniel, Bryan, Sonia, Julian, Lauren, Zaheer and Kylie and Enver got named greetings. Everyone else starts \u201cHi there,\u201d."),
 ]));
 children.push(rich([t("Subject A: ", { bold: true }), t("Your Kloof Street neighbours are claiming their profiles")]));
 children.push(rich([t("Subject B: ", { bold: true }), t("Two minutes about your free profile on kloofstreet.online")]));

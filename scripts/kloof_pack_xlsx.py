@@ -34,6 +34,13 @@ REMOVED_META = {
     "capetown@blondie.bar": {"company": "Blondie Bar", "opens": 1},
 }
 
+# Elri at Mount Nelson clicked unsubscribe after the first mail (Suppression
+# register, reason UNSUB, note kloofstreet-2026-11). The queue engine refuses
+# the address at send time and the follow up queue stages no row for them; the
+# email drafts sheet carries no draft either. The call list keeps the company
+# with the honest note: the mailbox is closed, the phone is the boss's call.
+UNSUBBED_EMAILS = {"elri.steenkamp@belmond.com"}
+
 # numbers on file, carried from the Nov 9 record + AKJP from the DB (Task 181 law)
 PHONES = {
     "info@rickscafe.co.za": "021 424 1100",
@@ -136,7 +143,7 @@ NOTES = {
     "Van Hunks": "3 opens, number on file. Was phone-bucket originally, email added later.",
     "Mamacita's": "3 opens, gmail inbox.",
     "Yours Truly": "One shop, two inboxes: Ameer and Daniel both opened. One call, one listing. Robert got the same mail and did not open it.",
-    "Mount Nelson Hotel": "Elri opened twice by name. Group brand: expect a marketing gatekeeper.",
+    "Mount Nelson Hotel": "Elri opened twice by name, then clicked unsubscribe after the first mail. Email is closed for good; phone is your judgment call.",
     "Stud. The Burger Shop": "First send failed (rate limit), the retry landed and was opened once. Treated as delivered.",
     "Robyn Page Physiotherapy": "Solo practice, gmail inbox.",
     "Excentric on Kloof": "Number on file. Declined-before row: summer angle.",
@@ -220,11 +227,15 @@ def followup_body(greet_line, company):
         'Not keen on emails from us? Reply "no thanks" and we won\u2019t mail you again.'
     )
 
-# one draft row per OPENER INBOX (30), same order as the call list companies
+# one draft row per OPENER INBOX, same order as the call list companies
+# (suppressed addresses carry no draft: Blondie removed by the boss, Elri
+# unsubscribed by their own click)
 r2 = 5
 draft_no = 1
 for row in rows:
     for k in row["emails"]:
+        if k in REMOVED_EMAILS or k in UNSUBBED_EMAILS:
+            continue
         g = openers[k]["greeting"] or "Hi there"
         greet_line = f"Hi {name_greeting(g)}," if g.lower() != "hi there" else "Hi there,"
         ws2.cell(row=r2, column=2, value=draft_no)
@@ -256,6 +267,7 @@ facts = [
     ("Openers", "30 inboxes, 29 companies (46%). Blondie Bar removed at your instruction, 28 companies on the list"),
     ("Total opens", "77 (68 on 8 Nov, 71 on 9 Nov, 77 today: people keep coming back). 76 on this list without Blondie Bar"),
     ("Removed", "Blondie Bar, capetown@blondie.bar: 1 open. Off the list and on the do-not-send register for every future campaign"),
+    ("Also off the email drafts", "Mount Nelson Hotel, elri.steenkamp@belmond.com: clicked unsubscribe after the first mail. The register carries them; the phone is your judgment call"),
     ("Non openers", "34 inboxes parked, no second touch yet"),
     ("Best day to work this list", "T1 today, T2 within 5 days, T3 within 10 days"),
 ]
