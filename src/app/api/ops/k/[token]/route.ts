@@ -220,13 +220,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ to
   report.leads = { imported: freshLeads.length, alreadyOnAccount: emails.length - freshLeads.length }
 
   // 5. The queue, born PAUSED. Suppression and duplicate laws honoured.
+  // Booking link law: ONLY the canonical ubuntu-wellness page may ride the
+  // letter. The account's other links (a "Virtual meeting l" test row) never
+  // go out to 522 clients. No canonical page yet -> the letter offers the
+  // reply-to-book path; one Edit draft later, the link line re-skins every
+  // still-queued row when the page exists.
   const alreadyRows = await db.emailLog.findMany({ where: { userId: user.id, campaign: TAG, toEmail: { in: emails }, status: { in: ['QUEUED', 'SENT'] } }, select: { toEmail: true } })
   const alreadySet = new Set(alreadyRows.map((r) => r.toEmail))
-  const preferred = await db.bookingLink.findUnique({ where: { slug: 'ubuntu-wellness' }, select: { slug: true, active: true, userId: true } })
-  const anyLink = preferred && preferred.active && preferred.userId === user.id
-    ? preferred
-    : await db.bookingLink.findFirst({ where: { userId: user.id, active: true }, orderBy: { createdAt: 'desc' }, select: { slug: true } })
-  const bookingUrl = anyLink ? `https://www.hustleportal.online/book/${anyLink.slug}` : null
+  const canonical = await db.bookingLink.findUnique({ where: { slug: 'ubuntu-wellness' }, select: { slug: true, active: true, userId: true } })
+  const bookingUrl = canonical && canonical.active && canonical.userId === user.id
+    ? `https://www.hustleportal.online/book/${canonical.slug}`
+    : null
   report.bookingLink = bookingUrl
 
   const toQueue = emails.filter((e) => !suppressedSet.has(e) && !alreadySet.has(e))
