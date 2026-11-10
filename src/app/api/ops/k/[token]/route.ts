@@ -104,12 +104,13 @@ async function collectFacts() {
   }
   const openers = [...inboxes.entries()].filter(([, v]) => v.opens > 0)
 
-  const companies = new Map<string, string | null>()
-  const leadIds = [...new Set(openers.map(([, v]) => v.leadId).filter((x): x is string => !!x))]
-  const leads = leadIds.length > 0
-    ? await db.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, company: true } })
+  // Company ground truth by EMAIL (the blast rows mostly carry no leadId, so
+  // the lead join goes through the address, same law as the Task 185 pack).
+  const openerEmails = openers.map(([email]) => email)
+  const leadRowsByEmail = openerEmails.length > 0
+    ? await db.lead.findMany({ where: { email: { in: openerEmails } }, select: { id: true, company: true, email: true } })
     : []
-  const companyByLead = new Map(leads.map((l) => [l.id, l.company]))
+  const leadByEmail = new Map(leadRowsByEmail.map((l) => [l.email.toLowerCase().trim(), l]))
 
   return {
     blondie: {
@@ -130,7 +131,7 @@ async function collectFacts() {
         email,
         opens: v.opens,
         greeting: v.greeting,
-        company: v.leadId ? (companyByLead.get(v.leadId) ?? null) : null,
+        company: leadByEmail.get(email)?.company ?? null,
       })).sort((a, b) => b.opens - a.opens),
     },
     marker: marker ? 'RUN ALREADY' : null,
@@ -217,11 +218,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ token: string
     byInbox.set(k, cur)
   }
 
-  const leadIds = [...new Set([...byInbox.values()].map((v) => v.leadId).filter((x): x is string => !!x))]
-  const leadRows = leadIds.length > 0
-    ? await db.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, company: true } })
+  const leadRowsByEmail = [...byInbox.keys()].length > 0
+    ? await db.lead.findMany({ where: { email: { in: [...byInbox.keys()] } }, select: { id: true, company: true, email: true } })
     : []
-  const leadById = new Map(leadRows.map((l) => [l.id, l]))
+  const leadByEmail = new Map(leadRowsByEmail.map((l) => [l.email.toLowerCase().trim(), l]))
 
   const alreadyRows = await db.emailLog.findMany({
     where: { campaign: FOLLOWUP_TAG, status: { in: ['QUEUED', 'SENT'] } },
@@ -234,8 +234,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ token: string
     if (dead.has(email)) continue // suppression is law, this includes Blondie
     if (isProbeEmail(email) || isInternalEmail(email) || isExecEmail(email)) continue
     if (already.has(email)) continue
-    const lead = v.leadId ? leadById.get(v.leadId) : undefined
-    toStage.push({ email, greet: greetLineOf(v.body), company: lead?.company ?? null, opens: v.opens, leadId: v.leadId })
+    const lead = leadByEmail.get(email)
+    toStage.push({ email, greet: greetLineOf(v.body), company: lead?.company ?? null, opens: v.opens, leadId: lead?.id ?? v.leadId })
   }
   toStage.sort((a, b) => b.opens - a.opens)
 
