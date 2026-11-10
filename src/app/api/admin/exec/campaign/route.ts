@@ -57,6 +57,20 @@ export async function POST(req: Request) {
   const from = normalizeCampaignFrom(payload.from)
   const campaign = payload.campaign?.trim().slice(0, 60) || 'generic'
 
+  // The suppression list is law on every lane. The queue engine checks it at
+  // staging and again before every send; this one-off path sends directly, so
+  // it carries its own check: a suppressed address is refused here too, with
+  // the honest reason, whether the operator asked for a dry run or a send.
+  const suppressed = await db.suppression.findUnique({ where: { email: to }, select: { reason: true, note: true } })
+  if (suppressed) {
+    return NextResponse.json({
+      ok: false,
+      to,
+      skipped: true,
+      reason: `Suppressed (${suppressed.reason}) — this address is on the do-not-send list and no campaign or manual send may touch it.`,
+    }, { status: 409 })
+  }
+
   // The lead this contact lives on (pipeline move NEW -> CONTACTED on open).
   let leadId: string | null = null
   if (payload.leadId) {
