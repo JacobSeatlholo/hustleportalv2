@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { api, rands, type EmailLogRow, type Lead, type CampaignRow, type CampaignInfo, type CampaignState } from './shared'
 import { EmailPreviewDialog } from './EmailPreviewDialog'
+import UserCampaigns, { type SenderProfile } from './UserCampaigns'
 import type { MailThemeId } from '@/lib/mailthemes'
 import { useHp } from './store'
 import { WinBackCard } from './AdminView'
@@ -68,6 +69,7 @@ interface MailStatus {
   domainStatus: 'verified' | 'pending' | 'not_started' | 'failed' | 'unknown'
   domains: { name: string; status: string }[]
   gmailConfigured: boolean
+  profiles?: SenderProfile[]
 }
 
 /** The "everyone on the system" roster readout, computed by src/lib/audience.ts. */
@@ -122,6 +124,12 @@ export default function MailView() {
   // The look this email arrives in (the composer's Look row). Plain sends text
   // only; a branded look rides the same words as html on whichever lane wins.
   const [theme, setTheme] = useState<MailThemeId>('plain')
+  // "Sending from": the account identity ('') or a workspace this account
+  // owns. The pick decides the name AND address their inbox shows, and it
+  // forces the engine lane — their Gmail can never wear another business's
+  // name. The roster comes back with the status call.
+  const [profiles, setProfiles] = useState<SenderProfile[]>([])
+  const [fromProfile, setFromProfile] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -485,12 +493,13 @@ export default function MailView() {
       const [mail, leadData, status] = await Promise.all([
         api<{ emails: EmailLogRow[] }>('/api/emails'),
         api<{ leads: Lead[] }>('/api/leads'),
-        api<{ status: MailStatus; spend?: SpendQuote | null }>('/api/emails/status').catch(() => null),
+        api<{ status: MailStatus; spend?: SpendQuote | null; profiles?: SenderProfile[] }>('/api/emails/status').catch(() => null),
       ])
       setEmails(mail.emails)
       setLeads(leadData.leads.filter((l) => l.unlocked && l.email))
       if (status?.status) setMailStatus(status.status)
       setSpendQuote(status?.spend ?? null)
+      if (status?.profiles?.length) setProfiles(status.profiles)
     } catch (e) {
       toast({ title: 'Could not load mail', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
@@ -571,6 +580,7 @@ export default function MailView() {
           body,
           theme,
           projectId: activeProjectId,
+          fromProfile: fromProfile || undefined,
           attachments: atts.length ? atts : undefined,
         }),
       })
@@ -947,6 +957,11 @@ export default function MailView() {
         </div>
       )}
 
+      {/* Campaigns for upgraded members (non-exec seats): their own queues,
+          their own profiles, read receipts included. The transport lane never
+          shows here — the engine picks the right pipe on its own. */}
+      {!isAdmin && paid && <UserCampaigns profiles={profiles} />}
+
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Compose */}
         <div className="lg:col-span-3 rounded-lg border bg-card p-4 space-y-4">
@@ -1002,6 +1017,22 @@ export default function MailView() {
           </Button>
 
           <div className="border-t pt-4 space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="m-from">Sending from</Label>
+              <select
+                id="m-from"
+                value={fromProfile}
+                onChange={(e) => setFromProfile(e.target.value)}
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                {(profiles.length ? profiles : [{ id: '', name: session?.user?.businessName || session?.user?.name || 'My business', from: '' }]).map((p) => (
+                  <option key={p.id || 'account'} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {profiles.find((p) => p.id === fromProfile)?.from && (
+                <p className="text-[11px] text-muted-foreground">Their inbox shows: <span className="font-medium">{profiles.find((p) => p.id === fromProfile)?.from}</span></p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="m-to">To</Label>
               <Input id="m-to" type="email" placeholder="prospect@business.co.za" value={to} onChange={(e) => setTo(e.target.value)} />
@@ -1166,9 +1197,15 @@ export default function MailView() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{e.subject}</p>
-                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
+                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{e.status === 'SENT' && e.openedAt ? ` · opened ${new Date(e.openedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}` : ''}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {e.status === 'SENT' && e.openedAt && (
+                        <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1 whitespace-nowrap">
+                          <MailCheck className="h-3 w-3" />
+                          read{e.openCount && e.openCount > 1 ? ` ×${e.openCount}` : ''}
+                        </Badge>
+                      )}
                       {e.status === 'DRAFT' && (
                         <button
                           onClick={(ev) => { ev.stopPropagation(); openDraft(e) }}

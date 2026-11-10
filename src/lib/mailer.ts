@@ -12,7 +12,7 @@
  */
 import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
-import { campaignHtml, flattenMarkdownLinks } from '@/lib/campaignhtml'
+import { campaignHtml, flattenMarkdownLinks, renderTextBlocks } from '@/lib/campaignhtml'
 import { themedEmailHtml, type MailThemeId } from '@/lib/mailthemes'
 
 /**
@@ -45,6 +45,14 @@ export type OutgoingMail = {
   subject: string
   body: string
   attachments?: MailAttachment[]
+  /** The workspace the sender picked in the composer's "Sending from" row.
+   *  The pick decides the display name AND the local part on our sending
+   *  domain, and it forces the engine lane: Gmail always sends as the
+   *  connected account, it can never wear another business's name. */
+  projectId?: string
+  /** Open-tracking pixel for engine sends — the read receipts the mail log
+   *  shows. Engine lane only; a send from their own Gmail carries no tracker. */
+  pixelUrl?: string
   /** The mail look the sender picked in the composer. Undefined/'plain' sends
    *  exactly as always (text only); a branded look rides the same body as html
    *  alongside the plain text, on BOTH member lanes (their Gmail + the engine). */
@@ -61,6 +69,32 @@ export type OutgoingMail = {
 export function memberThemedHtml(body: string, theme?: MailThemeId): string | undefined {
   if (!theme || theme === 'plain') return undefined
   return themedEmailHtml(body, { theme, footerLines: [] })
+}
+
+/** The 1x1 open-tracker img, appended inside the html body when present. */
+function appendOpenPixel(html: string, pixelUrl: string): string {
+  const img = `<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none" />`
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${img}</body>`) : html + img
+}
+
+/**
+ * The html side of a member ENGINE send: the picked look frames their words,
+ * and when a read-receipt pixel rides along (mail log read stamps), the html
+ * carries it. A plain look with a pixel renders as clean minimal html — text
+ * alone can never fire an image, so the pixel needs a page to live in. The
+ * words stay word-for-word the same; only the wrapper is new. Pure function.
+ */
+function memberHtmlWithPixel(mail: OutgoingMail): string | undefined {
+  const themed = memberThemedHtml(mail.body, mail.theme)
+  if (themed) return mail.pixelUrl ? appendOpenPixel(themed, mail.pixelUrl) : themed
+  if (!mail.pixelUrl) return undefined
+  return (
+    '<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9">' +
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">` +
+    `${renderTextBlocks(mail.body)}` +
+    `<img src="${mail.pixelUrl}" width="1" height="1" alt="" style="display:none" />` +
+    '</div></body></html>'
+  )
 }
 
 /**
@@ -172,8 +206,35 @@ function legalFooter(): string {
  * accepts any local part on it, and DKIM/SPF sign the send. Reply-To stays the user's
  * real account email, so replies land in THEIR inbox (set in resendSend).
  */
-export async function userSendingIdentity(userId: string): Promise<{ from: string; address: string; label: string }> {
+/** Build the from/address pair for a display label: "Avenzara" →
+ *  "Avenzara via HustlePortal <avenzara@hustleportal.online>". Pure, shared
+ *  by the identity resolver and the composer's sender-profile list. */
+export function identityFromLabel(rawLabel: string): { from: string; address: string; label: string } {
+  const label = (rawLabel || 'HustlePortal').trim().slice(0, 40) || 'HustlePortal'
+  const slug =
+    label
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24)
+      .replace(/-+$/, '') || 'owner'
+  return {
+    from: `${label} via HustlePortal <${slug}@hustleportal.online>`,
+    address: `${slug}@hustleportal.online`,
+    label,
+  }
+}
+
+export async function userSendingIdentity(userId: string, projectId?: string): Promise<{ from: string; address: string; label: string }> {
   try {
+    // An explicit pick (the composer's "Sending from" row) is the sender's
+    // choice and wins whole — but ONLY a workspace they own, never one
+    // guessed from an id that happens to exist.
+    if (projectId) {
+      const picked = await db.project.findFirst({ where: { id: projectId, userId }, select: { name: true } })
+      if (picked) return identityFromLabel(picked.name)
+    }
     const [user, project] = await Promise.all([
       db.user.findUnique({ where: { id: userId }, select: { name: true, businessName: true } }),
       db.project.findFirst({
@@ -182,20 +243,11 @@ export async function userSendingIdentity(userId: string): Promise<{ from: strin
         select: { name: true },
       }),
     ])
-    const label = (project?.name || user?.businessName || user?.name || 'HustlePortal').trim().slice(0, 40)
-    const slug =
-      label
-        .toLowerCase()
-        .replace(/&/g, ' and ')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 24)
-        .replace(/-+$/, '') || 'owner'
-    return {
-      from: `${label} via HustlePortal <${slug}@hustleportal.online>`,
-      address: `${slug}@hustleportal.online`,
-      label,
-    }
+    // The ACCOUNT's business name leads when nothing was picked. Workspaces
+    // get created, renamed and abandoned; the business on the account is who
+    // every send should introduce by default (the wrong-workspace name
+    // leaking onto mail is exactly the bug this order fixes).
+    return identityFromLabel(user?.businessName || project?.name || user?.name || 'HustlePortal')
   } catch {
     return { from: BRANDED_FROM, address: 'noreply@hustleportal.online', label: 'HustlePortal' }
   }
@@ -509,7 +561,7 @@ async function resendSend(
 ): Promise<{ ok: true } | { ok: false; raw: string }> {
   // Reply-To the sender's real account so client responses reach THEM
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
-  const themed = memberThemedHtml(mail.body, mail.theme)
+  const themed = memberHtmlWithPixel(mail)
   return resendPost(apiKey, {
     from,
     to: [mail.to],
@@ -540,12 +592,13 @@ async function sendViaPlatform(
         'Email is not switched on yet. HustlePortal mail is warming up. Try again soon, or connect your Gmail under Integrations to send from your own address.',
     }
   }
-  // USER mail goes out from the business's own identity on our domain. A
-  // per-send fromLocal pick (the sender the user chose in the composer) wins
-  // over everything — the operator RESEND_FROM env and the identity default.
-  // The domain never moves: only the part before the @ is theirs to edit, and
-  // that is the part Resend's verified domain signs for.
-  const identity = await userSendingIdentity(userId)
+  // USER mail goes out from the business's own identity on our domain. The
+  // composer's "Sending from" pick (projectId) decides the identity when set —
+  // label AND local part, one consistent sender. A per-send fromLocal pick
+  // still wins over everything for the address; the operator RESEND_FROM env
+  // is the last fallback. The domain never moves: only the part before the @
+  // is theirs to edit, and that is the part Resend's verified domain signs for.
+  const identity = await userSendingIdentity(userId, mail.projectId)
   const local = mail.fromLocal ? sanitizeFromLocal(mail.fromLocal) : null
   const branded = local
     ? `${identity.label} <${local}@${sendingDomain()}>`
@@ -589,8 +642,9 @@ export async function sendMail(
   const creds = await getUserMailCreds(userId)
   // A chosen sender on our domain can ONLY come from the platform engine —
   // Gmail always sends as the connected account, no masquerading. When the
-  // user picked their From in the composer, the pick wins and Gmail waits.
-  if (creds && !gmailOnCooldown(userId) && !mail.fromLocal) {
+  // user picked their From in the composer (fromLocal, or a workspace profile),
+  // the pick wins and Gmail waits.
+  if (creds && !gmailOnCooldown(userId) && !mail.fromLocal && !mail.projectId) {
     const r = await sendViaUserGmail(creds, payload)
     if (r.ok) {
       clearGmailFailure(userId)
@@ -618,10 +672,10 @@ export async function sendMail(
   if (fb.ok && creds && !mail.fromLocal && fb.viaFallback) {
     return { ...fb, notice: 'Sent via HustlePortal\'s test sender. Your Gmail login is cooling down and the sending domain is still verifying, so this reached only your own account inbox. Both fixes: Integrations (Gmail) + resend.com/domains.' }
   }
-  if (fb.ok && creds && mail.fromLocal) {
+  if (fb.ok && creds && (mail.fromLocal || mail.projectId)) {
     // Honest footnote: their Gmail exists but was bypassed on purpose, because
     // the sender they picked can only leave from our verified domain.
-    return { ...fb, notice: `Sent from ${fb.from || mail.fromLocal} — the sender you picked. (Your connected Gmail always sends as its own address, so the engine took this one.)` }
+    return { ...fb, notice: `Sent from ${fb.from || mail.fromLocal || mail.projectId} — the sender you picked. (Your connected Gmail always sends as its own address, so the engine took this one.)` }
   }
   return fb
 }
@@ -711,6 +765,9 @@ function campaignMailHtml(
 export async function sendCampaignMail(
   mail: ThemedCampaignFields & {
     to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string
+    /** Where replies land. Defaults to the team inbox; member campaigns point
+     *  it at the member's own account email so their clients answer THEM. */
+    replyTo?: string
   },
 ): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
@@ -729,7 +786,7 @@ export async function sendCampaignMail(
     from, to: [mail.to], subject: mail.subject, text: body,
     ...(html ? { html } : {}),
     ...(unsub ? { headers: { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
-    reply_to: TEAM_INBOX,
+    reply_to: mail.replyTo?.trim() || TEAM_INBOX,
   })
   if (res.ok) {
     const d = sendingDomain()
@@ -801,6 +858,9 @@ function sesSigV4Headers(key: string, secret: string, region: string, host: stri
 export async function sendCampaignMailViaSes(
   mail: ThemedCampaignFields & {
     to: string; subject: string; body: string; from?: string; pixelUrl?: string; unsubscribeUrl?: string
+    /** Where replies land. Defaults to the team inbox; member campaigns point
+     *  it at the member's own account email so their clients answer THEM. */
+    replyTo?: string
   },
 ): Promise<{ ok: boolean; via?: string; error?: string; providerId?: string }> {
   const key = process.env.SES_AWS_KEY?.trim()
@@ -818,7 +878,7 @@ export async function sendCampaignMailViaSes(
   const configSet = process.env.SES_CONFIG_SET?.trim()
   const payload = {
     FromEmailAddress: from,
-    ReplyToAddresses: [TEAM_INBOX],
+    ReplyToAddresses: [mail.replyTo?.trim() || TEAM_INBOX],
     Destination: { ToAddresses: [mail.to] },
     ...(configSet ? { ConfigurationSetName: configSet } : {}),
     Content: {

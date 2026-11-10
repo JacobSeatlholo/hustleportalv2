@@ -19,6 +19,9 @@
 import { db } from '@/lib/db'
 import { setConfig } from '@/lib/config'
 import { sendCampaignMail, sendCampaignMailViaSes } from '@/lib/mailer'
+import { planState, FREE_LIMITS } from '@/lib/limits'
+import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
+import { spendCredits, addCredits } from '@/lib/wallet'
 
 export const APP_BASE = 'https://www.hustleportal.online'
 export const CAMPAIGN_STATE_PREFIX = 'campaign_state:'
@@ -31,6 +34,13 @@ export interface CampaignState {
   /** The mail look the sends ride in (boardroom | goldrush | nightshift | plain).
    *  Undefined = the engine default (goldrush branded). Editable per campaign. */
   theme?: string
+  /** Member campaigns only: the account that owns the queue. Exec blasts
+   *  carry none. Ownership is checked on every control action, so one member
+   *  can never start, stop or read another member's campaign. */
+  ownerUserId?: string
+  /** Where replies land. Member campaigns → the member's account email;
+   *  exec blasts → the team inbox (the senders' default). */
+  replyTo?: string
   createdAt: string
   startedAt?: string
   completedAt?: string
@@ -201,6 +211,9 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       theme: (state.theme || undefined) as Parameters<typeof sendCampaignMail>[0]['theme'],
       pixelUrl: `${APP_BASE}/api/mail/open/${queued.id}`,
       unsubscribeUrl: unsubscribeUrl(queued.id),
+      // Member campaigns route replies to the member's own inbox; exec blasts
+      // keep the team inbox default inside the senders.
+      replyTo: state.replyTo || undefined,
     }
     // The campaign's lane decides the pipe. Same mail, same laws, either way.
     // One rate-limit retry: the provider counts requests per second, so a
@@ -222,6 +235,31 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       })
       per.sent++
       result.sent++
+      // Member campaigns ride the SAME airtime law as every other send: sends
+      // inside the plan's bundle are free, sends beyond it spend airtime, and
+      // the debit lands only AFTER the email actually went out. A drained
+      // wallet never blocks a sent email — the books carry the shortfall and
+      // the wallet waits for a top-up (the emails route keeps the same books).
+      if (state.ownerUserId) {
+        try {
+          const owner = await planState(state.ownerUserId)
+          const bundle = owner.paid ? (PLAN_SEND_BUNDLES[owner.plan] ?? DEFAULT_SEND_BUNDLE) : FREE_LIMITS.emailSends
+          const windowStart = owner.paid ? new Date(Date.now() - SEND_BUNDLE_WINDOW_DAYS * 24 * 60 * 60 * 1000) : null
+          const used = await db.emailLog.count({
+            where: { userId: state.ownerUserId, status: 'SENT', ...(windowStart ? { createdAt: { gte: windowStart } } : {}) },
+          })
+          if (used > bundle) {
+            const priceCents = SPEND_ACTIONS.EMAIL_SEND.cents
+            const spent = await spendCredits(state.ownerUserId, priceCents, `Airtime: campaign email to ${queued.toEmail}`, 'FEATURE_SPEND')
+            if (!spent) {
+              await addCredits(state.ownerUserId, -priceCents, 'ADJUSTMENT', `Airtime shortfall: campaign email to ${queued.toEmail} already sent — load to clear it`)
+            }
+          }
+        } catch (e) {
+          // Billing must never break a delivered send.
+          console.error('[campaign-queue] member airtime debit failed:', e instanceof Error ? e.message : e)
+        }
+      }
     } else {
       await db.emailLog.update({
         where: { id: queued.id },

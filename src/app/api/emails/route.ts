@@ -9,6 +9,7 @@ import { ensureWallet, spendCredits, addCredits, formatRands } from '@/lib/walle
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
 import { matchLead, type LeadMatch } from '@/lib/leadMatch'
 import { resolveProject } from '@/lib/workspace'
+import { APP_BASE } from '@/lib/campaignqueue'
 
 // GET /api/emails → the user's email log (drafts first, newest first)
 export async function GET() {
@@ -51,6 +52,11 @@ export async function POST(req: NextRequest) {
   // engine signs never moves.
   const cc = sanitizeCcInput(typeof body.cc === 'string' ? body.cc : '')
   const fromLocal = sanitizeFromLocal(typeof body.fromLocal === 'string' ? body.fromLocal : '') || undefined
+  // The composer's "Sending from" pick: a workspace this account owns. The
+  // pick decides the display name AND the local part on our domain, and it
+  // forces the engine lane — their Gmail can never wear another business's
+  // name. An unknown id is ignored silently (the account identity leads).
+  const fromProfile = typeof body.fromProfile === 'string' && body.fromProfile.length > 5 ? body.fromProfile : undefined
   // The look the sender picked (Mail composer "Look" row). An unknown value
   // never errors the send — it just falls back to plain, same as before.
   const pickedTheme: MailThemeId | null = MAIL_THEMES.includes(body.theme) ? body.theme : null
@@ -102,11 +108,41 @@ export async function POST(req: NextRequest) {
       }))
     : undefined
 
-  const result = await sendMail(userId, { to, subject, body: mailBody, attachments, ...(cc.length ? { cc } : {}), ...(fromLocal ? { fromLocal } : {}), ...(sendTheme ? { theme: sendTheme } : {}) })
+  // The log row exists BEFORE the send so the open-tracking pixel can carry
+  // its id (read receipts in the mail log). A draft updates in place; an
+  // ad-hoc send gets its row first and the send stamps it below — same
+  // end-state as before, one step earlier.
+  const staged = body.draftId
+    ? await db.emailLog.findFirst({ where: { id: body.draftId, userId } })
+    : null
+  let email = staged ?? (await db.emailLog.create({
+    data: {
+      userId,
+      toEmail: to,
+      ccEmail: cc.length ? cc.join(', ') : null,
+      subject,
+      body: mailBody,
+      status: 'DRAFT',
+      provider: 'NONE',
+      theme: pickedTheme,
+      ...(fromProfile ? { projectId: fromProfile } : {}),
+    },
+  }))
+
+  const result = await sendMail(userId, {
+    to, subject, body: mailBody, attachments,
+    ...(cc.length ? { cc } : {}),
+    ...(fromLocal ? { fromLocal } : {}),
+    ...(fromProfile ? { projectId: fromProfile } : {}),
+    ...(sendTheme ? { theme: sendTheme } : {}),
+    // Engine sends carry the read-receipt pixel bound to this row; Gmail
+    // sends ignore it (their own inbox, no tracker) — read receipts stay
+    // engine-lane only, which is exactly where the platform controls the html.
+    pixelUrl: `${APP_BASE}/api/mail/open/${email.id}`,
+  })
   const provider = result.ok ? result.provider : 'NONE'
 
-  // If this send belongs to a logged draft, update it; otherwise log the send
-  let email
+  // Stamp the send on the row that staged it.
   const logData = {
     toEmail: to,
     ccEmail: cc.length ? cc.join(', ') : null,
@@ -119,21 +155,7 @@ export async function POST(req: NextRequest) {
     theme: pickedTheme,
     error: result.ok ? null : result.error,
   }
-  if (body.draftId) {
-    const draft = await db.emailLog.findFirst({ where: { id: body.draftId, userId } })
-    if (draft) {
-      email = await db.emailLog.update({ where: { id: draft.id }, data: logData })
-    }
-  }
-  if (!email) {
-    email = await db.emailLog.create({
-      data: {
-        userId,
-        projectId: body.projectId || null,
-        ...logData,
-      },
-    })
-  }
+  email = await db.emailLog.update({ where: { id: email.id }, data: logData })
   if (!result.ok) {
     return NextResponse.json({ error: result.error, email }, { status: 400 })
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUserId, getUser } from '@/lib/auth'
-import { getMailStatus, readLastSystemSend } from '@/lib/mailer'
+import { getMailStatus, readLastSystemSend, userSendingIdentity, identityFromLabel } from '@/lib/mailer'
 import { db } from '@/lib/db'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { ensureWallet } from '@/lib/wallet'
@@ -49,7 +49,29 @@ export async function GET() {
       spend = { action: SPEND_ACTIONS.EMAIL_SEND.key, priceCents, mode, allowance, allowanceRemaining, balanceCents: wallet.balance }
     } catch { /* the chip is cosmetic — never block the status call on it */ }
 
-    return NextResponse.json({ status, lastSend, spend })
+    // The composer's "Sending from" roster: the account identity first (the
+    // business on the account is the default sender), then every workspace
+    // this account owns, each carrying the exact from line the engine uses.
+    // This is what makes the sender visible and choosable — the wrong name
+    // can never go out unnoticed again.
+    let profiles: { id: string; name: string; from: string }[] = []
+    try {
+      const account = await userSendingIdentity(userId)
+      const projects = await db.project.findMany({
+        where: { userId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        select: { id: true, name: true },
+        take: 12,
+      })
+      profiles = [
+        { id: '', name: account.label, from: account.from },
+        ...projects
+          .filter((p) => p.name.trim() !== account.label)
+          .map((p) => ({ id: p.id, name: p.name, from: identityFromLabel(p.name).from })),
+      ]
+    } catch { /* the roster is a picker, never a blocker */ }
+
+    return NextResponse.json({ status, lastSend, spend, profiles })
   } catch {
     // Never block the Mail screen on a status hiccup
     return NextResponse.json({
