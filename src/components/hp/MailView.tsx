@@ -150,7 +150,7 @@ export default function MailView() {
   // still-queued row of a live queue. The sender is shown on the card itself so
   // what goes out is never a surprise again.
   const [editTag, setEditTag] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState({ subject: '', body: '', from: '', perHour: 45, theme: 'engine' })
+  const [editDraft, setEditDraft] = useState({ subject: '', body: '', from: '', perHour: 45, theme: 'engine', brandName: '' })
   const [editSaving, setEditSaving] = useState(false)
   // Abandoned checkouts (exec): Yoco checkouts that opened and never finished.
   const [abandoned, setAbandoned] = useState<AbandonedCheckouts | null>(null)
@@ -180,6 +180,13 @@ export default function MailView() {
   // The look a new batch is born in (engine default = goldrush). Same catalogue
   // Edit draft offers, so the pick at creation and the pick later agree.
   const [cTheme, setCTheme] = useState('engine')
+  // The sender's brand on the chrome: business name replaces the BH wordmark
+  // (and the uploaded logo replaces the BH chip) on every email in the queue.
+  // Empty = the platform's own chrome, exactly as it has always been. The
+  // logo is per-account, uploaded once, worn by every branded campaign.
+  const [cBrandName, setCBrandName] = useState('')
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
   // Add email (exec): queue another letter into a campaign that already ran.
   // The audience is pulled from that campaign's OWN history — who it reached,
   // sliced by who opened — so the kloofstreet crew never needs pasting again
@@ -206,6 +213,57 @@ export default function MailView() {
   }, [isAdmin])
 
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
+
+  // The account's campaign logo, loaded once — the composer and Edit draft
+  // both show it, and a queue stores only the hosted url.
+  useEffect(() => {
+    if (!isAdmin) return
+    api<{ logoUrl: string | null }>('/api/campaign-logo')
+      .then((res) => setBrandLogoUrl(res.logoUrl))
+      .catch(() => setBrandLogoUrl(null))
+  }, [isAdmin])
+
+  // Upload / remove the account's campaign logo (PNG/JPG, email-safe raster —
+  // the route stores it and returns the hosted url the email html references).
+  async function uploadBrandLogo(file: File) {
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      toast({ title: 'PNG or JPG only', description: 'Email clients refuse SVG and other formats — export the logo as PNG and try again.', variant: 'destructive' })
+      return
+    }
+    if (file.size > 300_000) {
+      toast({ title: 'Logo too heavy', description: `${Math.round(file.size / 1024)} KB — keep it under 300 KB. A wide, flat banner compresses fine.`, variant: 'destructive' })
+      return
+    }
+    setLogoBusy(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(String(fr.result))
+        fr.onerror = () => reject(new Error('read failed'))
+        fr.readAsDataURL(file)
+      })
+      const res = await api<{ logoUrl: string }>('/api/campaign-logo', { method: 'PUT', body: JSON.stringify({ dataUrl }) })
+      setBrandLogoUrl(res.logoUrl)
+      toast({ title: 'Logo saved', description: 'Your campaigns can now wear it instead of the BH mark.' })
+    } catch (e) {
+      toast({ title: 'Could not save the logo', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  async function removeBrandLogo() {
+    setLogoBusy(true)
+    try {
+      await api('/api/campaign-logo', { method: 'DELETE' })
+      setBrandLogoUrl(null)
+      toast({ title: 'Logo removed', description: 'Branded campaigns fall back to the initials chip.' })
+    } catch {
+      toast({ title: 'Could not remove it', variant: 'destructive' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   // Abandoned checkouts readout, refreshed with the campaigns.
   const loadAbandoned = useCallback(async () => {
@@ -342,6 +400,7 @@ export default function MailView() {
     setCName(''); setCSubject(''); setCBody(''); setCPerHour('45')
     setCFrom('BlackBiz <blackbiz@hustleportal.online>'); setCProvider('RESEND')
     setComposerMode('new'); setAddSource(''); setSourcePick('opened'); setSourceAud(null); setCTheme('engine')
+    setCBrandName('')
   }
 
   // Add email: the composer aimed at a campaign that already ran. Sender,
@@ -359,6 +418,9 @@ export default function MailView() {
     setCPerHour(String(info?.state?.perHour || 45))
     setCProvider(info?.state?.provider === 'SES' && sesOk ? 'SES' : 'RESEND')
     setCTheme(info?.state?.theme || 'engine')
+    // The follow-up wears the parent campaign's brand by default — the Ubuntu
+    // wave two stays Ubuntu, not BH.
+    setCBrandName(info?.state?.brand?.name || '')
     setCSubject(''); setCBody('')
     setPickIds(new Set()); setPaste(''); setSystemPick(false); setAudienceSearch('')
     setComposerStep('audience')
@@ -403,6 +465,9 @@ export default function MailView() {
           perHour: Number(cPerHour),
           provider: cProvider,
           theme: cTheme === 'engine' ? undefined : cTheme,
+          brand: cBrandName.trim()
+            ? { name: cBrandName.trim(), ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}) }
+            : null,
           leads: [...pickIds],
           emails: pastedEmails,
           ...(composerMode === 'new' && systemPick ? { audience: 'system', skipPaying: !systemIncludePaying } : {}),
@@ -455,6 +520,7 @@ export default function MailView() {
       from: info?.state?.from || 'BlackBiz <blackbiz@hustleportal.online>',
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
+      brandName: info?.state?.brand?.name || '',
     })
     setEditTag(tag)
   }
@@ -473,6 +539,9 @@ export default function MailView() {
           from: editDraft.from,
           perHour: Number(editDraft.perHour) || undefined,
           theme: editDraft.theme === 'engine' ? '' : editDraft.theme,
+          brand: editDraft.brandName.trim()
+            ? { name: editDraft.brandName.trim(), ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}) }
+            : null,
         }),
       })
       toast({
@@ -485,6 +554,34 @@ export default function MailView() {
       toast({ title: 'Could not save the draft', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setEditSaving(false)
+    }
+  }
+
+  // Openers -> leads: everyone who opened at least one email under this
+  // campaign joins the operator's own pipeline (idempotent by email), so the
+  // next wave rides the lead tools instead of a raw address dump.
+  async function pushOpenersToLeads(tag: string) {
+    setActingTag(tag)
+    try {
+      const res = await api<{ found: number; added: number; existing: number }>('/api/admin/exec/campaigns', {
+        method: 'PATCH',
+        body: JSON.stringify({ campaign: tag, action: 'openersToLeads' }),
+      })
+      if (res.found === 0) {
+        toast({ title: 'No opens yet', description: 'The read receipts land as the sends go out — check back after the first hour.' })
+      } else {
+        toast({
+          title: `${res.added} opener${res.added === 1 ? '' : 's'} on your pipeline`,
+          description: res.existing > 0
+            ? `${res.existing} already on your leads. Find them under source CAMPAIGN.`
+            : 'They are on your leads now — stage them, note them, work them.',
+        })
+      }
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not push the openers', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setActingTag(null)
     }
   }
 
@@ -900,6 +997,12 @@ export default function MailView() {
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openAdd(key)}>
                           <Plus className="h-3 w-3" /> Add email
                         </Button>
+                        {sum.opened > 0 && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => pushOpenersToLeads(key)}>
+                            {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <User className="h-3 w-3" />}
+                            Openers → leads ({sum.opened})
+                          </Button>
+                        )}
                         {state && sum.queued > 0 && (
                           <>
                             {state.status !== 'ACTIVE' && (
@@ -1607,6 +1710,37 @@ export default function MailView() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* The sender's brand: their name (and logo) replaces the BH mark
+                  on this queue's emails. Empty = the platform chrome, as always. */}
+              <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+                <Label htmlFor="c-brand" className="flex items-center gap-1.5"><Palette className="h-3.5 w-3.5 text-brand" /> Your brand on the email <span className="text-[10px] font-normal text-muted-foreground">(optional)</span></Label>
+                <Input
+                  id="c-brand" value={cBrandName} maxLength={48}
+                  onChange={(e) => setCBrandName(e.target.value)}
+                  placeholder="e.g. Ubuntu Wellness — shows instead of BH HustlePortal"
+                />
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  {brandLogoUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={brandLogoUrl} alt="Your logo" className="h-8 max-w-[140px] rounded border bg-white object-contain px-1" />
+                      <Button size="sm" variant="ghost" type="button" className="h-7 text-xs text-muted-foreground" disabled={logoBusy} onClick={removeBrandLogo}>Remove logo</Button>
+                    </>
+                  ) : (
+                    <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                      <input
+                        type="file" accept="image/png,image/jpeg" className="hidden" disabled={logoBusy}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBrandLogo(f); e.currentTarget.value = '' }}
+                      />
+                      {logoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                      Upload a logo (PNG/JPG, under 300 KB)
+                    </label>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">
+                    {brandLogoUrl ? 'Logo rides the banner.' : cBrandName.trim() ? `No logo — the banner shows “${cBrandName.trim().slice(0, 2).toUpperCase()}” initials.` : 'No brand set — emails ride the HustlePortal look.'}
+                  </span>
+                </div>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="c-subject">Subject</Label>
                 <Input id="c-subject" value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Your next client is one search away" />
@@ -1701,6 +1835,37 @@ export default function MailView() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            {/* Re-skin the chrome too: the queue can wear the sender's brand
+                instead of the BH mark. Clear the field to go back to BH. */}
+            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+              <Label htmlFor="ed-brand" className="flex items-center gap-1.5"><Palette className="h-3.5 w-3.5 text-brand" /> Your brand on the email <span className="text-[10px] font-normal text-muted-foreground">(optional)</span></Label>
+              <Input
+                id="ed-brand" value={editDraft.brandName} maxLength={48}
+                onChange={(e) => setEditDraft({ ...editDraft, brandName: e.target.value })}
+                placeholder="e.g. Ubuntu Wellness — shows instead of BH HustlePortal"
+              />
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                {brandLogoUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={brandLogoUrl} alt="Your logo" className="h-8 max-w-[140px] rounded border bg-white object-contain px-1" />
+                    <Button size="sm" variant="ghost" type="button" className="h-7 text-xs text-muted-foreground" disabled={logoBusy} onClick={removeBrandLogo}>Remove logo</Button>
+                  </>
+                ) : (
+                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                    <input
+                      type="file" accept="image/png,image/jpeg" className="hidden" disabled={logoBusy}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBrandLogo(f); e.currentTarget.value = '' }}
+                    />
+                    {logoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Upload a logo (PNG/JPG, under 300 KB)
+                  </label>
+                )}
+                <span className="text-[10px] text-muted-foreground">
+                  {editDraft.brandName.trim() ? (brandLogoUrl ? 'Applies to every email still queued.' : `No logo — the banner shows “${editDraft.brandName.trim().slice(0, 2).toUpperCase()}” initials.`) : 'Empty = the HustlePortal chrome, as always.'}
+                </span>
               </div>
             </div>
             <div className="flex gap-2">

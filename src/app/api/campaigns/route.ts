@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { isSesConfigured, userSendingIdentity, identityFromLabel } from '@/lib/mailer'
+import { sanitizeBrand } from '@/lib/mailthemes'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
 import { ensureWallet } from '@/lib/wallet'
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
 
   let payload: {
     campaign?: string; subject?: string; body?: string; theme?: string; perHour?: number; fromProfile?: string
+    brand?: { name?: string; initials?: string; logoUrl?: string } | null
     leads?: string[]; emails?: string[]; personalize?: boolean
   }
   try {
@@ -103,6 +105,13 @@ export async function POST(req: NextRequest) {
   }
   const perHour = Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour)) || DEFAULT_HOURLY))
   const theme = THEMES.includes(String(payload.theme)) ? String(payload.theme) : undefined
+  // The member's own brand on the chrome — same sanitize law as the exec side.
+  const brand = payload.brand === undefined
+    ? undefined
+    : (payload.brand === null ? null : sanitizeBrand(payload.brand))
+  if (payload.brand != null && !brand) {
+    return NextResponse.json({ error: 'Brand needs a business name (max 48 characters).' }, { status: 400 })
+  }
   const sender = await resolveSender(userId, typeof payload.fromProfile === 'string' ? payload.fromProfile : undefined)
 
   // Recipients: pipeline leads this account owns (same access wall as every
@@ -209,6 +218,7 @@ export async function POST(req: NextRequest) {
         perHour,
         from: sender.from,
         theme: theme ?? existingState.theme,
+        ...(brand !== undefined ? { brand: brand ?? undefined } : {}),
         replyTo: me?.email || existingState.replyTo,
       }
     : {
@@ -219,6 +229,7 @@ export async function POST(req: NextRequest) {
         // wired (built for volume), the free lane otherwise. Same laws either way.
         provider: isSesConfigured() ? 'SES' : 'RESEND',
         theme,
+        ...(brand ? { brand } : {}),
         ownerUserId: userId,
         replyTo: me?.email || undefined,
         createdAt: new Date().toISOString(),
@@ -292,6 +303,7 @@ export async function PATCH(req: NextRequest) {
   let payload: {
     campaign?: string; action?: string; rowId?: string
     subject?: string; body?: string; perHour?: number; theme?: string
+    brand?: { name?: string; initials?: string; logoUrl?: string } | null
   }
   try {
     payload = await req.json()
@@ -339,6 +351,12 @@ export async function PATCH(req: NextRequest) {
     if (payload.theme != null && payload.theme !== '' && !nextTheme) {
       return NextResponse.json({ error: 'Unknown look. Use boardroom, goldrush, nightshift or plain.' }, { status: 400 })
     }
+    const nextBrand = payload.brand === undefined
+      ? undefined
+      : (payload.brand === null ? null : sanitizeBrand(payload.brand))
+    if (payload.brand != null && !nextBrand) {
+      return NextResponse.json({ error: 'Brand needs a business name (max 48 characters).' }, { status: 400 })
+    }
     const data: { subject?: string; body?: string } = {}
     if (subject !== undefined) data.subject = subject.slice(0, 180)
     if (body !== undefined) data.body = body.slice(0, 4000)
@@ -353,6 +371,7 @@ export async function PATCH(req: NextRequest) {
     const next: CampaignState = { ...current }
     if (nextPerHour !== undefined) next.perHour = nextPerHour
     if (payload.theme !== undefined) next.theme = nextTheme
+    if (payload.brand !== undefined) next.brand = nextBrand ?? undefined
     await writeCampaignState(tag, next)
     return NextResponse.json({
       ok: true,

@@ -231,6 +231,8 @@ export interface CampaignState {
   from?: string
   provider?: 'RESEND' | 'SES' // the transport lane, free lane by default, SES when its keys are in
   theme?: string // the mail look the sends ride in; undefined = engine default (goldrush)
+  /** The sender's own brand on the chrome (logo/initials/name); absent = BH. */
+  brand?: { name: string; initials?: string; logoUrl?: string } | null
   createdAt: string
   startedAt?: string
   completedAt?: string

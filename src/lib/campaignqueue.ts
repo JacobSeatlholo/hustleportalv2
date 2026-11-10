@@ -19,6 +19,7 @@
 import { db } from '@/lib/db'
 import { setConfig } from '@/lib/config'
 import { sendCampaignMail, sendCampaignMailViaSes } from '@/lib/mailer'
+import type { MailBrand } from '@/lib/mailthemes'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
 import { spendCredits, addCredits } from '@/lib/wallet'
@@ -34,6 +35,9 @@ export interface CampaignState {
   /** The mail look the sends ride in (boardroom | goldrush | nightshift | plain).
    *  Undefined = the engine default (goldrush branded). Editable per campaign. */
   theme?: string
+  /** The sender's own brand (logo/initials/name) when the queue rides their
+   *  chrome instead of the BH one. Absent = HustlePortal chrome, as always. */
+  brand?: MailBrand
   /** Member campaigns only: the account that owns the queue. Exec blasts
    *  carry none. Ownership is checked on every control action, so one member
    *  can never start, stop or read another member's campaign. */
@@ -209,6 +213,9 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       // The campaign's chosen look rides the state, so Edit draft can re-skin
       // a queue without touching a single row. Undefined = engine default.
       theme: (state.theme || undefined) as Parameters<typeof sendCampaignMail>[0]['theme'],
+      // Same law for the sender's brand: rides the state, applies to every
+      // still-queued email at send time. Undefined = the BH chrome.
+      brand: state.brand,
       pixelUrl: `${APP_BASE}/api/mail/open/${queued.id}`,
       unsubscribeUrl: unsubscribeUrl(queued.id),
       // Member campaigns route replies to the member's own inbox; exec blasts

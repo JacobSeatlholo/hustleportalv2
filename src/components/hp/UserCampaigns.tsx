@@ -75,10 +75,15 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
   const [cPerHour, setCPerHour] = useState('45')
   const [personalize, setPersonalize] = useState(true)
   const [creating, setCreating] = useState(false)
+  // The member's own brand on the chrome: business name (and optional logo)
+  // replaces the BH mark on this campaign's emails. Empty = platform chrome.
+  const [cBrandName, setCBrandName] = useState('')
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
 
   // edit draft state
   const [editTag, setEditTag] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState({ subject: '', body: '', perHour: 45, theme: 'engine' })
+  const [editDraft, setEditDraft] = useState({ subject: '', body: '', perHour: 45, theme: 'engine', brandName: '' })
   const [editSaving, setEditSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -94,6 +99,55 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
     }
   }, [])
   useEffect(() => { load() }, [load])
+
+  // The account's campaign logo, loaded once — both the composer and Edit
+  // draft offer it, and a queue stores only the hosted url.
+  useEffect(() => {
+    api<{ logoUrl: string | null }>('/api/campaign-logo')
+      .then((res) => setBrandLogoUrl(res.logoUrl))
+      .catch(() => setBrandLogoUrl(null))
+  }, [])
+
+  // Upload / remove the account's campaign logo (PNG/JPG, email-safe raster).
+  async function uploadBrandLogo(file: File) {
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      toast({ title: 'PNG or JPG only', description: 'Email clients refuse SVG and other formats — export the logo as PNG and try again.', variant: 'destructive' })
+      return
+    }
+    if (file.size > 300_000) {
+      toast({ title: 'Logo too heavy', description: `${Math.round(file.size / 1024)} KB — keep it under 300 KB.`, variant: 'destructive' })
+      return
+    }
+    setLogoBusy(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(String(fr.result))
+        fr.onerror = () => reject(new Error('read failed'))
+        fr.readAsDataURL(file)
+      })
+      const res = await api<{ logoUrl: string }>('/api/campaign-logo', { method: 'PUT', body: JSON.stringify({ dataUrl }) })
+      setBrandLogoUrl(res.logoUrl)
+      toast({ title: 'Logo saved', description: 'Your campaigns can now wear it instead of the BH mark.' })
+    } catch (e) {
+      toast({ title: 'Could not save the logo', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  async function removeBrandLogo() {
+    setLogoBusy(true)
+    try {
+      await api('/api/campaign-logo', { method: 'DELETE' })
+      setBrandLogoUrl(null)
+      toast({ title: 'Logo removed', description: 'Branded campaigns fall back to the initials chip.' })
+    } catch {
+      toast({ title: 'Could not remove it', variant: 'destructive' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   // The pipeline list for the audience picker, fetched when the composer opens.
   useEffect(() => {
@@ -153,6 +207,7 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
   function resetComposer() {
     setStep('audience'); setPickIds(new Set()); setPaste(''); setSearch('')
     setCName(''); setCSubject(''); setCBody(''); setCPerHour('45'); setCTheme('plain'); setPersonalize(true)
+    setCBrandName('')
     // keep cFrom: the member's last sender pick is usually the right one
   }
 
@@ -187,6 +242,9 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
           subject: cSubject.trim(),
           body: cBody,
           theme: cTheme === 'plain' ? 'plain' : cTheme,
+          brand: cBrandName.trim()
+            ? { name: cBrandName.trim(), ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}) }
+            : null,
           perHour: Number(cPerHour),
           fromProfile: cFrom || undefined,
           leads: [...pickIds],
@@ -258,6 +316,7 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
       body: queued?.body || '',
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
+      brandName: info?.state?.brand?.name || '',
     })
     setEditTag(tag)
   }
@@ -275,6 +334,9 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
           body: editDraft.body,
           perHour: Number(editDraft.perHour) || undefined,
           theme: editDraft.theme === 'engine' ? '' : editDraft.theme,
+          brand: editDraft.brandName.trim()
+            ? { name: editDraft.brandName.trim(), ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}) }
+            : null,
         }),
       })
       toast({
@@ -603,6 +665,37 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
                   ))}
                 </div>
               </div>
+              {/* The member's own brand: their name (and logo) replaces the BH
+                  mark on this campaign's emails. Empty = the platform chrome. */}
+              <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+                <Label htmlFor="uc-brand" className="flex items-center gap-1.5"><Palette className="h-3.5 w-3.5 text-brand" /> Your brand on the email <span className="text-[10px] font-normal text-muted-foreground">(optional)</span></Label>
+                <Input
+                  id="uc-brand" value={cBrandName} maxLength={48}
+                  onChange={(e) => setCBrandName(e.target.value)}
+                  placeholder="e.g. Mo Lawncare — shows instead of BH HustlePortal"
+                />
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  {brandLogoUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={brandLogoUrl} alt="Your logo" className="h-8 max-w-[140px] rounded border bg-white object-contain px-1" />
+                      <Button size="sm" variant="ghost" type="button" className="h-7 text-xs text-muted-foreground" disabled={logoBusy} onClick={removeBrandLogo}>Remove logo</Button>
+                    </>
+                  ) : (
+                    <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                      <input
+                        type="file" accept="image/png,image/jpeg" className="hidden" disabled={logoBusy}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBrandLogo(f); e.currentTarget.value = '' }}
+                      />
+                      {logoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                      Upload a logo (PNG/JPG, under 300 KB)
+                    </label>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">
+                    {brandLogoUrl ? 'Logo rides the banner.' : cBrandName.trim() ? `No logo — the banner shows “${cBrandName.trim().slice(0, 2).toUpperCase()}” initials.` : 'No brand set — emails ride the HustlePortal look.'}
+                  </span>
+                </div>
+              </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
                 <p className="font-medium text-[13px]">Before it queues</p>
                 <p className="text-muted-foreground">
@@ -674,6 +767,37 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            {/* Re-skin the chrome too: the queue can wear the member's brand
+                instead of the BH mark. Clear the field to go back to BH. */}
+            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+              <Label htmlFor="uc-ed-brand" className="flex items-center gap-1.5"><Palette className="h-3.5 w-3.5 text-brand" /> Your brand on the email <span className="text-[10px] font-normal text-muted-foreground">(optional)</span></Label>
+              <Input
+                id="uc-ed-brand" value={editDraft.brandName} maxLength={48}
+                onChange={(e) => setEditDraft({ ...editDraft, brandName: e.target.value })}
+                placeholder="e.g. Mo Lawncare — shows instead of BH HustlePortal"
+              />
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                {brandLogoUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={brandLogoUrl} alt="Your logo" className="h-8 max-w-[140px] rounded border bg-white object-contain px-1" />
+                    <Button size="sm" variant="ghost" type="button" className="h-7 text-xs text-muted-foreground" disabled={logoBusy} onClick={removeBrandLogo}>Remove logo</Button>
+                  </>
+                ) : (
+                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                    <input
+                      type="file" accept="image/png,image/jpeg" className="hidden" disabled={logoBusy}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBrandLogo(f); e.currentTarget.value = '' }}
+                    />
+                    {logoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Upload a logo (PNG/JPG, under 300 KB)
+                  </label>
+                )}
+                <span className="text-[10px] text-muted-foreground">
+                  {editDraft.brandName.trim() ? (brandLogoUrl ? 'Applies to every email still queued.' : `No logo — the banner shows “${editDraft.brandName.trim().slice(0, 2).toUpperCase()}” initials.`) : 'Empty = the HustlePortal chrome, as always.'}
+                </span>
               </div>
             </div>
             <div className="flex gap-2">

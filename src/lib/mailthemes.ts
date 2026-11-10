@@ -194,8 +194,73 @@ export const THEMES: Record<Exclude<MailThemeId, 'plain'>, MailTheme> & { plain:
   },
 }
 
+// ============ SENDER BRAND — their name on the same chrome ============
+//
+// The law the boss set: HustlePortal's own mail keeps the BH mark and the
+// badger, but a campaign can carry the SENDER'S brand instead — their logo
+// or their initials in the banner chip, their name as the wordmark — so a
+// member's client or an Ubuntu Wellness client receives mail that looks like
+// it came from THAT business, not from us. Same layout grammar, same themes,
+// same mascot library (a mascot stays available, but never rides in by
+// default on a branded send — the badger wears the BH vest).
+//
+// The logo must be a hosted absolute PNG/JPEG URL — SVG and data: URIs are
+// refused by Gmail and Outlook, and an email that loses its banner is worse
+// than one that never had it.
+
+export interface MailBrand {
+  /** The business name — becomes the banner wordmark and the footer credit. */
+  name: string
+  /** 1-3 letters for the chip when there is no logo. Derived when absent. */
+  initials?: string
+  /** Hosted absolute (or site-relative) image URL, PNG/JPEG only. */
+  logoUrl?: string
+}
+
+/** Up to three initials from a business name: "Ubuntu Wellness" -> "UW",
+ *  "Avenzara" -> "A", "Mo Lawncare" -> "ML". Pure. */
+export function brandInitials(name: string): string {
+  const words = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return 'HB'
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return ((words[0][0] || '') + (words[1][0] || '')).toUpperCase()
+}
+
+/** Site-relative logo urls are resolved against the asset base so a test or
+ *  preview can override the host; absolute http(s) urls ride as they are. */
+function brandLogoSrc(logoUrl: string, assetBase: string): string | null {
+  const u = (logoUrl || '').trim()
+  if (!u) return null
+  if (/^https:\/\//i.test(u)) return u
+  if (u.startsWith('/')) return `${assetBase}${u}`
+  return null // anything else (data:, javascript:, protocol-relative) is refused
+}
+
+/** Never throws: garbage in, no brand out — the send just rides the BH chrome
+ *  rather than shipping a broken banner. The exec/member APIs sanitize before
+ *  storage too, so what reaches the theme engine is already clean. */
+export function sanitizeBrand(raw: unknown): MailBrand | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as { name?: unknown; initials?: unknown; logoUrl?: unknown }
+  const name = typeof r.name === 'string' ? r.name.replace(/[<>"&]/g, '').trim().slice(0, 48) : ''
+  if (!name) return undefined
+  const initials = typeof r.initials === 'string'
+    ? r.initials.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+    : ''
+  const logoUrl = typeof r.logoUrl === 'string' && /^\/(email|brand|api)\//.test(r.logoUrl.trim())
+    ? r.logoUrl.trim()
+    : (/^https:\/\/([\w.-]+)\//.test(String(r.logoUrl || '')) ? String(r.logoUrl).trim() : '')
+  return {
+    name,
+    ...(initials ? { initials } : {}),
+    ...(logoUrl ? { logoUrl } : {}),
+  }
+}
+
 export interface ThemedMailOptions {
   theme?: MailThemeId
+  /** The sender's own brand: swaps the BH banner for their logo/initials/name. */
+  brand?: MailBrand
   /** Invisible 1x1 open tracker (campaign lane). Omitted for system mail. */
   pixelUrl?: string
   /** Caps accent line under the hero, PostHog "SECURITY REQUEST" style. */
@@ -219,21 +284,29 @@ export interface ThemedMailOptions {
   assetBase?: string
 }
 
-function banner(t: MailTheme, assetBase: string): string {
+function banner(t: MailTheme, assetBase: string, brand?: MailBrand): string {
   if (t.id === 'plain') return '' // legacy look has no chrome
-  const mark =
-    `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-    `<td width="34" height="34" bgcolor="${t.chipBg}" style="width:34px;height:34px;background:${t.chipBg};border-radius:7px;text-align:center;vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:15px;color:${t.chipText}">BH</td>` +
-    `<td style="padding-left:11px;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;color:${t.wordmark};letter-spacing:0.4px">HustlePortal</td>` +
-    `</tr></table>`
+  // A branded send wears the SENDER'S mark: their logo when they uploaded
+  // one, their initials chip + name otherwise. Same geometry, same slot,
+  // never the BH monogram.
+  const logoSrc = brand ? brandLogoSrc(brand.logoUrl || '', assetBase) : null
+  const mark = logoSrc
+    ? `<img src="${logoSrc}" alt="${brand!.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" height="40" style="display:block;height:40px;max-width:260px;width:auto;border:0;outline:none;text-decoration:none" />`
+    : `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+      `<td width="34" height="34" bgcolor="${t.chipBg}" style="width:34px;height:34px;background:${t.chipBg};border-radius:7px;text-align:center;vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:15px;color:${t.chipText}">${(brand ? (brand.initials || brandInitials(brand.name)) : 'BH').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>` +
+      `<td style="padding-left:11px;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;color:${t.wordmark};letter-spacing:0.4px">${(brand ? brand.name : 'HustlePortal').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>` +
+      `</tr></table>`
   return (
     `<tr><td bgcolor="${t.bannerBg}" style="background:${t.bannerBg};padding:15px 26px" align="left">${mark}</td></tr>` +
     `<tr><td bgcolor="${t.strip}" style="background:${t.strip};font-size:0;line-height:0;height:4px">&nbsp;</td></tr>`
   )
 }
 
-function heroRow(t: MailTheme, assetBase: string, mascot?: string): string {
-  const m = mascotImage(mascot) || t.hero
+function heroRow(t: MailTheme, assetBase: string, mascot?: string, brand?: MailBrand): string {
+  // A branded send never inherits the theme's default hero — our badger
+  // carries the BH vest, and their mail must not wear him by accident. An
+  // explicitly picked mascot still rides (their choice, their send).
+  const m = brand && !mascot ? undefined : (mascotImage(mascot) || t.hero)
   if (!m) return ''
   const src = `${assetBase}${m.src}`
   return (
@@ -312,6 +385,12 @@ function footerRow(opts: ThemedMailOptions, t: MailTheme): string {
     )
   }
   if (opts.footerLines?.length) lines.push(...opts.footerLines)
+  // A branded send identifies the SENDER (POPIA: the recipient must know who
+  // is talking) with one quiet platform credit, not our full legal block.
+  if (opts.brand) {
+    const bn = opts.brand.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    lines.push(`${bn} &middot; sent via HustlePortal`)
+  }
   if (lines.length === 0) return ''
   const body = lines
     .map((l) => l.replace(/(https?:\/\/[^\s<]+)/g, (_m, u: string) => `<a href="${u}" style="color:${t.link}">${u}</a>`))
@@ -357,8 +436,8 @@ export function themedEmailHtml(text: string, opts: ThemedMailOptions = {}): str
 ${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${t.pageBg};padding:26px 12px"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:${t.cardBg};border-radius:${t.radius}px;overflow:hidden">
-${banner(t, assetBase)}
-${heroRow(t, assetBase, opts.mascot)}
+${banner(t, assetBase, opts.brand)}
+${heroRow(t, assetBase, opts.mascot, opts.brand)}
 ${headlineRow(opts.headline, t)}
 ${titleRow(opts.title, t, !!opts.headline)}
 <tr><td style="padding:${opts.headline ? '18px' : opts.title ? '12px' : '28px'} 30px 6px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${t.text}">${blocks}</td></tr>

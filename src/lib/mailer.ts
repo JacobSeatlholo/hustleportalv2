@@ -13,7 +13,7 @@
 import { createHash, createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
 import { campaignHtml, flattenMarkdownLinks, renderTextBlocks } from '@/lib/campaignhtml'
-import { themedEmailHtml, type MailThemeId } from '@/lib/mailthemes'
+import { themedEmailHtml, sanitizeBrand, type MailBrand, type MailThemeId } from '@/lib/mailthemes'
 
 /**
  * Member mail carries NO ads, NO product pitch and NO referral link, ever.
@@ -198,6 +198,17 @@ export function legalFooterLines(): string[] {
 
 function legalFooter(): string {
   return ['', '', ...legalFooterLines()].join('\n')
+}
+
+/** The plain-text tail of a campaign: the one-click unsubscribe line, then —
+ *  branded sends — the SENDER'S name as the sign-off (their client mail must
+ *  read as their business, with the platform credited once), or — unbranded
+ *  sends — the full HustlePortal legal block exactly as it has always been.
+ *  Shared by both transports so they stay word-for-word identical. */
+function campaignTail(unsub: string | undefined, brand?: MailBrand): string {
+  const un = unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : ''
+  const credit = brand ? `\n\n${brand.name} · sent via HustlePortal` : legalFooter()
+  return un + credit
 }
 
 /**
@@ -728,6 +739,9 @@ export function normalizeCampaignFrom(raw?: string): string {
 type ThemedCampaignFields = {
   /** Defaults to 'goldrush'. 'plain' restores the legacy unbranded look exactly. */
   theme?: MailThemeId
+  /** The sender's own brand: their logo/initials/name replace the BH chrome.
+   *  Absent = HustlePortal chrome exactly as it has always been. */
+  brand?: MailBrand
   /** Caps accent line under the hero, e.g. "GOOD TO HAVE YOU BACK". */
   headline?: string
   /** Bulletproof CTA button shown after the body. */
@@ -752,12 +766,15 @@ function campaignMailHtml(
   }
   return themedEmailHtml(mail.body, {
     theme: mail.theme ?? 'goldrush',
+    brand: mail.brand,
     headline: mail.headline,
     ctaLabel: mail.ctaLabel,
     ctaUrl: mail.ctaUrl,
     preheader: mail.preheader,
     unsubscribeUrl: mail.unsubscribeUrl,
-    footerLines: legalFooterLines(),
+    // Branded sends carry their own footer credit (inside themedEmailHtml),
+    // so our legal block would only print the HustlePortal name twice.
+    footerLines: mail.brand ? [] : legalFooterLines(),
     pixelUrl: mail.pixelUrl,
   })
 }
@@ -776,7 +793,7 @@ export async function sendCampaignMail(
   // Bulk sender law (Gmail, Yahoo, Microsoft): every campaign mail carries a
   // one click unsubscribe header plus a plain link a human can tap.
   const unsub = mail.unsubscribeUrl?.trim()
-  const tail = (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
+  const tail = campaignTail(unsub, mail.brand)
   // The text side flattens phrase links ("HustlePortal (https://...)") so no
   // raw markdown ever reaches a plain text reader; the html side renders them
   // as real anchors.
@@ -869,7 +886,7 @@ export async function sendCampaignMailViaSes(
   if (!key || !secret) return { ok: false, error: 'SES lane is not configured.' }
   const from = normalizeCampaignFrom(mail.from)
   const unsub = mail.unsubscribeUrl?.trim()
-  const tail = (unsub ? `\n\nPrefer not to hear from us again? One tap and you are out: ${unsub}` : '') + legalFooter()
+  const tail = campaignTail(unsub, mail.brand)
   // The text side flattens phrase links ("HustlePortal (https://...)") so no
   // raw markdown ever reaches a plain text reader; the html side renders them
   // as real anchors.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireExec } from '@/lib/admin'
 import { db } from '@/lib/db'
 import { normalizeCampaignFrom, isSesConfigured } from '@/lib/mailer'
+import { sanitizeBrand } from '@/lib/mailthemes'
 import {
   readCampaignStates, writeCampaignState, unsubscribeUrl, type CampaignState,
 } from '@/lib/campaignqueue'
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
 
   let payload: {
     campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string; theme?: string
+    brand?: { name?: string; initials?: string; logoUrl?: string } | null
     leads?: string[]; emails?: string[]; audience?: string; skipPaying?: boolean; personalize?: boolean
     followUp?: boolean; sourceCampaign?: string; sourceFilter?: string
   }
@@ -95,6 +97,15 @@ export async function POST(req: NextRequest) {
     : (THEMES.includes(String(payload.theme)) ? String(payload.theme) : undefined)
   if (payload.theme != null && payload.theme !== '' && !theme) {
     return NextResponse.json({ error: 'Unknown look. Use boardroom, goldrush, nightshift or plain.' }, { status: 400 })
+  }
+
+  // The sender's own brand (logo/initials/name) — undefined leaves whatever
+  // the queue already wears alone, null strips it back to the BH chrome.
+  const brand = payload.brand === undefined
+    ? undefined
+    : (payload.brand === null ? null : sanitizeBrand(payload.brand))
+  if (payload.brand != null && !brand) {
+    return NextResponse.json({ error: 'Brand needs a business name (max 48 characters).' }, { status: 400 })
   }
 
   // Recipients from pipeline leads, same access wall as every lead action.
@@ -256,6 +267,7 @@ export async function POST(req: NextRequest) {
     from,
     provider,
     ...(theme ? { theme } : {}),
+    ...(brand !== undefined ? { brand: brand ?? undefined } : {}),
     ...(reopened ? { status: 'PAUSED' as const } : {}),
   }
   await writeCampaignState(tag, nextState)
@@ -329,6 +341,7 @@ export async function PATCH(req: NextRequest) {
     campaign?: string; action?: string; rowId?: string
     // editDraft fields: rewrite the letter on every still-QUEUED row.
     subject?: string; body?: string; from?: string; perHour?: number; theme?: string
+    brand?: { name?: string; initials?: string; logoUrl?: string } | null
   }
   try {
     payload = await req.json()
@@ -395,6 +408,14 @@ export async function PATCH(req: NextRequest) {
     if (payload.theme != null && payload.theme !== '' && !nextTheme) {
       return NextResponse.json({ error: 'Unknown look. Use boardroom, goldrush, nightshift or plain.' }, { status: 400 })
     }
+    // Brand: undefined = leave alone, null = strip back to the BH chrome,
+    // object = set (sanitized; a brand without a name is refused).
+    const nextBrand = payload.brand === undefined
+      ? undefined
+      : (payload.brand === null ? null : sanitizeBrand(payload.brand))
+    if (payload.brand != null && !nextBrand) {
+      return NextResponse.json({ error: 'Brand needs a business name (max 48 characters).' }, { status: 400 })
+    }
 
     const statesNow = await readCampaignStates()
     const current = statesNow[tag]
@@ -418,6 +439,7 @@ export async function PATCH(req: NextRequest) {
     if (nextFrom !== undefined) next.from = nextFrom
     if (nextPerHour !== undefined) next.perHour = nextPerHour
     if (payload.theme !== undefined) next.theme = nextTheme
+    if (payload.brand !== undefined) next.brand = nextBrand ?? undefined
     await writeCampaignState(tag, next)
 
     return NextResponse.json({
@@ -430,6 +452,53 @@ export async function PATCH(req: NextRequest) {
         ? 'Sender was normalized: the campaign domain carries the address (anything @hustleportal.online).'
         : undefined,
     })
+  }
+
+  // Openers -> leads: the read-receipt gold. Everyone who OPENED at least one
+  // email under this campaign becomes a lead on the operator's own pipeline,
+  // so the next wave (the introduction, the call list, the quote) can ride
+  // the lead tools — stages, notes, tasks — instead of a raw email dump.
+  // Idempotent by email: an address already on the pipeline is counted, not
+  // duplicated, so the button can be pressed after every send.
+  if (action === 'openersToLeads') {
+    const rows = await db.emailLog.findMany({
+      where: { campaign: tag, openedAt: { not: null } },
+      select: { toEmail: true, lead: { select: { contactName: true, company: true } } },
+    })
+    const openers = new Map<string, { name: string | null; company: string | null }>()
+    for (const r of rows) {
+      openers.set(r.toEmail.toLowerCase(), {
+        name: r.lead?.contactName?.trim() || null,
+        company: r.lead?.company?.trim() || null,
+      })
+    }
+    const emails = [...openers.keys()]
+    if (emails.length === 0) {
+      return NextResponse.json({ ok: true, found: 0, added: 0, existing: 0 })
+    }
+    const known = await db.lead.findMany({
+      where: { userId: gate.me.id, email: { in: emails } },
+      select: { email: true },
+    })
+    const knownSet = new Set(known.map((k) => (k.email || '').toLowerCase()))
+    const fresh = emails.filter((e) => !knownSet.has(e))
+    if (fresh.length > 0) {
+      await db.lead.createMany({
+        data: fresh.map((email) => {
+          const o = openers.get(email)
+          return {
+            userId: gate.me.id,
+            company: o?.company || 'Unknown',
+            ...(o?.name ? { contactName: o.name } : {}),
+            email,
+            source: 'CAMPAIGN',
+            stage: 'NEW',
+            notes: `Opened a ${tag} email · pushed from campaign read receipts ${new Date().toISOString().slice(0, 10)}`,
+          }
+        }),
+      })
+    }
+    return NextResponse.json({ ok: true, found: emails.length, added: fresh.length, existing: emails.length - fresh.length })
   }
 
   const states = await readCampaignStates()
@@ -465,5 +534,5 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, campaign: tag, state: next, stopped: stopped.count })
   }
 
-  return NextResponse.json({ error: 'Unknown action. Use start, pause, cancel or removeRow.' }, { status: 400 })
+  return NextResponse.json({ error: 'Unknown action. Use start, pause, cancel, removeRow, editDraft or openersToLeads.' }, { status: 400 })
 }
