@@ -177,6 +177,18 @@ export default function MailView() {
   const [cPerHour, setCPerHour] = useState('45')
   const [cProvider, setCProvider] = useState<'RESEND' | 'SES'>('RESEND')
   const [sesOk, setSesOk] = useState(false)
+  // The look a new batch is born in (engine default = goldrush). Same catalogue
+  // Edit draft offers, so the pick at creation and the pick later agree.
+  const [cTheme, setCTheme] = useState('engine')
+  // Add email (exec): queue another letter into a campaign that already ran.
+  // The audience is pulled from that campaign's OWN history — who it reached,
+  // sliced by who opened — so the kloofstreet crew never needs pasting again
+  // and the blast-exclusion law never blocks the people who already know the
+  // sender. Counts come from the server, the queue recomputes them anyway.
+  const [composerMode, setComposerMode] = useState<'new' | 'add'>('new')
+  const [addSource, setAddSource] = useState('')
+  const [sourcePick, setSourcePick] = useState<'opened' | 'unopened' | 'all'>('opened')
+  const [sourceAud, setSourceAud] = useState<{ found: boolean; total: number; opened: number; unopened: number; sample: { name: string; email: string } | null } | null>(null)
   const [creating, setCreating] = useState(false)
   const [actingTag, setActingTag] = useState<string | null>(null)
 
@@ -208,15 +220,21 @@ export default function MailView() {
   useEffect(() => { loadAbandoned() }, [loadAbandoned, loadCampaigns])
 
   // The roster readout rides along whenever the composer opens, so the boss
-  // always stages against today's numbers, never a stale count.
+  // always stages against today's numbers, never a stale count. In add mode
+  // the source campaign's own history joins it, same honesty law.
   useEffect(() => {
     if (!composerOpen) return
     let dead = false
     api<{ segments: SystemAudienceReadout }>('/api/admin/exec/campaigns/audience')
       .then((res) => { if (!dead) setSystemAud(res.segments) })
       .catch(() => { if (!dead) setSystemAud(null) })
+    if (composerMode === 'add' && addSource) {
+      api<{ source: { found: boolean; total: number; opened: number; unopened: number; sample: { name: string; email: string } | null } }>(`/api/admin/exec/campaigns/audience?source=${encodeURIComponent(addSource)}`)
+        .then((res) => { if (!dead) setSourceAud(res.source) })
+        .catch(() => { if (!dead) setSourceAud(null) })
+    }
     return () => { dead = true }
-  }, [composerOpen])
+  }, [composerOpen, composerMode, addSource])
 
   // While a queue is ACTIVE the open screen taps the engine every minute.
   // Closing the tab costs nothing: the cron heartbeat and the database clock
@@ -288,11 +306,19 @@ export default function MailView() {
   const systemCount = systemPick && systemAud
     ? systemAud.eligible + (systemIncludePaying ? systemAud.excluded.paying : 0)
     : 0
-  const pickCount = pickIds.size + pastedEmails.length + systemCount
+  const sourceCount = composerMode === 'add' && sourceAud?.found
+    ? (sourcePick === 'opened' ? sourceAud.opened : sourcePick === 'unopened' ? sourceAud.unopened : sourceAud.total)
+    : 0
+  const pickCount = (composerMode === 'add' ? sourceCount : pickIds.size + systemCount) + pastedEmails.length
   const personalizable = /\{name\}|\{email\}/.test(cBody) || /\{name\}/.test(cSubject)
+  // The sample the draft preview greets with: a real account from the very
+  // list being staged, so what the boss reads is what a recipient reads.
+  const samplePerson = composerMode === 'add'
+    ? sourceAud?.sample || null
+    : systemAud?.sample || null
   const sampleFill = (t: string) => t
-    .replace(/\{name\}/g, systemAud?.sample?.name || 'Thabo')
-    .replace(/\{email\}/g, systemAud?.sample?.email || 'you@example.co.za')
+    .replace(/\{name\}/g, samplePerson?.name || 'Thabo')
+    .replace(/\{email\}/g, samplePerson?.email || 'you@example.co.za')
   const audienceLeads = leads
     .filter((l) => {
       const q = audienceSearch.trim().toLowerCase()
@@ -315,6 +341,28 @@ export default function MailView() {
     setSystemPick(false); setSystemIncludePaying(false)
     setCName(''); setCSubject(''); setCBody(''); setCPerHour('45')
     setCFrom('BlackBiz <blackbiz@hustleportal.online>'); setCProvider('RESEND')
+    setComposerMode('new'); setAddSource(''); setSourcePick('opened'); setSourceAud(null); setCTheme('engine')
+  }
+
+  // Add email: the composer aimed at a campaign that already ran. Sender,
+  // pace, lane and look ride over from its state; the audience step becomes
+  // that campaign's own history, sliced by opens. Nothing here can send —
+  // the queue it builds is born paused like every other.
+  function openAdd(key: string) {
+    const info = campaigns.find((c) => c.tag === key)
+    setComposerMode('add')
+    setAddSource(key)
+    setSourcePick('opened')
+    setSourceAud(null)
+    setCName(`${key}-followup`)
+    setCFrom(info?.state?.from || 'BlackBiz <blackbiz@hustleportal.online>')
+    setCPerHour(String(info?.state?.perHour || 45))
+    setCProvider(info?.state?.provider === 'SES' && sesOk ? 'SES' : 'RESEND')
+    setCTheme(info?.state?.theme || 'engine')
+    setCSubject(''); setCBody('')
+    setPickIds(new Set()); setPaste(''); setSystemPick(false); setAudienceSearch('')
+    setComposerStep('audience')
+    setComposerOpen(true)
   }
 
   function finishEstimate(n: number, perHour: number) {
@@ -335,13 +383,17 @@ export default function MailView() {
       toast({ title: 'Write the message', description: 'The draft needs a body before it can queue.', variant: 'destructive' })
       return
     }
+    if (composerMode === 'add' && !cName.trim()) {
+      toast({ title: 'Name the queue', description: 'It pre-fills from the campaign — keep it or make it yours.', variant: 'destructive' })
+      return
+    }
     if (pickCount === 0) {
-      toast({ title: 'Pick an audience', description: 'Select contacts or paste addresses first.', variant: 'destructive' })
+      toast({ title: 'Pick an audience', description: composerMode === 'add' ? 'Choose who gets it from the campaign history, or paste addresses.' : 'Select contacts or paste addresses first.', variant: 'destructive' })
       return
     }
     setCreating(true)
     try {
-      const res = await api<{ campaign: string; queued: number; personalized?: boolean; skippedSuppressed: number; skippedDuplicate: number; invalid: string[] }>('/api/admin/exec/campaigns', {
+      const res = await api<{ campaign: string; queued: number; personalized?: boolean; followUp?: boolean; reopened?: boolean; skippedSuppressed: number; skippedDuplicate: number; invalid: string[] }>('/api/admin/exec/campaigns', {
         method: 'POST',
         body: JSON.stringify({
           campaign: cName.trim() || cSubject.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40),
@@ -350,15 +402,18 @@ export default function MailView() {
           from: cFrom.trim(),
           perHour: Number(cPerHour),
           provider: cProvider,
+          theme: cTheme === 'engine' ? undefined : cTheme,
           leads: [...pickIds],
           emails: pastedEmails,
-          ...(systemPick ? { audience: 'system', skipPaying: !systemIncludePaying } : {}),
+          ...(composerMode === 'new' && systemPick ? { audience: 'system', skipPaying: !systemIncludePaying } : {}),
+          ...(composerMode === 'add' ? { followUp: true, sourceCampaign: addSource, sourceFilter: sourcePick } : {}),
           personalize: personalizable || undefined,
         }),
       })
       const bits = [`${res.queued} contacts queued`]
       if (res.personalized) bits.push('each one greeted by name')
-      if (res.skippedDuplicate) bits.push(`${res.skippedDuplicate} already in this campaign`)
+      if (res.reopened) bits.push('queue re-paused — check the draft, then press Start')
+      if (res.skippedDuplicate) bits.push(`${res.skippedDuplicate} already queued there`)
       if (res.skippedSuppressed) bits.push(`${res.skippedSuppressed} unsubscribed or bounced, refused`)
       if (res.invalid.length) bits.push(`${res.invalid.length} invalid address${res.invalid.length === 1 ? '' : 'es'} dropped`)
       toast({ title: 'Queue built, nothing sent yet', description: `${bits.join(' · ')}. You press Start on the card when the draft is approved.` })
@@ -841,32 +896,41 @@ export default function MailView() {
                   </button>
                   {isOpen && (
                     <>
-                      {state && sum.queued > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-t">
-                          {state.status !== 'ACTIVE' && (
-                            <Button size="sm" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'start')}>
-                              {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                              Start sending
+                      <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-t flex-wrap">
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openAdd(key)}>
+                          <Plus className="h-3 w-3" /> Add email
+                        </Button>
+                        {state && sum.queued > 0 && (
+                          <>
+                            {state.status !== 'ACTIVE' && (
+                              <Button size="sm" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'start')}>
+                                {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                Start sending
+                              </Button>
+                            )}
+                            {state.status === 'ACTIVE' && (
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'pause')}>
+                                {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
+                                Pause
+                              </Button>
+                            )}
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openEdit(key)}>
+                              <Pencil className="h-3 w-3" /> Edit draft
                             </Button>
-                          )}
-                          {state.status === 'ACTIVE' && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={actingTag === key} onClick={() => control(key, 'pause')}>
-                              {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
-                              Pause
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-rose-500 border-rose-500/40 hover:bg-rose-500/10" disabled={actingTag === key} onClick={() => control(key, 'cancel')}>
+                              {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                              Cancel
                             </Button>
-                          )}
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openEdit(key)}>
-                            <Pencil className="h-3 w-3" /> Edit draft
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-rose-500 border-rose-500/40 hover:bg-rose-500/10" disabled={actingTag === key} onClick={() => control(key, 'cancel')}>
-                            {actingTag === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
-                            Cancel
-                          </Button>
-                          <span className="text-[11px] text-muted-foreground ml-auto hidden sm:block">
-                            {state.status === 'ACTIVE' ? 'Engine is moving. Check back or keep this page open.' : 'Draft gate: nothing sends until you press Start.'}
-                          </span>
-                        </div>
-                      )}
+                          </>
+                        )}
+                        <span className="text-[11px] text-muted-foreground ml-auto hidden sm:block">
+                          {state && sum.queued > 0
+                            ? state.status === 'ACTIVE'
+                              ? 'Engine is moving. Check back or keep this page open.'
+                              : 'Draft gate: nothing sends until you press Start.'
+                            : 'Add another letter to this campaign — it waits paused until you Start it.'}
+                        </span>
+                      </div>
                       <div className="divide-y border-t max-h-80 overflow-y-auto hp-scroll">
                         {rows.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-4 text-center">No sends recorded under this label.</p>
@@ -1337,15 +1401,65 @@ export default function MailView() {
       <Dialog open={composerOpen} onOpenChange={(o) => { if (!o) setComposerOpen(false) }}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hp-scroll">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-brand" /> New campaign</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-brand" /> {composerMode === 'add' ? `Add email — ${campaignLabel(addSource)}` : 'New campaign'}</DialogTitle>
             <DialogDescription>
               {composerStep === 'audience'
-                ? 'Pick the audience. The whole platform, your pipeline contacts, or paste any list.'
+                ? composerMode === 'add'
+                  ? `Pull the people ${campaignLabel(addSource)} already reached — sliced by who opened — or paste fresh addresses.`
+                  : 'Pick the audience. The whole platform, your pipeline contacts, or paste any list.'
                 : 'Write the message and set the pace. Review the draft before it queues.'}
             </DialogDescription>
           </DialogHeader>
 
           {composerStep === 'audience' ? (
+            composerMode === 'add' ? (
+              <div className="space-y-3">
+                {sourceAud === null ? (
+                  <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
+                ) : !sourceAud.found ? (
+                  <p className="text-xs text-muted-foreground rounded-lg border p-3">
+                    Nothing was ever sent under this campaign yet — paste addresses below instead.
+                  </p>
+                ) : (
+                  <div className="space-y-2" role="radiogroup" aria-label="Who gets this email">
+                    {([
+                      { id: 'opened', title: 'Opened it', n: sourceAud.opened, blurb: 'The warm list — they read the last one. Best odds for a follow-up.' },
+                      { id: 'unopened', title: 'Never opened', n: sourceAud.unopened, blurb: 'A fresh subject line gives the quiet ones a second chance.' },
+                      { id: 'all', title: 'Everyone reached', n: sourceAud.total, blurb: 'Opened and not opened — everyone this campaign actually delivered to.' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={sourcePick === opt.id}
+                        onClick={() => setSourcePick(opt.id)}
+                        className={`w-full rounded-lg border p-3 text-left transition ${sourcePick === opt.id ? 'border-[var(--brand)] bg-[var(--brand)]/5' : 'hover:bg-muted/40'}`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-medium">{opt.title}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{opt.n} contact{opt.n === 1 ? '' : 's'}</span>
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground mt-0.5">{opt.blurb}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="c-paste">Or paste extra addresses</Label>
+                  <Textarea
+                    id="c-paste"
+                    rows={3}
+                    value={paste}
+                    onChange={(e) => setPaste(e.target.value)}
+                    placeholder={'one@business.co.za\ntwo@other.co.za'}
+                  />
+                  <p className="text-[11px] text-muted-foreground">One per line or separated by commas. Bounced, complained and unsubscribed addresses are refused automatically.</p>
+                </div>
+                <Button className="w-full" disabled={pickCount === 0} onClick={() => setComposerStep('message')}>
+                  Continue with {pickCount} recipient{pickCount === 1 ? '' : 's'}
+                </Button>
+              </div>
+            ) : (
             <div className="space-y-3">
               <label
                 className={`rounded-lg border p-3 flex items-start gap-2.5 cursor-pointer transition ${systemPick ? 'border-[var(--brand)] bg-[var(--brand)]/5' : 'hover:bg-muted/40'}`}
@@ -1425,12 +1539,18 @@ export default function MailView() {
                 Continue with {pickCount} recipient{pickCount === 1 ? '' : 's'}
               </Button>
             </div>
+            )
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="c-name">Campaign name</Label>
+                  <Label htmlFor="c-name">{composerMode === 'add' ? 'Queue name' : 'Campaign name'}</Label>
                   <Input id="c-name" value={cName} onChange={(e) => setCName(e.target.value)} placeholder="blackbiz-intro" />
+                  {composerMode === 'add' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Queues as its own card with its own Start button. Set it back to the campaign&apos;s own name and it joins that queue instead.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="c-pace">Pace</Label>
@@ -1476,6 +1596,18 @@ export default function MailView() {
                 )}
               </div>
               <div className="space-y-1.5">
+                <Label>The look</Label>
+                <Select value={cTheme} onValueChange={(v) => setCTheme(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="engine">Engine default (Gold Rush)</SelectItem>
+                    {LOOKS.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="c-subject">Subject</Label>
                 <Input id="c-subject" value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Your next client is one search away" />
               </div>
@@ -1488,6 +1620,9 @@ export default function MailView() {
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
                 <p className="font-medium text-[13px]">Before it queues</p>
                 <p className="text-muted-foreground">{pickCount} recipients · {cPerHour} per hour · {cProvider === 'SES' ? 'SES lane' : 'free lane'} · finishes in {finishEstimate(pickCount, Number(cPerHour))}</p>
+                {composerMode === 'add' && (
+                  <p className="text-muted-foreground">Queues under <span className="font-medium text-foreground">{cName.trim() || '—'}</span> — a new letter always re-pauses the queue until you approve it.</p>
+                )}
                 <p className="text-muted-foreground">Every email carries a one tap unsubscribe link and open tracking. Bounces and spam complaints remove the address automatically.</p>
                 <p className="text-foreground/80 font-medium">Nothing sends yet. The queue waits paused, you press Start on the card once the draft is approved.</p>
               </div>

@@ -11,7 +11,12 @@ import { systemBlastAudience, fillMergeTags } from '@/lib/audience'
  * Campaign queues, the bulk path for outreach at real volume.
  *
  * POST   create a queue (recipients are staged as QUEUED rows; NOTHING sends
- *        until the operator presses Start, the draft gate is structural)
+ *        until the operator presses Start, the draft gate is structural).
+ *        followUp: true pulls the audience from a campaign that already ran
+ *        (sourceCampaign + sourceFilter: opened | unopened | all) — the boss's
+ *        own "add an email" on any queue. A new letter always re-arms the
+ *        draft gate: an existing queue flips back to PAUSED until Start is
+ *        pressed by a human who saw THIS draft.
  * GET    every campaign with its queue state and honest counters
  * PATCH  start / pause / resume / cancel a queue, removeRow to pull ONE
  *        queued email out of the list with a click, or editDraft to rewrite
@@ -34,6 +39,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const MAX_QUEUE = 5000
 const MAX_HOURLY = 600
 const DEFAULT_HOURLY = 45
+// The looks a campaign letter can ride. One catalogue, validated wherever a
+// draft is accepted (POST) or rewritten (PATCH editDraft).
+const THEMES = ['boardroom', 'goldrush', 'nightshift', 'plain']
 
 function slugTag(raw?: string): string {
   const s = (raw || '').trim().toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
@@ -45,8 +53,9 @@ export async function POST(req: NextRequest) {
   if (!gate.ok) return gate.res
 
   let payload: {
-    campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string
+    campaign?: string; subject?: string; body?: string; from?: string; perHour?: number; provider?: string; theme?: string
     leads?: string[]; emails?: string[]; audience?: string; skipPaying?: boolean; personalize?: boolean
+    followUp?: boolean; sourceCampaign?: string; sourceFilter?: string
   }
   try {
     payload = await req.json()
@@ -77,6 +86,15 @@ export async function POST(req: NextRequest) {
     : existingState?.provider || 'RESEND'
   if (provider === 'SES' && !isSesConfigured()) {
     return NextResponse.json({ error: 'SES lane is not configured yet. Add the SES API keys to the environment first, or use the free lane.' }, { status: 400 })
+  }
+
+  // The look this batch rides (engine default when omitted) — the same
+  // catalogue Edit draft offers, so a queue is born wearing what was picked.
+  const theme = payload.theme == null || payload.theme === ''
+    ? undefined
+    : (THEMES.includes(String(payload.theme)) ? String(payload.theme) : undefined)
+  if (payload.theme != null && payload.theme !== '' && !theme) {
+    return NextResponse.json({ error: 'Unknown look. Use boardroom, goldrush, nightshift or plain.' }, { status: 400 })
   }
 
   // Recipients from pipeline leads, same access wall as every lead action.
@@ -113,6 +131,40 @@ export async function POST(req: NextRequest) {
       if (!wanted.has(r.email)) wanted.set(r.email, { email: r.email, leadId: null })
     }
   }
+  // Follow-up mode: the audience is pulled from a campaign that already ran —
+  // the people it actually reached (its SENT rows), sliced by whether they
+  // opened. This is the boss's own handle on "add an email to the kloofstreet
+  // campaign": the list comes from the campaign's own history, so nobody gets
+  // pasted by hand and no blast-exclusion law blocks the crew that already
+  // knows the sender. Suppression is still checked here AND again at send time.
+  const followUp = payload.followUp === true
+  if (followUp && !payload.sourceCampaign?.trim()) {
+    return NextResponse.json({ error: 'sourceCampaign is required when followUp is true.' }, { status: 400 })
+  }
+  const sourceTag = followUp ? slugTag(payload.sourceCampaign) : ''
+  const sourceFilter: 'opened' | 'unopened' | 'all' =
+    payload.sourceFilter === 'opened' || payload.sourceFilter === 'unopened' ? payload.sourceFilter : 'all'
+  if (followUp) {
+    const sentRows = await db.emailLog.findMany({
+      where: { campaign: sourceTag, status: 'SENT' },
+      select: { toEmail: true, openedAt: true },
+    })
+    if (sentRows.length === 0 && wanted.size === 0) {
+      return NextResponse.json({ error: `Nothing was ever sent under ${sourceTag} — there is no audience to pull from. Paste addresses instead.` }, { status: 400 })
+    }
+    // One row per address; when an address appears twice, opened wins.
+    // An empty history is not fatal on its own: pasted or lead addresses
+    // already staged still carry the queue.
+    if (sentRows.length > 0) {
+      const reached = new Map<string, boolean>()
+      for (const r of sentRows) reached.set(r.toEmail, reached.get(r.toEmail) || Boolean(r.openedAt))
+      for (const [email, opened] of reached) {
+        if (sourceFilter === 'opened' && !opened) continue
+        if (sourceFilter === 'unopened' && opened) continue
+        if (!wanted.has(email)) wanted.set(email, { email, leadId: null })
+      }
+    }
+  }
 
   if (wanted.size === 0) {
     return NextResponse.json({ error: 'No valid recipients. Unlock contacts in Leads first, or paste addresses.' }, { status: 400 })
@@ -124,7 +176,15 @@ export async function POST(req: NextRequest) {
   const emails = [...wanted.keys()]
   const [suppressedRows, existingRows] = await Promise.all([
     db.suppression.findMany({ where: { email: { in: emails } }, select: { email: true } }),
-    db.emailLog.findMany({ where: { campaign: tag, toEmail: { in: emails }, status: { in: ['QUEUED', 'SENT'] } }, select: { toEmail: true } }),
+    // A follow-up under the SAME tag is a deliberate second touch: the SENT
+    // rows it dedups against are email one, and email two is the point. Only
+    // still-QUEUED rows are refused, so nobody holds two copies of the new
+    // letter while the first is still pending. Any other queue keeps the
+    // full law — QUEUED or SENT under the target tag means already covered.
+    db.emailLog.findMany({
+      where: { campaign: tag, toEmail: { in: emails }, status: followUp && tag === sourceTag ? 'QUEUED' : { in: ['QUEUED', 'SENT'] } },
+      select: { toEmail: true },
+    }),
   ])
   const suppressed = new Set(suppressedRows.map((r) => r.email))
   const already = new Set(existingRows.map((r) => r.toEmail))
@@ -186,17 +246,32 @@ export async function POST(req: NextRequest) {
     from,
     createdAt: new Date().toISOString(),
   }
-  await writeCampaignState(tag, { ...existing, perHour, from, provider })
+  // The follow-up gate: a new letter joining a queue that already ran (or is
+  // still running) re-arms the draft gate — the queue goes back to PAUSED and
+  // nothing sends until Start is pressed by a human who saw THIS draft.
+  const reopened = followUp && existing.status !== 'PAUSED'
+  const nextState: CampaignState = {
+    ...existing,
+    perHour,
+    from,
+    provider,
+    ...(theme ? { theme } : {}),
+    ...(reopened ? { status: 'PAUSED' as const } : {}),
+  }
+  await writeCampaignState(tag, nextState)
 
   return NextResponse.json({
     ok: true,
     campaign: tag,
     queued: toQueue.length,
     personalized: personal && toQueue.length > 0,
+    followUp,
+    sourceTag: followUp ? sourceTag : undefined,
+    reopened,
     skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
     skippedDuplicate: existingRows.length,
     invalid,
-    state: { ...existing, perHour, from, provider },
+    state: nextState,
   })
 }
 
@@ -314,7 +389,6 @@ export async function PATCH(req: NextRequest) {
       ? undefined
       : Math.max(1, Math.min(MAX_HOURLY, Math.round(Number(payload.perHour) || DEFAULT_HOURLY)))
     const nextFrom = payload.from === undefined ? undefined : normalizeCampaignFrom(payload.from)
-    const THEMES = ['boardroom', 'goldrush', 'nightshift', 'plain']
     const nextTheme = payload.theme === undefined || payload.theme === null || payload.theme === ''
       ? undefined
       : (THEMES.includes(String(payload.theme)) ? String(payload.theme) : undefined)
