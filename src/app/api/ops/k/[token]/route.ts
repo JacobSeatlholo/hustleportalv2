@@ -20,6 +20,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     select: {
       id: true, toEmail: true, status: true, error: true, sentAt: true,
       openedAt: true, openCount: true, leadId: true, subject: true, createdAt: true,
+      body: true, // greeting-per-row was baked at queue time: the body is the greeting ground truth
     },
     orderBy: { sentAt: 'asc' },
   })
