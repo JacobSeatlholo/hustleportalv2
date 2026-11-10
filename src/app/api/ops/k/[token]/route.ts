@@ -110,7 +110,7 @@ async function collectFacts() {
   const leadRowsByEmail = openerEmails.length > 0
     ? await db.lead.findMany({ where: { email: { in: openerEmails } }, select: { id: true, company: true, email: true } })
     : []
-  const leadByEmail = new Map(leadRowsByEmail.map((l) => [l.email.toLowerCase().trim(), l]))
+  const leadByEmail = new Map(leadRowsByEmail.map((l) => [(l.email || '').toLowerCase().trim(), l]))
 
   return {
     blondie: {
@@ -221,7 +221,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ token: string
   const leadRowsByEmail = [...byInbox.keys()].length > 0
     ? await db.lead.findMany({ where: { email: { in: [...byInbox.keys()] } }, select: { id: true, company: true, email: true } })
     : []
-  const leadByEmail = new Map(leadRowsByEmail.map((l) => [l.email.toLowerCase().trim(), l]))
+  const leadByEmail = new Map(leadRowsByEmail.map((l) => [(l.email || '').toLowerCase().trim(), l]))
 
   const alreadyRows = await db.emailLog.findMany({
     where: { campaign: FOLLOWUP_TAG, status: { in: ['QUEUED', 'SENT'] } },
