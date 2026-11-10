@@ -31,7 +31,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Megaphone, MailCheck, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, X, Pencil, Palette, Eye } from 'lucide-react'
+import { Loader2, Megaphone, MailCheck, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, X, Pencil, Palette, Eye, Sparkles } from 'lucide-react'
+import { requestUpgrade } from './useUpgrade'
 
 /** One "Sending from" choice: the account identity (id '') or a workspace. */
 export interface SenderProfile {
@@ -49,7 +50,10 @@ const LOOKS: { id: MailThemeId; label: string; dot: string; blurb: string }[] = 
 ]
 
 
-export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] }) {
+/** `paid` comes from the mail section: paying members run campaigns as-is,
+ *  free plans see the same card but the buttons hand them the ONE upgrade
+ *  prompt before anything works (the server's 402 backs this up either way). */
+export default function UserCampaigns({ profiles, paid = true }: { profiles: SenderProfile[]; paid?: boolean }) {
   const { bumpRefresh } = useHp()
   const { toast } = useToast()
   const [campaigns, setCampaigns] = useState<CampaignInfo[]>([])
@@ -98,15 +102,21 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
       setLoaded(true)
     }
   }, [])
-  useEffect(() => { load() }, [load])
+  // Free plans never call the gated endpoints: the card shows its upgrade
+  // prompt instead, and no request fires until they actually upgrade.
+  useEffect(() => {
+    if (!paid) { setLoaded(true); return }
+    load()
+  }, [load, paid])
 
   // The account's campaign logo, loaded once — both the composer and Edit
   // draft offer it, and a queue stores only the hosted url.
   useEffect(() => {
+    if (!paid) return
     api<{ logoUrl: string | null }>('/api/campaign-logo')
       .then((res) => setBrandLogoUrl(res.logoUrl))
       .catch(() => setBrandLogoUrl(null))
-  }, [])
+  }, [paid])
 
   // Upload / remove the account's campaign logo (PNG/JPG, email-safe raster).
   async function uploadBrandLogo(file: File) {
@@ -383,12 +393,27 @@ export default function UserCampaigns({ profiles }: { profiles: SenderProfile[] 
             Batch outreach to your contacts, paced like a human. Build the list, review the draft, press Start. Replies come straight back to your inbox.
           </p>
         </div>
-        <Button size="sm" className="gap-1 shrink-0" onClick={() => { resetComposer(); setOpen(true) }}>
+        <Button
+          size="sm" className="gap-1 shrink-0"
+          onClick={() => { if (!paid) { requestUpgrade('campaigns'); return } resetComposer(); setOpen(true) }}
+        >
           <Plus className="h-3.5 w-3.5" /> Begin campaign
         </Button>
       </div>
 
-      {!loaded ? (
+      {!paid ? (
+        <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm min-w-0">
+            <p className="font-medium">Campaigns run on the paid plans</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Batch email your own contacts, paced like a human, with your business name on every message and read receipts on every send. Upgrade and Begin campaign opens straight away.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="border-brand/50 shrink-0" onClick={() => requestUpgrade('campaigns')}>
+            <Sparkles className="h-3.5 w-3.5 mr-1 text-brand" /> See the plans
+          </Button>
+        </div>
+      ) : !loaded ? (
         <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-12 rounded-md bg-white/5 animate-pulse" />)}</div>
       ) : tags.length === 0 ? (
         <p className="text-xs text-muted-foreground py-4 text-center">

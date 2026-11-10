@@ -1124,10 +1124,11 @@ export default function MailView() {
         </div>
       )}
 
-      {/* Campaigns for upgraded members (non-exec seats): their own queues,
-          their own profiles, read receipts included. The transport lane never
-          shows here — the engine picks the right pipe on its own. */}
-      {!isAdmin && paid && <UserCampaigns profiles={profiles} />}
+      {/* Campaigns for every non-exec seat: the card is always visible so the
+          next step is never a secret. Paying members run it as-is; free plans
+          get the honest upgrade prompt the moment they reach for it. The
+          transport lane never shows here — the engine picks the pipe itself. */}
+      {!isAdmin && <UserCampaigns profiles={profiles} paid={paid} />}
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Compose */}

@@ -51,6 +51,17 @@ export const UPGRADE_COPY: Record<string, UpgradeCopy> = {
       'AI drafts grounded in your profile',
     ],
   },
+  campaigns: {
+    notice: 'Campaigns are part of the paid plans. Upgrade and Begin campaign opens.',
+    title: 'Put your outreach on rails',
+    body:
+      'Campaigns email your whole client list for you, paced like a human, with your business name on every message and read receipts on every send. You write the letter once, review the draft, and nothing goes out until you press Start. This one lives on the paid plans.',
+    perks: [
+      'Batch emails to your own contacts',
+      'Your name and logo on every send',
+      'Read receipts: see who opened',
+    ],
+  },
   logo: {
     notice: 'Your logo on every invoice lives on Operator.',
     title: 'Put your name on every invoice',
