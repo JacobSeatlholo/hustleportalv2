@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { jitsiMeetLink } from '@/lib/meet'
 import { gcalInsert } from '@/lib/gcal'
+import { sendAppointmentInvite, validInviteEmail } from '@/lib/appointmentInvite'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -17,6 +18,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data: Record<string, unknown> = {}
   if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim()
   if ('clientName' in body) data.clientName = body.clientName || null
+  if ('clientEmail' in body) {
+    const email = validInviteEmail(String(body.clientEmail || ''))
+    if (body.clientEmail && body.clientEmail.trim() && !email) {
+      return NextResponse.json({ error: "That email doesn't look right — check it or leave the field empty." }, { status: 400 })
+    }
+    data.clientEmail = email
+    // A new address means a fresh invite is welcome again.
+    if (email !== existing.clientEmail) data.inviteSentAt = null
+  }
   if ('notes' in body) data.notes = body.notes || null
   if (body.startsAt) {
     const d = new Date(body.startsAt)
@@ -26,6 +36,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('endsAt' in body) data.endsAt = body.endsAt ? new Date(body.endsAt) : null
   if (body.regenerateMeetLink) data.meetLink = jitsiMeetLink(body.title || existing.title)
   const appointment = await db.appointment.update({ where: { id }, data })
+
+  // Re-send (or send for the first time) the meeting-link invite on demand —
+  // the "Email invite" chip on an upcoming row. Honest report back, never a
+  // thrown error: the appointment edit itself already succeeded.
+  let invite: { sent: boolean; error?: string; to: string } | null = null
+  if (body.sendInvite === true) {
+    try {
+      invite = await sendAppointmentInvite(userId, id)
+    } catch (e) {
+      invite = { sent: false, error: e instanceof Error ? e.message : 'Invite failed to send.', to: String(body.clientEmail || existing.clientEmail || '') }
+    }
+  }
 
   // If the user moved the event and GCal was previously synced, push the update (best-effort)
   if ((data.startsAt || data.title) && existing.gcalEventId) {
@@ -49,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       // non-fatal
     }
   }
-  return NextResponse.json({ appointment })
+  return NextResponse.json({ appointment, invite })
 }
 
 // DELETE /api/appointments/[id]

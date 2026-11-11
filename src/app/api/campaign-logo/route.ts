@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { planState, upgradeJson } from '@/lib/limits'
+import { stripLogoBackground } from '@/lib/logostrip'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,14 @@ export const dynamic = 'force-dynamic'
  * SVG and data: URIs outright, so the logo is stored as a data URL but always
  * SERVED through the public /api/campaign-logo/[u] route as a real image
  * response the mail clients will actually fetch.
+ *
+ * THE WHITE-BOX LAW: most logos arrive as a fine mark on a flat white
+ * rectangle, and on the ink banner that rectangle reads as a cheap white box.
+ * Every upload therefore goes through stripLogoBackground — a flat near-white
+ * background becomes transparent (flood-fill from the border, so white inside
+ * the mark survives), the mark is trimmed to its edges and re-encoded as a
+ * compact PNG. A logo designed on colour passes through untouched: the
+ * stripper only acts when the border is actually near-white.
  */
 
 const KEY = 'CAMPAIGN_LOGO'
@@ -44,14 +53,30 @@ export async function PUT(req: NextRequest) {
       { status: 400 },
     )
   }
-  const dataUrl = parsed.dataUrl
+  // The white-box law, applied at the door: strip a flat near-white background
+  // before anything is stored. A failed strip (odd image, size cap) is never an
+  // error — the logo stores exactly as uploaded instead.
+  let dataUrl = parsed.dataUrl
+  let stripped = false
+  try {
+    const m = dataUrl.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/)
+    if (m) {
+      const result = await stripLogoBackground(Buffer.from(m[2], 'base64'))
+      if (result.stripped && result.png && result.png.length > 0) {
+        dataUrl = `data:image/png;base64,${result.png.toString('base64')}`
+        stripped = true
+      }
+    }
+  } catch {
+    // strip is a favour, never a gate
+  }
   await db.userSetting.upsert({
     where: { userId_key: { userId, key: KEY } },
     create: { userId, key: KEY, value: dataUrl },
     update: { value: dataUrl },
   })
   // The version query busts email-client caches when the logo changes.
-  return NextResponse.json({ logoUrl: logoPublicUrl(userId, dataUrl) })
+  return NextResponse.json({ logoUrl: logoPublicUrl(userId, dataUrl), stripped })
 }
 
 // DELETE /api/campaign-logo → campaigns fall back to the initials chip.

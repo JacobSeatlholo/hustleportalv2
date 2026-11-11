@@ -415,10 +415,12 @@ model Appointment {
   projectId   String?
   title       String
   clientName  String?
+  clientEmail String? // the person they are meeting — set here, the meeting link lands in their inbox the moment the appointment saves
   notes       String?
   startsAt    DateTime
   endsAt      DateTime?
   meetLink      String? // Jitsi link (meet.ts)
+  inviteSentAt  DateTime? // stamped when the meeting-link email actually went out; null = no email yet (or it failed)
   source        String    @default("MANUAL") // MANUAL | VOICE | ICS | BOOKING (guest booked via a booking link)
   gcalEventId   String? // set when synced to Google Calendar
   externalId    String? // iCalendar UID or feed identity — the import/sync dedupe key

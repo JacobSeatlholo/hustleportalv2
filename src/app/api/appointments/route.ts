@@ -4,6 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { resolveProject } from '@/lib/workspace'
 import { jitsiMeetLink } from '@/lib/meet'
 import { gcalInsert } from '@/lib/gcal'
+import { sendAppointmentInvite, validInviteEmail } from '@/lib/appointmentInvite'
 
 // GET /api/appointments?scope=upcoming|past
 export async function GET(req: NextRequest) {
@@ -31,6 +32,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A valid date & time is required.' }, { status: 400 })
   }
   const endsAt = body.endsAt ? new Date(body.endsAt) : null
+  // The guest's inbox: optional, but if it is set it must be real — the
+  // whole point of the field is that the link lands there the moment this
+  // appointment saves.
+  const clientEmail = validInviteEmail(String(body.clientEmail || ''))
+  if (body.clientEmail && body.clientEmail.trim() && !clientEmail) {
+    return NextResponse.json({ error: "That email doesn't look right — check it or leave the field empty." }, { status: 400 })
+  }
   const project = await resolveProject(userId, body.projectId)
   const meetLink = body.meetLink || jitsiMeetLink(title)
   const appointment = await db.appointment.create({
@@ -39,6 +47,7 @@ export async function POST(req: NextRequest) {
       projectId: project.id,
       title,
       clientName: body.clientName || null,
+      clientEmail,
       notes: body.notes || null,
       startsAt,
       endsAt,
@@ -63,7 +72,18 @@ export async function POST(req: NextRequest) {
   } catch {
     // sync is optional, the ICS/template link fallbacks always work
   }
-  return NextResponse.json({ appointment: { ...appointment, gcalEventId }, gcalSynced: !!gcalEventId }, { status: 201 })
+  // The instant invite: an email on the appointment means the meeting link
+  // is in the guest's inbox before the save dialog even closes. The booking
+  // is already safe, so a mail failure reports honestly instead of failing.
+  let invite: { sent: boolean; error?: string; to: string } | null = null
+  if (clientEmail) {
+    try {
+      invite = await sendAppointmentInvite(userId, appointment.id)
+    } catch (e) {
+      invite = { sent: false, error: e instanceof Error ? e.message : 'Invite failed to send.', to: clientEmail }
+    }
+  }
+  return NextResponse.json({ appointment: { ...appointment, gcalEventId }, gcalSynced: !!gcalEventId, invite }, { status: 201 })
 }
 
 function notes_body(notes: unknown, meetLink: string) {

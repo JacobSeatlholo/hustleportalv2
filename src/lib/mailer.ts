@@ -57,6 +57,10 @@ export type OutgoingMail = {
    *  exactly as always (text only); a branded look rides the same body as html
    *  alongside the plain text, on BOTH member lanes (their Gmail + the engine). */
   theme?: MailThemeId
+  /** Optional sender brand (their uploaded campaign logo + business name) —
+   *  dresses the themed chrome on member lanes. The appointment invite rides
+   *  this so a client gets mail that looks like it came from THAT business. */
+  brand?: MailBrand
 }
 
 /**
@@ -66,13 +70,16 @@ export type OutgoingMail = {
  * only the quiet "Delivered by HustlePortal" line on engine sends, which is
  * part of the body text and renders as the closing block). Pure function.
  */
-export function memberThemedHtml(body: string, theme?: MailThemeId, standardCharacter = true): string | undefined {
+export function memberThemedHtml(body: string, theme?: MailThemeId, standardCharacter = true, brand?: MailBrand): string | undefined {
   if (!theme || theme === 'plain') return undefined
   // Member sends ride the standard character law: blank-shirt badger, neutral
   // HP chip — the BH vest only rides HustlePortal's own mail and the boss's
   // own unbranded sends, never a member's. The replay path passes the flag
   // through so an exec's own rows replay the BH chrome they actually wore.
-  return themedEmailHtml(body, { theme, footerLines: [], standardCharacter })
+  // A member WITH an uploaded campaign logo may pass their brand: their client
+  // then gets mail that looks like it came from THEIR business (the Task 185
+  // brand law, applied to the member lane), never our mark.
+  return themedEmailHtml(body, { theme, footerLines: [], standardCharacter, ...(brand ? { brand } : {}) })
 }
 
 /** The 1x1 open-tracker img, appended inside the html body when present. */
@@ -89,7 +96,7 @@ function appendOpenPixel(html: string, pixelUrl: string): string {
  * words stay word-for-word the same; only the wrapper is new. Pure function.
  */
 function memberHtmlWithPixel(mail: OutgoingMail): string | undefined {
-  const themed = memberThemedHtml(mail.body, mail.theme)
+  const themed = memberThemedHtml(mail.body, mail.theme, true, mail.brand)
   if (themed) return mail.pixelUrl ? appendOpenPixel(themed, mail.pixelUrl) : themed
   if (!mail.pixelUrl) return undefined
   return (
@@ -542,7 +549,7 @@ async function sendViaUserGmail(
       secure: true,
       auth: { user: creds.user, pass: creds.appPassword },
     })
-    const themed = memberThemedHtml(mail.body, mail.theme)
+    const themed = memberThemedHtml(mail.body, mail.theme, true, mail.brand)
     await transport.sendMail({
       from: `"HustlePortal" <${creds.user}>`,
       to: mail.to,

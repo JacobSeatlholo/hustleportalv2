@@ -71,10 +71,12 @@ export interface Appointment {
   id: string
   title: string
   clientName: string | null
+  clientEmail: string | null
   notes: string | null
   startsAt: string
   endsAt: string | null
   meetLink: string | null
+  inviteSentAt: string | null
   source: string
   gcalEventId: string | null
   externalId?: string | null

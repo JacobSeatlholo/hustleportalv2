@@ -17,7 +17,7 @@ import { bookingPhoneFromNotes, bookingVenueFromNotes, waReminderLink } from '@/
 import ScanDiaryDialog from './ScanDiaryDialog'
 import BookingLinksCard from './BookingLinksCard'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle, Apple as AppleIcon,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle, Mail, Apple as AppleIcon,
 } from 'lucide-react'
 
 type SpeechRecognitionLike = {
@@ -208,6 +208,7 @@ export default function CalendarView() {
 
   const [title, setTitle] = useState('')
   const [clientName, setClientName] = useState('')
+  const [clientEmail, setClientEmail] = useState('')
   const [when, setWhen] = useState('')
   const [duration, setDuration] = useState(60)
   const [notes, setNotes] = useState('')
@@ -291,30 +292,50 @@ export default function CalendarView() {
     setCreating(true)
     try {
       const startsAt = new Date(when)
-      const res = await api<{ appointment: Appointment; gcalSynced: boolean }>('/api/appointments', {
+      const res = await api<{ appointment: Appointment; gcalSynced: boolean; invite: { sent: boolean; error?: string; to: string } | null }>('/api/appointments', {
         method: 'POST',
         body: JSON.stringify({
-          title, clientName, notes, meetLink: meetLink.trim() || undefined, source,
+          title, clientName, clientEmail: clientEmail.trim() || undefined, notes, meetLink: meetLink.trim() || undefined, source,
           projectId: activeProjectId,
           startsAt: startsAt.toISOString(),
           endsAt: new Date(startsAt.getTime() + duration * 60000).toISOString(),
         }),
       })
-      toast({
-        title: 'Appointment saved ✓',
-        description: res.gcalSynced
-          ? 'Synced to Google Calendar.'
+      const inviteNote = res.invite?.sent
+        ? `The meeting link is on its way to ${res.invite.to}.`
+        : res.invite && !res.invite.sent
+          ? `Saved — but the invite email failed: ${res.invite.error || 'try "Email invite" on the appointment.'}`
           : meetLink.trim()
             ? `Your meeting link is on the invite: ${res.appointment.meetLink}`
-            : `Backup meeting link created: ${res.appointment.meetLink}`,
+            : `Backup meeting link created: ${res.appointment.meetLink}`
+      toast({
+        title: 'Appointment saved ✓',
+        description: res.gcalSynced ? `Synced to Google Calendar. ${inviteNote}` : inviteNote,
       })
-      setTitle(''); setClientName(''); setWhen(''); setNotes(''); setMeetLink(''); setTranscript('')
+      setTitle(''); setClientName(''); setClientEmail(''); setWhen(''); setNotes(''); setMeetLink(''); setTranscript('')
       bumpRefresh()
       load()
     } catch (e) {
       toast({ title: 'Could not save', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function resendInvite(id: string) {
+    try {
+      const res = await api<{ invite: { sent: boolean; error?: string; to: string } | null }>(`/api/appointments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sendInvite: true }),
+      })
+      if (res.invite?.sent) {
+        toast({ title: 'Invite sent ✓', description: `The meeting link is on its way to ${res.invite.to}.` })
+      } else {
+        toast({ title: 'Invite not sent', description: res.invite?.error || 'Try again in a moment.', variant: 'destructive' })
+      }
+      load()
+    } catch (e) {
+      toast({ title: 'Could not send the invite', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     }
   }
 
@@ -395,6 +416,11 @@ export default function CalendarView() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="a-email">Their email (optional)</Label>
+              <Input id="a-email" type="email" inputMode="email" placeholder="sipho@example.co.za" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">They get the meeting link in their inbox the moment you save.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="a-when">Date &amp; time</Label>
               <Input id="a-when" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
             </div>
@@ -421,7 +447,7 @@ export default function CalendarView() {
 
         {/* Lists */}
         <div className="lg:col-span-3 space-y-4">
-          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} />
+          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} onInvite={resendInvite} />
           <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} past />
         </div>
       </div>
@@ -447,12 +473,13 @@ function SparkleIcon() {
   return <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" /></svg>
 }
 
-function Section({ title, loading, empty, appts, onDelete, past = false }: {
+function Section({ title, loading, empty, appts, onDelete, onInvite, past = false }: {
   title: string
   loading: boolean
   empty: string
   appts: Appointment[]
   onDelete: (id: string) => void
+  onInvite?: (id: string) => void
   past?: boolean
 }) {
   const { toast } = useToast()
@@ -470,10 +497,13 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{a.title}</p>
-                  <p className="text-xs text-muted-foreground">{localDT(a.startsAt)}{a.clientName ? ` · ${a.clientName}` : ''}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {localDT(a.startsAt)}{a.clientName ? ` · ${a.clientName}` : ''}{a.clientEmail ? ` · ${a.clientEmail}` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {a.source === 'VOICE' && <Badge variant="outline" className="text-[10px] border-brand/40 text-brand"><Mic className="h-2.5 w-2.5 mr-0.5" />VOICE</Badge>}
+                  {a.inviteSentAt && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500"><Mail className="h-2.5 w-2.5 mr-0.5" />Invite sent</Badge>}
                   {a.gcalEventId && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">GCal</Badge>}
                 </div>
               </div>
@@ -505,6 +535,15 @@ function Section({ title, loading, empty, appts, onDelete, past = false }: {
                 >
                   <AppleIcon className="h-3 w-3" /> Apple Calendar
                 </a>
+                {!past && onInvite && a.clientEmail && (
+                  <button
+                    onClick={() => onInvite(a.id)}
+                    title="Emails them the meeting link right now"
+                    className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand hover:bg-brand/20 transition"
+                  >
+                    <Mail className="h-3 w-3" /> {a.inviteSentAt ? 'Resend invite' : 'Email invite'}
+                  </button>
+                )}
                 {!past && bookingPhoneFromNotes(a.notes) && (
                   <a
                     href={waReminderLink({
