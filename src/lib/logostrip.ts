@@ -2,24 +2,27 @@
  * The white-box killer — campaign logos arrive with their background baked in.
  *
  * A member uploads the logo their designer exported: a great mark sitting on a
- * flat white rectangle. In the email banner (ink band) that rectangle renders
- * as a white box — cheap, lazy, exactly the look the boss refused. Gmail and
- * Outlook render transparent PNGs perfectly, so the fix is to strip the flat
- * near-white background and hand every banner a clean transparent PNG.
+ * flat background rectangle (white, black — whatever the export gave them).
+ * On the email banner that rectangle reads as a cheap box — exactly the look
+ * the boss refused. Gmail and Outlook render transparent PNGs perfectly, so
+ * the fix is to strip the flat background and hand every banner a clean
+ * transparent PNG.
  *
  * Algorithm (conservative by design):
  *  1. Decode to raw RGBA (sharp — already in the dependency tree).
- *  2. Look at the BORDER ring. A logo-on-white has a near-white border; a logo
- *     designed on colour does not. If the border is not predominantly
- *     near-white, the image is left untouched — nobody's brand gets rewritten.
- *  3. Flood-fill from the border across near-white pixels only (BFS, 4-way).
- *     White INSIDE the mark (an enclosed counter, a snowflake's middle) is
- *     never reached, so it stays exactly as the designer drew it.
- *  4. One halo pass: pixels adjacent to the stripped area that are ALMOST
- *     white (anti-aliased JPEG edges) join the transparent zone, so no grey
- *     fringe rides the mark onto the dark banner.
- *  5. Trim transparent margins (the mark fills its 40px slot, not float in
- *     padding), cap the size, re-encode as a compact PNG.
+ *  2. Look at the BORDER ring and take its per-channel MEDIAN colour. If the
+ *     border is not predominantly near that one colour, the image is left
+ *     untouched — nobody's brand gets rewritten. (A logo designed on a photo,
+ *     a gradient or a coloured panel keeps its background; a flat white or
+ *     black export gets cleaned.)
+ *  3. Flood-fill from the border across pixels near that colour only (BFS,
+ *     4-way). Colour INSIDE the mark (an enclosed counter, a snowflake's
+ *     middle) is never reached, so it stays exactly as the designer drew it.
+ *  4. One halo pass: pixels adjacent to the stripped area that are ALMOST the
+ *     background colour (anti-aliased edges) join the transparent zone, so no
+ *     fringe rides the mark onto the banner.
+ *  5. Trim transparent margins (the mark fills its 40px slot instead of
+ *     floating in padding), cap the size, re-encode as a compact PNG.
  *
  * Pure module: buffer in, result out, no db, no env — the upload route, the
  * ops door and the local QA scripts all run the exact same code.
@@ -27,26 +30,32 @@
 import sharp from 'sharp'
 
 export interface StripResult {
-  /** true when the border was near-white and the background was stripped. */
+  /** true when the border was flat and the background was stripped. */
   stripped: boolean
   /** The processed PNG when stripped, null when left untouched. */
   png: Buffer | null
   width: number
   height: number
-  /** Share of pixels that ended up fully transparent (0..1), post-trim. */
+  /** Share of pixels that ended up fully transparent (0..1). */
   transparentPct: number
   /** One-line human note for logs and the ops report. */
   note: string
 }
 
-const DEFAULT_TOL = 28 // 255-28 = 227: catches #F7F7F7-class whites + JPEG noise, never a cream brand colour (#FFFDF7 sits at 253/253/247 → dist 8, would strip — but that IS the white we are killing)
+const DEFAULT_TOL = 28 // per-channel distance from the background colour: catches off-whites + JPEG noise, never a real brand colour
 const MAX_BYTES = 290_000 // stays under the storage law's 300 KB
 const MAX_W = 640 // renders at height 40 in the banner; 640w is generous retina headroom
 const MAX_H = 320
 
-/** A pixel is "near-white" when every channel is within tol of 255. */
-function isNearWhite(r: number, g: number, b: number, tol: number): boolean {
-  return r >= 255 - tol && g >= 255 - tol && b >= 255 - tol
+/** Per-channel distance between two colours (Chebyshev — every channel must
+ *  be close, so a grey can never masquerade as black nor cream as white). */
+function colourDist(r: number, g: number, b: number, c: [number, number, number]): number {
+  return Math.max(Math.abs(r - c[0]), Math.abs(g - c[1]), Math.abs(b - c[2]))
+}
+
+function median3(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
 }
 
 export async function stripLogoBackground(
@@ -54,7 +63,7 @@ export async function stripLogoBackground(
   opts: { tol?: number } = {},
 ): Promise<StripResult> {
   const tol = opts.tol ?? DEFAULT_TOL
-  let img = sharp(buf, { failOn: 'none' }).ensureAlpha()
+  const img = sharp(buf, { failOn: 'none' }).ensureAlpha()
   const meta = await img.metadata().catch(() => null)
   if (!meta || !meta.width || !meta.height || meta.width < 8 || meta.height < 8) {
     return { stripped: false, png: null, width: 0, height: 0, transparentPct: 0, note: 'not a usable raster image' }
@@ -65,23 +74,41 @@ export async function stripLogoBackground(
 
   const at = (x: number, y: number) => (y * w + x) * 4
 
-  // --- Step 1: is the border predominantly near-white? ---
+  // --- Step 1: the border ring decides the background colour ---
+  // Fully transparent border pixels are ignored: a logo already exported with
+  // transparency must pass through untouched (and its (0,0,0) rgb husk must
+  // never read as a "flat black background").
+  const br: number[] = []
+  const bg: number[] = []
+  const bb: number[] = []
+  let opaqueBorder = 0
   let borderTotal = 0
-  let borderWhite = 0
-  const check = (x: number, y: number) => {
+  const sample = (x: number, y: number) => {
     const i = at(x, y)
     borderTotal++
-    if (isNearWhite(raw[i], raw[i + 1], raw[i + 2], tol)) borderWhite++
+    if (raw[i + 3] < 128) return
+    opaqueBorder++
+    br.push(raw[i])
+    bg.push(raw[i + 1])
+    bb.push(raw[i + 2])
   }
   for (let x = 0; x < w; x++) {
-    check(x, 0)
-    check(x, h - 1)
+    sample(x, 0)
+    sample(x, h - 1)
   }
   for (let y = 0; y < h; y++) {
-    check(0, y)
-    check(w - 1, y)
+    sample(0, y)
+    sample(w - 1, y)
   }
-  const borderShare = borderWhite / borderTotal
+  if (opaqueBorder < borderTotal * 0.3) {
+    return { stripped: false, png: null, width: w, height: h, transparentPct: 0, note: 'border already transparent — logo left untouched' }
+  }
+  const bgColour: [number, number, number] = [median3(br), median3(bg), median3(bb)]
+  let borderMatch = 0
+  for (let i = 0; i < br.length; i++) {
+    if (colourDist(br[i], bg[i], bb[i], bgColour) <= tol) borderMatch++
+  }
+  const borderShare = borderMatch / br.length
   if (borderShare < 0.55) {
     return {
       stripped: false,
@@ -89,54 +116,54 @@ export async function stripLogoBackground(
       width: w,
       height: h,
       transparentPct: 0,
-      note: `border is only ${Math.round(borderShare * 100)}% white — logo designed on colour, left untouched`,
+      note: `border is only ${Math.round(borderShare * 100)}% uniform (${bgColour.join(',')}) — no flat background to strip`,
     }
   }
 
-  // --- Step 2: flood-fill the background from every near-white border pixel ---
+  // --- Step 2: flood-fill the background from every matching border pixel ---
   const visited = new Uint8Array(w * h)
   const stack: number[] = []
-  const pushIfWhite = (x: number, y: number) => {
+  const pushIfBg = (x: number, y: number) => {
     if (x < 0 || y < 0 || x >= w || y >= h) return
     const p = y * w + x
     if (visited[p]) return
     const i = p * 4
-    if (!isNearWhite(raw[i], raw[i + 1], raw[i + 2], tol)) return
+    if (raw[i + 3] < 128) return // transparent gaps never bridge the fill into the mark
+    if (colourDist(raw[i], raw[i + 1], raw[i + 2], bgColour) > tol) return
     visited[p] = 1
     stack.push(p)
   }
   for (let x = 0; x < w; x++) {
-    pushIfWhite(x, 0)
-    pushIfWhite(x, h - 1)
+    pushIfBg(x, 0)
+    pushIfBg(x, h - 1)
   }
   for (let y = 0; y < h; y++) {
-    pushIfWhite(0, y)
-    pushIfWhite(w - 1, y)
+    pushIfBg(0, y)
+    pushIfBg(w - 1, y)
   }
   while (stack.length) {
     const p = stack.pop() as number
     const x = p % w
     const y = (p - x) / w
-    pushIfWhite(x + 1, y)
-    pushIfWhite(x - 1, y)
-    pushIfWhite(x, y + 1)
-    pushIfWhite(x, y - 1)
+    pushIfBg(x + 1, y)
+    pushIfBg(x - 1, y)
+    pushIfBg(x, y + 1)
+    pushIfBg(x, y - 1)
   }
 
   // --- Step 3: halo pass — anti-aliased fringe joins the transparent zone ---
-  // Two gentle rounds: any unvisited pixel with a whiteDist under tol*2 that
-  // touches a stripped pixel becomes transparent too. Kills the grey ring.
-  const whiteDist = (p: number) => {
-    const i = p * 4
-    return 255 - Math.min(raw[i], raw[i + 1], raw[i + 2])
-  }
+  // Two gentle rounds: any unvisited pixel within tol*2 of the background
+  // colour that touches a stripped pixel becomes transparent too. Kills the
+  // light ring on white exports and the dark ring on black ones.
   for (let round = 0; round < 2; round++) {
     const joins: number[] = []
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const p = y * w + x
         if (visited[p]) continue
-        if (whiteDist(p) > tol * 2) continue
+        const i = p * 4
+        if (raw[i + 3] < 128) continue
+        if (colourDist(raw[i], raw[i + 1], raw[i + 2], bgColour) > tol * 2) continue
         const touches =
           (x > 0 && visited[p - 1]) ||
           (x < w - 1 && visited[p + 1]) ||
@@ -201,6 +228,6 @@ export async function stripLogoBackground(
     width: finalMeta.width || cw,
     height: finalMeta.height || ch,
     transparentPct: strippedCount / (w * h), // honest share of the original frame
-    note: `background stripped (${Math.round((strippedCount / (w * h)) * 100)}% of frame transparent), trimmed ${w}x${h} → ${finalMeta.width}x${finalMeta.height}`,
+    note: `flat background (${bgColour.join(',')}) stripped, ${Math.round((strippedCount / (w * h)) * 100)}% of frame transparent, trimmed ${w}x${h} → ${finalMeta.width}x${finalMeta.height}`,
   }
 }

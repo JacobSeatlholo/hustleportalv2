@@ -7,20 +7,18 @@ export const dynamic = 'force-dynamic'
 
 /**
  * ONE-SHOT OPS DOOR (the Task 146/181/184/186/189 law, seventh lawful run):
- * the Ubuntu Wellness account's stored campaign logo carries its white
- * background baked in, and on the ink banner it reads as a cheap white box.
- * The upload route now strips white backgrounds for every FUTURE upload, but
- * the stored logo predates the law — this door fixes the stored one.
- *
- * GET  → DRY RUN, writes nothing: resolves the account, reads the stored
- *        logo, runs the exact stripLogoBackground the upload route uses, and
- *        returns the report plus the processed PNG (base64) so the result can
- *        be eyeballed on the dark banner before anything is committed.
- * POST → THE WRITE: backs up the original to CAMPAIGN_LOGO_PRESTRIP_BAK,
- *        stores the stripped PNG under CAMPAIGN_LOGO, drops a marker row.
- *        A second POST finds the marker and refuses — one run, like every
- *        door before it. The door file is deleted from the repo right after
- *        the run, tokens die with it.
+ * the Ubuntu Wellness campaign's banner logo wore a white box on the ink
+ * banner (the boss's screenshot), and the version under the state's current
+ * url is cached by mail clients for a day. v5 truth, after four dry-runs:
+ *   - the stored logo now on the account is a clean transparent-border RGBA
+ *     upload (the account owner re-uploaded mid-task);
+ *   - the state (platformConfig campaign_state:u-ubuntu-november-offer) still
+ *     points at ?v=4hwe — the url that served the white-boxed bytes.
+ * THE WRITE: strip the stored logo if (and only if) it carries an opaque flat
+ * background, store the clean mark, and repoint the state's brand at a fresh
+ * cache-busting url of the stored bytes — previews and the 522 still-queued
+ * sends all re-read the state at render/send time. Backups + marker row first,
+ * door deleted from the repo right after the run, tokens die with it.
  *
  * The account is hard-baked to support@ubuntuwellness.com — no other row can
  * be touched by this door, and nothing else on it changes.
@@ -172,35 +170,48 @@ export async function POST(_req: NextRequest, { params }: Step) {
     }
     const logoUrl = typeof brand.logoUrl === 'string' ? brand.logoUrl : ''
     if (!logoUrl) {
-      return NextResponse.json({ wrote: false, error: 'brand carries no logoUrl — nothing to strip' }, { status: 200 })
+      return NextResponse.json({ wrote: false, error: 'brand carries no logoUrl — nothing to fix' }, { status: 200 })
     }
-    const fetched = await logoBytesFromUrl(logoUrl)
-    if (!fetched) {
-      return NextResponse.json({ wrote: false, error: `could not fetch the logo behind ${logoUrl}` }, { status: 200 })
+    const stored = await storedLogo(acc.id)
+    if (!stored) {
+      return NextResponse.json({ wrote: false, error: 'no stored CAMPAIGN_LOGO behind the brand url — nothing to fix' }, { status: 200 })
     }
-    const result = await stripLogoBackground(fetched.buf)
-    if (!result.stripped || !result.png) {
-      return NextResponse.json({ wrote: false, stripNote: result.note, note: 'strip declined — logo left untouched' }, { status: 200 })
+    const sm = stored.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/)
+    if (!sm) {
+      return NextResponse.json({ wrote: false, error: 'stored logo is not a recognised data url' }, { status: 200 })
     }
-    const dataUrl = `data:image/png;base64,${result.png.toString('base64')}`
-    // Backups first: the exact state JSON and the current logo bytes behind
-    // the old url (fetched already — keep them).
+    const storedBytes = Buffer.from(sm[2], 'base64')
+    // Strip ONLY when the stored logo actually carries an opaque flat
+    // background (the white-boxed export the boss screenshotted). The current
+    // upload already has a transparent border — the stripper honestly declines
+    // and the stored bytes ride unchanged.
+    let finalStored = stored
+    let stripNote = 'not attempted'
+    let strippedBytes: number | null = null
+    const result = await stripLogoBackground(storedBytes)
+    stripNote = result.note
+    if (result.stripped && result.png) {
+      finalStored = `data:image/png;base64,${result.png.toString('base64')}`
+      strippedBytes = result.png.length
+    }
+    // Backups first: the exact state JSON plus the pre-fix stored logo.
     await db.userSetting.upsert({
       where: { userId_key: { userId: acc.id, key: BAK_KEY } },
-      create: { userId: acc.id, key: BAK_KEY, value: JSON.stringify({ state, oldLogoUrl: logoUrl, oldLogoBase64: fetched.buf.toString('base64') }) },
-      update: { value: JSON.stringify({ state, oldLogoUrl: logoUrl, oldLogoBase64: fetched.buf.toString('base64') }) },
+      create: { userId: acc.id, key: BAK_KEY, value: JSON.stringify({ state, oldLogoUrl: logoUrl, oldStoredLogo: stored }) },
+      update: { value: JSON.stringify({ state, oldLogoUrl: logoUrl, oldStoredLogo: stored }) },
     })
-    // 1. The stripped mark becomes the account's hosted campaign logo.
+    // 1. The clean mark is what the account's hosted route serves.
     await db.userSetting.upsert({
       where: { userId_key: { userId: acc.id, key: KEY } },
-      create: { userId: acc.id, key: KEY, value: dataUrl },
-      update: { value: dataUrl },
+      create: { userId: acc.id, key: KEY, value: finalStored },
+      update: { value: finalStored },
     })
-    // 2. The state's brand points at the hosted route — site-relative, resolved
-    //    against the asset base at render time. Previews and queued sends both
-    //    re-read this at render/send time. The state row is updated WHERE IT
-    //    LIVES (the holder account found by key).
-    const newBrand = { ...brand, logoUrl: `/api/campaign-logo/${acc.id}` }
+    // 2. The state's brand rides a FRESH cache-busting url of those bytes —
+    //    the inbox caches that saw the white-boxed export under the old url
+    //    get a miss and fetch the clean mark. Previews and still-queued sends
+    //    both re-read the state at render/send time.
+    const bust = logoPublicUrl(acc.id, finalStored) + `&r=${Date.now().toString(36)}`
+    const newBrand = { ...brand, logoUrl: bust }
     const newState = { ...state, brand: newBrand }
     await db.platformConfig.update({
       where: { key: STATE_KEY },
@@ -213,13 +224,12 @@ export async function POST(_req: NextRequest, { params }: Step) {
     })
     return NextResponse.json({
       wrote: true,
+      strippedApplied: !!strippedBytes,
+      stripNote,
+      storedBytesChanged: finalStored !== stored,
       oldLogoUrl: logoUrl,
       newLogoUrl: newBrand.logoUrl,
-      beforeBytes: fetched.buf.length,
-      afterBytes: result.png.length,
-      stripNote: result.note,
       backupKey: BAK_KEY,
-      logoUrl: logoPublicUrl(acc.id, dataUrl),
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'door error' }, { status: 200 })
