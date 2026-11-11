@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { normalizeCampaignFrom, isSesConfigured } from '@/lib/mailer'
 import { readCampaignStates, writeCampaignState, type CampaignState } from '@/lib/campaignqueue'
 import { fillMergeTags } from '@/lib/audience'
+import { tokenizeDraft } from '@/lib/campaignpersonal'
 
 /**
  * Abandoned checkouts, the exec follow-up lane.
@@ -104,8 +105,12 @@ export async function POST(req: NextRequest) {
   }
 
   const tag = monthTag()
-  const subject = (payload.subject?.trim() || DEFAULT_SUBJECT)
-  const body = (payload.body || DEFAULT_BODY)
+  // The greeting law rides here too: a flattened salutation in the operator's
+  // draft ("Hi Michael") is re-tokenized to {first_name} before the per-row
+  // fill, so one name can never spread to every abandoned-checkout row.
+  const draftSrc = tokenizeDraft(payload.subject?.trim() || DEFAULT_SUBJECT, payload.body || DEFAULT_BODY)
+  const subject = draftSrc.subject
+  const body = draftSrc.body
   if (body.trim().length < 20) return NextResponse.json({ error: 'Body is required.' }, { status: 400 })
 
   const cutoff = new Date(Date.now() - INFLIGHT_MINUTES * 60_000)

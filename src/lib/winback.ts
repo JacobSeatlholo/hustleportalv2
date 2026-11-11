@@ -48,6 +48,10 @@ export interface WinbackDraft {
  */
 export const WINBACK_DRAFT_KEY = 'WINBACK_DRAFT_OVERRIDE'
 export const WINBACK_NAME_TOKEN = '{firstName}'
+/** Every name token the win-back fill accepts — {first_name} is the platform's
+ *  canonical greeting tag, {firstName} the lane's original. {name} rides too,
+ *  so a letter written in any of the platform's three dialects personalizes. */
+const WINBACK_NAME_TOKENS = ['{first_name}', '{firstName}', '{name}']
 
 /**
  * The boss's one-click removals from THIS campaign's list. Not the Suppression
@@ -168,10 +172,13 @@ export function renderWinbackEmail(
 ): WinbackDraft {
   const hi = firstName(user.name, user.businessName)
   if (override) {
-    return {
-      subject: override.subject.split(WINBACK_NAME_TOKEN).join(hi),
-      body: override.body.split(WINBACK_NAME_TOKEN).join(hi),
+    let subject = override.subject
+    let body = override.body
+    for (const token of WINBACK_NAME_TOKENS) {
+      subject = subject.split(token).join(hi)
+      body = body.split(token).join(hi)
     }
+    return { subject, body }
   }
   return {
     subject: `It has been a while, ${hi}. Come and see what is new`,

@@ -31,8 +31,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Megaphone, MailCheck, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, X, Pencil, Palette, Eye, Sparkles } from 'lucide-react'
+import { Loader2, Megaphone, MailCheck, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, X, Pencil, Palette, Eye, Sparkles, AlertTriangle } from 'lucide-react'
 import { requestUpgrade } from './useUpgrade'
+import {
+  fillForRecipient, flattenedGreetingName, hasMergeToken, recipientFirstName, tokenizeGreeting,
+} from '@/lib/campaignpersonal'
 
 /** One "Sending from" choice: the account identity (id '') or a workspace. */
 export interface SenderProfile {
@@ -88,6 +91,9 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
   // edit draft state
   const [editTag, setEditTag] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ subject: '', body: '', perHour: 45, theme: 'engine', brandName: '' })
+  // The contact the edit dialog's "Greets as" strip previews — the boss picks
+  // anyone on the queue and reads exactly the greeting that address will get.
+  const [editContactId, setEditContactId] = useState('')
   const [editSaving, setEditSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -193,8 +199,8 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
 
   const pastedEmails = paste.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)
   const pickCount = pickIds.size + pastedEmails.length
-  const personalizable = /\{name\}|\{email\}/.test(cBody) || /\{name\}/.test(cSubject)
-  const sampleFill = (t: string) => t.replace(/\{name\}/g, leads[0]?.contactName || 'Thabo').replace(/\{email\}/g, leads[0]?.email || 'you@example.co.za')
+  const personalizable = hasMergeToken(cBody) || hasMergeToken(cSubject)
+  const sampleFill = (t: string) => fillForRecipient(t, recipientFirstName(leads[0]?.contactName || leads[0]?.company) || 'Thabo', leads[0]?.email || 'you@example.co.za')
   const audienceLeads = leads
     .filter((l) => {
       const q = search.trim().toLowerCase()
@@ -204,6 +210,24 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
     .slice(0, 300)
   const pickedProfile = profiles.find((p) => p.id === cFrom)
   const readingRow = reading ? readRow(reading) : null
+
+  // The edit dialog's per-contact proof: queued addresses of the open queue,
+  // one per email, and the greeting line the chosen one will read. Computed
+  // from the EDITOR's live text, so an edit shows up in the proof instantly.
+  const editContacts = editTag
+    ? rows
+        .filter((r) => r.campaign === editTag && r.status === 'QUEUED')
+        .filter((r, i, arr) => arr.findIndex((x) => x.toEmail === r.toEmail) === i)
+        .slice(0, 100)
+    : []
+  const editChosen = editContacts.find((r) => r.id === editContactId) || editContacts[0] || null
+  const editGreetsName = editChosen
+    ? recipientFirstName(editChosen.lead?.contactName || editChosen.lead?.company || '') || 'there'
+    : ''
+  const editGreetsSubject = editChosen ? fillForRecipient(editDraft.subject, editGreetsName, editChosen.toEmail) : editDraft.subject
+  const editGreetsLine = editChosen
+    ? (fillForRecipient(editDraft.body, editGreetsName, editChosen.toEmail).split('\n').find((l) => l.trim()) || '').trim()
+    : ''
 
   function togglePick(id: string) {
     setPickIds((prev) => {
@@ -321,17 +345,22 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
   function openEdit(tag: string) {
     const queued = rows.find((r) => r.campaign === tag && r.status === 'QUEUED')
     const info = campaigns.find((c) => c.tag === tag)
-    // The editor opens the MASTER draft ({name} tokens intact) — never a row's
-    // filled copy. That fallback is how one row's "Hi Michael" once flattened
-    // onto the whole queue. Legacy queues without a master fall back to a row,
-    // and the save re-personalizes them anyway.
+    // The editor opens the MASTER draft ({first_name} tokens intact) — never a
+    // row's filled copy. That fallback is how one row's "Hi Michael" once
+    // flattened onto the whole queue. Legacy queues without a master fall
+    // back to a row, and the greeting is re-tokenized HERE so the editor
+    // always shows the per-person tag — the boss never sees one contact's
+    // literal name standing in the draft. The save re-personalizes anyway.
+    const srcSubject = info?.state?.draft?.subject ?? queued?.subject ?? ''
+    const srcBody = info?.state?.draft?.body ?? queued?.body ?? ''
     setEditDraft({
-      subject: info?.state?.draft?.subject ?? queued?.subject ?? '',
-      body: info?.state?.draft?.body ?? queued?.body ?? '',
+      subject: tokenizeGreeting(srcSubject).text,
+      body: tokenizeGreeting(srcBody).text,
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
       brandName: info?.state?.brand?.name || '',
     })
+    setEditContactId('')
     setEditTag(tag)
   }
 
@@ -443,6 +472,18 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
           const progress = sum.total ? Math.round((done / sum.total) * 100) : 0
           const rate = sum.total ? Math.round((sum.opened / sum.total) * 100) : 0
           const isOpen = expanded === key
+          // THE FLATTENED-GREETING WARNING: every queued row carrying ONE
+          // personal name is the live bug (the boss's own "Hi Michael"). An
+          // opt-out queue (personalize === false) rides byte-identical on
+          // purpose and is never called out.
+          const flatGreeting = state && state.personalize !== false && sum.queued >= 2
+            ? (() => {
+                const q = cRows.filter((r) => r.status === 'QUEUED')
+                const first = q[0]
+                if (!first || q.some((r) => r.subject !== first.subject || r.body !== first.body)) return null
+                return flattenedGreetingName(first.body) || flattenedGreetingName(first.subject)
+              })()
+            : null
           const statusChip = !state ? null
             : state.status === 'ACTIVE' ? <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />sending</Badge>
             : state.status === 'PAUSED' ? <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">paused</Badge>
@@ -476,6 +517,16 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
               </button>
               {isOpen && (
                 <>
+                  {flatGreeting && (
+                    <div className="px-3 py-2 bg-amber-500/10 border-t text-[11px] text-amber-700 flex items-start gap-2">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Every queued email still greets everyone “{flatGreeting}” — one name from an older save.
+                        Open <strong>Edit draft</strong> (the greeting reads Hi {'{first_name}'}) and press Save:
+                        each contact then gets their own name. Start also re-greets before anything sends.
+                      </span>
+                    </div>
+                  )}
                   {state && sum.queued > 0 && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-t flex-wrap">
                       {state.status !== 'ACTIVE' && (
@@ -666,7 +717,7 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
               <div className="space-y-1.5">
                 <Label htmlFor="uc-body">Message</Label>
                 <Textarea id="uc-body" rows={8} value={cBody} onChange={(e) => setCBody(e.target.value)} placeholder="Write it the way you speak. Short lines win." />
-                <p className="text-[11px] text-muted-foreground">Type {'{name}'} in the greeting and {'{email}'} where their address goes. Every email is filled per person before it sends.</p>
+                <p className="text-[11px] text-muted-foreground">Type {'{first_name}'} in the greeting and {'{email}'} where their address goes. Every email is filled per person before it sends.</p>
                 <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -674,7 +725,7 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
                     checked={personalize}
                     onChange={(e) => setPersonalize(e.target.checked)}
                   />
-                  Fill {'{name}'} and {'{email}'} per person
+                  Fill {'{first_name}'} and {'{email}'} per person
                 </label>
                 <p className="text-[11px] text-muted-foreground">A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.</p>
               </div>
@@ -776,9 +827,34 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
               <Label htmlFor="uc-ed-body">Message</Label>
               <Textarea id="uc-ed-body" rows={10} value={editDraft.body} onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })} />
               <p className="text-[11px] text-muted-foreground">
-                Every email greets its own contact: write {'{name}'} in the greeting, or leave any name — saving re-greets each queued email from its contact. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
+                Every email greets its own contact: write {'{first_name}'} in the greeting ({'{name}'} and {'{firstName}'} work too), or leave any name — saving re-greets each queued email from its contact. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
               </p>
             </div>
+            {/* THE PER-CONTACT PROOF: pick anyone still queued and read the
+                exact subject + greeting line that address will receive — the
+                fill runs on the editor's live text, not a stored row. */}
+            {editChosen && (
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Label className="text-[11px] text-muted-foreground shrink-0">Greets as</Label>
+                  <Select value={editChosen.id} onValueChange={(v) => setEditContactId(v)}>
+                    <SelectTrigger className="h-8 flex-1 min-w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {editContacts.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {(r.lead?.contactName || r.lead?.company || r.toEmail)}{r.toEmail !== (r.lead?.company || '') ? ` · ${r.toEmail}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs truncate"><span className="text-muted-foreground">Subject:</span> {editGreetsSubject}</p>
+                <p className="text-xs truncate"><span className="text-muted-foreground">Opens:</span> {editGreetsLine || '(empty)'}</p>
+                {editContacts.length > 1 && (
+                  <p className="text-[10px] text-muted-foreground">+ {editContacts.length - 1} more queued{editContacts.length >= 100 ? ' (first 100 listed)' : ''} — every one gets their own name on Save.</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="uc-ed-perhour">Sends per hour</Label>

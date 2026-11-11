@@ -214,7 +214,7 @@ export interface CampaignRow {
   createdAt: string
   /** The look this row rides: null = engine default (goldrush), 'plain' = legacy text. */
   theme?: string | null
-  lead: { id: string; company: string; stage: string } | null
+  lead: { id: string; company: string; contactName?: string | null; stage: string } | null
 }
 
 export interface CampaignSummary {
@@ -235,8 +235,9 @@ export interface CampaignState {
   theme?: string // the mail look the sends ride in; undefined = engine default (goldrush)
   /** The sender's own brand on the chrome (logo/initials/name); absent = BH. */
   brand?: { name: string; initials?: string; logoUrl?: string } | null
-  /** The master letter with {name}/{email} tokens — the editor opens this, and
-   *  every save re-greets each queued contact from it. */
+  /** The master letter with {first_name}/{email} tokens ({firstName}/{name}
+ *  ride as accepted aliases) — the editor opens this, and every save re-greets
+ *  each queued contact from it. */
   draft?: { subject: string; body: string }
   /** False = the composer's per-person fill was explicitly unticked. */
   personalize?: boolean

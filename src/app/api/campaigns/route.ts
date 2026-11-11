@@ -11,7 +11,7 @@ import {
   type CampaignState,
 } from '@/lib/campaignqueue'
 import {
-  recipientFirstName, tokenizeDraft, groupRefillWrites,
+  recipientFirstName, tokenizeDraft, groupRefillWrites, fillForRecipient,
   type RefillRow,
 } from '@/lib/campaignpersonal'
 
@@ -239,8 +239,8 @@ export async function POST(req: NextRequest) {
       return {
         userId,
         toEmail: r.email,
-        subject: (personal ? master.subject.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : subject).slice(0, 180),
-        body: (personal ? master.body.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : body).slice(0, 4000),
+        subject: (personal ? fillForRecipient(master.subject, nm, r.email) : subject).slice(0, 180),
+        body: (personal ? fillForRecipient(master.body, nm, r.email) : body).slice(0, 4000),
         status: 'QUEUED',
         provider: 'PLATFORM',
         campaign: tag,
@@ -311,7 +311,7 @@ export async function GET() {
     select: {
       id: true, campaign: true, toEmail: true, subject: true, body: true, status: true, error: true,
       openedAt: true, openCount: true, sentAt: true, createdAt: true, theme: true,
-      lead: { select: { id: true, company: true, stage: true } },
+      lead: { select: { id: true, company: true, contactName: true, stage: true } },
     },
   })
   const states = await readCampaignStates()

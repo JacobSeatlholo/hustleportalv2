@@ -117,7 +117,13 @@ export async function systemBlastAudience(opts: { skipPaying?: boolean } = {}): 
   }
 }
 
-/** Fill the merge tags: {name} becomes the person, {email} becomes their address. */
+/** Fill the merge tags: every accepted name token ({first_name}, {firstName},
+ *  {name}) becomes the person, {email} becomes their address. Same law as
+ *  campaignpersonal.fillForRecipient. */
 export function fillMergeTags(template: string, name: string, email: string): string {
-  return template.replace(/\{name\}/g, name).replace(/\{email\}/g, email)
+  return template
+    .replace(/\{first_name\}/g, name)
+    .replace(/\{firstName\}/g, name)
+    .replace(/\{name\}/g, name)
+    .replace(/\{email\}/g, email)
 }

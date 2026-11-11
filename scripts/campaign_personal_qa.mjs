@@ -4,15 +4,24 @@
 // flattened it onto every queued row, so a whole audience received "Hi
 // Michael". This QA walks the exact member flow against a local dev server:
 //
-//   A. build a queue with {name} tokens  → per-recipient first-name fills
-//   B. save a flattened letter ("Hi Michael") via editDraft → healed, every
-//      row re-greeted from its own contact, master draft stored
+//   A. build a queue with {first_name} tokens (canonical + {name} alias)
+//      → per-recipient first-name fills
+//   B. save a flattened letter ("Hi Michael") via editDraft → healed to
+//      {first_name}, every row re-greeted from its own contact, master stored
 //   C. legacy queue (no master draft, rows flattened by hand) → the Start
 //      gate re-tokenizes and re-personalizes before anything sends
 //   D. explicit opt-out (personalize: false) → byte-identical letter, Start
 //      leaves it untouched
 //   E. {email} fills per recipient
 //   F. static greetings (Hi team) are never "healed"
+//   G. THE EXEC-SEAT HOLE: an ADMIN saving the draft on a MEMBER queue (rows
+//      are clients staged as leads, no platform accounts behind the
+//      addresses) heals from the LEAD contact names — never one name, never
+//      a flattened "there"
+//   H. {first_name} written literally by the boss fills per recipient,
+//      mixed with {name} in the same letter
+//   I. the engine's door: an ACTIVE legacy queue re-greets its rows at the
+//      tick itself, before a single send rides out
 //
 // Run (dev server on :3000, schema pushed to the same DB):
 //   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/hustleportal" node scripts/campaign_personal_qa.mjs
@@ -110,7 +119,10 @@ async function main() {
   check('A6 honorific stripped (Dr Naledi → Naledi)', bodyByPrefix(rowsA, 'naledi').startsWith('Hi Naledi,'), bodyByPrefix(rowsA, 'naledi').slice(0, 22))
   check('A7 nameless contact rides "there"', bodyByPrefix(rowsA, 'noname').startsWith('Hi there,'), bodyByPrefix(rowsA, 'noname').slice(0, 22))
   const stateA = await stateOf(tagA)
-  check('A8 master draft stored with tokens', JSON.parse(stateA.value).draft?.body?.includes('{name}') === true, JSON.parse(stateA.value).draft?.body?.slice(0, 14))
+  // A letter written with ANY accepted name token is stored as written (the
+  // alias is respected, never rewritten); the canonical {first_name} heal is
+  // covered by B8/G8.
+  check('A8 master draft stores the author\'s token untouched', /\{first_name\}|\{firstName\}|\{name\}/.test(JSON.parse(stateA.value).draft?.body || ''), JSON.parse(stateA.value).draft?.body?.slice(0, 20))
 
   // ---- B. the live bug's exact shape: a flattened "Hi Michael" save heals ----
   const b = await call('/api/campaigns', {
@@ -126,7 +138,7 @@ async function main() {
   check('B6 nameless row rides "there"', bodyByPrefix(rowsB, 'noname').startsWith('Hi there,'), bodyByPrefix(rowsB, 'noname').slice(0, 22))
   check('B7 subject re-personalized too', rowsB.find((r) => r.toEmail.startsWith('thabo'))?.subject === 'Hi Thabo, quick quote', rowsB.find((r) => r.toEmail.startsWith('thabo'))?.subject)
   const stateB = JSON.parse((await stateOf(tagA)).value)
-  check('B8 master draft holds {name}, not Michael', stateB.draft?.body?.includes('Hi {name}') === true, stateB.draft?.body?.slice(0, 14))
+  check('B8 master draft holds {first_name}, not Michael', stateB.draft?.body?.includes('Hi {first_name}') === true, stateB.draft?.body?.slice(0, 20))
 
   // ---- C. legacy queue: rows flattened by hand, no master draft, Start heals ----
   const tagC = 'u-qa-personal-legacy'
@@ -148,7 +160,7 @@ async function main() {
   check('C4 legacy queue re-greeted (Naledi)', bodyByPrefix(rowsC, 'naledi').startsWith('Hi Naledi,'), bodyByPrefix(rowsC, 'naledi').slice(0, 26))
   check('C5 legacy queue nameless rides "there"', bodyByPrefix(rowsC, 'noname').startsWith('Hi there,'), bodyByPrefix(rowsC, 'noname').slice(0, 25))
   const stateC = JSON.parse((await stateOf(tagC)).value)
-  check('C6 master draft rebuilt at Start', stateC.draft?.body?.includes('{name}') === true)
+  check('C6 master draft rebuilt at Start with the canonical token', stateC.draft?.body?.includes('{first_name}') === true)
 
   // ---- D. explicit opt-out rides byte-identical, Start leaves it alone ----
   const tagD = 'u-qa-personal-static'
@@ -184,6 +196,68 @@ async function main() {
   check('F1 static greeting not healed', f.json?.greetingHealed === false, `healed=${f.json?.greetingHealed}`)
   const rowsF = await rowsFor(tagE)
   check('F2 static greeting rides for everyone', rowsF.every((r) => r.body.startsWith('Hi team,')), rowsF[0]?.body?.slice(0, 10))
+
+  // ---- G. THE EXEC-SEAT HOLE: an ADMIN editDraft on a member queue whose
+  // rows are clients staged as LEADS (no platform accounts behind the
+  // addresses) heals from the LEAD contact names — the Ubuntu Wave shape. ----
+  const execEmail = `execqa${TS}@hustleqa.local`
+  const execReg = await call('/api/auth', { method: 'POST', body: { action: 'register', email: execEmail, password: 'hustle123', name: 'QA Boss Michael', businessName: 'BH HQ', city: 'Johannesburg', industry: 'Platform' } })
+  check('G1 exec registers', execReg.status === 200, `status ${execReg.status}`)
+  const execUser = await db.user.findUnique({ where: { email: execEmail } })
+  await db.user.update({ where: { id: execUser.id }, data: { role: 'ADMIN' } })
+  const execCookie = cookieOf(execReg)
+  const g = await call('/api/admin/exec/campaigns', {
+    method: 'PATCH', cookie: execCookie,
+    body: { campaign: 'u-qa-personal-legacy', action: 'editDraft', subject: 'Hi Michael, from the exec seat', body: 'Hi Michael,\n\nThe boss saved this from his own card — the rows are client leads with no accounts behind them, long enough.' },
+  })
+  check('G2 exec save accepted', g.status === 200, `status ${g.status} ${JSON.stringify(g.json?.error || '')}`)
+  check('G3 exec save reports greetingHealed', g.json?.greetingHealed === true)
+  const rowsG = await rowsFor(tagC)
+  check('G4 Michael lead keeps his name', bodyByPrefix(rowsG, 'michael').startsWith('Hi Michael,'), bodyByPrefix(rowsG, 'michael').slice(0, 22))
+  check('G5 Thabo lead greeted (not flattened to Michael or there)', bodyByPrefix(rowsG, 'thabo').startsWith('Hi Thabo,'), bodyByPrefix(rowsG, 'thabo').slice(0, 22))
+  check('G6 Naledi lead greeted with honorific stripped', bodyByPrefix(rowsG, 'naledi').startsWith('Hi Naledi,'), bodyByPrefix(rowsG, 'naledi').slice(0, 22))
+  check('G7 nameless lead rides "there"', bodyByPrefix(rowsG, 'noname').startsWith('Hi there,'), bodyByPrefix(rowsG, 'noname').slice(0, 22))
+  const stateG = JSON.parse((await stateOf(tagC)).value)
+  check('G8 master draft holds {first_name} after exec save', stateG.draft?.body?.includes('Hi {first_name}') === true, stateG.draft?.body?.slice(0, 20))
+
+  // ---- H. the boss writes {first_name} literally; mixed with {name} ----
+  const tagH = 'u-qa-personal-firstname'
+  await call('/api/campaigns', {
+    method: 'POST', cookie,
+    body: { campaign: 'qa-personal-firstname', subject: 'Hey {first_name}', body: 'Hi {first_name} ({name} also works), we will write to {email} — long enough to pass the gate.', leads: leads.map((l) => l.id), perHour: 120, theme: 'plain', brand: null },
+  })
+  const rowsH = await rowsFor(tagH)
+  check('H1 {first_name} fills per row', bodyByPrefix(rowsH, 'thabo').startsWith('Hi Thabo (Thabo also works),'), bodyByPrefix(rowsH, 'thabo').slice(0, 32))
+  check('H2 mixed tokens all fill (Naledi)', bodyByPrefix(rowsH, 'naledi').startsWith('Hi Naledi (Naledi also works),'), bodyByPrefix(rowsH, 'naledi').slice(0, 34))
+  check('H3 {email} still fills alongside', rowsH.every((r) => r.body.includes(r.toEmail)))
+  check('H4 a letter already carrying {first_name} is never re-tokenized', JSON.parse((await stateOf(tagH)).value).draft?.body?.includes('{first_name} ({name} also works)') === true)
+
+  // ---- I. THE ENGINE'S DOOR: an ACTIVE legacy queue re-greets its rows at
+  // the tick itself, before a single send rides out — no path to a live send
+  // can carry one name for everyone. ----
+  const tagI = 'u-qa-personal-tick'
+  await call('/api/campaigns', {
+    method: 'POST', cookie,
+    body: { campaign: 'qa-personal-tick', subject: 'Tick letter', body: 'Hello {first_name},\n\nEnough body here to pass the gate.', leads: leads.map((l) => l.id), perHour: 120, theme: 'plain', brand: null },
+  })
+  // Simulate the pre-law world: ACTIVE, no master draft, rows flattened.
+  const stI = await stateOf(tagI)
+  const parsedI = JSON.parse(stI.value)
+  delete parsedI.draft
+  parsedI.status = 'ACTIVE'
+  parsedI.startedAt = new Date().toISOString()
+  await db.platformConfig.update({ where: { key: stI.key }, data: { value: JSON.stringify(parsedI) } })
+  await db.emailLog.updateMany({ where: { campaign: tagI }, data: { subject: 'Tick letter', body: 'Hi Michael,\n\nFlattened by hand, long enough for the engine door.' } })
+  // The tick needs no provider keys to prove the gate: the refill runs before
+  // the send loop, and the local sends fail honestly (no key configured).
+  const tick = await call('/api/cron/campaign-tick?dry=1', { method: 'GET', cookie: execCookie })
+  check('I1 tick accepted', tick.status === 200 || tick.status === 500, `status ${tick.status}`)
+  const rowsI = await rowsFor(tagI)
+  check('I2 tick gate re-greeted every row (Thabo)', bodyByPrefix(rowsI, 'thabo').startsWith('Hi Thabo,'), bodyByPrefix(rowsI, 'thabo').slice(0, 24))
+  check('I3 tick gate re-greeted (Naledi)', bodyByPrefix(rowsI, 'naledi').startsWith('Hi Naledi,'), bodyByPrefix(rowsI, 'naledi').slice(0, 24))
+  check('I4 tick gate nameless rides "there"', bodyByPrefix(rowsI, 'noname').startsWith('Hi there,'), bodyByPrefix(rowsI, 'noname').slice(0, 24))
+  const stateI = JSON.parse((await stateOf(tagI)).value)
+  check('I5 master draft rebuilt by the engine gate', /\{first_name\}|\{name\}/.test(stateI.draft?.body || ''), stateI.draft?.body?.slice(0, 20))
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`)
   await db.$disconnect()

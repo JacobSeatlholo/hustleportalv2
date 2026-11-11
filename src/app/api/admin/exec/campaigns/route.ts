@@ -8,7 +8,7 @@ import {
 } from '@/lib/campaignqueue'
 import { systemBlastAudience } from '@/lib/audience'
 import {
-  recipientFirstName, tokenizeDraft, groupRefillWrites,
+  recipientFirstName, tokenizeDraft, groupRefillWrites, fillForRecipient,
 } from '@/lib/campaignpersonal'
 
 /**
@@ -53,21 +53,33 @@ function slugTag(raw?: string): string {
 }
 
 /** Re-personalize every QUEUED row from the master draft: the greeting name
- *  resolves from the account behind each address (first name, then business
- *  name; an unknown address rides "there"). Grouped writes — one updateMany
- *  per distinct filled copy. Same law as the member queues. */
+ *  resolves per ROW — the lead behind the row first (member queues stage
+ *  their clients as leads: the Ubuntu Wave's 522 Fresha clients), then the
+ *  account behind the address (first name, then business name), then the
+ *  plain honest "there". Grouped writes — one updateMany per distinct filled
+ *  copy. Same law as the member queues, so an exec-seat save can never
+ *  flatten a member queue into one name. */
 async function refillQueuedRows(tag: string, master: { subject: string; body: string }): Promise<number> {
   const rows = await db.emailLog.findMany({
     where: { campaign: tag, status: 'QUEUED' },
-    select: { id: true, toEmail: true },
+    select: { id: true, toEmail: true, leadId: true },
   })
   if (rows.length === 0) return 0
+  const leadIds = [...new Set(rows.map((r) => r.leadId).filter((x): x is string => Boolean(x)))]
+  const leads = leadIds.length > 0
+    ? await db.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, contactName: true } })
+    : []
+  const nameByLead = new Map(leads.map((l) => [l.id, recipientFirstName(l.contactName)]))
   const accounts = await db.user.findMany({
     where: { email: { in: rows.map((r) => r.toEmail) } },
     select: { email: true, name: true, businessName: true },
   })
   const nameByEmail = new Map(accounts.map((u) => [u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim()]))
-  const groups = groupRefillWrites(rows, master, (r) => nameByEmail.get(r.toEmail.toLowerCase()) || '')
+  const groups = groupRefillWrites(
+    rows,
+    master,
+    (r) => (r.leadId ? nameByLead.get(r.leadId) : '') || nameByEmail.get(r.toEmail.toLowerCase()) || '',
+  )
   let written = 0
   for (const g of groups) {
     const res = await db.emailLog.updateMany({
@@ -247,23 +259,36 @@ export async function POST(req: NextRequest) {
   }
 
   // One draft, greeted per person. The MASTER draft (tokens intact) rides on
-  // the queue state, and every queued row gets its own filled copy: {name}
-  // resolves from the account itself (first name, then business name),
-  // unknown addresses fall back to a plain honest "there" so nothing reads
-  // like a broken template. A flattened greeting in the operator's draft is
-  // healed to {name} here, before it can ever flatten a queue.
+  // the queue state, and every queued row gets its own filled copy: the
+  // greeting name resolves per ROW — the lead behind the row first (member
+  // queues stage their clients as leads), then the account behind the address
+  // (first name, then business name), then a plain honest "there" so nothing
+  // reads like a broken template. A flattened greeting in the operator's
+  // draft is healed here, before it can ever flatten a queue.
   const personal = payload.personalize !== false
   const master = personal
     ? tokenizeDraft(subject, body)
     : { subject, body, healed: false }
   const namesByEmail = new Map<string, string>()
   if (personal && toQueue.length > 0) {
-    const accounts = await db.user.findMany({
-      where: { email: { in: toQueue.map((r) => r.email) } },
-      select: { email: true, name: true, businessName: true },
-    })
+    const leadIds = [...new Set(toQueue.map((r) => r.leadId).filter((x): x is string => Boolean(x)))]
+    const leads = leadIds.length > 0
+      ? await db.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, contactName: true } })
+      : []
+    const nameByLead = new Map(leads.map((l) => [l.id, recipientFirstName(l.contactName)]))
+    const rest = toQueue.filter((r) => !r.leadId || !nameByLead.get(r.leadId))
+    const accounts = rest.length > 0
+      ? await db.user.findMany({
+          where: { email: { in: rest.map((r) => r.email) } },
+          select: { email: true, name: true, businessName: true },
+        })
+      : []
     for (const u of accounts) {
-      namesByEmail.set(u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim() || 'there')
+      namesByEmail.set(u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim())
+    }
+    for (const r of toQueue) {
+      const nm = (r.leadId ? nameByLead.get(r.leadId) : '') || namesByEmail.get(r.email) || 'there'
+      namesByEmail.set(r.email, nm)
     }
   }
 
@@ -273,8 +298,8 @@ export async function POST(req: NextRequest) {
       return {
         userId: gate.me.id,
         toEmail: r.email,
-        subject: (personal ? master.subject.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : subject).slice(0, 180),
-        body: (personal ? master.body.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : body).slice(0, 4000),
+        subject: (personal ? fillForRecipient(master.subject, nm, r.email) : subject).slice(0, 180),
+        body: (personal ? fillForRecipient(master.body, nm, r.email) : body).slice(0, 4000),
         status: 'QUEUED',
         provider: 'PLATFORM',
         campaign: tag,
@@ -340,7 +365,7 @@ export async function GET() {
         // The look on record — the preview replays the exact send from it
         // (null rows rode the engine default, the client falls back).
         theme: true,
-        lead: { select: { id: true, company: true, stage: true } },
+        lead: { select: { id: true, company: true, contactName: true, stage: true } },
       },
     }),
     readCampaignStates(),
@@ -505,7 +530,7 @@ export async function PATCH(req: NextRequest) {
       queuedLeft: await db.emailLog.count({ where: { campaign: tag, status: 'QUEUED' } }),
       state: next,
       note: greetingHealed
-        ? 'Greeting re-personalized: the salutation name was flattened onto every row — it now fills {name} per contact.'
+        ? 'Greeting re-personalized: the salutation name was flattened onto every row — it now fills {first_name} per contact.'
         : (nextFrom !== undefined && nextFrom !== (payload.from || '').trim()
           ? 'Sender was normalized: the campaign domain carries the address (anything @hustleportal.online).'
           : undefined),

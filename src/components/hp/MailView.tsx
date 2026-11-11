@@ -27,7 +27,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette, Pencil, ShoppingCart } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette, Pencil, ShoppingCart, AlertTriangle } from 'lucide-react'
+import {
+  fillForRecipient, flattenedGreetingName, hasMergeToken, recipientFirstName, tokenizeGreeting,
+} from '@/lib/campaignpersonal'
 
 // Abandoned checkouts readout (exec): Yoco checkouts that opened and never
 // finished — the follow-up list. amountRands/creditRands come from the TopUp row.
@@ -151,6 +154,9 @@ export default function MailView() {
   // what goes out is never a surprise again.
   const [editTag, setEditTag] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ subject: '', body: '', from: '', perHour: 45, theme: 'engine', brandName: '' })
+  // The contact the edit dialog's "Greets as" strip previews — pick anyone on
+  // the queue and read the exact greeting that address will receive.
+  const [editContactId, setEditContactId] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   // Abandoned checkouts (exec): Yoco checkouts that opened and never finished.
   const [abandoned, setAbandoned] = useState<AbandonedCheckouts | null>(null)
@@ -368,15 +374,31 @@ export default function MailView() {
     ? (sourcePick === 'opened' ? sourceAud.opened : sourcePick === 'unopened' ? sourceAud.unopened : sourceAud.total)
     : 0
   const pickCount = (composerMode === 'add' ? sourceCount : pickIds.size + systemCount) + pastedEmails.length
-  const personalizable = /\{name\}|\{email\}/.test(cBody) || /\{name\}/.test(cSubject)
+  const personalizable = hasMergeToken(cBody) || hasMergeToken(cSubject)
   // The sample the draft preview greets with: a real account from the very
   // list being staged, so what the boss reads is what a recipient reads.
   const samplePerson = composerMode === 'add'
     ? sourceAud?.sample || null
     : systemAud?.sample || null
-  const sampleFill = (t: string) => t
-    .replace(/\{name\}/g, samplePerson?.name || 'Thabo')
-    .replace(/\{email\}/g, samplePerson?.email || 'you@example.co.za')
+  const sampleFill = (t: string) => fillForRecipient(t, samplePerson?.name || 'Thabo', samplePerson?.email || 'you@example.co.za')
+
+  // The edit dialog's per-contact proof: queued addresses of the open queue,
+  // one per email, and the greeting line the chosen one will read. Computed
+  // from the EDITOR's live text, so an edit shows up in the proof instantly.
+  const editContacts = editTag
+    ? (campaignRows || [])
+        .filter((r) => r.campaign === editTag && r.status === 'QUEUED')
+        .filter((r, i, arr) => arr.findIndex((x) => x.toEmail === r.toEmail) === i)
+        .slice(0, 100)
+    : []
+  const editChosen = editContacts.find((r) => r.id === editContactId) || editContacts[0] || null
+  const editGreetsName = editChosen
+    ? recipientFirstName(editChosen.lead?.contactName || editChosen.lead?.company || '') || 'there'
+    : ''
+  const editGreetsSubject = editChosen ? fillForRecipient(editDraft.subject, editGreetsName, editChosen.toEmail) : editDraft.subject
+  const editGreetsLine = editChosen
+    ? (fillForRecipient(editDraft.body, editGreetsName, editChosen.toEmail).split('\n').find((l) => l.trim()) || '').trim()
+    : ''
   const audienceLeads = leads
     .filter((l) => {
       const q = audienceSearch.trim().toLowerCase()
@@ -514,18 +536,23 @@ export default function MailView() {
   function openEdit(tag: string) {
     const info = campaigns.find((c) => c.tag === tag)
     const queued = (campaignRows || []).find((r) => r.campaign === tag && r.status === 'QUEUED')
-    // The editor opens the MASTER draft ({name} tokens intact) — never a row's
-    // filled copy, which is how one greeting name once flattened onto a whole
-    // queue. Legacy queues without a master fall back to a row; the save
+    // The editor opens the MASTER draft ({first_name} tokens intact) — never a
+    // row's filled copy, which is how one greeting name once flattened onto a
+    // whole queue. Legacy queues without a master fall back to a row, and the
+    // greeting is re-tokenized HERE so the editor always shows the per-person
+    // tag — never one contact's literal name standing in the draft. The save
     // re-personalizes them anyway.
+    const srcSubject = info?.state?.draft?.subject ?? queued?.subject ?? ''
+    const srcBody = info?.state?.draft?.body ?? queued?.body ?? ''
     setEditDraft({
-      subject: info?.state?.draft?.subject ?? queued?.subject ?? '',
-      body: info?.state?.draft?.body ?? queued?.body ?? '',
+      subject: tokenizeGreeting(srcSubject).text,
+      body: tokenizeGreeting(srcBody).text,
       from: info?.state?.from || 'BlackBiz <blackbiz@hustleportal.online>',
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
       brandName: info?.state?.brand?.name || '',
     })
+    setEditContactId('')
     setEditTag(tag)
   }
 
@@ -591,7 +618,7 @@ export default function MailView() {
 
   // ---- Abandoned checkout follow-up blast ----
   const ABANDON_DEFAULT_SUBJECT = 'Your top-up is still open — nothing was charged'
-  const ABANDON_DEFAULT_BODY = `Hi {name},\n\nQuick one — you started loading your HustlePortal wallet and the checkout never finished. No money left your card.\n\nTwo doors, your pick:\n\n• Finish the top-up — your credits land the moment you pay: HustlePortal Wallet (https://www.hustleportal.online)\n• Or just log in and keep working — the free tools stay open either way: HustlePortal (https://www.hustleportal.online)\n\nIf the card gave you trouble, reply to this email and a human will sort it out by hand.\n\nThe Business Hustle team`
+  const ABANDON_DEFAULT_BODY = `Hi {first_name},\n\nQuick one — you started loading your HustlePortal wallet and the checkout never finished. No money left your card.\n\nTwo doors, your pick:\n\n• Finish the top-up — your credits land the moment you pay: HustlePortal Wallet (https://www.hustleportal.online)\n• Or just log in and keep working — the free tools stay open either way: HustlePortal (https://www.hustleportal.online)\n\nIf the card gave you trouble, reply to this email and a human will sort it out by hand.\n\nThe Business Hustle team`
 
   function openAbandon() {
     setAbandonDraft({ subject: ABANDON_DEFAULT_SUBJECT, body: ABANDON_DEFAULT_BODY })
@@ -963,6 +990,17 @@ export default function MailView() {
               const progress = sum.total ? Math.round((done / sum.total) * 100) : 0
               const rate = sum.total ? Math.round((sum.opened / sum.total) * 100) : 0
               const isOpen = expanded === key
+              // THE FLATTENED-GREETING WARNING (exec seat): every queued row
+              // carrying ONE personal name is the live bug. An opt-out queue
+              // (personalize === false) rides byte-identical on purpose.
+              const flatGreeting = state && state.personalize !== false && sum.queued >= 2
+                ? (() => {
+                    const q = rows.filter((r) => r.status === 'QUEUED')
+                    const first = q[0]
+                    if (!first || q.some((r) => r.subject !== first.subject || r.body !== first.body)) return null
+                    return flattenedGreetingName(first.body) || flattenedGreetingName(first.subject)
+                  })()
+                : null
               const statusChip = !state ? null
                 : state.status === 'ACTIVE' ? <Badge className="bg-emerald-500/15 text-emerald-600 border-0 text-[10px] gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />sending</Badge>
                 : state.status === 'PAUSED' ? <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">paused</Badge>
@@ -997,6 +1035,16 @@ export default function MailView() {
                   </button>
                   {isOpen && (
                     <>
+                      {flatGreeting && (
+                        <div className="px-3 py-2 bg-amber-500/10 border-t text-[11px] text-amber-700 flex items-start gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <span>
+                            Every queued email still greets everyone “{flatGreeting}” — one name from an older save.
+                            Open <strong>Edit draft</strong> (the greeting reads Hi {'{first_name}'}) and press Save:
+                            each contact then gets their own name. Start also re-greets before anything sends.
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-t flex-wrap">
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openAdd(key)}>
                           <Plus className="h-3 w-3" /> Add email
@@ -1754,7 +1802,7 @@ export default function MailView() {
                 <Label htmlFor="c-body">Message</Label>
                 <Textarea id="c-body" rows={8} value={cBody} onChange={(e) => setCBody(e.target.value)} placeholder="Write it the way you speak. Short lines win." />
                 <p className="text-[11px] text-muted-foreground">A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.</p>
-                <p className="text-[11px] text-muted-foreground">Type {'{name}'} in the greeting and {'{email}'} where their address goes. Every email is filled per person before it sends.</p>
+                <p className="text-[11px] text-muted-foreground">Type {'{first_name}'} in the greeting and {'{email}'} where their address goes. Every email is filled per person before it sends.</p>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-xs">
                 <p className="font-medium text-[13px]">Before it queues</p>
@@ -1818,9 +1866,34 @@ export default function MailView() {
               <Label htmlFor="ed-body">Message</Label>
               <Textarea id="ed-body" rows={10} value={editDraft.body} onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })} />
               <p className="text-[11px] text-muted-foreground">
-                Every email greets its own account: write {'{name}'} in the greeting, or leave any name — saving re-greets each queued email from the account behind it. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
+                Every email greets its own recipient: write {'{first_name}'} in the greeting ({'{name}'} and {'{firstName}'} work too), or leave any name — saving re-greets each queued email from its lead or account. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
               </p>
             </div>
+            {/* THE PER-CONTACT PROOF: pick anyone still queued and read the
+                exact subject + greeting line that address will receive — the
+                fill runs on the editor's live text, not a stored row. */}
+            {editChosen && (
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Label className="text-[11px] text-muted-foreground shrink-0">Greets as</Label>
+                  <Select value={editChosen.id} onValueChange={(v) => setEditContactId(v)}>
+                    <SelectTrigger className="h-8 flex-1 min-w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {editContacts.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {(r.lead?.contactName || r.lead?.company || r.toEmail)}{r.toEmail !== (r.lead?.company || '') ? ` · ${r.toEmail}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs truncate"><span className="text-muted-foreground">Subject:</span> {editGreetsSubject}</p>
+                <p className="text-xs truncate"><span className="text-muted-foreground">Opens:</span> {editGreetsLine || '(empty)'}</p>
+                {editContacts.length > 1 && (
+                  <p className="text-[10px] text-muted-foreground">+ {editContacts.length - 1} more queued{editContacts.length >= 100 ? ' (first 100 listed)' : ''} — every one gets their own name on Save.</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ed-perhour">Sends per hour</Label>
@@ -1885,7 +1958,7 @@ export default function MailView() {
       </Dialog>
 
       {/* Abandoned checkout follow-up: the editable recovery letter. Queues
-          under abandoned-cart-<month>, born paused, {name} fills per account. */}
+          under abandoned-cart-<month>, born paused, {first_name} fills per account. */}
       <Dialog open={abandonOpen} onOpenChange={(o) => { if (!o) setAbandonOpen(false) }}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto hp-scroll">
           <DialogHeader>
@@ -1893,7 +1966,7 @@ export default function MailView() {
               <ShoppingCart className="h-4 w-4 text-brand" /> Follow-up blast — abandoned checkouts
             </DialogTitle>
             <DialogDescription>
-              {abandoned ? `${abandoned.abandoned.filter((a) => !a.alreadyQueued).length} abandoned checkout${abandoned.abandoned.filter((a) => !a.alreadyQueued).length === 1 ? '' : 's'} get the nudge · {name} fills per account` : ''}
+              {abandoned ? `${abandoned.abandoned.filter((a) => !a.alreadyQueued).length} abandoned checkout${abandoned.abandoned.filter((a) => !a.alreadyQueued).length === 1 ? '' : 's'} get the nudge · {first_name} fills per account` : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1905,7 +1978,7 @@ export default function MailView() {
               <Label htmlFor="ab-body">Message</Label>
               <Textarea id="ab-body" rows={10} value={abandonDraft.body} onChange={(e) => setAbandonDraft({ ...abandonDraft, body: e.target.value })} />
               <p className="text-[11px] text-muted-foreground">
-                These are real accounts, so {'{name}'} fills with their own first name. One tap unsubscribe and the legal footer ride along automatically.
+                These are real accounts, so {'{first_name}'} fills with their own first name. One tap unsubscribe and the legal footer ride along automatically.
               </p>
             </div>
             <div className="flex gap-2">

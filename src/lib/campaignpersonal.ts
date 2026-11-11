@@ -8,14 +8,17 @@
  * edit path had nothing to fill — one name spread to the whole audience.
  *
  * The law, once and for all:
- *   1. The MASTER draft (with {name}/{email} tokens) lives in the campaign
- *      state. The editor always opens the master, never a filled row.
- *   2. Any save (build, edit, Start) re-personalizes every QUEUED row from
- *      the master: each row greets its own contact's first name.
+ *   1. The MASTER draft (with {first_name}/{email} tokens — {firstName} and
+ *      {name} ride as accepted aliases) lives in the campaign state. The
+ *      editor always opens the master, never a filled row.
+ *   2. Any save (build, edit, Start, and the send tick itself) re-personalizes
+ *      every QUEUED row from the master: each row greets its own contact's
+ *      first name.
  *   3. A flattened letter ("Hi Michael") is healed on save: the greeting name
- *      is re-tokenized to {name} before the per-row fill runs.
- *   4. An explicit opt-out (composer's "Fill {name} and {email} per person"
- *      unticked) is respected: the letter rides byte-identical for everyone.
+ *      is re-tokenized to {first_name} before the per-row fill runs.
+ *   4. An explicit opt-out (composer's "Fill {first_name} and {email} per
+ *      person" unticked) is respected: the letter rides byte-identical for
+ *      everyone.
  *
  * No db import here — pure functions, testable in isolation, safe on any lane.
  */
@@ -65,28 +68,45 @@ const GREETING_RE = new RegExp(
 )
 
 /**
- * Heal a flattened greeting: the salutation's name becomes {name} so the
- * per-row fill can greet every contact properly. Only the FIRST salutation —
- * the one at the top of the letter — is touched; a name mentioned later in
- * the body ("...introducing you to Michael Jordan...") stays exactly as
- * written. Static greetings (Hi team, Dear Sir/Madam) are left alone, and a
- * draft that already carries {name} is returned untouched.
+ * The merge tokens, one law: {first_name} is the canonical greeting tag the
+ * platform writes and the hints show; {firstName} and {name} are accepted
+ * aliases so a letter written either way still greets per contact. {email}
+ * fills the address. Fill order never collides ({first_name} does not
+ * contain the literal "{name}"), but the canonical token runs first anyway.
  */
-export function tokenizeGreeting(text: string): { text: string; healed: boolean } {
-  if (!text || /\{name\}/.test(text)) return { text, healed: false }
+export const NAME_TOKEN = '{first_name}'
+const NAME_TOKEN_RE = /\{first_name\}|\{firstName\}|\{name\}/g
+const EMAIL_TOKEN_RE = /\{email\}/g
+
+/** True when the text carries any accepted name token (or {email}). */
+export function hasMergeToken(text: string): boolean {
+  return /\{first_name\}|\{firstName\}|\{name\}|\{email\}/.test(text)
+}
+
+/**
+ * Heal a flattened greeting: the salutation's name becomes {first_name} so
+ * the per-row fill can greet every contact properly. Only the FIRST
+ * salutation — the one at the top of the letter — is touched; a name
+ * mentioned later in the body ("...introducing you to Michael Jordan...")
+ * stays exactly as written. Static greetings (Hi team, Dear Sir/Madam) are
+ * left alone, and a draft that already carries a name token ({first_name},
+ * {firstName} or {name}) is returned untouched.
+ */
+export function tokenizeGreeting(text: string): { text: string; healed: boolean; /** The literal flattened name found, when healed. */ name: string | null } {
+  if (!text || /\{first_name\}|\{firstName\}|\{name\}/.test(text)) return { text, healed: false, name: null }
   const m = GREETING_RE.exec(text)
-  if (!m) return { text, healed: false }
+  if (!m) return { text, healed: false, name: null }
   const name = m[3]
-  if (NOT_A_NAME.has(name.toLowerCase())) return { text, healed: false }
+  if (NOT_A_NAME.has(name.toLowerCase())) return { text, healed: false, name: null }
   // The match must be the letter's opening line: the greeting starts the text
   // or sits at the top of it (within the first 120 characters). A "hi" buried
   // deep in the body is a word in a sentence, not a salutation.
-  if (m.index + m[1].length > 120) return { text, healed: false }
+  if (m.index + m[1].length > 120) return { text, healed: false, name: null }
   // Rebuild around the full match (opener + whitespace + name), so whatever
   // spacing or punctuation follows the name survives untouched.
   const start = m.index + m[1].length
-  const healed = text.slice(0, start) + m[2] + ' {name}' + text.slice(m.index + m[0].length)
-  return { text: healed, healed: true }
+  const healed = text.slice(0, start) + m[2] + ' ' + NAME_TOKEN + text.slice(m.index + m[0].length)
+  return { text: healed, healed: true, name }
 }
 
 /** Tokenize subject and body of a master draft. Healed = at least one greeting repaired. */
@@ -98,9 +118,23 @@ export function tokenizeDraft(subject: string, body: string): {
   return { subject: s.text, body: b.text, healed: s.healed || b.healed }
 }
 
-/** Fill the merge tags for one recipient. Same law as audience.fillMergeTags. */
+/**
+ * The literal greeting name a FLATTENED letter carries ("Hi Michael," →
+ * "Michael"), or null when the letter already personalizes (any name token)
+ * or greets statically (Hi team). This is the queue-card warning's engine:
+ * queued rows that all carry one personal name are the live bug, and the
+ * card says so in words before a single send rides it.
+ */
+export function flattenedGreetingName(text: string): string | null {
+  if (!text || /\{first_name\}|\{firstName\}|\{name\}/.test(text)) return null
+  return tokenizeGreeting(text).name
+}
+
+/** Fill the merge tags for one recipient: every accepted name token
+ *  ({first_name}, {firstName}, {name}) becomes the person, {email} their
+ *  address. Same law as audience.fillMergeTags. */
 export function fillForRecipient(template: string, name: string, email: string): string {
-  return template.replace(/\{name\}/g, name).replace(/\{email\}/g, email)
+  return template.replace(NAME_TOKEN_RE, name).replace(EMAIL_TOKEN_RE, email)
 }
 
 export interface RefillRow {

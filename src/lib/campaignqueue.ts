@@ -23,6 +23,7 @@ import type { MailBrand } from '@/lib/mailthemes'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { SPEND_ACTIONS, PLAN_SEND_BUNDLES, DEFAULT_SEND_BUNDLE, SEND_BUNDLE_WINDOW_DAYS } from '@/lib/spend'
 import { spendCredits, addCredits } from '@/lib/wallet'
+import { tokenizeDraft, recipientFirstName, groupRefillWrites } from '@/lib/campaignpersonal'
 
 export const APP_BASE = 'https://www.hustleportal.online'
 export const CAMPAIGN_STATE_PREFIX = 'campaign_state:'
@@ -136,6 +137,63 @@ export async function verifyUnsubscribe(logId: string, sig: string): Promise<boo
   return sig === unsubscribeSig(logId)
 }
 
+/**
+ * The greeting law, enforced at the engine's door: every ACTIVE personalized
+ * queue's QUEUED rows are re-greeted from the master draft before anything
+ * sends. A queue with no master on record (legacy, or one that went live
+ * before the law deployed) gets its greeting re-tokenized from the first
+ * queued row and stored — so the engine can NEVER put one name on every
+ * email, no matter which path led the queue here. The explicit opt-out
+ * (personalize === false) rides byte-identical, as the composer promised.
+ * Name resolution per row: the lead behind the row first (member queues
+ * stage their clients as leads), then the account behind the address, then
+ * the plain honest "there".
+ */
+async function enforceQueueGreeting(tag: string, state: CampaignState): Promise<void> {
+  if (state.personalize === false) return
+  const first = await db.emailLog.findFirst({
+    where: { campaign: tag, status: 'QUEUED' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+  if (!first) return
+  let master = state.draft
+  if (!master) {
+    const row = await db.emailLog.findUnique({ where: { id: first.id }, select: { subject: true, body: true } })
+    if (!row) return
+    const t = tokenizeDraft(row.subject, row.body)
+    master = { subject: t.subject, body: t.body }
+    state.draft = master
+    await writeCampaignState(tag, state)
+  }
+  const rows = await db.emailLog.findMany({
+    where: { campaign: tag, status: 'QUEUED' },
+    select: { id: true, toEmail: true, leadId: true },
+  })
+  if (rows.length === 0) return
+  const leadIds = [...new Set(rows.map((r) => r.leadId).filter((x): x is string => Boolean(x)))]
+  const leads = leadIds.length > 0
+    ? await db.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, contactName: true } })
+    : []
+  const nameByLead = new Map(leads.map((l) => [l.id, recipientFirstName(l.contactName)]))
+  const accounts = await db.user.findMany({
+    where: { email: { in: rows.map((r) => r.toEmail) } },
+    select: { email: true, name: true, businessName: true },
+  })
+  const nameByEmail = new Map(accounts.map((u) => [u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim()]))
+  const groups = groupRefillWrites(
+    rows,
+    master,
+    (r) => (r.leadId ? nameByLead.get(r.leadId) : '') || nameByEmail.get(r.toEmail.toLowerCase()) || '',
+  )
+  for (const g of groups) {
+    await db.emailLog.updateMany({
+      where: { id: { in: g.ids }, status: 'QUEUED' },
+      data: { subject: g.subject, body: g.body },
+    })
+  }
+}
+
 export interface TickResult {
   sent: number
   failed: number
@@ -199,6 +257,19 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       }
     }
     return result
+  }
+
+  // THE GREETING GATE AT THE ENGINE'S DOOR: every active personalized queue
+  // re-greets its queued rows from the master draft before a single send
+  // rides out — the flattened-name bug is structurally impossible here, even
+  // for a queue that went live before the law deployed. Failures never block
+  // the tick: a broken refill must not stop honest mail.
+  for (const tag of activeTags) {
+    try {
+      await enforceQueueGreeting(tag, states[tag])
+    } catch (e) {
+      console.error('[campaign-queue] greeting gate failed for', tag, ':', e instanceof Error ? e.message : e)
+    }
   }
 
   const hourAgo = new Date(Date.now() - 3_600_000)
