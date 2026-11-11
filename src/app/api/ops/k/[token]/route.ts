@@ -51,15 +51,24 @@ async function storedLogo(userId: string): Promise<string | null> {
   return row?.value || null
 }
 
-/** The campaign state row — the brand the queue's mail actually wears. */
-async function campaignState(userId: string): Promise<Record<string, unknown> | null> {
-  const row = await db.userSetting.findUnique({
-    where: { userId_key: { userId, key: STATE_KEY } },
-    select: { value: true },
+/** The campaign state row — the brand the queue's mail actually wears.
+ *  v3: the state row does NOT have to live on the Ubuntu account (the queue
+ *  was created through an exec door, so the state may sit on the exec seat
+ *  with ownerUserId pointing at the member). Look it up by KEY across all
+ *  accounts and remember which row it is. */
+async function findStateRow(): Promise<{ userId: string; value: string } | null> {
+  const row = await db.userSetting.findFirst({
+    where: { key: STATE_KEY },
+    select: { userId: true, value: true },
   })
-  if (!row?.value) return null
+  return row || null
+}
+
+async function campaignState(): Promise<{ holderUserId: string; state: Record<string, unknown> } | null> {
+  const row = await findStateRow()
+  if (!row) return null
   try {
-    return JSON.parse(row.value) as Record<string, unknown>
+    return { holderUserId: row.userId, state: JSON.parse(row.value) as Record<string, unknown> }
   } catch {
     return null
   }
@@ -116,19 +125,22 @@ async function brandReport(brand: Record<string, unknown>) {
  */
 
 async function report(userId: string) {
-  const state = await campaignState(userId)
+  const found = await campaignState()
+  const state = found?.state || null
   const brand = (state?.brand as Record<string, unknown> | undefined) || null
   const out: Record<string, unknown> = {
     userId,
     campaignTag: CAMPAIGN_TAG,
     hasState: !!state,
+    stateHolderUserId: found?.holderUserId || null,
     campaignStatus: (state?.status as string) || null,
+    ownerUserId: (state?.ownerUserId as string) || null,
     brand: brand ? { name: brand.name || null, initials: brand.initials || null, logoUrl: brand.logoUrl || null } : null,
   }
   if (brand) {
     out.strip = await brandReport(brand)
   } else {
-    out.note = state ? 'campaign state carries no brand object' : 'no campaign state row'
+    out.note = state ? 'campaign state carries no brand object' : 'no campaign state row anywhere'
   }
   return out
 }
@@ -157,11 +169,13 @@ export async function POST(_req: NextRequest, { params }: Step) {
     if (mark) {
       return NextResponse.json({ locked: true, note: 'marker row exists — this door already ran once', markedAt: mark.value })
     }
-    const state = await campaignState(acc.id)
+    const found = await campaignState()
+    const state = found?.state || null
     const brand = (state?.brand as Record<string, unknown> | undefined) || null
-    if (!state || !brand) {
+    if (!found || !state || !brand) {
       return NextResponse.json({ wrote: false, error: 'campaign state or brand missing — nothing to fix' }, { status: 200 })
     }
+    const holder = found.holderUserId
     const logoUrl = typeof brand.logoUrl === 'string' ? brand.logoUrl : ''
     if (!logoUrl) {
       return NextResponse.json({ wrote: false, error: 'brand carries no logoUrl — nothing to strip' }, { status: 200 })
@@ -190,11 +204,12 @@ export async function POST(_req: NextRequest, { params }: Step) {
     })
     // 2. The state's brand points at the hosted route — site-relative, resolved
     //    against the asset base at render time. Previews and queued sends both
-    //    re-read this at render/send time.
+    //    re-read this at render/send time. The state row is updated WHERE IT
+    //    LIVES (the holder account found by key).
     const newBrand = { ...brand, logoUrl: `/api/campaign-logo/${acc.id}` }
     const newState = { ...state, brand: newBrand }
     await db.userSetting.update({
-      where: { userId_key: { userId: acc.id, key: STATE_KEY } },
+      where: { userId_key: { userId: holder, key: STATE_KEY } },
       data: { value: JSON.stringify(newState) },
     })
     await db.userSetting.upsert({
