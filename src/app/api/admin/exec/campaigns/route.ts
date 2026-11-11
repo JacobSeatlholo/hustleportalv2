@@ -6,7 +6,10 @@ import { sanitizeBrand } from '@/lib/mailthemes'
 import {
   readCampaignStates, writeCampaignState, unsubscribeUrl, type CampaignState,
 } from '@/lib/campaignqueue'
-import { systemBlastAudience, fillMergeTags } from '@/lib/audience'
+import { systemBlastAudience } from '@/lib/audience'
+import {
+  recipientFirstName, tokenizeDraft, groupRefillWrites,
+} from '@/lib/campaignpersonal'
 
 /**
  * Campaign queues, the bulk path for outreach at real volume.
@@ -47,6 +50,33 @@ const THEMES = ['boardroom', 'goldrush', 'nightshift', 'plain']
 function slugTag(raw?: string): string {
   const s = (raw || '').trim().toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
   return s || 'campaign'
+}
+
+/** Re-personalize every QUEUED row from the master draft: the greeting name
+ *  resolves from the account behind each address (first name, then business
+ *  name; an unknown address rides "there"). Grouped writes — one updateMany
+ *  per distinct filled copy. Same law as the member queues. */
+async function refillQueuedRows(tag: string, master: { subject: string; body: string }): Promise<number> {
+  const rows = await db.emailLog.findMany({
+    where: { campaign: tag, status: 'QUEUED' },
+    select: { id: true, toEmail: true },
+  })
+  if (rows.length === 0) return 0
+  const accounts = await db.user.findMany({
+    where: { email: { in: rows.map((r) => r.toEmail) } },
+    select: { email: true, name: true, businessName: true },
+  })
+  const nameByEmail = new Map(accounts.map((u) => [u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim()]))
+  const groups = groupRefillWrites(rows, master, (r) => nameByEmail.get(r.toEmail.toLowerCase()) || '')
+  let written = 0
+  for (const g of groups) {
+    const res = await db.emailLog.updateMany({
+      where: { id: { in: g.ids }, status: 'QUEUED' },
+      data: { subject: g.subject, body: g.body },
+    })
+    written += res.count
+  }
+  return written
 }
 
 export async function POST(req: NextRequest) {
@@ -216,11 +246,16 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // One draft, greeted per person: when the draft carries {name} / {email},
-  // every queued row gets its own filled copy. The merge resolves from the
-  // account itself (first name, then business name), unknown addresses fall
-  // back to a plain honest "there" so nothing reads like a broken template.
-  const personal = payload.personalize === true
+  // One draft, greeted per person. The MASTER draft (tokens intact) rides on
+  // the queue state, and every queued row gets its own filled copy: {name}
+  // resolves from the account itself (first name, then business name),
+  // unknown addresses fall back to a plain honest "there" so nothing reads
+  // like a broken template. A flattened greeting in the operator's draft is
+  // healed to {name} here, before it can ever flatten a queue.
+  const personal = payload.personalize !== false
+  const master = personal
+    ? tokenizeDraft(subject, body)
+    : { subject, body, healed: false }
   const namesByEmail = new Map<string, string>()
   if (personal && toQueue.length > 0) {
     const accounts = await db.user.findMany({
@@ -228,8 +263,7 @@ export async function POST(req: NextRequest) {
       select: { email: true, name: true, businessName: true },
     })
     for (const u of accounts) {
-      const first = (u.name || '').trim().split(/\s+/)[0]
-      namesByEmail.set(u.email.toLowerCase(), first || (u.businessName || '').trim() || 'there')
+      namesByEmail.set(u.email.toLowerCase(), recipientFirstName(u.name) || (u.businessName || '').trim() || 'there')
     }
   }
 
@@ -239,8 +273,8 @@ export async function POST(req: NextRequest) {
       return {
         userId: gate.me.id,
         toEmail: r.email,
-        subject: (personal ? fillMergeTags(subject, nm, r.email) : subject).slice(0, 180),
-        body: (personal ? fillMergeTags(body, nm, r.email) : body).slice(0, 4000),
+        subject: (personal ? master.subject.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : subject).slice(0, 180),
+        body: (personal ? master.body.replace(/\{name\}/g, nm).replace(/\{email\}/g, r.email) : body).slice(0, 4000),
         status: 'QUEUED',
         provider: 'PLATFORM',
         campaign: tag,
@@ -269,6 +303,10 @@ export async function POST(req: NextRequest) {
     ...(theme ? { theme } : {}),
     ...(brand !== undefined ? { brand: brand ?? undefined } : {}),
     ...(reopened ? { status: 'PAUSED' as const } : {}),
+    // The master draft rides the state, so Edit-draft and Start always work
+    // from the letter as written — never from a row's filled copy.
+    ...(personal ? { draft: { subject: master.subject, body: master.body } } : {}),
+    personalize: personal,
   }
   await writeCampaignState(tag, nextState)
 
@@ -423,19 +461,36 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'No queue exists under this campaign tag.' }, { status: 404 })
     }
 
-    const data: { subject?: string; body?: string } = {}
-    if (subject !== undefined) data.subject = subject.slice(0, 180)
-    if (body !== undefined) data.body = body.slice(0, 4000)
+    // THE SAVE LAW (same as the member queues): the saved letter becomes the
+    // queue's master draft — tokens intact, a flattened greeting re-tokenized
+    // to {name} — and every QUEUED row is re-greeted from it per account.
+    // Saving is the repair door for a queue whose rows already carry one
+    // flattened name; no rebuild needed.
     let updatedRows = 0
-    if (Object.keys(data).length > 0) {
-      const res = await db.emailLog.updateMany({
-        where: { campaign: tag, status: 'QUEUED' },
-        data,
-      })
-      updatedRows = res.count
+    let greetingHealed = false
+    const next: CampaignState = { ...current }
+    const masterSrcSubject = subject !== undefined ? subject : current.draft?.subject
+    const masterSrcBody = body !== undefined ? body : current.draft?.body
+    if (masterSrcSubject !== undefined && masterSrcBody !== undefined && masterSrcBody.trim().length >= 20) {
+      const master = tokenizeDraft(masterSrcSubject, masterSrcBody)
+      greetingHealed = master.healed
+      updatedRows = await refillQueuedRows(tag, master)
+      next.draft = { subject: master.subject, body: master.body }
+      next.personalize = true
+    } else {
+      // Partial patch (or no letter to speak of): the legacy verbatim write.
+      const data: { subject?: string; body?: string } = {}
+      if (subject !== undefined) data.subject = subject.slice(0, 180)
+      if (body !== undefined) data.body = body.slice(0, 4000)
+      if (Object.keys(data).length > 0) {
+        const res = await db.emailLog.updateMany({
+          where: { campaign: tag, status: 'QUEUED' },
+          data,
+        })
+        updatedRows = res.count
+      }
     }
 
-    const next: CampaignState = { ...current }
     if (nextFrom !== undefined) next.from = nextFrom
     if (nextPerHour !== undefined) next.perHour = nextPerHour
     if (payload.theme !== undefined) next.theme = nextTheme
@@ -446,11 +501,14 @@ export async function PATCH(req: NextRequest) {
       ok: true,
       campaign: tag,
       updatedRows,
+      greetingHealed,
       queuedLeft: await db.emailLog.count({ where: { campaign: tag, status: 'QUEUED' } }),
       state: next,
-      note: nextFrom !== undefined && nextFrom !== (payload.from || '').trim()
-        ? 'Sender was normalized: the campaign domain carries the address (anything @hustleportal.online).'
-        : undefined,
+      note: greetingHealed
+        ? 'Greeting re-personalized: the salutation name was flattened onto every row — it now fills {name} per contact.'
+        : (nextFrom !== undefined && nextFrom !== (payload.from || '').trim()
+          ? 'Sender was normalized: the campaign domain carries the address (anything @hustleportal.online).'
+          : undefined),
     })
   }
 
@@ -513,9 +571,33 @@ export async function PATCH(req: NextRequest) {
     if (queued === 0) {
       return NextResponse.json({ error: 'Nothing queued under this campaign. Create a queue first.' }, { status: 400 })
     }
+    // THE FLATTENED-GREETING GATE (same as the member queues): no queue goes
+    // live with one name on every row. Personalized queues refill from their
+    // stored master draft; legacy queues get the greeting re-tokenized from
+    // the first queued row. An explicit opt-out rides byte-identical.
+    let greetingHealed = false
+    if (current.personalize !== false) {
+      let master = current.draft
+      if (!master) {
+        const first = await db.emailLog.findFirst({
+          where: { campaign: tag, status: 'QUEUED' },
+          orderBy: { createdAt: 'asc' },
+          select: { subject: true, body: true },
+        })
+        if (first) {
+          const t = tokenizeDraft(first.subject, first.body)
+          master = { subject: t.subject, body: t.body }
+          greetingHealed = t.healed
+        }
+      }
+      if (master) {
+        await refillQueuedRows(tag, master)
+        current.draft = master
+      }
+    }
     const next: CampaignState = { ...current, status: 'ACTIVE', startedAt: current.startedAt || new Date().toISOString() }
     await writeCampaignState(tag, next)
-    return NextResponse.json({ ok: true, campaign: tag, state: next })
+    return NextResponse.json({ ok: true, campaign: tag, state: next, ...(greetingHealed ? { greetingHealed: true } : {}) })
   }
 
   if (action === 'pause') {

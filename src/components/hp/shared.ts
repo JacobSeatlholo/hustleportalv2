@@ -235,6 +235,11 @@ export interface CampaignState {
   theme?: string // the mail look the sends ride in; undefined = engine default (goldrush)
   /** The sender's own brand on the chrome (logo/initials/name); absent = BH. */
   brand?: { name: string; initials?: string; logoUrl?: string } | null
+  /** The master letter with {name}/{email} tokens — the editor opens this, and
+   *  every save re-greets each queued contact from it. */
+  draft?: { subject: string; body: string }
+  /** False = the composer's per-person fill was explicitly unticked. */
+  personalize?: boolean
   createdAt: string
   startedAt?: string
   completedAt?: string

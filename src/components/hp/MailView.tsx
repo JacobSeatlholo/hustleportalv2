@@ -514,9 +514,13 @@ export default function MailView() {
   function openEdit(tag: string) {
     const info = campaigns.find((c) => c.tag === tag)
     const queued = (campaignRows || []).find((r) => r.campaign === tag && r.status === 'QUEUED')
+    // The editor opens the MASTER draft ({name} tokens intact) — never a row's
+    // filled copy, which is how one greeting name once flattened onto a whole
+    // queue. Legacy queues without a master fall back to a row; the save
+    // re-personalizes them anyway.
     setEditDraft({
-      subject: queued?.subject || '',
-      body: queued?.body || '',
+      subject: info?.state?.draft?.subject ?? queued?.subject ?? '',
+      body: info?.state?.draft?.body ?? queued?.body ?? '',
       from: info?.state?.from || 'BlackBiz <blackbiz@hustleportal.online>',
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
@@ -1814,7 +1818,7 @@ export default function MailView() {
               <Label htmlFor="ed-body">Message</Label>
               <Textarea id="ed-body" rows={10} value={editDraft.body} onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })} />
               <p className="text-[11px] text-muted-foreground">
-                Type {'{name}'} in the greeting and it fills per person where the account exists. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
+                Every email greets its own account: write {'{name}'} in the greeting, or leave any name — saving re-greets each queued email from the account behind it. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">

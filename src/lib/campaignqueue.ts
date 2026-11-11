@@ -45,6 +45,16 @@ export interface CampaignState {
   /** Where replies land. Member campaigns → the member's account email;
    *  exec blasts → the team inbox (the senders' default). */
   replyTo?: string
+  /** The MASTER draft — the letter with {name}/{email} tokens as written.
+   *  The Edit-draft editor opens this, never a filled row, and every save
+   *  re-personalizes the queued rows from it. This is what stops one row's
+   *  filled greeting ("Hi Michael") from ever flattening onto the queue
+   *  again. Absent on legacy queues — the Start gate rebuilds it. */
+  draft?: { subject: string; body: string }
+  /** False only when the composer's "Fill {name} and {email} per person" was
+   *  explicitly unticked: the letter rides byte-identical for everyone and
+   *  the heal gate at Start respects that choice. Absent = personalized. */
+  personalize?: boolean
   createdAt: string
   startedAt?: string
   completedAt?: string

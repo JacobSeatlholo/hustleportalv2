@@ -321,9 +321,13 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
   function openEdit(tag: string) {
     const queued = rows.find((r) => r.campaign === tag && r.status === 'QUEUED')
     const info = campaigns.find((c) => c.tag === tag)
+    // The editor opens the MASTER draft ({name} tokens intact) — never a row's
+    // filled copy. That fallback is how one row's "Hi Michael" once flattened
+    // onto the whole queue. Legacy queues without a master fall back to a row,
+    // and the save re-personalizes them anyway.
     setEditDraft({
-      subject: queued?.subject || '',
-      body: queued?.body || '',
+      subject: info?.state?.draft?.subject ?? queued?.subject ?? '',
+      body: info?.state?.draft?.body ?? queued?.body ?? '',
       perHour: info?.state?.perHour || 45,
       theme: info?.state?.theme || 'engine',
       brandName: info?.state?.brand?.name || '',
@@ -335,7 +339,7 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
     if (!editTag) return
     setEditSaving(true)
     try {
-      const res = await api<{ updatedRows: number; queuedLeft: number }>('/api/campaigns', {
+      const res = await api<{ updatedRows: number; queuedLeft: number; greetingHealed?: boolean }>('/api/campaigns', {
         method: 'PATCH',
         body: JSON.stringify({
           campaign: editTag.replace(/^u-/, ''),
@@ -351,7 +355,9 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
       })
       toast({
         title: `Draft updated · ${res.updatedRows} email${res.updatedRows === 1 ? '' : 's'} rewritten`,
-        description: `${res.queuedLeft} still queued. Sent mail stays history — the log is never rewritten.`,
+        description: res.greetingHealed
+          ? 'The greeting carried one flattened name — every queued email now greets its own contact by name.'
+          : `${res.queuedLeft} still queued. Sent mail stays history — the log is never rewritten.`,
       })
       setEditTag(null)
       load()
@@ -770,7 +776,7 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
               <Label htmlFor="uc-ed-body">Message</Label>
               <Textarea id="uc-ed-body" rows={10} value={editDraft.body} onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })} />
               <p className="text-[11px] text-muted-foreground">
-                Type {'{name}'} in the greeting and it fills per person where the contact has a name. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
+                Every email greets its own contact: write {'{name}'} in the greeting, or leave any name — saving re-greets each queued email from its contact. A line starting with &quot;See it in motion: &lt;video link&gt;&quot; renders as a big clickable video card.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
