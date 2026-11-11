@@ -56,19 +56,14 @@ async function storedLogo(userId: string): Promise<string | null> {
  *  was created through an exec door, so the state may sit on the exec seat
  *  with ownerUserId pointing at the member). Look it up by KEY across all
  *  accounts and remember which row it is. */
-async function findStateRow(): Promise<{ userId: string; value: string } | null> {
-  const row = await db.userSetting.findFirst({
-    where: { key: STATE_KEY },
-    select: { userId: true, value: true },
-  })
-  return row || null
-}
-
-async function campaignState(): Promise<{ holderUserId: string; state: Record<string, unknown> } | null> {
-  const row = await findStateRow()
-  if (!row) return null
+async function campaignState(): Promise<{ state: Record<string, unknown> } | null> {
+  // v4 TRUTH: campaign state lives in platformConfig (the global config store),
+  // keyed campaign_state:<tag> — see src/lib/campaignqueue.ts line 12. Not a
+  // userSetting row on any account.
+  const row = await db.platformConfig.findUnique({ where: { key: STATE_KEY }, select: { value: true } })
+  if (!row?.value) return null
   try {
-    return { holderUserId: row.userId, state: JSON.parse(row.value) as Record<string, unknown> }
+    return { state: JSON.parse(row.value) as Record<string, unknown> }
   } catch {
     return null
   }
@@ -132,9 +127,9 @@ async function report(userId: string) {
     userId,
     campaignTag: CAMPAIGN_TAG,
     hasState: !!state,
-    stateHolderUserId: found?.holderUserId || null,
     campaignStatus: (state?.status as string) || null,
     ownerUserId: (state?.ownerUserId as string) || null,
+    stateFrom: (state?.from as string) || null,
     brand: brand ? { name: brand.name || null, initials: brand.initials || null, logoUrl: brand.logoUrl || null } : null,
   }
   if (brand) {
@@ -175,7 +170,6 @@ export async function POST(_req: NextRequest, { params }: Step) {
     if (!found || !state || !brand) {
       return NextResponse.json({ wrote: false, error: 'campaign state or brand missing — nothing to fix' }, { status: 200 })
     }
-    const holder = found.holderUserId
     const logoUrl = typeof brand.logoUrl === 'string' ? brand.logoUrl : ''
     if (!logoUrl) {
       return NextResponse.json({ wrote: false, error: 'brand carries no logoUrl — nothing to strip' }, { status: 200 })
@@ -208,8 +202,8 @@ export async function POST(_req: NextRequest, { params }: Step) {
     //    LIVES (the holder account found by key).
     const newBrand = { ...brand, logoUrl: `/api/campaign-logo/${acc.id}` }
     const newState = { ...state, brand: newBrand }
-    await db.userSetting.update({
-      where: { userId_key: { userId: holder, key: STATE_KEY } },
+    await db.platformConfig.update({
+      where: { key: STATE_KEY },
       data: { value: JSON.stringify(newState) },
     })
     await db.userSetting.upsert({
