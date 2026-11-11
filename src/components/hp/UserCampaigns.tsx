@@ -717,7 +717,7 @@ export default function UserCampaigns({ profiles, paid = true }: { profiles: Sen
                     </label>
                   )}
                   <span className="text-[10px] text-muted-foreground">
-                    {brandLogoUrl ? 'Logo rides the banner.' : cBrandName.trim() ? `No logo — the banner shows “${cBrandName.trim().slice(0, 2).toUpperCase()}” initials.` : 'No brand set — emails ride the HustlePortal look.'}
+                    {brandLogoUrl ? 'Logo rides the banner.' : cBrandName.trim() ? `No logo — the banner shows “${cBrandName.trim().slice(0, 2).toUpperCase()}” initials.` : 'No brand set — emails ride the neutral HustlePortal frame: the badger with a blank shirt, no BH mark.'}
                   </span>
                 </div>
               </div>

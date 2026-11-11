@@ -21,6 +21,11 @@
 
 export const CAMPAIGN_VIDEO_POSTER = 'https://www.hustleportal.online/campaign/blackbiz-intro-video.jpg'
 
+/** The neutral twin — same dark frame, same play button, NO wordmark. Rides
+ *  sender-branded and member-owned mail (the standard-character law) so a
+ *  user's video card carries none of our branding. */
+export const STANDARD_VIDEO_POSTER = 'https://www.hustleportal.online/campaign/blackbiz-intro-video-std.jpg'
+
 const MD_LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g
 
 /** Plain text side of a markdown phrase link: "HustlePortal (https://...)" */
@@ -40,7 +45,7 @@ function escapeHtml(s: string): string {
  * linkColor lets each theme carry its own palette while the legacy default
  * keeps the historic blue.
  */
-export function renderTextBlocks(text: string, linkColor = '#0b57d0'): string {
+export function renderTextBlocks(text: string, linkColor = '#0b57d0', videoPoster?: string): string {
   // Stash phrase links before escaping/linkify can mangle them.
   const links: { text: string; url: string }[] = []
   const stashed = text.replace(MD_LINK, (_m, t: string, u: string) => {
@@ -51,9 +56,10 @@ export function renderTextBlocks(text: string, linkColor = '#0b57d0'): string {
   for (const line of stashed.split('\n')) {
     const video = line.match(/^See it in motion: (https:\/\/\S+)$/)
     if (video) {
+      const std = !!videoPoster
       blocks.push(
         `<a href="${video[1]}" target="_blank" style="text-decoration:none">` +
-        `<img src="${CAMPAIGN_VIDEO_POSTER}" width="640" alt="Watch: HustlePortal in motion. Tap to play." ` +
+        `<img src="${videoPoster || CAMPAIGN_VIDEO_POSTER}" width="640" alt="${std ? 'Watch the video. Tap to play.' : 'Watch: HustlePortal in motion. Tap to play.'}" ` +
         `style="display:block;width:100%;max-width:640px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;margin:18px 0" /></a>`,
       )
       continue

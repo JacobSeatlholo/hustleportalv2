@@ -54,6 +54,26 @@ export function campaignStateKey(tag: string): string {
   return `${CAMPAIGN_STATE_PREFIX}${tag}`
 }
 
+/** The brand a campaign's mail wears: the sender's own when the queue carries
+ *  one; a member queue without one derives it from their sending identity
+ *  ("Ubuntu Wellness <support@...>" → "Ubuntu Wellness") so a member's client
+ *  never meets the BH chrome; an exec blast without a brand keeps the
+ *  HustlePortal chrome — that is the boss's own mail, as always. */
+export function effectiveCampaignBrand(state: CampaignState): MailBrand | undefined {
+  if (state.brand) return state.brand
+  if (!state.ownerUserId) return undefined
+  const name = (state.from || '').split('<')[0].replace(/["']/g, '').trim()
+  return { name: name || 'HustlePortal' }
+}
+
+/** True when the campaign's mail must ride the standard character (the
+ *  blank-shirt badger, neutral HP chip) instead of the BH-vested one: every
+ *  member-owned queue and every branded send. Exec blasts without a brand
+ *  keep the BH chrome. Must match the preview replay in /api/emails/preview. */
+export function campaignStandardCharacter(state: CampaignState): boolean {
+  return !!state.ownerUserId || !!state.brand
+}
+
 // The provider's burst law is 10 requests per second; a tick that fires sends
 // back to back blows straight through it and drops live mail as FAILED. Every
 // send is therefore followed by a short breath, and a 429 gets one patient
@@ -213,9 +233,12 @@ export async function tickCampaigns(maxSends = 30): Promise<TickResult> {
       // The campaign's chosen look rides the state, so Edit draft can re-skin
       // a queue without touching a single row. Undefined = engine default.
       theme: (state.theme || undefined) as Parameters<typeof sendCampaignMail>[0]['theme'],
-      // Same law for the sender's brand: rides the state, applies to every
-      // still-queued email at send time. Undefined = the BH chrome.
-      brand: state.brand,
+      // The sender's brand rides the state; a member queue without one wears
+      // their sending identity's name, so their clients never see BH chrome.
+      brand: effectiveCampaignBrand(state),
+      // Member-owned and branded sends ride the standard character (blank
+      // shirt) — the BH-vested badger stays on HustlePortal's own mail.
+      standardCharacter: campaignStandardCharacter(state),
       pixelUrl: `${APP_BASE}/api/mail/open/${queued.id}`,
       unsubscribeUrl: unsubscribeUrl(queued.id),
       // Member campaigns route replies to the member's own inbox; exec blasts

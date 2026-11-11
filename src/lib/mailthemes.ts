@@ -23,7 +23,7 @@
  *    platform already serves.
  */
 
-import { renderTextBlocks } from './campaignhtml'
+import { renderTextBlocks, STANDARD_VIDEO_POSTER } from './campaignhtml'
 
 export type MailThemeId = 'boardroom' | 'goldrush' | 'nightshift' | 'plain'
 
@@ -62,6 +62,61 @@ export const MASCOTS: Record<string, MascotImage> = {
 /** Never throws: an unknown mascot id renders nothing special, just the default. */
 export function mascotImage(id: string | undefined): MascotImage | undefined {
   return id ? MASCOTS[id] : undefined
+}
+
+// ============ THE STANDARD CHARACTER — same badger, shirt blank ============
+//
+// The boss's law: the BH-vested badger rides ONLY HustlePortal's own mail
+// (system mail) and the boss's own unbranded sends. Every sender-branded
+// campaign and every member-owned send wears the STANDARD character instead
+// — the same badger family with NOTHING written on the shirts — so a user's
+// client never meets our mark. wave/night had blank twins all along; the
+// other occasions got std twins generated from their originals (same flat
+// cartoon style, plain mustard fabric, plain gold coin).
+
+export const STANDARD_MASCOT_SRC: Record<string, string> = {
+  wave: '/email/mascot-wave.jpg',
+  calendar: '/email/mascot-calendar-std.jpg',
+  phone: '/email/mascot-phone-std.jpg',
+  video: '/email/mascot-video-std.jpg',
+  thumbs: '/email/mascot-thumbs-std.jpg',
+  coins: '/email/mascot-coins-std.jpg',
+  search: '/email/mascot-search-std.jpg',
+  lock: '/email/mascot-lock-std.jpg',
+  night: '/email/mascot-night.jpg',
+}
+
+/** The standard-library twin of a BH mascot: same occasion, blank shirt.
+ *  Occasions without a twin come back undefined — a their-send stays
+ *  hero-less rather than wearing the vested original. */
+export function standardMascotImage(id: string | undefined): MascotImage | undefined {
+  const base = mascotImage(id)
+  const src = base ? STANDARD_MASCOT_SRC[base.id] : undefined
+  if (!base || !src) return undefined
+  const alt = base.alt
+    .replace(/The HustlePortal honey badger/g, 'The honey badger')
+    .replace(/,? ?BH on his vest/gi, '')
+    .replace(/,? ?BH badge on his hoodie/gi, '')
+    .replace(/a gold BH coin/gi, 'a plain gold coin')
+  return { ...base, src, alt }
+}
+
+/** Theme default hero in its standard-character form (blank shirt). */
+const STANDARD_HERO: Partial<Record<MailThemeId, MascotImage>> = {
+  goldrush: {
+    id: 'wave',
+    label: 'Waving hello',
+    src: '/email/mascot-wave.jpg',
+    alt: 'The honey badger waving with a laptop under his arm',
+    bg: '#F8CD6E',
+  },
+  nightshift: {
+    id: 'night',
+    label: 'Night scene',
+    src: '/email/mascot-night.jpg',
+    alt: 'The honey badger reading good news on his phone at night',
+    bg: '#202E4B',
+  },
 }
 
 interface MailTheme {
@@ -278,22 +333,30 @@ export interface ThemedMailOptions {
   unsubscribeUrl?: string
   /** Mascot override from the library (MASCOTS ids) — the picture above the headline. */
   mascot?: string
+  /** The standard-character law: when true (sender-branded or member-owned
+   *  send) the mail wears the blank-shirt badger family and the neutral HP
+   *  chip — never the BH vest. HustlePortal's own unbranded mail omits it
+   *  and keeps the BH chrome exactly as it has always been. */
+  standardCharacter?: boolean
   /** Legal footer lines (from mailer.legalFooterLines). */
   footerLines?: string[]
   /** Base for brand images; tests and previews override it. */
   assetBase?: string
 }
 
-function banner(t: MailTheme, assetBase: string, brand?: MailBrand): string {
+function banner(t: MailTheme, assetBase: string, brand?: MailBrand, standardCharacter?: boolean): string {
   if (t.id === 'plain') return '' // legacy look has no chrome
   // A branded send wears the SENDER'S mark: their logo when they uploaded
   // one, their initials chip + name otherwise. Same geometry, same slot,
-  // never the BH monogram.
+  // never the BH monogram. An unbranded standard-character send (a member's
+  // own mail through the engine) carries the neutral HP chip — the BH
+  // monogram rides only HustlePortal's own unbranded mail.
   const logoSrc = brand ? brandLogoSrc(brand.logoUrl || '', assetBase) : null
+  const chip = brand ? (brand.initials || brandInitials(brand.name)) : (standardCharacter ? 'HP' : 'BH')
   const mark = logoSrc
     ? `<img src="${logoSrc}" alt="${brand!.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" height="40" style="display:block;height:40px;max-width:260px;width:auto;border:0;outline:none;text-decoration:none" />`
     : `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-      `<td width="34" height="34" bgcolor="${t.chipBg}" style="width:34px;height:34px;background:${t.chipBg};border-radius:7px;text-align:center;vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:15px;color:${t.chipText}">${(brand ? (brand.initials || brandInitials(brand.name)) : 'BH').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>` +
+      `<td width="34" height="34" bgcolor="${t.chipBg}" style="width:34px;height:34px;background:${t.chipBg};border-radius:7px;text-align:center;vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:15px;color:${t.chipText}">${chip.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>` +
       `<td style="padding-left:11px;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;color:${t.wordmark};letter-spacing:0.4px">${(brand ? brand.name : 'HustlePortal').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>` +
       `</tr></table>`
   return (
@@ -302,11 +365,16 @@ function banner(t: MailTheme, assetBase: string, brand?: MailBrand): string {
   )
 }
 
-function heroRow(t: MailTheme, assetBase: string, mascot?: string, brand?: MailBrand): string {
-  // A branded send never inherits the theme's default hero — our badger
-  // carries the BH vest, and their mail must not wear him by accident. An
-  // explicitly picked mascot still rides (their choice, their send).
-  const m = brand && !mascot ? undefined : (mascotImage(mascot) || t.hero)
+function heroRow(t: MailTheme, assetBase: string, mascot?: string, brand?: MailBrand, standardCharacter?: boolean): string {
+  // The their-send law: a branded or member-owned send never wears the BH
+  // vest. Its default hero is the standard character (blank shirt), an
+  // explicitly picked mascot resolves through the standard library, and an
+  // occasion with no standard twin stays hero-less rather than shipping our
+  // mark. HustlePortal's own unbranded mail keeps the BH heroes as always.
+  const theirSend = !!brand || !!standardCharacter
+  const m = theirSend
+    ? (mascot ? standardMascotImage(mascot) : STANDARD_HERO[t.id])
+    : (mascotImage(mascot) || t.hero)
   if (!m) return ''
   const src = `${assetBase}${m.src}`
   return (
@@ -419,7 +487,7 @@ export function themedEmailHtml(text: string, opts: ThemedMailOptions = {}): str
     return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f7f9"><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e3e5e8">${brd}${pixel}</div></body></html>`
   }
 
-  const blocks = renderTextBlocks(text, t.link)
+  const blocks = renderTextBlocks(text, t.link, (opts.brand || opts.standardCharacter) ? STANDARD_VIDEO_POSTER : undefined)
   const preheader = opts.preheader
     ? `<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0">${opts.preheader
         .replace(/&/g, '&amp;')
@@ -436,8 +504,8 @@ export function themedEmailHtml(text: string, opts: ThemedMailOptions = {}): str
 ${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${t.pageBg};padding:26px 12px"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:${t.cardBg};border-radius:${t.radius}px;overflow:hidden">
-${banner(t, assetBase, opts.brand)}
-${heroRow(t, assetBase, opts.mascot, opts.brand)}
+${banner(t, assetBase, opts.brand, opts.standardCharacter)}
+${heroRow(t, assetBase, opts.mascot, opts.brand, opts.standardCharacter)}
 ${headlineRow(opts.headline, t)}
 ${titleRow(opts.title, t, !!opts.headline)}
 <tr><td style="padding:${opts.headline ? '18px' : opts.title ? '12px' : '28px'} 30px 6px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${t.text}">${blocks}</td></tr>

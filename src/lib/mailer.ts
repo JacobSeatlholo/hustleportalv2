@@ -66,9 +66,13 @@ export type OutgoingMail = {
  * only the quiet "Delivered by HustlePortal" line on engine sends, which is
  * part of the body text and renders as the closing block). Pure function.
  */
-export function memberThemedHtml(body: string, theme?: MailThemeId): string | undefined {
+export function memberThemedHtml(body: string, theme?: MailThemeId, standardCharacter = true): string | undefined {
   if (!theme || theme === 'plain') return undefined
-  return themedEmailHtml(body, { theme, footerLines: [] })
+  // Member sends ride the standard character law: blank-shirt badger, neutral
+  // HP chip — the BH vest only rides HustlePortal's own mail and the boss's
+  // own unbranded sends, never a member's. The replay path passes the flag
+  // through so an exec's own rows replay the BH chrome they actually wore.
+  return themedEmailHtml(body, { theme, footerLines: [], standardCharacter })
 }
 
 /** The 1x1 open-tracker img, appended inside the html body when present. */
@@ -118,6 +122,12 @@ export function replaySentHtml(opts: {
   campaign?: string | null
   /** Campaign rows only: the signed one-tap unsubscribe link of that row. */
   unsubUrl?: string | null
+  /** Campaign rows only: the sender brand the send rode (from the queue state).
+   *  Absent on an exec blast = the BH chrome, exactly as it went out. */
+  brand?: MailBrand | null
+  /** Campaign rows only: true when the send rode the standard character
+   *  (member-owned or branded queue) — the replay must match the send. */
+  standardCharacter?: boolean
 }): string | undefined {
   const bodyText = String(opts.body || '')
   if (!bodyText.trim()) return undefined
@@ -129,14 +139,24 @@ export function replaySentHtml(opts: {
     // Legacy 'plain' campaign rows shipped text + pixel only; the replay has
     // no pixel (a preview must not fire the read receipt), so plain = text.
     if (!theme || theme === 'plain') return undefined
-    const tail =
-      '\n\nPrefer not to hear from us again? One tap and you are out: ' +
-      (opts.unsubUrl || '') +
-      legalFooter()
-    return campaignMailHtml({ body: flattenMarkdownLinks(bodyText), theme }, tail)
+    // The tail matches what the send actually carried: branded queues credit
+    // the sender, unbranded ones keep the legal block.
+    const tail = campaignTail(opts.unsubUrl || undefined, opts.brand || undefined)
+    return campaignMailHtml(
+      {
+        body: flattenMarkdownLinks(bodyText),
+        theme,
+        brand: opts.brand || undefined,
+        standardCharacter: opts.standardCharacter,
+      },
+      tail,
+    )
   }
   if (!theme || theme === 'plain') return undefined
-  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme)
+  // Non-campaign rows: member sends rode the standard chrome, exec rows the
+  // BH one — the caller (preview API) passes the requester's law so the
+  // replay shows exactly what landed.
+  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme, opts.standardCharacter ?? true)
 }
 
 const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/
@@ -742,6 +762,9 @@ type ThemedCampaignFields = {
   /** The sender's own brand: their logo/initials/name replace the BH chrome.
    *  Absent = HustlePortal chrome exactly as it has always been. */
   brand?: MailBrand
+  /** The standard-character law: blank-shirt badger + neutral HP chip on
+   *  member-owned or branded sends. Absent = BH chrome, as always. */
+  standardCharacter?: boolean
   /** Caps accent line under the hero, e.g. "GOOD TO HAVE YOU BACK". */
   headline?: string
   /** Bulletproof CTA button shown after the body. */
@@ -767,6 +790,7 @@ function campaignMailHtml(
   return themedEmailHtml(mail.body, {
     theme: mail.theme ?? 'goldrush',
     brand: mail.brand,
+    standardCharacter: mail.standardCharacter,
     headline: mail.headline,
     ctaLabel: mail.ctaLabel,
     ctaUrl: mail.ctaUrl,
