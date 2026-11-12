@@ -73,6 +73,7 @@ export interface Appointment {
   clientName: string | null
   clientEmail: string | null
   notes: string | null
+  minutes: string | null
   startsAt: string
   endsAt: string | null
   meetLink: string | null

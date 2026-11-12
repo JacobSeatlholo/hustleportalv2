@@ -352,6 +352,37 @@ export default function CalendarView() {
   const [scanOpen, setScanOpen] = useState(false)
   const [icsOpen, setIcsOpen] = useState(false)
 
+  // Meeting minutes: one tap on a row, jot while the call runs, saved on the event.
+  const [minutesFor, setMinutesFor] = useState<Appointment | null>(null)
+  const [minutesText, setMinutesText] = useState('')
+  const [minutesSaving, setMinutesSaving] = useState(false)
+
+  function openMinutes(a: Appointment) {
+    setMinutesFor(a)
+    setMinutesText(a.minutes || '')
+  }
+
+  async function saveMinutes() {
+    if (!minutesFor) return
+    setMinutesSaving(true)
+    try {
+      const res = await api<{ appointment: Appointment }>(`/api/appointments/${minutesFor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ minutes: minutesText }),
+      })
+      const saved = res.appointment
+      const swap = (rows: Appointment[]) => rows.map((r) => (r.id === saved.id ? saved : r))
+      setUpcoming(swap)
+      setPast(swap)
+      setMinutesFor(null)
+      toast({ title: 'Notes saved ✓', description: 'They live on the appointment — open Notes any time to add more.' })
+    } catch (e) {
+      toast({ title: 'Could not save notes', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setMinutesSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -447,10 +478,37 @@ export default function CalendarView() {
 
         {/* Lists */}
         <div className="lg:col-span-3 space-y-4">
-          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} onInvite={resendInvite} />
-          <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} past />
+          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} onInvite={resendInvite} onNotes={openMinutes} />
+          <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} onNotes={openMinutes} past />
         </div>
       </div>
+
+      {/* Meeting minutes: jot during the call, saved on the event, never on the invite. */}
+      <Dialog open={!!minutesFor} onOpenChange={(o) => { if (!o) setMinutesFor(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><NotebookPen className="h-4 w-4 text-brand" /> Notes &amp; minutes</DialogTitle>
+            <DialogDescription>
+              {minutesFor ? `${minutesFor.title}${minutesFor.clientName ? ` · ${minutesFor.clientName}` : ''} · ${localDT(minutesFor.startsAt)}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={9}
+            autoFocus
+            value={minutesText}
+            onChange={(e) => setMinutesText(e.target.value)}
+            placeholder={'What was said, decided, agreed…\n- quote R4 500, they confirm Friday\n- wants the site live before launch day'}
+            className="text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground">Everything here stays on the event — it never rides the invite email. Empty the box and save to clear.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setMinutesFor(null)}>Close</Button>
+            <Button onClick={saveMinutes} disabled={minutesSaving}>
+              {minutesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <NotebookPen className="h-4 w-4" />} Save notes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ScanDiaryDialog open={scanOpen} onOpenChange={setScanOpen} onDone={() => { bumpRefresh(); load() }} />
     </div>
@@ -473,13 +531,14 @@ function SparkleIcon() {
   return <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" /></svg>
 }
 
-function Section({ title, loading, empty, appts, onDelete, onInvite, past = false }: {
+function Section({ title, loading, empty, appts, onDelete, onInvite, onNotes, past = false }: {
   title: string
   loading: boolean
   empty: string
   appts: Appointment[]
   onDelete: (id: string) => void
   onInvite?: (id: string) => void
+  onNotes: (a: Appointment) => void
   past?: boolean
 }) {
   const { toast } = useToast()
@@ -508,6 +567,12 @@ function Section({ title, loading, empty, appts, onDelete, onInvite, past = fals
                 </div>
               </div>
               {a.notes && <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{a.notes}</p>}
+              {a.minutes && (
+                <p className="mt-1 text-xs flex gap-1.5">
+                  <NotebookPen className="h-3 w-3 mt-0.5 shrink-0 text-brand" />
+                  <span className="line-clamp-2">{a.minutes}</span>
+                </p>
+              )}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {a.meetLink && (
                   <>
@@ -562,6 +627,15 @@ function Section({ title, loading, empty, appts, onDelete, onInvite, past = fals
                     <MessageCircle className="h-3 w-3" /> WhatsApp reminder
                   </a>
                 )}
+                <button
+                  onClick={() => onNotes(a)}
+                  title="Jot the important bits during the call — they save on the event"
+                  className={a.minutes
+                    ? 'inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/20 transition'
+                    : 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition'}
+                >
+                  <NotebookPen className="h-3 w-3" /> {a.minutes ? 'Notes ✓' : 'Add notes'}
+                </button>
                 <button onClick={() => onDelete(a.id)} className="ml-auto text-muted-foreground hover:text-rose-400 transition" aria-label="Delete appointment">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

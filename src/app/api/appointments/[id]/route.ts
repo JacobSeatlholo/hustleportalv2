@@ -28,6 +28,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (email !== existing.clientEmail) data.inviteSentAt = null
   }
   if ('notes' in body) data.notes = body.notes || null
+  // Meeting minutes: the internal record of the call. Accepts a trimmed string
+  // or an empty string to clear. Stays on the event — it never rides the invite.
+  if ('minutes' in body) data.minutes = String(body.minutes ?? '').trim() || null
   if (body.startsAt) {
     const d = new Date(body.startsAt)
     if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'Invalid date.' }, { status: 400 })

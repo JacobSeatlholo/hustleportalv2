@@ -417,6 +417,7 @@ model Appointment {
   clientName  String?
   clientEmail String? // the person they are meeting — set here, the meeting link lands in their inbox the moment the appointment saves
   notes       String?
+  minutes     String? // the call's own record: what was said, decided, agreed — jotted on the event during the meeting, never rides the invite email
   startsAt    DateTime
   endsAt      DateTime?
   meetLink      String? // Jitsi link (meet.ts)
