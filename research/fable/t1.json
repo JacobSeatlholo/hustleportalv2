@@ -1,0 +1,14 @@
+{
+  "created": 1794489158,
+  "id": "202611122112374dffce35a7c64974",
+  "request_id": "202611122112374dffce35a7c64974",
+  "text": "Five apps, three spreadsheets, and the lead you forgot to call back. Running a business shouldn't take ten logins. Hustle Portal puts your whole business in one place. Tell it who your ideal customer is, and the AI Scout finds real local businesses that need what you sell. Every",
+  "usage": {
+    "completion_tokens": 65,
+    "prompt_tokens": 299,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 364
+  }
+}
