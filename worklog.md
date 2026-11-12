@@ -3549,3 +3549,10 @@ Work Log:
 Stage Summary:
 - Boss-side steps remaining (5-10 min, all outside the app): DNS MX (Vercel dashboard) -> SES receipt rule -> SNS HTTPS subscription with the existing SES_WEBHOOK_SECRET -> mail-admin auto-BCC rule -> connect ceo@businesshustle.co.za in Mail > Log external.
 - Freeze law untouched: this feature never sends; waves stay SHELVED until probation clears.
+
+FOLLOW-UP (Nov 13, post-resume verification) — Task 198/199 CC-to-log + task-from-meeting
+- Prior session finished build/deploy (268fe41) but died before boss handover; this session verified prod state only, zero code changes.
+- Verified: git main == origin/main (HEAD 324a21c). GET /api/webhooks/ses-inbound -> 200 {"ok":true,"capture":"ready","address":"log@hustleportal.online"} (armed via SES_WEBHOOK_SECRET fallback). /api/emails/aliases 401 unauth. Ops login 200; GET /api/inbound -> {"rows":[],"counts":{"unmatched":0,"logged":0,"ignored":0}} (InboundMail live on prod DB). POST /api/emails/log-external with foreign From -> 400 honesty wall intact.
+- Semantics confirmed: captured CC mail = direction IN, status LOGGED, provider SES_INBOUND, real fromEmail kept, capture address scrubbed from displayed To/Cc; engine-sent vs captured rows stay distinguishable by design.
+- Boss-side steps outstanding (outside app): DNS MX -> SES receipt rule -> SNS HTTPS subscription (?key=SES_WEBHOOK_SECRET) -> optional auto-BCC rule -> connect ceo@ address if login differs.
+- Freeze law untouched: inbound is a separate SES surface; waves stay SHELVED until probation clears.
