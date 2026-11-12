@@ -130,6 +130,11 @@ export interface EmailLogRow {
   openCount?: number | null
   openedAt?: string | null
   sentAt?: string | null
+  // Captured-mail context: IN rows arrived via the log@ CC/BCC pipeline or a
+  // manual external log; fromEmail is the address that really wore the send.
+  direction?: string | null // OUT | IN
+  fromEmail?: string | null
+  leadId?: string | null
 }
 
 export interface IntegrationSetting {

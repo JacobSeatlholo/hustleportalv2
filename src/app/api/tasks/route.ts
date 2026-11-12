@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId, status, createdAt } = body
+  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId, status, createdAt, appointmentId } = body
   if (!title || !String(title).trim()) {
     return NextResponse.json({ error: 'Task title is required.' }, { status: 400 })
   }
@@ -87,6 +87,15 @@ export async function POST(req: NextRequest) {
     })
     if (!lead) return NextResponse.json({ error: 'That contact does not exist.' }, { status: 404 })
     linkedLeadId = lead.id
+  }
+  // A task can be spun from a calendar meeting — the follow-up it promised.
+  // Only the owner's own appointment can be linked; the link is the trace
+  // from the chip on the meeting row back to the task it produced.
+  let linkedAppointmentId: string | null = null
+  if (appointmentId) {
+    const appt = await db.appointment.findFirst({ where: { id: String(appointmentId), userId }, select: { id: true } })
+    if (!appt) return NextResponse.json({ error: 'That meeting does not exist.' }, { status: 404 })
+    linkedAppointmentId = appt.id
   }
   if (teamId) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
@@ -111,6 +120,7 @@ export async function POST(req: NextRequest) {
       isPrivate: teamId ? false : Boolean(isPrivate),
       teamId: teamId || null,
       leadId: linkedLeadId,
+      appointmentId: linkedAppointmentId,
       creatorId: userId,
       assigneeId: assigneeId || userId,
       ...(backCreatedAt ? { createdAt: backCreatedAt } : {}),

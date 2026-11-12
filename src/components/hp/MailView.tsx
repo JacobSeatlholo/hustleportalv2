@@ -27,7 +27,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette, Pencil, ShoppingCart, AlertTriangle } from 'lucide-react'
+import { Loader2, Mail, Send, Sparkles, Trash2, Inbox, ShieldCheck, X, Megaphone, MailCheck, CalendarPlus, ChevronDown, ChevronUp, User, Play, Pause, Ban, Plus, Search, Clapperboard, Film, Coins, Paperclip, Eye, Palette, Pencil, ShoppingCart, AlertTriangle, MailPlus, ListTodo } from 'lucide-react'
 import {
   fillForRecipient, flattenedGreetingName, hasMergeToken, recipientFirstName, tokenizeGreeting,
 } from '@/lib/campaignpersonal'
@@ -43,6 +43,21 @@ type AbandonedCheckouts = {
     id: string; email: string; name: string; amountRands: number; creditRands: number
     packageId: string; reference: string; ageHours: number; alreadyQueued: boolean
   }[]
+}
+
+// One row of the executive unmatched-inbound queue: a CC that arrived at the
+// capture address from a sender no account owns (yet).
+interface InboundRow {
+  id: string
+  fromEmail: string
+  fromName?: string | null
+  toEmail: string
+  subject: string
+  textBody: string
+  status: string
+  spam: boolean
+  receivedAt: string
+  user?: { name: string; email: string } | null
 }
 
 // The looks a sender can give their email, in the composer's "Look" row.
@@ -115,6 +130,21 @@ export default function MailView() {
   const [spendQuote, setSpendQuote] = useState<SpendQuote | null>(null)
   // Read view: click a row in the log, read the whole email as it went out.
   const [reading, setReading] = useState<EmailLogRow | null>(null)
+
+  // Log external email: the honest door for mail sent from outside the
+  // portal — paste what was sent, the log carries it. Connected sending
+  // addresses (aliases) ride the same dialog; they are what the CC/BCC
+  // capture resolves the From line against.
+  const [logExtOpen, setLogExtOpen] = useState(false)
+  const [logExt, setLogExt] = useState({ fromEmail: '', to: '', cc: '', subject: '', body: '', sentAt: '' })
+  const [logExtSaving, setLogExtSaving] = useState(false)
+  const [aliases, setAliases] = useState<{ id: string; address: string; label?: string | null }[]>([])
+  const [aliasNew, setAliasNew] = useState('')
+  const [aliasBusy, setAliasBusy] = useState(false)
+  // Unmatched inbound (exec): CCs from senders nothing resolved to wait here.
+  const [inboundRows, setInboundRows] = useState<InboundRow[] | null>(null)
+  // Follow-up task from a log row — the same form the campaign rows use.
+  const [logTaskRow, setLogTaskRow] = useState<EmailLogRow | null>(null)
 
   // compose state
   const [leadId, setLeadId] = useState('')
@@ -691,6 +721,140 @@ export default function MailView() {
   }, [toast])
 
   useEffect(() => { load() }, [load])
+
+  // The executive unmatched-inbound queue: CCs from senders no account owns
+  // yet. Claim one and the migration funnel moves; ignore one and spam
+  // never entered anyone's books.
+  const loadInbound = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const res = await api<{ rows: InboundRow[] }>('/api/inbound')
+      setInboundRows(res.rows || [])
+    } catch {
+      setInboundRows([])
+    }
+  }, [isAdmin])
+  useEffect(() => { loadInbound() }, [loadInbound])
+
+  async function claimInbound(id: string) {
+    try {
+      await api('/api/inbound', { method: 'POST', body: JSON.stringify({ id, action: 'CLAIM', userId: session?.user.id }) })
+      toast({ title: 'Claimed', description: 'The email now lives in your email log — follow up from there.' })
+      loadInbound()
+      load()
+    } catch (e) {
+      toast({ title: 'Could not claim it', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    }
+  }
+
+  async function ignoreInbound(id: string) {
+    try {
+      await api('/api/inbound', { method: 'POST', body: JSON.stringify({ id, action: 'IGNORE' }) })
+      setInboundRows((rows) => (rows || []).filter((r) => r.id !== id))
+    } catch {
+      toast({ title: 'Could not remove it', variant: 'destructive' })
+    }
+  }
+
+  // Aliases ride the Log external dialog: load when it opens.
+  async function loadAliases() {
+    try {
+      const res = await api<{ aliases: { id: string; address: string; label?: string | null }[] }>('/api/emails/aliases')
+      setAliases(res.aliases)
+    } catch {
+      setAliases([])
+    }
+  }
+
+  async function addAlias() {
+    const address = aliasNew.trim().toLowerCase()
+    if (!address.includes('@')) {
+      toast({ title: 'Enter a valid email address', variant: 'destructive' })
+      return
+    }
+    setAliasBusy(true)
+    try {
+      await api('/api/emails/aliases', { method: 'POST', body: JSON.stringify({ address }) })
+      setAliasNew('')
+      toast({ title: 'Address connected', description: `Mail you send from ${address} with log@hustleportal.online on CC now logs itself here.` })
+      loadAliases()
+    } catch (e) {
+      toast({ title: 'Could not connect it', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setAliasBusy(false)
+    }
+  }
+
+  async function removeAlias(address: string) {
+    try {
+      await api(`/api/emails/aliases?address=${encodeURIComponent(address)}`, { method: 'DELETE' })
+      loadAliases()
+    } catch {
+      toast({ title: 'Could not remove it', variant: 'destructive' })
+    }
+  }
+
+  function openLogExternal() {
+    setLogExt({ fromEmail: session?.user.email || '', to: '', cc: '', subject: '', body: '', sentAt: '' })
+    setLogExtOpen(true)
+    loadAliases()
+  }
+
+  async function submitLogExternal() {
+    if (!logExt.to.trim() || !logExt.body.trim()) return
+    setLogExtSaving(true)
+    try {
+      await api('/api/emails/log-external', {
+        method: 'POST',
+        body: JSON.stringify({ ...logExt, sentAt: logExt.sentAt ? new Date(logExt.sentAt).toISOString() : undefined }),
+      })
+      toast({ title: 'Email logged', description: 'It lives in your email log now — read it, or spin the follow-up task from it.' })
+      setLogExtOpen(false)
+      load()
+    } catch (e) {
+      toast({ title: 'Could not log it', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setLogExtSaving(false)
+    }
+  }
+
+  function openTaskFromLog(r: EmailLogRow) {
+    setLogTaskRow(r)
+    setTask({
+      title: `Follow up: ${r.subject}`,
+      dueDate: '', dueTime: '', priority: 'MEDIUM',
+      notes: `From email log · ${r.direction === 'IN' ? `from ${r.fromEmail || ''}` : `to ${r.toEmail}`}`,
+    })
+  }
+
+  async function saveLogTask() {
+    if (!logTaskRow) return
+    setTaskSaving(true)
+    try {
+      const dueIso = task.dueDate
+        ? new Date(task.dueTime ? `${task.dueDate}T${task.dueTime}` : `${task.dueDate}T00:00`).toISOString()
+        : null
+      await api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: task.title.trim(),
+          notes: task.notes.trim() || null,
+          priority: task.priority,
+          dueDate: dueIso,
+          isPrivate: false,
+          assigneeId: session?.user.id,
+          leadId: logTaskRow.leadId || undefined,
+        }),
+      })
+      toast({ title: 'Task added', description: 'It lives under Tasks.' })
+      setLogTaskRow(null)
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not add task', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setTaskSaving(false)
+    }
+  }
 
   async function draftWithGemini() {
     // A typed goal wins, the presets are just the fast path.
@@ -1393,9 +1557,18 @@ export default function MailView() {
 
         {/* Log */}
         <div className="lg:col-span-2 rounded-lg border bg-card p-4">
-          <h3 className="font-medium text-sm flex items-center gap-2 mb-3">
-            <Inbox className="h-4 w-4 text-brand" /> Email log
-          </h3>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="font-medium text-sm flex items-center gap-2">
+              <Inbox className="h-4 w-4 text-brand" /> Email log
+            </h3>
+            <button
+              onClick={openLogExternal}
+              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium hover:border-brand transition"
+              title="Record mail you sent from another mailbox"
+            >
+              <MailPlus className="h-3 w-3" /> Log external
+            </button>
+          </div>
           {!loading && emails.some((e) => e.status === 'DRAFT') && (
             <p className="text-[11px] text-amber-500/90 -mt-1.5 mb-2.5">
               {emails.filter((e) => e.status === 'DRAFT').length} draft{emails.filter((e) => e.status === 'DRAFT').length === 1 ? '' : 's'} waiting for your approval — press <span className="font-medium">Edit &amp; send</span>, check it, hit Send. Only you press Send.
@@ -1417,7 +1590,7 @@ export default function MailView() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{e.subject}</p>
-                      <p className="truncate text-xs text-muted-foreground">to {e.toEmail}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{e.status === 'SENT' && e.openedAt ? ` · opened ${new Date(e.openedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}` : ''}</p>
+                      <p className="truncate text-xs text-muted-foreground">{e.direction === 'IN' ? `from ${e.fromEmail || '?'}` : `to ${e.toEmail}`}{e.ccEmail ? ` · cc ${e.ccEmail}` : ''} · {new Date(e.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{e.status === 'SENT' && e.openedAt ? ` · opened ${new Date(e.openedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}` : ''}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {e.status === 'SENT' && e.openedAt && (
@@ -1440,11 +1613,20 @@ export default function MailView() {
                         className={
                           e.status === 'SENT' ? 'border-emerald-500/40 text-emerald-500'
                           : e.status === 'FAILED' ? 'border-rose-500/40 text-rose-500'
+                          : e.status === 'LOGGED' ? 'border-sky-500/40 text-sky-500'
                           : 'border-yellow-500/40 text-yellow-500'
                         }
                       >
                         {e.status}
                       </Badge>
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); openTaskFromLog(e) }}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-brand transition text-[11px] font-medium whitespace-nowrap"
+                        aria-label="Create a follow-up task from this email"
+                        title="Create a follow-up task from this email"
+                      >
+                        <ListTodo className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         onClick={(ev) => { ev.stopPropagation(); remove(e.id) }}
                         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition"
@@ -1462,6 +1644,37 @@ export default function MailView() {
             </div>
           )}
         </div>
+
+        {/* Unmatched inbound (exec): CCs from senders no account owns yet —
+            the slow-migration funnel. Claim one and it becomes a log row. */}
+        {isAdmin && inboundRows && inboundRows.length > 0 && (
+          <div className="lg:col-span-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+            <h3 className="font-medium text-sm flex items-center gap-2 mb-1.5">
+              <Inbox className="h-4 w-4 text-brand" /> Unmatched CC mail
+            </h3>
+            <p className="text-[11px] text-muted-foreground mb-2.5">
+              Someone CC&apos;d <span className="font-medium">log@hustleportal.online</span> from an address no account owns yet. Claim it to the right account — that is how companies drift in.
+            </p>
+            <div className="space-y-2 max-h-72 overflow-y-auto hp-scroll">
+              {inboundRows.map((r) => (
+                <div key={r.id} className="rounded-lg border p-2.5 text-sm bg-card">
+                  <p className="truncate font-medium">{r.subject}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    from {r.fromEmail} · {new Date(r.receivedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{r.spam ? ' · flagged spam' : ''}
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => claimInbound(r.id)}>
+                      Claim to my log
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => ignoreInbound(r.id)}>
+                      Ignore
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Read view: the whole email, exactly as it went out — replayed from
@@ -1505,13 +1718,104 @@ export default function MailView() {
         </span>
       </div>
 
-      {/* quick follow up task from a campaign row */}
-      <Dialog open={Boolean(taskRow)} onOpenChange={(o) => !o && setTaskRow(null)}>
+      {/* Log external email: record mail sent from another mailbox, plus the
+          connected sending addresses the CC capture resolves against. */}
+      <Dialog open={logExtOpen} onOpenChange={setLogExtOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hp-scroll">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MailPlus className="h-4 w-4 text-brand" /> Log an external email</DialogTitle>
+            <DialogDescription>
+              Paste the email you sent from your own mailbox (the old address, Gmail, Outlook). It lands in this log like any other — history without switching tools.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Sent from</Label>
+              <Select value={logExt.fromEmail} onValueChange={(v) => setLogExt({ ...logExt, fromEmail: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {session?.user.email && <SelectItem value={session.user.email}>{session.user.email} (login)</SelectItem>}
+                  {aliases.map((a) => (
+                    <SelectItem key={a.id} value={a.address}>{a.address}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="le-to">To</Label>
+              <Input id="le-to" type="email" inputMode="email" placeholder="them@company.co.za" value={logExt.to} onChange={(e) => setLogExt({ ...logExt, to: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="le-cc">Cc (optional)</Label>
+              <Input id="le-cc" placeholder="other copies, comma-separated" value={logExt.cc} onChange={(e) => setLogExt({ ...logExt, cc: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="le-subject">Subject</Label>
+                <Input id="le-subject" placeholder="Partnership pitch" value={logExt.subject} onChange={(e) => setLogExt({ ...logExt, subject: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="le-sent">Sent on</Label>
+                <Input id="le-sent" type="datetime-local" value={logExt.sentAt} onChange={(e) => setLogExt({ ...logExt, sentAt: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="le-body">What you sent</Label>
+              <Textarea id="le-body" rows={8} placeholder="Paste the email as you sent it…" value={logExt.body} onChange={(e) => setLogExt({ ...logExt, body: e.target.value })} />
+            </div>
+            <Button onClick={submitLogExternal} disabled={logExtSaving || !logExt.to.trim() || !logExt.body.trim()} className="w-full">
+              {logExtSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MailPlus className="h-4 w-4 mr-1" />}
+              Add to my log
+            </Button>
+
+            {/* Connected sending addresses: what the CC capture resolves against. */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="text-xs font-medium">Connected sending addresses</p>
+              <p className="text-[11px] text-muted-foreground">
+                Add the addresses you send from outside the portal. Email sent from any of them with <span className="font-medium">log@hustleportal.online</span> on CC (or BCC) logs itself here automatically.
+              </p>
+              {aliases.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {aliases.map((a) => (
+                    <span key={a.id} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]">
+                      {a.address}
+                      <button onClick={() => removeAlias(a.address)} className="text-muted-foreground hover:text-rose-400" aria-label={`Remove ${a.address}`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={aliasNew}
+                  onChange={(e) => setAliasNew(e.target.value)}
+                  placeholder="ceo@businesshustle.co.za"
+                  type="email"
+                  inputMode="email"
+                  className="h-8 text-xs"
+                />
+                <Button size="sm" variant="outline" onClick={addAlias} disabled={aliasBusy || !aliasNew.trim()} className="h-8 text-xs shrink-0">
+                  {aliasBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Connect
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* quick follow up task from a campaign row (or any log row) */}
+      <Dialog open={Boolean(taskRow || logTaskRow)} onOpenChange={(o) => { if (!o) { setTaskRow(null); setLogTaskRow(null) } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Follow up task</DialogTitle>
             <DialogDescription>
-              {taskRow ? `Linked to ${taskRow.lead?.company || taskRow.toEmail} from ${campaignLabel(taskRow.campaign || '')}.` : ''}
+              {taskRow
+                ? `Linked to ${taskRow.lead?.company || taskRow.toEmail} from ${campaignLabel(taskRow.campaign || '')}.`
+                : logTaskRow
+                  ? 'From your email log — the follow-up this email promised.'
+                  : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1544,7 +1848,7 @@ export default function MailView() {
               <Label>Notes</Label>
               <Textarea rows={2} value={task.notes} onChange={(e) => setTask({ ...task, notes: e.target.value })} />
             </div>
-            <Button onClick={saveTask} disabled={taskSaving || !task.title.trim()} className="w-full">
+            <Button onClick={taskRow ? saveTask : saveLogTask} disabled={taskSaving || !task.title.trim()} className="w-full">
               {taskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarPlus className="h-4 w-4 mr-1" />}
               Add task
             </Button>

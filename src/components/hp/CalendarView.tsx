@@ -17,8 +17,11 @@ import { bookingPhoneFromNotes, bookingVenueFromNotes, waReminderLink } from '@/
 import ScanDiaryDialog from './ScanDiaryDialog'
 import BookingLinksCard from './BookingLinksCard'
 import {
-  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle, Mail, Apple as AppleIcon,
+  Loader2, Mic, CalendarPlus, Video, Copy, Trash2, Download, CalendarDays, Radio, NotebookPen, Upload, RefreshCw, Link2, Link2Off, MessageCircle, Mail, Apple as AppleIcon, ListTodo,
 } from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 
 type SpeechRecognitionLike = {
   lang: string
@@ -383,6 +386,63 @@ export default function CalendarView() {
     }
   }
 
+  // Follow-up task from a meeting: the chip on the row opens a prefilled
+  // task — title, the meeting's own record (notes + minutes) as context, due
+  // the NEXT weekday at 09:00. The task keeps the appointmentId link, so the
+  // promise the meeting made is traceable in Tasks.
+  const [taskFor, setTaskFor] = useState<Appointment | null>(null)
+  const [meetingTask, setMeetingTask] = useState({ title: '', notes: '', dueDate: '', dueTime: '', priority: 'MEDIUM' })
+  const [meetingTaskSaving, setMeetingTaskSaving] = useState(false)
+
+  function nextWeekdayNine(from: Date): { date: string; time: string } {
+    const d = new Date(from)
+    d.setDate(d.getDate() + 1)
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: '09:00' }
+  }
+
+  function openTaskFromMeeting(a: Appointment) {
+    const due = nextWeekdayNine(new Date(a.startsAt))
+    const context = [
+      `Follow-up from meeting "${a.title}" (${localDT(a.startsAt)})`,
+      a.clientName ? `With: ${a.clientName}` : '',
+      a.clientEmail ? `Email: ${a.clientEmail}` : '',
+      a.notes ? `Notes: ${a.notes}` : '',
+      a.minutes ? `Minutes: ${a.minutes}` : '',
+    ].filter(Boolean).join('\n')
+    setTaskFor(a)
+    setMeetingTask({ title: `Follow up: ${a.title}`, notes: context, dueDate: due.date, dueTime: due.time, priority: 'MEDIUM' })
+  }
+
+  async function saveMeetingTask() {
+    if (!taskFor) return
+    setMeetingTaskSaving(true)
+    try {
+      const dueIso = meetingTask.dueDate
+        ? new Date(meetingTask.dueTime ? `${meetingTask.dueDate}T${meetingTask.dueTime}` : `${meetingTask.dueDate}T00:00`).toISOString()
+        : null
+      await api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: meetingTask.title.trim(),
+          notes: meetingTask.notes.trim() || null,
+          priority: meetingTask.priority,
+          dueDate: dueIso,
+          isPrivate: false,
+          appointmentId: taskFor.id,
+        }),
+      })
+      toast({ title: 'Task added ✓', description: `Due ${meetingTask.dueDate || 'soon'}${meetingTask.dueTime ? ` at ${meetingTask.dueTime}` : ''}. It lives under Tasks.` })
+      setTaskFor(null)
+      bumpRefresh()
+    } catch (e) {
+      toast({ title: 'Could not add task', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setMeetingTaskSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -478,8 +538,8 @@ export default function CalendarView() {
 
         {/* Lists */}
         <div className="lg:col-span-3 space-y-4">
-          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} onInvite={resendInvite} onNotes={openMinutes} />
-          <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} onNotes={openMinutes} past />
+          <Section title={`Upcoming (${upcoming.length})`} loading={loading} empty="Nothing booked, capture your next meeting by voice." appts={upcoming} onDelete={remove} onInvite={resendInvite} onNotes={openMinutes} onTask={openTaskFromMeeting} />
+          <Section title={`Past (${past.length})`} loading={loading} empty="No history yet." appts={past.slice(0, 10)} onDelete={remove} onNotes={openMinutes} onTask={openTaskFromMeeting} past />
         </div>
       </div>
 
@@ -511,6 +571,54 @@ export default function CalendarView() {
       </Dialog>
 
       <ScanDiaryDialog open={scanOpen} onOpenChange={setScanOpen} onDone={() => { bumpRefresh(); load() }} />
+
+      {/* Follow-up task from a meeting: prefilled from the event, due the
+          next weekday at 09:00 — the promise the meeting made, on the books. */}
+      <Dialog open={!!taskFor} onOpenChange={(o) => { if (!o) setTaskFor(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ListTodo className="h-4 w-4 text-brand" /> Follow-up task</DialogTitle>
+            <DialogDescription>
+              {taskFor ? `From "${taskFor.title}"${taskFor.clientName ? ` · ${taskFor.clientName}` : ''} — prefilled, due the next weekday at 09:00.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="mt-title">Task</Label>
+              <Input id="mt-title" value={meetingTask.title} onChange={(e) => setMeetingTask({ ...meetingTask, title: e.target.value })} placeholder="Follow up…" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mt-date">Due date</Label>
+                <Input id="mt-date" type="date" value={meetingTask.dueDate} onChange={(e) => setMeetingTask({ ...meetingTask, dueDate: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="mt-time">Time</Label>
+                <Input id="mt-time" type="time" value={meetingTask.dueTime} onChange={(e) => setMeetingTask({ ...meetingTask, dueTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Priority</Label>
+              <Select value={meetingTask.priority} onValueChange={(v) => setMeetingTask({ ...meetingTask, priority: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mt-notes">Notes</Label>
+              <Textarea id="mt-notes" rows={4} value={meetingTask.notes} onChange={(e) => setMeetingTask({ ...meetingTask, notes: e.target.value })} />
+            </div>
+            <Button onClick={saveMeetingTask} disabled={meetingTaskSaving || !meetingTask.title.trim()} className="w-full">
+              {meetingTaskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ListTodo className="h-4 w-4 mr-1" />}
+              Add task
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -531,7 +639,7 @@ function SparkleIcon() {
   return <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" /></svg>
 }
 
-function Section({ title, loading, empty, appts, onDelete, onInvite, onNotes, past = false }: {
+function Section({ title, loading, empty, appts, onDelete, onInvite, onNotes, onTask, past = false }: {
   title: string
   loading: boolean
   empty: string
@@ -539,6 +647,7 @@ function Section({ title, loading, empty, appts, onDelete, onInvite, onNotes, pa
   onDelete: (id: string) => void
   onInvite?: (id: string) => void
   onNotes: (a: Appointment) => void
+  onTask: (a: Appointment) => void
   past?: boolean
 }) {
   const { toast } = useToast()
@@ -635,6 +744,13 @@ function Section({ title, loading, empty, appts, onDelete, onInvite, onNotes, pa
                     : 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition'}
                 >
                   <NotebookPen className="h-3 w-3" /> {a.minutes ? 'Notes ✓' : 'Add notes'}
+                </button>
+                <button
+                  onClick={() => onTask(a)}
+                  title="Create the follow-up task this meeting promised — prefilled, due the next weekday 09:00"
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] hover:border-brand transition"
+                >
+                  <ListTodo className="h-3 w-3" /> Task
                 </button>
                 <button onClick={() => onDelete(a.id)} className="ml-auto text-muted-foreground hover:text-rose-400 transition" aria-label="Delete appointment">
                   <Trash2 className="h-3.5 w-3.5" />

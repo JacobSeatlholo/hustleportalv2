@@ -67,6 +67,8 @@ model User {
   appointments       Appointment[]
   invoices           Invoice[]
   emailLogs          EmailLog[]
+  emailAliases       EmailAlias[]
+  inboundMails       InboundMail[]
   statementAccounts  StatementAccount[]
   userSettings       UserSetting[]
   subscription       Subscription?
@@ -271,12 +273,13 @@ model Lead {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team      Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  projectId String?
-  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  emailLogs EmailLog[]
-  tasks     Task[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team         Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  emailLogs    EmailLog[]
+  tasks        Task[]
+  inboundMails InboundMail[]
 
   @@index([userId, stage])
   @@index([projectId])
@@ -322,26 +325,28 @@ model ClientNote {
 // ============ TASKS ============
 
 model Task {
-  id         String    @id @default(cuid())
-  title      String
-  notes      String?
-  status     String    @default("TODO") // TODO | IN_PROGRESS | DONE
-  priority   String    @default("MEDIUM") // LOW | MEDIUM | HIGH
-  dueDate    DateTime?
-  isPrivate  Boolean   @default(false)
-  teamId     String? // null = personal task
-  leadId     String? // optional link: this task belongs to a pipeline contact
-  clientId   String? // optional link: this task belongs to a client (Clients module, e.g. saved from WhatsApp)
-  creatorId  String
-  assigneeId String?
+  id            String    @id @default(cuid())
+  title         String
+  notes         String?
+  status        String    @default("TODO") // TODO | IN_PROGRESS | DONE
+  priority      String    @default("MEDIUM") // LOW | MEDIUM | HIGH
+  dueDate       DateTime?
+  isPrivate     Boolean   @default(false)
+  teamId        String? // null = personal task
+  leadId        String? // optional link: this task belongs to a pipeline contact
+  clientId      String? // optional link: this task belongs to a client (Clients module, e.g. saved from WhatsApp)
+  appointmentId String? // optional link: this task was spun from a calendar meeting (the follow-up it promised)
+  creatorId     String
+  assigneeId    String?
 
-  creator  User          @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  assignee User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  team     Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  lead     Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  client   Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  comments TaskComment[]
-  events   TaskEvent[]
+  creator     User          @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee    User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  team        Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  lead        Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client      Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointment Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  comments    TaskComment[]
+  events      TaskEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -349,6 +354,7 @@ model Task {
   @@index([creatorId, status])
   @@index([teamId, status])
   @@index([leadId])
+  @@index([appointmentId])
 }
 
 // Team discussion threads ON tasks — the in-context alternative to WhatsApp groups.
@@ -433,6 +439,7 @@ model Appointment {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
+  tasks       Task[]       // follow-up tasks spun from this meeting
 
   @@index([userId, startsAt])
   @@index([projectId])
@@ -515,8 +522,10 @@ model EmailLog {
   ccEmail    String? // comma-joined carbon copies, the log stays honest about who else saw it
   subject    String
   body       String
-  status     String    @default("DRAFT") // DRAFT | QUEUED | SENT | FAILED | BOUNCED | SKIPPED
-  provider   String    @default("GMAIL")
+  status     String    @default("DRAFT") // DRAFT | QUEUED | SENT | FAILED | BOUNCED | SKIPPED | LOGGED (captured from outside, never sent by the engine)
+  provider   String    @default("GMAIL") // GMAIL | RESEND | SES | EXTERNAL (sent from the user's own mailbox, logged by hand or CC)
+  direction  String    @default("OUT") // OUT | IN — IN rows arrived via the log@ capture, the sender's own record of mail that left their mailbox
+  fromEmail  String? // the sending address as it really was — the log stays honest about whose name the email wore
   error      String?
   campaign   String? // bulk send grouping, e.g. blackbiz-intro
   theme      String? // the mail look the sender picked in the composer: boardroom | goldrush | nightshift | plain (null = legacy send)
@@ -546,6 +555,60 @@ model Suppression {
   reason    String // BOUNCE | COMPLAINT | UNSUB | MANUAL
   note      String? // e.g. the campaign that produced the bounce
   createdAt DateTime @default(now())
+}
+
+// ============ INBOUND MAIL CAPTURE (CC / BCC the log address) ============
+
+// The migration door: a company keeps its old mailbox and just CCs (or BCCs)
+// log@hustleportal.online on mail it already sends. SES receives it, the
+// ses-inbound webhook parses it, and it lands in the sender's email log as if
+// the portal had sent it — history captured without changing anyone's habits.
+// Extra sending addresses an account owns beyond its login email (the old
+// ceo@ on the legacy domain, an info@ box) attach here so the From line
+// resolves to the right account. The address is the identity: it must be
+// unique across the platform, because whoever owns it owns that mail.
+model EmailAlias {
+  id        String   @id @default(cuid())
+  address   String   @unique // lowercase, exact — the From line the inbound webhook matches
+  userId    String
+  label     String? // optional display hint: "old Gmail", "info@ box"
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Every email SES receives for the capture address lands here first. A
+// sender whose From address resolves to an account (login email or alias)
+// gets an EmailLog row immediately and this row rides along as the audit
+// record. A sender nothing resolves to waits in UNMATCHED — the executive
+// queue: one click claims it for an account (the slow-migration funnel),
+// one click ignores it (spam never entered anyone's books).
+model InboundMail {
+  id           String   @id @default(cuid())
+  sesMessageId String?  @unique // SES receipt messageId — the dedupe key for redeliveries
+  fromEmail    String
+  fromName     String?
+  toEmail      String   @default("") // the real recipients, capture address excluded
+  ccEmail      String?
+  subject      String
+  textBody     String
+  status       String   @default("UNMATCHED") // UNMATCHED | LOGGED | IGNORED
+  spam         Boolean  @default(false) // SES spam verdict said FAIL — kept, flagged, never hidden
+  sizeBytes    Int?
+  note         String? // e.g. "content not included — oversized"
+  userId       String? // set the moment the sender resolved or an exec claimed it
+  leadId       String? // the pipeline contact this mail belongs to, when one matched
+  emailLogId   String? // the user-facing log row this capture produced
+  receivedAt   DateTime
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 // ============ WHATSAPP (Cloud API log: inbound auto-capture + outbound sends) ============
