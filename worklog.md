@@ -3533,3 +3533,19 @@ Stage Summary:
 - Deployed: HEAD pushed to origin/main -> Vercel -> www.hustleportal.online (SHA in git log, verified by poll_deploy). Prod webhook: GET /api/webhooks/ses-inbound answers 503 until SES_INBOUND_SECRET is set in Vercel env (or falls back to SES_WEBHOOK_SECRET if present).
 - Boss handover (paste-ready): (1) Vercel: add SES_INBOUND_SECRET=<generated secret> and redeploy. (2) DNS (Vercel dashboard, hustleportal.online): MX record 10 -> inbound-smtp.af-south-1.amazonaws.com (TTL default). (3) SES console af-south-1 -> Email receiving: create receipt rule, recipient log@hustleportal.online, action SNS -> topic (e.g. hustleportal-inbound) with "Include original content" = Yes, spam/virus scan enabled, rule set ACTIVE. (4) SNS: HTTPS subscription to https://www.hustleportal.online/api/webhooks/ses-inbound?key=<same secret>; confirm the subscription (the webhook fetches the confirmation). (5) Old system: in the mail admin for businesshustle.co.za, add an auto-BCC routing rule (Workspace: Gmail routing; cPanel: Global Email Filters -> BCC) to log@hustleportal.online. (6) In the portal: Mail -> Log external -> connect ceo@businesshustle.co.za (so CC capture resolves the From line).
 - Freeze law untouched: nothing in this task sends mail; inbound receiving is a separate SES surface. Campaign waves stay SHELVED until probation clears.
+
+---
+Task ID: 199 (deploy confirmation)
+Agent: Super Z (main)
+Task: Task 199 deployment record.
+
+Work Log:
+- Push 11d1159..268fe41 (includes the 5 previously-unpushed commits) -> Vercel -> DEPLOYED 268fe41, dbPing=true at 2026-11-12T17:36 UTC (poll_deploy).
+- Prod probes: GET /api/webhooks/ses-inbound -> 200 {"ok":true,"capture":"ready","address":"log@hustleportal.online"} — the door is ALREADY ARMED: SES_INBOUND_SECRET unset but the SES_WEBHOOK_SECRET fallback is present in Vercel env, so the SNS subscription URL just carries the existing SES_WEBHOOK_SECRET as ?key=. NO Vercel env step needed.
+- /api/emails/aliases, /api/inbound, /api/emails/log-external all live with correct 401 auth walls.
+- Ops-seat GET /api/inbound on prod -> 200 {"rows":[],"counts":{"unmatched":0,"logged":0,"ignored":0}} — InboundMail table exists on the prod DB (build.mjs prisma db push ran), queue healthy.
+- paramiko had to be reinstalled into /home/z/.venv post-reset before push (worklog's own durability warning was right).
+
+Stage Summary:
+- Boss-side steps remaining (5-10 min, all outside the app): DNS MX (Vercel dashboard) -> SES receipt rule -> SNS HTTPS subscription with the existing SES_WEBHOOK_SECRET -> mail-admin auto-BCC rule -> connect ceo@businesshustle.co.za in Mail > Log external.
+- Freeze law untouched: this feature never sends; waves stay SHELVED until probation clears.
