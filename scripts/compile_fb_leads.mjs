@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 const NAME = 'compile_fb_leads'
-const cookie = login(NAME)
+const cookie = await login(NAME)
 
 const { status, json } = await apiGet(cookie, '/api/admin/exec/xpitch/review', 60_000)
 if (status !== 200 || !json?.ok) {

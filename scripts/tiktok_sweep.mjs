@@ -14,7 +14,7 @@ import { login, tregTruth, searchAsk, picksForToday, TIKTOK_ASKS, SWEEP_CAPS } f
 const NAME = 'tiktok_sweep'
 const asks = Math.max(1, Math.min(8, Number(process.argv[2]) || 4))
 
-const cookie = login(NAME)
+const cookie = await login(NAME)
 
 const truth = await tregTruth(cookie)
 if (!truth.ok) {

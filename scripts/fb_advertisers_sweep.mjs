@@ -23,7 +23,7 @@ if (SWEEP_CAPS.facebook < FB_CALL_USD) {
   process.exit(3)
 }
 
-const cookie = login(NAME)
+const cookie = await login(NAME)
 
 const truth = await tregTruth(cookie)
 if (!truth.ok) {
