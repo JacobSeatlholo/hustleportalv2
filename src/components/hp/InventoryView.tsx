@@ -20,6 +20,7 @@ import { api, randsPlain } from './shared'
 import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import { toCSV } from '@/lib/csv'
+import { queueOfflineWrite, isOfflineFailure } from '@/lib/offlineOutbox'
 import { photoToDataUrl, fetchCutout } from '@/lib/photoPolish'
 import { Plus, Loader2, Trash2, Boxes, Minus, AlertTriangle, Sparkles, Upload, Download, Camera, X } from 'lucide-react'
 
@@ -160,6 +161,8 @@ export default function InventoryView() {
   const [cutOn, setCutOn] = useState(false)
   const [cutBlob, setCutBlob] = useState<Blob | null>(null)
   const [cutBusy, setCutBusy] = useState(false)
+  // Photo preview: tap any product photo to see it big, on the row or in the dialog.
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null)
   const applySeq = useRef(0)
   const rowPhotoRef = useRef<HTMLInputElement>(null)
   const rowPhotoTarget = useRef<string | null>(null)
@@ -207,7 +210,29 @@ export default function InventoryView() {
       load()
       bumpRefresh()
     } catch (e) {
-      toast({ title: 'Could not add item', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      if (isOfflineFailure(e)) {
+        // Offline create: the item queues on this device and replays with an
+        // idempotency key the moment the network returns (see offlineOutbox).
+        queueOfflineWrite('/api/inventory', {
+          name: form.name,
+          sku: form.sku,
+          quantity: parseFloat(form.quantity) || 0,
+          unit: form.unit,
+          costPrice: parseFloat(form.costPrice) || 0,
+          sellPrice: parseFloat(form.sellPrice) || 0,
+          lowStockAt: parseFloat(form.lowStockAt) || 0,
+          supplier: form.supplier,
+          location: form.location,
+          image: newImage || '',
+          notes: form.notes,
+        })
+        toast({ title: `${form.name.trim()} saved on this device`, description: "You're offline — it lands in your stockroom the moment you reconnect." })
+        setForm({ ...EMPTY })
+        clearNewImage()
+        setShowAdd(false)
+      } else {
+        toast({ title: 'Could not add item', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+      }
     } finally {
       setBusy(false)
     }
@@ -279,13 +304,21 @@ export default function InventoryView() {
   async function onRowImageFile(f: File | undefined | null) {
     const id = rowPhotoTarget.current
     if (!f || !id) return
+    let image: string | null = null
     try {
-      const image = await processImage(f, { polish: true })
+      image = await processImage(f, { polish: true })
       const res = await api<{ item: Item }>('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id, image }) })
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, image: res.item.image } : i)))
       toast({ title: 'Photo saved', description: 'Brightened, sharpened and square cropped on your phone.' })
-    } catch {
-      toast({ title: 'Could not save that photo', description: 'Use a PNG, JPG or WebP photo, under 12 megabytes.', variant: 'destructive' })
+    } catch (e) {
+      if (image && isOfflineFailure(e)) {
+        // Offline photo set: an absolute value, safe to replay verbatim.
+        queueOfflineWrite('/api/inventory', { id, image }, 'PATCH')
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, image } : i)))
+        toast({ title: 'Photo saved on this device', description: "You're offline — it syncs the moment you reconnect." })
+      } else {
+        toast({ title: 'Could not save that photo', description: 'Use a PNG, JPG or WebP photo, under 12 megabytes.', variant: 'destructive' })
+      }
     }
   }
 
@@ -309,8 +342,15 @@ export default function InventoryView() {
     try {
       await api('/api/inventory', { method: 'PATCH', body: JSON.stringify({ id: item.id, quantity: n }) })
       bumpRefresh()
-    } catch {
-      load()
+    } catch (e) {
+      // An exact count is an absolute value, safe to replay verbatim offline.
+      // The +/- taps are relative and stay online-only on purpose.
+      if (isOfflineFailure(e)) {
+        queueOfflineWrite('/api/inventory', { id: item.id, quantity: n }, 'PATCH')
+        toast({ title: 'Count saved on this device', description: "You're offline — it syncs the moment you reconnect." })
+      } else {
+        load()
+      }
     }
   }
 
@@ -428,7 +468,9 @@ export default function InventoryView() {
                   {i.image ? (
                     <div className="relative shrink-0">
                       { }
-                      <img src={i.image} alt={i.name} className="h-11 w-11 rounded-lg object-cover border" />
+                      <button type="button" aria-label={`Preview photo of ${i.name}`} title="Tap to see the photo" onClick={() => setPreview({ src: i.image as string, name: i.name })} className="cursor-zoom-in">
+                        <img src={i.image} alt={i.name} className="h-11 w-11 rounded-lg object-cover border" />
+                      </button>
                       <button
                         type="button"
                         aria-label={`Remove photo of ${i.name}`}
@@ -540,7 +582,9 @@ export default function InventoryView() {
               {newImage ? (
                 <div className="flex items-center gap-2.5 rounded-lg border p-2">
                   { }
-                  <img src={newImage} alt="Product preview" className="h-11 w-11 rounded-lg object-cover border" />
+                  <button type="button" aria-label="Preview the product photo" title="Tap to see the photo" onClick={() => setPreview({ src: newImage as string, name: form.name.trim() || 'Product photo' })} className="cursor-zoom-in">
+                    <img src={newImage} alt="Product preview" className="h-11 w-11 rounded-lg object-cover border" />
+                  </button>
                   <div className="flex-1 min-w-0">
                     <span className="text-xs text-muted-foreground block">It shows on the stock row.</span>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -607,6 +651,18 @@ export default function InventoryView() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add item'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Photo preview: tap a product photo anywhere to see it full size. */}
+      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Camera className="h-4 w-4 text-brand" /> {preview?.name || 'Product photo'}</DialogTitle>
+            <DialogDescription>The product photo at full size, exactly as it appears on the stock row.</DialogDescription>
+          </DialogHeader>
+          {preview?.src && (
+            <img src={preview.src} alt={preview.name} className="w-full rounded-lg border object-contain max-h-[70vh] bg-muted/30" />
+          )}
         </DialogContent>
       </Dialog>
     </div>

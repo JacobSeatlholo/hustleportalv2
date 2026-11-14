@@ -23,6 +23,7 @@ import { useHp } from './store'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
 import { consumePendingLead } from './leadBus'
+import { queueOfflineWrite, isOfflineFailure } from '@/lib/offlineOutbox'
 import {
   Plus, Upload, Sparkles, Loader2, Lock, Eye, Trash2, Phone, Mail, Globe, User,
   Search, RefreshCw, X, HandCoins, MapPin, MailCheck, CalendarPlus, Check,
@@ -484,14 +485,20 @@ function AddLeadDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenC
     if (!form.company.trim()) return
     setBusy(true)
     try {
-      await api('/api/leads', {
-        method: 'POST',
-        body: JSON.stringify({ ...form, projectId: activeProjectId || undefined, value: parseFloat(form.value) || 0, source: 'MANUAL', unlocked: Boolean(form.email || form.phone) }),
-      })
-      toast({ title: 'Lead captured' })
+      const leadPayload = { ...form, projectId: activeProjectId || undefined, value: parseFloat(form.value) || 0, source: 'MANUAL', unlocked: Boolean(form.email || form.phone) }
+      try {
+        await api('/api/leads', { method: 'POST', body: JSON.stringify(leadPayload) })
+        toast({ title: 'Lead captured' })
+      } catch (err) {
+        if (!isOfflineFailure(err)) throw err
+        // Offline capture: queues on this device, replays with an idempotency
+        // key on reconnect.
+        queueOfflineWrite('/api/leads', leadPayload)
+        toast({ title: 'Lead captured on this device', description: "You're offline — it lands in your pipeline the moment you reconnect." })
+      }
       setForm({ company: '', contactName: '', email: '', phone: '', industry: '', city: '', value: '' })
       onOpenChange(false)
-      onSaved()
+      if (navigator.onLine) onSaved()
     } catch (e) {
       toast({ title: 'Failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {

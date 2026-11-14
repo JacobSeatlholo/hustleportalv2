@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { geminiGenerate, parseJsonLoose, googleGroundDrained } from '@/lib/gemini'
+import { parseJsonLoose } from '@/lib/gemini'
 import { deepseekGenerate } from '@/lib/deepseek'
 import { openrouterGenerate } from '@/lib/openrouter'
 import { zaiGenerate, getUserZaiKey, markPlatformSearchOutcome, platformPocketDown } from '@/lib/zai'
@@ -34,22 +34,17 @@ export const maxDuration = 60
  * POST /api/leads/discover, source REAL leads.
  *
  * ENGINE CHAIN (first one with real results wins):
- *  1. A PERSONAL z.ai key (the seller's own, under Integrations) puts GLM in
- *     front, their credits, their control, about two cents per scan. The
- *     PLATFORM GLM pool never fronts a grounded scan: its web search tool
- *     draws on a separate cash balance, and while that is unfunded a platform
- *     led scan always dies on the same refusal and drags a billing note the
- *     seller cannot act on into every result. Without a personal key, Gemini
- *     with Google Search grounding leads (22s budget).
- *  2. The other engine backs up automatically: z.ai GLM brings live Web Search
- *     grounding that ignores Google's quota mood; Gemini grounds on Google
- *     Search when z.ai can't answer. The GLM engine takes the lead spot back
- *     automatically the moment its search balance is funded.
- *  3. OpenStreetMap real directory (keyless), ranked by AI with the anti
+ *  1. THE grounded web scan, one engine for everyone: z.ai GLM with live Web
+ *     Search grounding. The seller's own key (under Integrations) spends their
+ *     credits, about two cents per scan; the platform pool carries everyone
+ *     else. Google's free tier kept resting its quotas at the worst possible
+ *     moments (demo days included), so Gemini is OUT of the chain entirely:
+ *     one funded web engine, no quota mood to explain to a seller mid search.
+ *  2. OpenStreetMap real directory (keyless), ranked by AI with the anti
  *     fabrication guarantee: the seller's own DeepSeek key leads, the GLM
  *     engine on the already paid token pack carries everyone else. Ranks
  *     reality, never supplies contact facts.
- *  4. Explee verified data when configured.
+ *  3. Explee verified data when configured.
  *
  * No fabricated companies, no synthetic contacts: real results or an honest
  * note naming the most actionable cause.
@@ -459,7 +454,7 @@ async function enrichWithPeople(
     .map((l, i) => `${i + 1}. ${l.company}${l.city ? ` (${l.city})` : ''}${l.website ? ` website: ${l.website}` : ''}`)
     .join('\n')
   try {
-    const res = await geminiGenerate(userId, {
+    const res = await zaiGenerate(userId, {
       search: true,
       json: true,
       system:
@@ -473,7 +468,7 @@ async function enrichWithPeople(
         `- profileUrl: ONLY when you actually saw a public profile page for this person (LinkedIn, Facebook, the company team page, a directory listing). Copy the web address exactly.\n` +
         `- Skip any business where you found no publicly named person.\n` +
         `Return ONLY JSON: {"people":[{"company":"","contactName":"","role":"","profileUrl":""}]}`,
-      maxOutputTokens: 900,
+      maxTokens: 900,
       timeoutMs: 12_000,
       trace,
     })
@@ -766,19 +761,14 @@ export async function POST(req: NextRequest) {
 
   const t0 = Date.now()
 
-  // WHO LEADS THE SCAN: a PERSONAL z.ai key (the seller's own credits, their
-  // control) puts the GLM engine in front. The platform GLM pool stays OUT of
-  // the lead spot even though its search pocket is now funded (operator top
-  // up, Nov 2026): Google's free tier absorbs the scan volume at zero cost,
-  // so the platform GLM engine carries the BACKUP lane, and it can actually
-  // answer now instead of dying on the same refusal. The pocket memory below
-  // keeps that backup honest in both directions: skipped while the pocket is
-  // freshly known dry, trusted again the moment it proves it pays.
+  // WHO LEADS THE SCAN: z.ai GLM with live Web Search grounding leads for
+  // EVERYONE now. Google's free tier kept resting its quotas at the worst
+  // possible moments (demo days included), so Gemini is out of the chain
+  // entirely: one funded engine front to back — the platform pool for sellers
+  // without a key, the seller's own credits when they saved one. The pocket
+  // memory below keeps the walk honest in both directions: skipped while the
+  // pocket is freshly known dry, trusted again the moment it proves it pays.
   const personalZai = Boolean(await getUserZaiKey(userId))
-  const zaiFirst = personalZai
-
-  const runGeminiScan = () => geminiGenerate(userId, { ...buildSearch(), timeoutMs: 22_000, trace: geminiTrace })
-  const geminiTrace: string[] = []
   const glmTrace: string[] = []
   const runZaiScan = () => {
     const remaining = t0 + 44_000 - Date.now()
@@ -812,17 +802,16 @@ export async function POST(req: NextRequest) {
 
   const aiSearchResponse = async (
     leads: Awaited<ReturnType<typeof parseLeadList>>,
-    engine: 'gemini' | 'zai',
     notice?: string,
     zaiEndpoint?: 'z.ai' | 'zhipu'
   ): Promise<NextResponse> => {
-    // Capture + verify: what the engines found lands in the shared pool
+    // Capture + verify: what the engine found lands in the shared pool
     // (deduped, phones normalized, websites pinged while budget allows), then
     // the answer tops up with fresh pool faces the seller has never saved.
     const { stamps, deadEmails } = await rememberScanResults({
       topicFp,
       area: areaLabel,
-      source: engine === 'zai' ? 'ZAI' : 'GEMINI',
+      source: 'ZAI',
       leads: leads as RememberLead[],
       budgetUntil: t0 + 54_000,
     })
@@ -848,11 +837,10 @@ export async function POST(req: NextRequest) {
       source: 'WEB',
       ...(notice ? { notice } : {}),
       ...(scarcity ? { note: scarcity } : { note: deck.length > leads.length ? `${baseNote} Topped up with verified pool leads you have not seen yet.` : baseNote }),
-      ...(body.debug ? { glmTrace, geminiTrace } : {}),
+      ...(body.debug ? { glmTrace } : {}),
     })
   }
 
-  let ai: Awaited<ReturnType<typeof geminiGenerate>>
   let zai: Awaited<ReturnType<typeof zaiGenerate>> | null
 
   /**
@@ -876,62 +864,22 @@ export async function POST(req: NextRequest) {
     return undefined
   }
 
-  if (zaiFirst) {
-    // 1) PRIMARY, z.ai GLM with live Web Search grounding. A personal key
-    //    spends the seller's own credits; the platform key spends the
-    //    operator's pool. Either way a grounded scan costs about two cents.
-    zai = await runZaiScan()
-    let leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
-    if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, 'zai', undefined, zai.endpoint)
-
-    // 2) BACKUP, Gemini with Google Search grounding when the z.ai engine could
-    //    not answer. If the z.ai cause is money or the key, say so once, gently:
-    //    the user can act on that, and it explains why the scan ran on Google.
-    //    Drain pocket: a walk that already ended drained this half hour is
-    //    skipped - the seconds go to the directory lane instead of a 429 storm.
-    ai = googleGroundDrained()
-      ? { ok: false, error: 'Google grounded walk skipped: the daily search allowance drained minutes ago (instance memory).' }
-      : await runGeminiScan()
-    leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
-    if (ai.ok && leads.length > 0) {
-      return aiSearchResponse(leads, 'gemini', zaiWhy('Google') || ai.notice)
-    }
+  // THE GROUNDED SCAN: one web walk, z.ai GLM with live Web Search grounding,
+  // for everyone. A personal key spends the seller's own credits; the platform
+  // pool spends the operator's. Pre-flight: without a personal key, when the
+  // pocket is freshly known to refuse the search tool for balance, skip the
+  // dead knock entirely and hand those seconds to the map directory; every
+  // real outcome re-marks the memory, so an operator top up is picked up
+  // within minutes.
+  if (!personalZai && platformPocketDown()) {
+    zai = null
+    glmTrace.push('platform pocket skipped, refused for balance in the last few minutes')
   } else {
-    // 1) PRIMARY, Gemini with Google Search grounding (the established engine,
-    //    when its free tier is in the mood). Deadline trimmed to 22s so a second
-    //    engine still gets its turn inside the 60s function budget. Drain
-    //    pocket: a walk that already ended drained this half hour is skipped
-    //    entirely - a day bucket will not refill before the early-morning
-    //    reset, so the walk's only product is a 429 storm that starves the
-    //    directory lane of its seconds.
-    ai = googleGroundDrained()
-      ? { ok: false, error: 'Google grounded walk skipped: the daily search allowance drained minutes ago (instance memory).' }
-      : await runGeminiScan()
-    let leads = ai.ok ? await parseLeadList(ai.text, cap, city) : []
-    if (ai.ok && leads.length > 0) return aiSearchResponse(leads, 'gemini', ai.notice)
-
-    // 2) SECOND, z.ai GLM with live Web Search grounding (the platform pool:
-    //    a saved key would have taken the lead spot above). Pre-flight: when
-    //    the pocket is freshly known to refuse the search tool for balance,
-    //    skip the dead knocks entirely and hand those seconds to the map
-    //    directory; every real outcome re-marks the memory, so an operator
-    //    top up is picked up within minutes. Google was tried first and
-    //    could not answer, say so once, gently.
-    if (platformPocketDown()) {
-      zai = null
-      glmTrace.push('platform pocket skipped, refused for balance in the last few minutes')
-    } else {
-      zai = await runZaiScan()
-      if (zai) markPlatformSearchOutcome('platform', zai.ok, zai.ok ? undefined : zai.reason)
-    }
-    leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
-    if (zai?.ok && leads.length > 0) {
-      const engineNotice = !ai.ok
-        ? 'Heads up: the Google search engine was unavailable this minute, so this scan ran on the backup live search engine. Everything below is still real, search grounded results.'
-        : undefined
-      return aiSearchResponse(leads, 'zai', engineNotice, zai.endpoint)
-    }
+    zai = await runZaiScan()
+    if (zai && !personalZai) markPlatformSearchOutcome('platform', zai.ok, zai.ok ? undefined : zai.reason)
   }
+  let leads = zai?.ok ? await parseLeadList(zai.text, cap, city) : []
+  if (zai?.ok && leads.length > 0) return aiSearchResponse(leads, undefined, zai.endpoint)
 
   // 3) FALLBACK A, OpenStreetMap: real, keyless directory listings (no AI
   //    needed to fetch them), then DeepSeek ranks them to the seller when a
@@ -959,15 +907,15 @@ export async function POST(req: NextRequest) {
     const areaLine = pinArea ? ' within 5 km of your location' : area && area !== 'South Africa' ? ` in ${area}` : ''
     const dirNotice =
       zaiWhy('the real business directory') ||
-      (!ai.ok && /allowance|drained/i.test(ai.error)
-        ? 'Heads up: the live web search allowance is out for now, so this scan ran on the real business directory instead. Everything below is still a real, verifiable business.'
+      (zai && !zai.ok
+        ? 'Heads up: the live search engine could not answer this minute, so this scan ran on the real business directory instead. Everything below is still a real, verifiable business.'
         : undefined)
-    // Map ranking (GLM plain generation) and the People Pass (Gemini grounded)
-    // draw on DIFFERENT engines and different quotas, so they run side by
-    // side: the scan answers in the same time, with names AND reasons.
+    // Map ranking (GLM plain generation) and the People Pass (GLM grounded)
+    // are two walks on the same engine, so they run side by side: the scan
+    // answers in the same time, with names AND reasons.
     const [ranked, people] = await Promise.all([
       enrichOsmWithAi(userId, definition, osm.leads as AiLead[], cap, t0, glmTrace),
-      enrichWithPeople(userId, osm.leads as unknown as (AiLead & { company: string })[], t0, geminiTrace),
+      enrichWithPeople(userId, osm.leads as unknown as (AiLead & { company: string })[], t0),
     ])
     const leadsWithPeople = mergePeople(osm.leads as unknown as OutLead[], people)
     // Region gate on the answer side: the directory is area bounded, but a
@@ -1012,7 +960,7 @@ export async function POST(req: NextRequest) {
         ...(ranked.notice || dirNotice ? { notice: ranked.notice || dirNotice } : {}),
         ...(osm.note ? { osmNote: osm.note } : {}),
         ...(scarcity ? { note: scarcity } : {}),
-        ...(body.debug ? { glmTrace, geminiTrace } : {}),
+        ...(body.debug ? { glmTrace } : {}),
         ...(scarcity
           ? {}
           : {
@@ -1026,10 +974,10 @@ export async function POST(req: NextRequest) {
       leads: deck,
       mode: deck.length ? 'OSM' : 'SCARCE',
       source: 'OSM',
-      ...(dirNotice || ai.notice ? { notice: dirNotice || ai.notice } : {}),
+      ...(dirNotice ? { notice: dirNotice } : {}),
       ...(osm.note ? { osmNote: osm.note } : {}),
       ...(scarcity ? { note: scarcity } : { note: `Real businesses from the OpenStreetMap directory${areaLine}. Contact details as listed.` }),
-      ...(body.debug ? { glmTrace, geminiTrace } : {}),
+      ...(body.debug ? { glmTrace } : {}),
     })
   }
 
@@ -1069,40 +1017,25 @@ export async function POST(req: NextRequest) {
   // or key problem beats a quota rest) instead of stacking two errors.
   const slowRun = Date.now() - t0 > 50_000
   const mapWhy = osm.note ? ` ${osm.note}` : ' The map directory had nothing for that description either.'
-  const engineErrors: { error: string; reason?: string }[] = []
-  if (!ai.ok) engineErrors.push({ error: ai.error })
-  // The platform lane's failure counts too: a BALANCE or key cause from the
-  // operator pool is exactly as actionable as a personal key's, and hiding it
-  // let a pure Google quota rest speak for a money problem it could not explain.
-  if (zai && !zai.ok) engineErrors.push({ error: zai.error, reason: zai.reason })
+  // One grounded engine now: its failure (if any) IS the engine story. A
+  // money, key or pacing cause names a fix the seller can act on; a drained
+  // allowance never ships as a wait-till-morning dead end — the keyless
+  // directory already tried to carry the scan before this note was written.
+  const engineError = zai && !zai.ok ? zai.error : ''
   const isDrain = (s?: string) => !!s && /allowance|drained|refill/i.test(s)
-  const actionable = engineErrors.some((e) => e.reason === 'BALANCE' || e.reason === 'KEY_INVALID' || e.reason === 'RATE')
-  const engineError = engineErrors.length
-    ? engineErrors.find((e) => e.reason === 'BALANCE' || e.reason === 'KEY_INVALID' || e.reason === 'RATE')?.error ?? engineErrors[0].error
-    : ''
-  // The drained-allowance line never ships, even in a total blackout (both
-  // engines down AND the keyless directory empty): a pure quota rest reads as
-  // a resting note with a next move, never a wait-till-morning dead end. An
-  // actionable cause (money, key, pace) still leads verbatim.
-  const leadError = engineError && isDrain(engineError) && !actionable
-    ? 'The search engine is resting on its free allowance right now. Try naming the type of business and the area more directly, for example: taverns in Soweto that need security services.'
+  const leadError = engineError && isDrain(engineError)
+    ? 'The live search engine is catching its breath right now. One more try in a few minutes usually clears it, or name the type of business and the area more directly, for example: taverns in Soweto that need security services.'
     : engineError
-  const aiAlso = !ai.ok && ai.error !== engineError
-    ? isDrain(ai.error)
-      ? ' The Google engine is also resting on its free allowance right now.'
-      : ` The Google engine also could not answer this minute: ${ai.error}`
-    : ''
-  const note = ai.ok || zai?.ok
+  const note = zai?.ok
     ? `The web search and the map directory both came back empty for that description.${osm.note ? ` ${osm.note}` : ''} Try naming the type of business and the area more directly. For example: taverns in Soweto that need security services.`
-    : `${leadError}${mapWhy}${aiAlso}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
+    : `${leadError}${mapWhy}${slowRun ? ' The search ran out of its time budget. One more try is usually quicker.' : ''}`
 
   await logScanRun(userId, topicFp, 'NONE', 0, false)
   return NextResponse.json(
     {
       leads: [],
       mode: 'NONE',
-      ...(ai.notice ? { notice: ai.notice } : {}),
-      ...(body.debug ? { glmTrace, geminiTrace } : {}),
+      ...(body.debug ? { glmTrace } : {}),
       note,
     },
     { status: 200 }

@@ -18,6 +18,7 @@ import CityField from './CityField'
 import PwaNotifications from './PwaNotifications'
 import ThemeToggle from './ThemeToggle'
 import { MODULES } from '@/lib/modules'
+import { queueOfflineWrite, isOfflineFailure } from '@/lib/offlineOutbox'
 import { LEVELS } from '@/lib/levels'
 import { Loader2, Users, UserPlus, Trophy, LogOut, CheckCircle2, Circle, Building2, Sparkles, Compass, Globe, Copy, Check, ScanSearch, Bell, FolderKanban, Trash2, X, LayoutGrid, Flame, ClipboardList } from 'lucide-react'
 
@@ -175,8 +176,17 @@ export default function ProfileView() {
     try {
       // "Other" is a door, not a label: the typed value IS the industry.
       const resolved = form.industry === 'Other' && customIndustry.trim() ? { ...form, industry: customIndustry.trim() } : form
-      await api('/api/profile', { method: 'PATCH', body: JSON.stringify(resolved) })
-      toast({ title: 'Profile saved' })
+      try {
+        await api('/api/profile', { method: 'PATCH', body: JSON.stringify(resolved) })
+        toast({ title: 'Profile saved' })
+      } catch (err) {
+        if (!isOfflineFailure(err)) throw err
+        // Offline save: an absolute snapshot of the form, safe to replay verbatim.
+        queueOfflineWrite('/api/profile', resolved, 'PATCH')
+        toast({ title: 'Profile saved on this device', description: "You're offline — it syncs the moment you reconnect." })
+        setSaving(false)
+        return
+      }
       await loadSession()
     } catch (e) {
       toast({ title: 'Save failed', description: e instanceof Error ? e.message : '', variant: 'destructive' })

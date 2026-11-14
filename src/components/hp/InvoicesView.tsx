@@ -17,6 +17,7 @@ import { tpCanShow, tpMarkShown } from './touchpoints'
 import { TouchpointCard, TouchpointAction } from './TouchpointCard'
 import { ServiceRequestDialog, type RequestedService } from './ServiceRequestDialog'
 import { usePlan, requestUpgrade } from './useUpgrade'
+import { queueOfflineWrite, isOfflineFailure } from '@/lib/offlineOutbox'
 
 type Item = { description: string; quantity: number; unitPrice: number }
 type BankDetails = {
@@ -474,23 +475,34 @@ export default function InvoicesView() {
     }
     setCreating(true)
     try {
-      const res = await api<{ invoice: Invoice; statementNote?: string }>('/api/invoices', {
-        method: 'POST',
-        body: JSON.stringify({
-          kind: docKind,
-          clientName, clientEmail, items, taxRate, pricesIncludeVat: vatMode === 'incl', notes, logoUrl,
-          status: 'DRAFT', projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
-          bankDetails: bankLines(bank).join('\n'),
-        }),
-      })
-      toast({ title: `${res.invoice.number} created ✓`, description: res.statementNote || 'Saved as draft.' })
-      resetForm()
-      setShowCreate(false)
-      bumpRefresh()
-      load() // load() re-derives the invoice-logo touchpoint from the fresh list
-      // "Create & send" was checked → the composer opens on the fresh document.
-      // Nothing is marked SENT until the email itself actually goes out.
-      if (sendAfter) openSend(res.invoice)
+      const payload = {
+        kind: docKind,
+        clientName, clientEmail, items, taxRate, pricesIncludeVat: vatMode === 'incl', notes, logoUrl,
+        status: 'DRAFT', projectId: effProject !== 'ALL' ? effProject : (activeProjectId || undefined),
+        bankDetails: bankLines(bank).join('\n'),
+      }
+      try {
+        const res = await api<{ invoice: Invoice; statementNote?: string }>('/api/invoices', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        toast({ title: `${res.invoice.number} created ✓`, description: res.statementNote || 'Saved as draft.' })
+        resetForm()
+        setShowCreate(false)
+        bumpRefresh()
+        load() // load() re-derives the invoice-logo touchpoint from the fresh list
+        // "Create & send" was checked → the composer opens on the fresh document.
+        // Nothing is marked SENT until the email itself actually goes out.
+        if (sendAfter) openSend(res.invoice)
+      } catch (err) {
+        if (!isOfflineFailure(err)) throw err
+        // Offline create: the document queues on this device and replays on
+        // reconnect. "Create & send" stays an online-only step — mail waits.
+        queueOfflineWrite('/api/invoices', payload)
+        toast({ title: 'Document saved on this device', description: "You're offline — it lands in your invoices the moment you reconnect." })
+        resetForm()
+        setShowCreate(false)
+      }
     } catch (e) {
       toast({ title: 'Could not create invoice', description: e instanceof Error ? e.message : '', variant: 'destructive' })
     } finally {

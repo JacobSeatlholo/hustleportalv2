@@ -52,7 +52,7 @@ export default function OfflineSyncBanner() {
           <span>
             {pending === 0
               ? 'Back online — everything synced.'
-              : `Back online — ${pending} offline note${pending === 1 ? '' : 's'} syncing…`}
+              : `Back online — ${pending} offline change${pending === 1 ? '' : 's'} syncing…`}
           </span>
           {pending > 0 && (
             <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={sync} disabled={syncing}>
@@ -62,7 +62,7 @@ export default function OfflineSyncBanner() {
         </>
       ) : (
         <span>
-          Offline — the app still works. Notes save on this device{pending > 0 ? ` (${pending} queued)` : ''} and sync automatically when you reconnect.
+          Offline — the app still works. Your work saves on this device{pending > 0 ? ` (${pending} queued)` : ''} and syncs automatically when you reconnect.
         </span>
       )}
     </div>

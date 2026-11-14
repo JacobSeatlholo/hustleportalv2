@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { parseContactList, normalizePhone, waLink, waGreeting } from '@/lib/whatsapp'
-import { queueOfflineNote } from '@/lib/offlineOutbox'
+import { queueOfflineNote, queueOfflineWrite, isOfflineFailure } from '@/lib/offlineOutbox'
 import { api, rands } from './shared'
 import { useHp } from './store'
 import { tpCanShow, tpMarkShown } from './touchpoints'
@@ -416,8 +416,18 @@ export default function ClientsView() {
         toast({ title: 'Client updated' })
       } else {
         // New clients join the workspace you are looking at right now.
-        await api('/api/clients', { method: 'POST', body: JSON.stringify({ ...payload, projectId: activeProjectId || undefined }) })
-        toast({ title: 'Client added', description: `${form.name} is now in your CRM.` })
+        try {
+          await api('/api/clients', { method: 'POST', body: JSON.stringify({ ...payload, projectId: activeProjectId || undefined }) })
+          toast({ title: 'Client added', description: `${form.name} is now in your CRM.` })
+        } catch (err) {
+          if (!isOfflineFailure(err)) throw err
+          // Offline create: queues on this device, replays with an idempotency
+          // key on reconnect. Skip the reload — the network is not there yet.
+          queueOfflineWrite('/api/clients', { ...payload, projectId: activeProjectId || undefined })
+          toast({ title: 'Client saved on this device', description: "You're offline — they land in your CRM the moment you reconnect." })
+          setDialogOpen(false)
+          return
+        }
       }
       setDialogOpen(false)
       await load()
