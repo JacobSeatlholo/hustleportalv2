@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import LeadCalculator from './LeadCalculator'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -264,6 +265,9 @@ export default function DashboardView() {
           </div>
         )}
       </div>
+
+      {/* The math behind the hustle: leads needed for the revenue goal */}
+      <LeadCalculator />
 
       {/* Module shortcuts */}
       <div className="grid sm:grid-cols-3 gap-3">

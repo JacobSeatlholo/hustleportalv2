@@ -30,8 +30,10 @@ export interface PlanDef {
   highlight?: boolean
 }
 
+import { STANDARD_REVEAL_PRICE_CENTS } from './levels'
+
 /** Wallet-cent price of one verified lead reveal (keep in sync with CONFIG_KEYS.LEAD_PRICE default). */
-export const LEAD_REVEAL_PRICE_CENTS = 1500
+export const LEAD_REVEAL_PRICE_CENTS = STANDARD_REVEAL_PRICE_CENTS
 
 function annualOf(priceCents: number): number {
   return priceCents * 10

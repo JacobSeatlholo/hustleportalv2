@@ -5,10 +5,10 @@
 export const LEVELS = [
   { level: 1, name: 'Seedling', min: 0, icon: '🌱', rewardCents: 0, reward: 'Starter credits on signup' },
   { level: 2, name: 'Builder', min: 100, icon: '🔧', rewardCents: 500, reward: 'R5 wallet credit' },
-  { level: 3, name: 'Operator', min: 300, icon: '⚡', rewardCents: 1000, reward: 'R10 wallet credit' },
-  { level: 4, name: 'Closer', min: 700, icon: '🎯', rewardCents: 1500, reward: 'R15 wallet credit' },
-  { level: 5, name: 'Boss', min: 1200, icon: '👑', rewardCents: 2500, reward: 'R25 wallet credit' },
-  { level: 6, name: 'Tycoon', min: 2500, icon: '🏆', rewardCents: 5000, reward: 'R50 wallet credit' },
+  { level: 3, name: 'Operator', min: 300, icon: '⚡', rewardCents: 1000, reward: 'R10 wallet credit + R15 lead reveals' },
+  { level: 4, name: 'Closer', min: 700, icon: '🎯', rewardCents: 1500, reward: 'R15 wallet credit + R15 lead reveals' },
+  { level: 5, name: 'Boss', min: 1200, icon: '👑', rewardCents: 2500, reward: 'R25 wallet credit + R15 lead reveals' },
+  { level: 6, name: 'Tycoon', min: 2500, icon: '🏆', rewardCents: 5000, reward: 'R50 wallet credit + R15 lead reveals' },
 ]
 
 export function levelFor(xp: number) {
@@ -18,4 +18,16 @@ export function levelFor(xp: number) {
   const span = next ? next.min - current.min : 1
   const progress = next ? Math.min(100, Math.round(((xp - current.min) / span) * 100)) : 100
   return { ...current, next, progress }
+}
+
+// ---- Lead reveal pricing: the level perk, one source of truth ----
+// The list price (R18) is what anyone pays at the reveal till; Operator (L3)
+// and up have earned the R15 price. Enforced server-side at the till, the UI
+// only displays it.
+export const STANDARD_REVEAL_PRICE_CENTS = 1800
+export const DISCOUNTED_REVEAL_PRICE_CENTS = 1500
+export const REVEAL_DISCOUNT_MIN_LEVEL = 3
+
+export function revealPriceForLevel(level: number) {
+  return level >= REVEAL_DISCOUNT_MIN_LEVEL ? DISCOUNTED_REVEAL_PRICE_CENTS : STANDARD_REVEAL_PRICE_CENTS
 }

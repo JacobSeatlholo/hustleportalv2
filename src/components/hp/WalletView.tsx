@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, type CreditTx, type TopUpPack } from './shared'
 import { SPEND_ACTIONS, COMING_SOON_SKUS, TOPUP_MIN_CENTS, TOPUP_MAX_CENTS, bonusForLoad, creditsForLoad } from '@/lib/spend'
-import { LEAD_REVEAL_PRICE_CENTS } from '@/lib/plans'
+import { levelFor, revealPriceForLevel, REVEAL_DISCOUNT_MIN_LEVEL, DISCOUNTED_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { useHp } from './store'
 import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift, Coins } from 'lucide-react'
 
@@ -129,8 +129,8 @@ export default function WalletView() {
             <span><span className="font-medium">Outreach email</span> — {SPEND_ACTIONS.EMAIL_SEND.outcome}</span>
           </li>
           <li className="flex gap-3">
-            <span className="font-display text-brand shrink-0 w-16">{rands(LEAD_REVEAL_PRICE_CENTS)}</span>
-            <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free.</span>
+            <span className="font-display text-brand shrink-0 w-16">{rands(revealPriceForLevel(levelFor(session?.user?.xp ?? 0).level))}</span>
+            <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free. {levelFor(session?.user?.xp ?? 0).level >= REVEAL_DISCOUNT_MIN_LEVEL ? 'You reveal at the Operator perk price.' : `Reveal at R15 once you reach Operator (level 3).`}</span>
           </li>
           {COMING_SOON_SKUS.map((sku) => (
             <li key={sku.key} className="flex gap-3 text-muted-foreground">

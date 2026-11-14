@@ -557,7 +557,7 @@ export default function Landing() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] hidden sm:inline-flex items-center gap-1 text-emerald-500 font-medium"><BadgeCheck className="h-3 w-3" /> Verified</span>
-                    <span className="text-[10px] rounded-md bg-brand text-black font-semibold px-2 py-1">Reveal R15</span>
+                    <span className="text-[10px] rounded-md bg-brand text-black font-semibold px-2 py-1">Reveal R18</span>
                   </div>
                 </div>
               ))}

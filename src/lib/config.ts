@@ -16,7 +16,7 @@ export const CONFIG_KEYS = {
 } as const
 
 const DEFAULTS: Record<string, string> = {
-  [CONFIG_KEYS.LEAD_PRICE]: '1500', // R15.00
+  [CONFIG_KEYS.LEAD_PRICE]: '1800', // R18.00 list (R15 at Operator+, applied at the reveal till)
   [CONFIG_KEYS.FREE_LEADS]: '3',
   [CONFIG_KEYS.WELCOME_CREDIT_CENTS]: '9900', // R99, enough real teaser reveals to taste the platform
   [CONFIG_KEYS.CAMPAIGN_AUTO_CENTS]: '50000', // R500, the smallest credit pack; every real top-up earns a campaign

@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
+import { levelFor, revealPriceForLevel, STANDARD_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { zaiGenerate } from '@/lib/zai'
@@ -61,7 +62,13 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const price = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || 1500
+  // The till prices from the operator config, then applies the member's level
+  // perk SERVER-SIDE (the UI number is only a display): Operator (L3) and up
+  // reveal at R15. Math.min keeps the discount one-directional — an operator
+  // promo price in config always wins over the standard ladder.
+  const configPrice = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || STANDARD_REVEAL_PRICE_CENTS
+  const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true } })
+  const price = Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
 
   let contact = {
     email: saneEmail(lead.email),
