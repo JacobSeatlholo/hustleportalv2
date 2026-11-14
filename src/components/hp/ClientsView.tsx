@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { parseContactList, normalizePhone, waLink, waGreeting } from '@/lib/whatsapp'
+import { queueOfflineNote } from '@/lib/offlineOutbox'
 import { api, rands } from './shared'
 import { useHp } from './store'
 import { tpCanShow, tpMarkShown } from './touchpoints'
@@ -120,13 +121,29 @@ function TimelineDialog({ client, open, onOpenChange, onCountChange }: {
     if (!client || !noteBody.trim()) return
     setSavingNote(true)
     try {
+      // Offline first: the note queues on this device and replays with an
+      // idempotency key on reconnect (see src/lib/offlineOutbox.ts).
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        queueOfflineNote(client.id, noteBody.trim())
+        setNoteBody('')
+        toast({ title: 'Saved offline', description: 'No connection right now — it syncs automatically when you reconnect.' })
+        return
+      }
       await api(`/api/clients/${client.id}/timeline`, { method: 'POST', body: JSON.stringify({ body: noteBody }) })
       const r = await api<{ items: TimelineItem[] }>(`/api/clients/${client.id}/timeline`)
       setItems(r.items)
       onCountChange?.(r.items.length)
       setNoteBody('')
       toast({ title: 'Note saved' })
-    } catch {
+    } catch (e) {
+      // A network death mid-save throws without a status — outbox it instead
+      // of losing the note. Real API errors (with status) toast as before.
+      if ((e as { status?: number }).status === undefined) {
+        queueOfflineNote(client.id, noteBody.trim())
+        setNoteBody('')
+        toast({ title: 'Saved offline', description: 'The connection dropped — it syncs automatically when you reconnect.' })
+        return
+      }
       toast({ title: 'Could not save the note', variant: 'destructive' })
     } finally {
       setSavingNote(false)

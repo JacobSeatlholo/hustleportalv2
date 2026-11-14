@@ -137,6 +137,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const text = String((body as { body?: unknown }).body || '').trim().slice(0, 2000)
   if (!text) return NextResponse.json({ error: 'Write the note first.' }, { status: 400 })
 
+  // Offline replay: the outbox stamps an Idempotency-Key on every queued note.
+  // A retry that fires after a lost response dedupes on the (userId, client,
+  // body) it would have created inside the replay window — no schema change.
+  if (req.headers.get('idempotency-key')) {
+    const recent = await db.clientNote.findFirst({
+      where: { userId, clientId: client.id, body: text, createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) } },
+    })
+    if (recent) return NextResponse.json({ note: recent })
+  }
+
   const note = await db.clientNote.create({ data: { clientId: client.id, userId, body: text } })
   return NextResponse.json({ note }, { status: 201 })
 }

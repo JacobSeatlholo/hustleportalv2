@@ -12,12 +12,33 @@
  *    Without this handler the device silently died at rotation time. The
  *    worker now re-subscribes with the server key and re-stores itself.
  */
+ * v3 (offline mode): same-origin GET caching so the app opens and recent
+ * screens read offline. Writes never touch the worker — the client outbox
+ * (src/lib/offlineOutbox.ts) owns them and replays with an Idempotency-Key.
+ */
+const STATIC_CACHE = 'hp-static-v3'
+const PAGE_CACHE = 'hp-pages-v3'
+const API_CACHE = 'hp-api-v3'
+const OFFLINE_URL = '/offline'
+const NEVER_CACHE_API = ['/api/auth', '/api/push', '/api/cron', '/api/webhooks', '/api/admin']
+
 self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(STATIC_CACHE).then((c) => c.addAll([OFFLINE_URL, '/icon-192.png', '/manifest.webmanifest']))
+  )
   self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    (async () => {
+      // Runtime caches start fresh with every worker version: a deploy can move
+      // chunks, and serving last week's payloads offline breaks pages.
+      const names = await caches.keys()
+      await Promise.all(names.filter((n) => n !== STATIC_CACHE).map((n) => caches.delete(n)))
+      await self.clients.claim()
+    })()
+  )
 })
 
 function urlB64ToUint8Array(base64String) {
@@ -112,4 +133,79 @@ self.addEventListener('notificationclick', (event) => {
       return self.clients.openWindow(url)
     })
   )
+})
+
+/* v3 (offline mode): fetch handling — reads work offline, writes pass through. */
+self.addEventListener('fetch', (event) => {
+  const req = event.request
+  if (req.method !== 'GET') return
+  const url = new URL(req.url)
+  if (url.origin !== location.origin) return
+
+  // Immutable build output + brand assets: cache-first (their urls change
+  // when content changes).
+  if (
+    url.pathname.startsWith('/_next/static') ||
+    url.pathname.startsWith('/icon') ||
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname.startsWith('/brand/')
+  ) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then(async (cache) => {
+        const hit = await cache.match(req)
+        if (hit) return hit
+        const res = await fetch(req)
+        if (res.ok) cache.put(req, res.clone())
+        return res
+      })
+    )
+    return
+  }
+
+  // API GETs: network-first; successful JSON (never a Set-Cookie response)
+  // lands in the cache so timelines and dashboards re-open offline.
+  if (url.pathname.startsWith('/api/')) {
+    if (NEVER_CACHE_API.some((p) => url.pathname.startsWith(p))) return
+    event.respondWith(
+      (async () => {
+        try {
+          const res = await fetch(req)
+          if (res.ok && !res.headers.get('set-cookie') && (res.headers.get('content-type') || '').includes('json')) {
+            const cache = await caches.open(API_CACHE)
+            cache.put(req, res.clone())
+          }
+          return res
+        } catch (e) {
+          const hit = await caches.match(req)
+          if (hit) return hit
+          return Response.json({ error: 'Offline and not cached yet.' }, { status: 503 })
+        }
+      })()
+    )
+    return
+  }
+
+  // Page navigations: network-first, then the cached copy of this exact page,
+  // then the offline shell.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const res = await fetch(req)
+          if (res.ok) {
+            const cache = await caches.open(PAGE_CACHE)
+            cache.put(req, res.clone())
+          }
+          return res
+        } catch (e) {
+          const hit = await caches.match(req)
+          return hit || (await caches.match(OFFLINE_URL)) || Response.error()
+        }
+      })()
+    )
+  }
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting()
 })

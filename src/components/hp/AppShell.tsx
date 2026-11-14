@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { useHp, type ViewKey } from './store'
 import { api, rands } from './shared'
+import OfflineSyncBanner from './OfflineSyncBanner'
 import DashboardView from './DashboardView'
 import LeadsView from './LeadsView'
 import TasksView from './TasksView'
@@ -239,6 +240,7 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen hp-gradient-bg flex">
+      <OfflineSyncBanner />
       {/* Sidebar, desktop — slides away (z.ai-style) so the dashboard can take the full width */}
       <aside
         aria-hidden={sidebarCollapsed}
