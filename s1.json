@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+   <head>
+      <title>Security check - Substation</title>
+      <meta charset="UTF-8" />
+      <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+      <meta content="dark" name="color-scheme" />
+      <style nonce="yDFlGpcXX-RloiMc8wbyL8hb">
+         *,
+         ::after,
+         ::backdrop,
+         ::before,
+         ::file-selector-button {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border: 0 solid;
+         }
+         :host,
+         html {
+            line-height: 1.5;
+            -webkit-text-size-adjust: 100%;
+            tab-size: 4;
+            font-family: ui-sans-serif, system-ui, sans-serif,
+               "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+               "Noto Color Emoji";
+            font-feature-settings: normal;
+            font-variation-settings: normal;
+            -webkit-tap-highlight-color: transparent;
+         }
+         hr {
+            height: 0;
+            color: inherit;
+            border-top-width: 1px;
+         }
+         abbr:where([title]) {
+            -webkit-text-decoration: underline dotted;
+            text-decoration: underline dotted;
+         }
+         h1,
+         h2,
+         h3,
+         h4,
+         h5,
+         h6 {
+            font-size: inherit;
+            font-weight: inherit;
+         }
+         a {
+            color: inherit;
+            -webkit-text-decoration: inherit;
+            text-decoration: inherit;
+         }
+         b,
+         strong {
+            font-weight: bolder;
+         }
+         code,
+         kbd,
+         pre,
+         samp {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+               "Liberation Mono", "Courier New", monospace;
+            font-feature-settings: normal;
+            font-variation-settings: normal;
+            font-size: 1em;
+         }
+         small {
+            font-size: 80%;
+         }
+         sub,
+         sup {
+            font-size: 75%;
+            line-height: 0;
+            position: relative;
+            vertical-align: baseline;
+         }
+         sub {
+            bottom: -0.25em;
+         }
+         sup {
+            top: -0.5em;
+         }
+         table {
+            text-indent: 0;
+            border-color: inherit;
+            border-collapse: collapse;
+         }
+         :-moz-focusring {
+            outline: auto;
+         }
+         progress {
+            vertical-align: baseline;
+         }
+         summary {
+            display: list-item;
+         }
+         menu,
+         ol,
+         ul {
+            list-style: none;
+         }
+         audio,
+         canvas,
+         embed,
+         iframe,
+         img,
+         object,
+         svg,
+         video {
+            display: block;
+            vertical-align: middle;
+         }
+         img,
+         video {
+            max-width: 100%;
+            height: auto;
+         }
+         ::file-selector-button,
+         button,
+         input,
+         optgroup,
+         select,
+         textarea {
+            font: inherit;
+            font-feature-settings: inherit;
+            font-variation-settings: inherit;
+            letter-spacing: inherit;
+            color: inherit;
+            border-radius: 0;
+            background-color: transparent;
+            opacity: 1;
+         }
+         :where(select:is([multiple], [size])) optgroup {
+            font-weight: bolder;
+         }
+         :where(select:is([multiple], [size])) optgroup option {
+            padding-inline-start: 20px;
+         }
+         ::file-selector-button {
+            margin-inline-end: 4px;
+         }
+         ::placeholder {
+            opacity: 1;
+         }
+         @supports (not (-webkit-appearance: -apple-pay-button)) or
+            (contain-intrinsic-size: 1px) {
+            ::placeholder {
+               color: color-mix(in oklab, currentColor 50%, transparent);
+            }
+         }
+         textarea {
+            resize: vertical;
+         }
+         ::-webkit-search-decoration {
+            -webkit-appearance: none;
+         }
+         ::-webkit-date-and-time-value {
+            min-height: 1lh;
+            text-align: inherit;
+         }
+         ::-webkit-datetime-edit {
+            display: inline-flex;
+         }
+         ::-webkit-datetime-edit-fields-wrapper {
+            padding: 0;
+         }
+         ::-webkit-datetime-edit,
+         ::-webkit-datetime-edit-day-field,
+         ::-webkit-datetime-edit-hour-field,
+         ::-webkit-datetime-edit-meridiem-field,
+         ::-webkit-datetime-edit-millisecond-field,
+         ::-webkit-datetime-edit-minute-field,
+         ::-webkit-datetime-edit-month-field,
+         ::-webkit-datetime-edit-second-field,
+         ::-webkit-datetime-edit-year-field {
+            padding-block: 0;
+         }
+         :-moz-ui-invalid {
+            box-shadow: none;
+         }
+         button,
+         input:where([type="button"], [type="reset"], [type="submit"]),
+         ::file-selector-button {
+            appearance: button;
+         }
+         ::-webkit-inner-spin-button,
+         ::-webkit-outer-spin-button {
+            height: auto;
+         }
+         [hidden]:where(:not([hidden="until-found"])) {
+            display: none !important;
+         }
+
+         :root {
+            --container-max-width: 48rem;
+            --container-min-width: 13em;
+            --spacing-lg: 2.3em;
+            --spacing-md: 1em;
+            --spacing-sm: 0.5em;
+            --spacing-xs: 0.4em;
+            --title-size: 2.2rem;
+         }
+         body {
+            border: 5px solid #750eff;
+            display: block;
+            height: 100svh;
+         }
+         .container {
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 28px 40px;
+            width: 100%;
+            height: 100%;
+            max-width: var(--container-max-width);
+            min-width: var(--container-min-width);
+         }
+         .title {
+            font-size: var(--title-size);
+            min-height: 1.6em;
+         }
+         .title-text {
+            font-size: var(--title-size);
+            padding-bottom: var(--spacing-xs);
+         }
+         p {
+             overflow-wrap: break-word;
+             word-wrap: break-word;
+             white-space: normal;
+         }
+         ol,
+         ul {
+            margin: var(--spacing-md) 0;
+            margin-inline-start: var(--spacing-lg);
+            padding: 0;
+         }
+         ol > li,
+         ul > li {
+            margin-bottom: var(--spacing-sm);
+         }
+         ul {
+            list-style: square;
+         }
+         dt {
+            font-weight: 700;
+         }
+         ul.columns {
+            column-count: 2;
+            column-gap: 5em;
+         }
+         @media (width < 48rem) {
+            .container {
+               background-color: rgba(0, 0, 0, 0.8);
+            }
+            .title {
+               margin-inline-start: 0;
+               padding-inline-start: 0;
+            }
+            .title-text {
+               padding-top: 0;
+            }
+         }
+         @media (max-width: 35em) {
+            ul.columns {
+               column-count: 1;
+            }
+         }
+      </style>
+   </head>
+   <body>
+      <div class="container">
+         <div class="title">
+            <h1 class="title-text">Security check</h1>
+         </div>
+         <div>
+            <div>
+               <p id="description">
+                  This page requires JavaScript to be enabled.
+               </p>
+            </div>
+            <br />
+            <div>
+               <small>Substation, a project from INETOL</small>
+            </div>
+         </div>
+      </div>
+      <script nonce="yDFlGpcXX-RloiMc8wbyL8hb">const e=document.getElementById(`description`);e.textContent=`Please wait until we validate your connection...`;function t(){let e=`__substation_`;document.cookie=`${e}=0; Max-Age=60; Path=/; SameSite=Lax`;let t=document.cookie.split(`; `).some(t=>t===`${e}=0`);return document.cookie=`${e}=; Max-Age=0; Path=/; SameSite=Lax`,t}if(t()){let e=e=>new Uint8Array(e.match(/.{1,2}/g).map(e=>parseInt(e,16))),t=e=>Array.from(e).map(e=>e.toString(16).padStart(2,`0`)).join(``),n=`000000006aeee420c3189c33db148ab5`,r= 3600 ,i=e(n),a=new ArrayBuffer(i.length*2),o=new Uint8Array(a,0,i.length),s=new Uint8Array(a,i.length);i.forEach((e,t)=>o[t]=e);function c(e){let t=new Uint8Array(e),n=0;for(let e of t)for(let t=7;t>=0;t--){if(e>>t&1)return n;n++}return n}(async()=>{for(await new Promise(requestAnimationFrame),await new Promise(e=>setTimeout(e,0));;)if(crypto.getRandomValues(s),c(await crypto.subtle.digest(`SHA-512`,a))>= 16 ){document.cookie=`__substation_pow=${n}; Path=/; max-age=${r}; SameSite=Lax; Secure`,document.cookie=`__substation_visa=${t(s)}; Path=/; max-age=${r}; SameSite=Lax; Secure`,document.cookie=`__substation_cauth=87ebfddd39d8bade89e0633b3de37d8c35c4c60e9e34b36dfdba600e80ad4ae902b417d07bbef4cf773826760f6f1eb291cfb64099452f88646f6a21f3cbc05e; Path=/; max-age=${r}; SameSite=Lax; Secure`,window.location.reload();return}})()}</script>
+   </body>
+</html>
