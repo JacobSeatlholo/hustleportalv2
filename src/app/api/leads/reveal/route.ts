@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
-import { levelFor, revealPriceForLevel, STANDARD_REVEAL_PRICE_CENTS } from '@/lib/levels'
+import { levelFor, revealPriceForLevel, STANDARD_REVEAL_PRICE_CENTS, isPremiumTier, DFY_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { zaiGenerate } from '@/lib/zai'
@@ -62,13 +62,16 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // The till prices from the operator config, then applies the member's level
-  // perk SERVER-SIDE (the UI number is only a display): Operator (L3) and up
-  // reveal at R15. Math.min keeps the discount one-directional — an operator
-  // promo price in config always wins over the standard ladder.
+  // The till prices by track. B2C self-serve: the operator config, then the
+  // member's level perk SERVER-SIDE (the UI number is only a display) —
+  // Operator (L3) and up reveal at R15; Math.min keeps the discount
+  // one-directional, an operator promo in config always wins over the ladder.
+  // B2B done-for-you (PREMIUM_DFY): the contractual R108 flat — no ladder, no
+  // promo; that rate lives in the DFY agreement, not the config table.
   const configPrice = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || STANDARD_REVEAL_PRICE_CENTS
-  const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true } })
-  const price = Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
+  const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true, pricingTier: true } })
+  const selfServePrice = Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
+  const price = isPremiumTier(member?.pricingTier) ? DFY_REVEAL_PRICE_CENTS : selfServePrice
 
   let contact = {
     email: saneEmail(lead.email),

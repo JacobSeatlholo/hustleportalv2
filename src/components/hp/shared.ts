@@ -9,6 +9,7 @@ export interface SessionUser {
   videoTheme: string | null // machine | clean, the member's default pitch video theme
   role: string
   xp: number
+  pricingTier: string // SELF_SERVE | PREMIUM_DFY — the reveal till enforces it server-side
   persona: string | null // FIND_CLIENTS | GET_PAID | STAY_ON_TOP | RUN_EVERYTHING
   profession: string | null // ACCOUNTANT | ADVISOR | LAWYER | ENTREPRENEUR | SOLOPRENEUR | OTHER
   onboardedAt: string | null

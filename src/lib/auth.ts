@@ -140,6 +140,7 @@ export function publicUser(u: {
   videoTheme?: string | null
   role: string
   xp: number
+  pricingTier?: string
   persona?: string | null
   profession?: string | null
   onboardedAt?: Date | null
@@ -156,6 +157,7 @@ export function publicUser(u: {
     videoTheme: u.videoTheme || null,
     role: u.role,
     xp: u.xp,
+    pricingTier: u.pricingTier || 'SELF_SERVE',
     persona: u.persona || null,
     profession: u.profession || null,
     onboardedAt: u.onboardedAt || null,

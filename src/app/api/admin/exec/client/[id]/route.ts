@@ -119,7 +119,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
 // PATCH /api/admin/exec/client/[id], pause or restore an account, or set the
 // member's personal referral code.
-// Body: { status: 'ACTIVE' | 'SUSPENDED', reason?: string } or { refCode: string }
+// Body: { status: 'ACTIVE' | 'SUSPENDED', reason?: string } | { refCode: string } | { pricingTier: 'SELF_SERVE' | 'PREMIUM_DFY' }
 // Guard rails: the exec cannot pause themselves or any other admin/exec account.
 // Referral codes: 4 to 16 letters and numbers, stored uppercase (attribution
 // uppercases at signup anyway), unique across members, exec seats excluded.
@@ -158,6 +158,34 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       note: target.refCode && target.refCode !== code
         ? 'Old link retired. Links shared with the previous code stop attributing.'
         : 'Referral code set.',
+    })
+  }
+
+  // Pricing tier path: the exec moves an account between the self-serve
+  // ladder (R18 list, R15 at Operator+) and the B2B done-for-you rate (R108
+  // flat, the rate the strategist agreement prices Stream B on). Exec seats
+  // never carry a tier.
+  if (typeof body?.pricingTier === 'string') {
+    const tier = body.pricingTier
+    if (tier !== 'SELF_SERVE' && tier !== 'PREMIUM_DFY') {
+      return NextResponse.json({ error: 'pricingTier must be SELF_SERVE or PREMIUM_DFY.' }, { status: 400 })
+    }
+    const target = await loadTarget(id)
+    if (!target) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
+    if (isExecUser(target)) {
+      return NextResponse.json({ error: 'Exec seats do not carry pricing tiers.' }, { status: 400 })
+    }
+    const updated = await db.user.update({
+      where: { id },
+      data: { pricingTier: tier },
+      select: { id: true, pricingTier: true },
+    })
+    return NextResponse.json({
+      ok: true,
+      client: updated,
+      note: tier === 'PREMIUM_DFY'
+        ? 'Account moved to the done-for-you rate (R108 per lead reveal).'
+        : 'Account back on the self-serve ladder (R18 list, R15 at Operator+).',
     })
   }
 

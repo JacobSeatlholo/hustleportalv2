@@ -5,7 +5,7 @@
  * Monthly leads needed = revenue goal / (average deal value × close rate).
  * Rounded up (nobody calls half a lead), split into a weekly and daily pace,
  * plus the honest money bridge: revealing that many verified contacts at the
- * member's own level price.
+ * member's own track price (self-serve ladder or the B2B done-for-you rate).
  */
 import { useMemo, useState } from 'react'
 import { ArrowRight, Calculator } from 'lucide-react'
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { rands } from './shared'
 import { useHp } from './store'
-import { levelFor, revealPriceForLevel } from '@/lib/levels'
+import { levelFor, revealPriceFor, isPremiumTier } from '@/lib/levels'
 
 export default function LeadCalculator() {
   const { session, setView } = useHp()
@@ -23,7 +23,8 @@ export default function LeadCalculator() {
   const [rate, setRate] = useState(3)
 
   const level = levelFor(session?.user?.xp ?? 0)
-  const priceCents = revealPriceForLevel(level.level)
+  const premium = isPremiumTier(session?.user?.pricingTier)
+  const priceCents = revealPriceFor(session?.user?.pricingTier, level.level)
 
   const calc = useMemo(() => {
     const g = parseFloat(goal)
@@ -71,7 +72,7 @@ export default function LeadCalculator() {
           <div className="sm:ml-auto sm:text-right">
             <div className="font-display text-2xl leading-none text-brand">{rands(calc.costCents)}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              to reveal them at your price ({rands(priceCents)} each{level.level >= 3 ? ', Operator perk' : ''})
+              to reveal them at your price ({rands(priceCents)} each{premium ? ', done-for-you rate' : level.level >= 3 ? ', Operator perk' : ''})
             </div>
             <Button size="sm" className="mt-2" onClick={() => setView('leads')}>
               Open Leads <ArrowRight className="h-3.5 w-3.5" />

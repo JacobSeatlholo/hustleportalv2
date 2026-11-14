@@ -31,3 +31,21 @@ export const REVEAL_DISCOUNT_MIN_LEVEL = 3
 export function revealPriceForLevel(level: number) {
   return level >= REVEAL_DISCOUNT_MIN_LEVEL ? DISCOUNTED_REVEAL_PRICE_CENTS : STANDARD_REVEAL_PRICE_CENTS
 }
+
+// ---- B2B done-for-you track ----
+// The strategist agreement's R108: the premium rate companies pay for managed,
+// done-for-you lead work for their teams. Flat and contractual — the level
+// ladder and operator promos belong to the self-serve (B2C) world and never
+// discount a DFY contract.
+export const DFY_REVEAL_PRICE_CENTS = 10800
+export type PricingTier = 'SELF_SERVE' | 'PREMIUM_DFY'
+export const PRICING_TIERS: PricingTier[] = ['SELF_SERVE', 'PREMIUM_DFY']
+
+export function isPremiumTier(tier?: string | null): boolean {
+  return tier === 'PREMIUM_DFY'
+}
+
+/** The till's price for one reveal — the whole pricing rule in one place. */
+export function revealPriceFor(tier: string | null | undefined, level: number): number {
+  return isPremiumTier(tier) ? DFY_REVEAL_PRICE_CENTS : revealPriceForLevel(level)
+}
