@@ -63,10 +63,14 @@ export const PLANS: PlanDef[] = [
     tagline: 'For teams ready to outscale the competition.',
     priceCents: 49900, // R499
     annualCents: annualOf(49900), // R4,990/yr, 2 months free
-    revealCredits: 12 * LEAD_REVEAL_PRICE_CENTS, // 12 verified reveals, the better per-lead deal
+    // 14 credits, not 12: at 12 the per-lead math was R41.58 — WORSE than
+    // Operator's R39.80, so the highlighted card contradicted its own
+    // "best per-lead price" copy. 14 lands R35.64 and the claim is true
+    // (Task 206; arithmetic on record in scripts/pricing_math_check.py).
+    revealCredits: 14 * LEAD_REVEAL_PRICE_CENTS,
     perks: [
       'Everything in Operator',
-      '12 verified lead reveals every month, the best per-lead price, unused ones roll over',
+      '14 verified lead reveals every month, the best per-lead price (R35.64 each), unused ones roll over',
       'Up to 5 team seats, shared pipeline',
       'Priority AI (longer context, faster replies)',
       'Founding Member badge on your profile',

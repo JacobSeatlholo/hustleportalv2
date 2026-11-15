@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { api, rands, type CreditTx, type TopUpPack } from './shared'
 import { SPEND_ACTIONS, COMING_SOON_SKUS, TOPUP_MIN_CENTS, TOPUP_MAX_CENTS, bonusForLoad, creditsForLoad } from '@/lib/spend'
-import { levelFor, revealPriceFor, REVEAL_DISCOUNT_MIN_LEVEL, isPremiumTier } from '@/lib/levels'
+import { levelFor, revealPriceFor, REVEAL_DISCOUNT_MIN_LEVEL, isPremiumTier, tillAnchorLine } from '@/lib/levels'
 import { useHp } from './store'
 import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift, Coins } from 'lucide-react'
 
@@ -36,6 +36,14 @@ export default function WalletView() {
       : null
   const isValidCustom = customPack !== null
 
+  // Task 206: the member's saved average deal value (from the lead calculator,
+  // AVG_DEAL_CENTS user setting) turns the price list into outcome units.
+  const level = levelFor(session?.user?.xp ?? 0)
+  const priceCents = revealPriceFor(session?.user?.pricingTier, level.level)
+  const anchor = tillAnchorLine(session?.user?.pricingTier, level.level)
+  const [avgDealCents, setAvgDealCents] = useState<number | null>(null)
+  const revealsPerJob = avgDealCents ? Math.max(1, Math.floor(avgDealCents / priceCents)) : null
+
   async function load() {
     try {
       setData(await api<WalletData>('/api/wallet'))
@@ -46,6 +54,13 @@ export default function WalletView() {
 
   useEffect(() => {
     load()
+    // Task 206: pull the saved average deal value for the payback line.
+    api<{ settings: { key: string; value: string }[] }>('/api/settings')
+      .then((res) => {
+        const saved = res.settings.find((s) => s.key === 'AVG_DEAL_CENTS')
+        if (saved && /^\d+$/.test(saved.value) && Number(saved.value) > 0) setAvgDealCents(Number(saved.value))
+      })
+      .catch(() => {})
     // Return-from-Yoco handling: credits land via webhook a few seconds after payment.
     const params = new URLSearchParams(window.location.search)
     const t = params.get('topup')
@@ -130,7 +145,9 @@ export default function WalletView() {
           </li>
           <li className="flex gap-3">
             <span className="font-display text-brand shrink-0 w-16">{rands(revealPriceFor(session?.user?.pricingTier, levelFor(session?.user?.xp ?? 0).level))}</span>
-            <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free. {isPremiumTier(session?.user?.pricingTier) ? 'Your account is on the done-for-you rate.' : levelFor(session?.user?.xp ?? 0).level >= REVEAL_DISCOUNT_MIN_LEVEL ? 'You reveal at the Operator perk price.' : 'Reveal at R15 once you reach Operator (level 3).'}</span>
+            <span><span className="font-medium">Verified lead reveal</span> — Real contact details of a real business, verified before a cent leaves your wallet. Your own imported contacts stay free. {isPremiumTier(session?.user?.pricingTier) ? 'Your account is on the done-for-you rate.' : levelFor(session?.user?.xp ?? 0).level >= REVEAL_DISCOUNT_MIN_LEVEL ? 'You reveal at the Operator perk price.' : 'Reveal at R15 once you reach Operator (level 3).'}
+              {anchor && <span className="block text-xs text-muted-foreground mt-1">{anchor}{revealsPerJob ? ` One average job pays for ${revealsPerJob} reveals — one closes, the till is covered.` : ''}</span>}
+            </span>
           </li>
           {COMING_SOON_SKUS.map((sku) => (
             <li key={sku.key} className="flex gap-3 text-muted-foreground">
@@ -208,7 +225,7 @@ export default function WalletView() {
             <p className="text-xs text-muted-foreground">
               {customRands && isValidCustom && bonusForLoad(customCents) > 0
                 ? <>You load <span className="font-medium text-foreground">{rands(customCents)}</span> and your wallet grows by <span className="font-medium text-emerald-600">{rands(creditsForLoad(customCents))}</span> — a {bonusForLoad(customCents)}% bonus airtime.</>
-                : <>Minimum R50. Bonus airtime from R1,500 (+10%) and R5,000 (+15%) — the same ladder the packs ride.</>}
+                : <>Minimum R50. Bonus airtime from R120 (+5%), R300 (+10%) and R5,000 (+15%) — the same ladder the packs ride.</>}
             </p>
           </CardContent>
         </Card>

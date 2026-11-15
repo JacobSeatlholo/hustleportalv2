@@ -25,6 +25,7 @@ const ALLOWED_KEYS = [
   'NAV_ORDER', // JSON ViewKey[], the user's personal sidebar menu order
   'MODULES', // JSON string[], disabled module keys (the tailored workspace)
   'ICS_FEED_URL', // read-only calendar feed for the Calendar sync button
+  'AVG_DEAL_CENTS', // Task 206: the lead calculator's average deal value in cents — powers the till's "one job pays for N reveals" line
 ]
 
 const SECRET_KEYS = new Set(['GMAIL_APP_PASSWORD', 'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY', 'ZAI_API_KEY', 'EXPLEE_API_KEY', 'GCAL_OAUTH_TOKEN', 'WA_ACCESS_TOKEN', 'WA_VERIFY_TOKEN'])
@@ -60,6 +61,10 @@ export async function PUT(req: NextRequest) {
   const value = String(body.value ?? '').trim()
   if (!ALLOWED_KEYS.includes(key)) {
     return NextResponse.json({ error: 'Unknown setting key.' }, { status: 400 })
+  }
+  // AVG_DEAL_CENTS is machine-written by the lead calculator: plain cents only.
+  if (key === 'AVG_DEAL_CENTS' && !/^\d{1,7}$/.test(value)) {
+    return NextResponse.json({ error: 'AVG_DEAL_CENTS must be plain cents, e.g. 150000 for R1,500.' }, { status: 400 })
   }
   if (!value.trim()) {
     await db.userSetting.deleteMany({ where: { userId, key } })

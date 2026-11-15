@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api, rands, randsPlain, STAGES, FEEDBACK_REASON_LABELS, type Lead, type LeadEmailLog, type Task, type TopUpPack } from './shared'
 import { EmailPreviewDialog } from './EmailPreviewDialog'
 import { useHp } from './store'
+import { levelFor, revealPriceFor, tillAnchorLine } from '@/lib/levels'
 import { usePlan, requestUpgrade } from './useUpgrade'
 import CityField from './CityField'
 import { consumePendingLead } from './leadBus'
@@ -1298,6 +1299,22 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
   // replayed from the log. Quick reference while on the phone with them.
   const [previewEmail, setPreviewEmail] = useState<LeadEmailLog | null>(null)
 
+  // Task 206: the member's saved average deal value (lead calculator) feeds
+  // the reveal wall's payback line — the till speaks in outcome units.
+  const [avgDealCents, setAvgDealCents] = useState<number | null>(null)
+  const level = levelFor(session?.user?.xp ?? 0)
+  const tillNote = tillAnchorLine(session?.user?.pricingTier, level.level)
+  const revealsPerJob = avgDealCents ? Math.max(1, Math.floor(avgDealCents / revealPriceFor(session?.user?.pricingTier, level.level))) : null
+  useEffect(() => {
+    if (!lead) return
+    api<{ settings: { key: string; value: string }[] }>('/api/settings')
+      .then((res) => {
+        const saved = res.settings.find((s) => s.key === 'AVG_DEAL_CENTS')
+        if (saved && /^\d+$/.test(saved.value) && Number(saved.value) > 0) setAvgDealCents(Number(saved.value))
+      })
+      .catch(() => {})
+  }, [lead])
+
   const leadId = lead?.id || ''
 
   // Fresh on every open: an email opened two minutes ago must show here now.
@@ -1515,6 +1532,11 @@ function LeadDetailDialog({ lead, onOpenChange, onReveal, onMoved, onVerdict, on
               <Lock className="h-5 w-5 mx-auto text-brand" />
               <p className="text-sm font-medium">Contact details locked</p>
               <p className="text-xs text-muted-foreground">Reveal email &amp; phone using wallet credits. CSV/manual leads are always free.</p>
+              {tillNote && (
+                <p className="text-xs text-muted-foreground">
+                  {tillNote}{revealsPerJob ? ` One average job pays for ${revealsPerJob} reveals.` : ''}
+                </p>
+              )}
               <Button
                 onClick={async () => {
                   setRevealing(true)

@@ -49,3 +49,21 @@ export function isPremiumTier(tier?: string | null): boolean {
 export function revealPriceFor(tier: string | null | undefined, level: number): number {
   return isPremiumTier(tier) ? DFY_REVEAL_PRICE_CENTS : revealPriceForLevel(level)
 }
+
+// ---- The till's anchor line (Task 206, on the record) ----
+// Anchoring psychology: the first rand figure the eye reads becomes the
+// reference the member judges their own price against, so the till shows the
+// big comparisons with the member's price, never the member's price alone.
+// The two anchors are ones the portal owns honestly: our own managed rate,
+// and the "from R250/lead" that South African pay-per-lead agencies advertise
+// (web-sourced Nov 2026, used as a labeled market reference, not a quote).
+export const AGENCY_PER_LEAD_CENTS = 25000
+
+export function tillAnchorLine(tier: string | null | undefined, level: number): string | null {
+  if (isPremiumTier(tier)) {
+    // DFY accounts never see R108 beside R15 — their anchor is the market only.
+    return 'Agencies charge R250+ per lead — this one is managed, and verified before a cent moves.'
+  }
+  const self = (revealPriceForLevel(level) / 100).toFixed(0)
+  return `Managed rate R108 · agencies charge R250+ per lead · your price R${self}, verified or you don't pay.`
+}

@@ -74,7 +74,9 @@ export const COMING_SOON_SKUS = [
 export const TOPUP_MIN_CENTS = 5_00 // R50 — below this Yoco's fee starts eating the load
 export const TOPUP_MAX_CENTS = 1_000_000 // R10,000 ceiling per load
 export const TOPUP_BONUS_TIERS: { fromCents: number; bonusPct: number }[] = [
-  { fromCents: 1_500_00, bonusPct: 10 }, // R1,500+ — the Growth tier
+  { fromCents: 120_00, bonusPct: 5 }, // R120+ — the Hustle tier (Task 206 preset ladder)
+  { fromCents: 300_00, bonusPct: 10 }, // R300+ — the Growth band (moved down from R1,500 by the preset ladder)
+  { fromCents: 1_500_00, bonusPct: 10 }, // R1,500+ — same 10% band, kept so historical pack math reads unchanged
   { fromCents: 5_000_00, bonusPct: 15 }, // R5,000+ — the Scale tier
 ]
 
@@ -91,6 +93,19 @@ export function bonusForLoad(amountCents: number): number {
 export function creditsForLoad(amountCents: number): number {
   return Math.round(amountCents * (1 + bonusForLoad(amountCents) / 100))
 }
+
+/**
+ * The preset top-up ladder (Task 206): three buttons with a decoy shape —
+ * Starter is the honest entry, Growth the value anchor, Hustle the intended
+ * target with its bonus printed right on the button. Served by the wallet
+ * route when no TOPUP_PACKS config overrides it; credit math rides the same
+ * TOPUP_BONUS_TIERS as any custom load, so pack and custom never disagree.
+ */
+export const DEFAULT_TOPUP_PACKS: { id: string; name: string; amountCents: number; creditCents: number; bonus: number }[] = [
+  { id: 'starter', name: 'Starter', amountCents: 5_000, creditCents: creditsForLoad(5_000), bonus: bonusForLoad(5_000) },
+  { id: 'hustle', name: 'Hustle', amountCents: 12_000, creditCents: creditsForLoad(12_000), bonus: bonusForLoad(12_000) },
+  { id: 'growth', name: 'Growth', amountCents: 30_000, creditCents: creditsForLoad(30_000), bonus: bonusForLoad(30_000) },
+]
 
 /**
  * Paid-plan send bundle: emails included free per ROLLING 30 DAYS — the free

@@ -11,6 +11,7 @@ import { attributeSignup } from '@/lib/referral'
 import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 import { ensureExecAdmin } from '@/lib/admin'
 import { runWelcomeSweep } from '@/lib/welcomesweep'
+import { STANDARD_REVEAL_PRICE_CENTS } from '@/lib/levels'
 
 // The welcome sweep runs after the response ships (Vercel keeps the function
 // alive for after() work): a fresh signup should wake up to real,
@@ -80,6 +81,16 @@ export async function POST(req: NextRequest) {
       // welcome bonus, R99 in lead credits: enough for real teaser reveals,
       // the taste that sells the R199 Operator plan
       const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
+      // Task 206: frame the welcome as the OUTCOME it buys, never as a price.
+      // R99 reads as a rand over five R18 reveals; "5 verified leads, on us"
+      // reads as a gift with a face. Numbers computed, never hardcoded, so a
+      // configured WELCOME_CREDIT_CENTS change keeps the copy honest.
+      const welcomeReveals = Math.floor(welcomeCents / STANDARD_REVEAL_PRICE_CENTS)
+      const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * STANDARD_REVEAL_PRICE_CENTS) / 100)
+      const welcomeLeadLine =
+        welcomeReveals >= 1
+          ? `Your wallet is already loaded: ${welcomeReveals} verified leads, on us, with R${welcomeLeftoverRands} still on the card after that.`
+          : `Your wallet is already loaded with R${Math.round(welcomeCents / 100)} in lead credits.`
       if (welcomeCents > 0) {
         await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits`)
       }
@@ -98,20 +109,24 @@ export async function POST(req: NextRequest) {
         const creditRand = Math.round(welcomeCents / 100)
         await sendSystemMail({
           to: normalized,
-          subject: `Welcome${first !== 'there' ? ` ${first}` : ''}, your R${creditRand} lead credit is ready`,
+          subject: welcomeReveals >= 1
+            ? `Welcome${first !== 'there' ? ` ${first}` : ''}, ${welcomeReveals} verified leads are on us`
+            : `Welcome${first !== 'there' ? ` ${first}` : ''}, your R${creditRand} lead credit is ready`,
           // The PostHog treatment: eyebrow, big headline, the credit as the
           // hero number. Copy stays verbatim; the chrome only frames it.
           headline: 'WELCOME ABOARD',
           title: 'Your Business OS is live',
-          value: { text: `R${creditRand}`, caption: 'Lead credits already loaded in your wallet' },
+          value: welcomeReveals >= 1
+            ? { text: `${welcomeReveals}`, caption: `Verified leads, already loaded — R${creditRand} in credits waiting` }
+            : { text: `R${creditRand}`, caption: 'Lead credits already loaded in your wallet' },
           mascot: 'wave',
           body: [
             `Hi ${first},`,
             '',
             'Welcome to HustlePortal. Your Business OS is live.',
             '',
-            `Your wallet is already loaded with R${creditRand} in lead credits. That is real`,
-            'finding power: open the AI Lead Finder, type your city, and reveal verified',
+            welcomeLeadLine,
+            'Open the AI Lead Finder, type your city, and reveal verified',
             "businesses around you. If a lead can't be verified, you're not charged for it.",
             'No gimmicks. Only leads that answer back.',
             '',
