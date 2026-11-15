@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
     brand?: { name?: string; initials?: string; logoUrl?: string } | null
     leads?: string[]; emails?: string[]; audience?: string; skipPaying?: boolean; personalize?: boolean
     followUp?: boolean; sourceCampaign?: string; sourceFilter?: string
+    leadsOf?: string; exclude?: string[]
   }
   try {
     payload = await req.json()
@@ -164,6 +165,37 @@ export async function POST(req: NextRequest) {
       const email = l.email?.trim().toLowerCase()
       if (email && EMAIL_RE.test(email)) wanted.set(email, { email, leadId: l.id })
     }
+  }
+  // Whole-pipeline staging for the owner's own ecosystem lists: every lead
+  // one account owns, with an email on record, resolved server side so the
+  // addresses never need to leave the platform. The same suppression,
+  // dedupe and greeting laws below apply unchanged. `exclude` names
+  // addresses that must never be queued from this source (a client of the
+  // house, say) and the response reports the honest count of both.
+  const leadsOf = typeof payload.leadsOf === 'string' ? payload.leadsOf.trim() : ''
+  const exclude = new Set(
+    (Array.isArray(payload.exclude) ? payload.exclude : [])
+      .map((x) => String(x || '').trim().toLowerCase())
+      .filter(Boolean),
+  )
+  let leadsOfInfo: { user: string; leads: number; withEmail: number; excluded: number } | undefined
+  if (leadsOf) {
+    const owner = await db.user.findUnique({ where: { id: leadsOf }, select: { id: true, email: true } })
+    if (!owner) return NextResponse.json({ error: 'leadsOf does not match any account.' }, { status: 404 })
+    const pipeLeads = await db.lead.findMany({
+      where: { userId: leadsOf, email: { not: null } },
+      select: { id: true, email: true },
+    })
+    let excludedCount = 0
+    let withEmail = 0
+    for (const l of pipeLeads) {
+      const email = l.email?.trim().toLowerCase() || ''
+      if (!email || !EMAIL_RE.test(email)) continue
+      withEmail++
+      if (exclude.has(email)) { excludedCount++; continue }
+      if (!wanted.has(email)) wanted.set(email, { email, leadId: l.id })
+    }
+    leadsOfInfo = { user: owner.email, leads: pipeLeads.length, withEmail, excluded: excludedCount }
   }
   // Raw pasted addresses, honest about the ones that never stood a chance.
   const invalid: string[] = []
@@ -342,6 +374,7 @@ export async function POST(req: NextRequest) {
     personalized: personal && toQueue.length > 0,
     followUp,
     sourceTag: followUp ? sourceTag : undefined,
+    leadsOf: leadsOfInfo,
     reopened,
     skippedSuppressed: suppressedRows.filter((r) => !already.has(r.email)).length,
     skippedDuplicate: existingRows.length,
