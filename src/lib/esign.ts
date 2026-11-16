@@ -52,20 +52,24 @@ function ascii(s: string): string {
     .trim()
 }
 
-/** Naive word-wrap for the certificate page (Helvetica ~4.9pt per char at 9pt). */
+/** Naive word-wrap for the certificate page, with hard-split for unbroken
+ * runs (SHA-256 hashes are 64 chars with no spaces and must wrap by character). */
 function wrap(text: string, maxChars: number): string[] {
   const words = ascii(text).split(/\s+/)
   const lines: string[] = []
-  let line = ''
   for (const w of words) {
-    if ((line + ' ' + w).trim().length > maxChars) {
-      if (line) lines.push(line)
-      line = w
+    if (w.length > maxChars) {
+      // hard chunk long unbroken tokens (hashes, URLs)
+      for (let i = 0; i < w.length; i += maxChars) lines.push(w.slice(i, i + maxChars))
+      continue
+    }
+    const prev = lines.length ? lines[lines.length - 1] : ''
+    if (prev && (prev + ' ' + w).length <= maxChars) {
+      lines[lines.length - 1] = prev + ' ' + w
     } else {
-      line = (line + ' ' + w).trim()
+      lines.push(w)
     }
   }
-  if (line) lines.push(line)
   return lines
 }
 
@@ -110,9 +114,11 @@ export async function stampSignedPdf(input: StampInput): Promise<StampResult> {
   const black = rgb(0, 0, 0)
 
   // --- execution block on the last page, bottom-left ---
-  const { width } = last.getSize()
+  // Geometry: signature image sits ABOVE the /s/ line; the detail lines run
+  // BELOW it, all at fixed baselines so nothing overlaps (image spans
+  // y=140..140+h, /s/ at 128, email at 114, session line at 102).
   const x = 57
-  let y = 128
+  const y = 128
   let png: Awaited<ReturnType<PDFDocument['embedPng']>> | null = null
   try {
     png = await pdf.embedPng(Buffer.from(input.sigPngBase64, 'base64'))
@@ -121,9 +127,8 @@ export async function stampSignedPdf(input: StampInput): Promise<StampResult> {
   }
   if (png) {
     const w = 170
-    const h = Math.min(60, w * (png.height / png.width))
-    last.drawImage(png, { x, y: y + 26, width: w, height: h })
-    y += h + 30
+    const h = Math.min(56, w * (png.height / png.width))
+    last.drawImage(png, { x, y: y + 12, width: w, height: h })
   }
   last.drawText(`/s/ ${ascii(input.typedName)}`, { x, y, size: 12, font: bold, color: black })
   last.drawText(ascii(`Electronically signed by ${input.typedName} <${input.signerEmail}>`), {
@@ -143,18 +148,18 @@ export async function stampSignedPdf(input: StampInput): Promise<StampResult> {
     ['Document', input.docTitle],
     ['Signer', `${input.typedName} <${input.signerEmail}>`],
     ['Session', input.sessionId],
-    ['Signing link opened', input.viewedAt ? `${sast(input.viewedAt)} from IP ${input.signerIp || 'unknown'}` : 'not recorded'],
+    ['Link opened', input.viewedAt ? `${sast(input.viewedAt)} from IP ${input.signerIp || 'unknown'}` : 'not recorded'],
     ['Signature executed', `${sast(input.signedAt)} from IP ${input.signerIp || 'unknown'}`],
     ['Device (user agent)', (input.userAgent || 'unknown').slice(0, 120)],
-    ['SHA-256 of original document', input.originalSha256 || 'not recorded'],
-    ['SHA-256 of signed document', 'stored in the signing session record and shown on the signing page'],
+    ['SHA-256 (original)', input.originalSha256 || 'not recorded'],
+    ['SHA-256 (signed)', 'stored in the signing session record and shown on the signing page'],
   ]
   for (const [label, value] of fields) {
     cert.drawText(`${label}:`, { x: 57, y: cy, size: 9, font: bold, color: black })
-    const vlines = wrap(value, 78)
+    const vlines = wrap(value, 72)
     let vy = cy
     for (const vl of vlines) {
-      cert.drawText(vl, { x: 170, y: vy, size: 9, font, color: black })
+      cert.drawText(vl, { x: 210, y: vy, size: 9, font, color: black })
       vy -= 12
     }
     cy = vy - 8

@@ -96,3 +96,5 @@ tool-results/
 
 # npm audit artifact only; bun.lock is the lockfile of record
 package-lock.json
+core
+core.*
