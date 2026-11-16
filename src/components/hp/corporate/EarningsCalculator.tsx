@@ -8,7 +8,7 @@
 
 import { useMemo, useState } from 'react'
 import { Calculator } from 'lucide-react'
-import { REFERRAL_PER_LEAD_CENTS, MEMBER_SPLIT_CENTS, rand } from '@/lib/corporate'
+import { REFERRAL_PER_LEAD_CENTS, MEMBER_SPLIT_CENTS, MANAGED_PER_LEAD_CENTS, rand } from '@/lib/corporate'
 
 const inputCls =
   'w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition ' +
@@ -21,7 +21,7 @@ export default function EarningsCalculator({ partnerName }: { partnerName: strin
   const view = useMemo(() => {
     const monthlyLeads = Math.max(0, sellers) * Math.max(0, leadsPerSeller)
     const earnings = monthlyLeads * REFERRAL_PER_LEAD_CENTS
-    const clientSpend = monthlyLeads * 10800
+    const clientSpend = monthlyLeads * MANAGED_PER_LEAD_CENTS
     return { monthlyLeads, earnings, clientSpend }
   }, [sellers, leadsPerSeller])
 
@@ -67,7 +67,7 @@ export default function EarningsCalculator({ partnerName }: { partnerName: strin
         </div>
         <div className="rounded-xl border border-border bg-card p-4 text-center">
           <p className="font-display text-2xl">{rand(view.clientSpend)}</p>
-          <p className="text-xs text-muted-foreground">that office's monthly spend at R108 per verified lead</p>
+          <p className="text-xs text-muted-foreground">that office's monthly spend at R110 per verified lead</p>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">

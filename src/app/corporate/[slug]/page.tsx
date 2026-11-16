@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!s) return { title: 'HustlePortal Corporate' }
   return {
     title: `${s.company} × HustlePortal Corporate — verified leads, done for you`,
-    description: `${s.company} presents HustlePortal Corporate in strategic partnership: R550 in starting credit, R108 per verified lead, done for you. Led by ${s.name}.`,
+    description: `${s.company} presents HustlePortal Corporate in strategic partnership: R550 in starting credit, exactly five managed leads, R110 per qualified lead reveal. Led by ${s.name}.`,
   }
 }
 

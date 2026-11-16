@@ -33,11 +33,12 @@ export function revealPriceForLevel(level: number) {
 }
 
 // ---- B2B done-for-you track ----
-// The strategist agreement's R108: the premium rate companies pay for managed,
-// done-for-you lead work for their teams. Flat and contractual — the level
-// ladder and operator promos belong to the self-serve (B2C) world and never
-// discount a DFY contract.
-export const DFY_REVEAL_PRICE_CENTS = 10800
+// The corporate rate: R110 per qualified lead reveal, standardised with the
+// Trinity Direct Consortium partnership terms (Kelo's email, Nov 2026) so the
+// R550 starting credit is exactly five managed leads. Flat and contractual —
+// the level ladder and operator promos belong to the self-serve (B2C) world
+// and never discount a DFY contract.
+export const DFY_REVEAL_PRICE_CENTS = 11000
 export type PricingTier = 'SELF_SERVE' | 'PREMIUM_DFY'
 export const PRICING_TIERS: PricingTier[] = ['SELF_SERVE', 'PREMIUM_DFY']
 
@@ -61,9 +62,12 @@ export const AGENCY_PER_LEAD_CENTS = 25000
 
 export function tillAnchorLine(tier: string | null | undefined, level: number): string | null {
   if (isPremiumTier(tier)) {
-    // DFY accounts never see R108 beside R15 — their anchor is the market only.
+    // DFY accounts never see their own rate beside R15 — their anchor is the market only.
     return 'Agencies charge R250+ per lead — this one is managed, and verified before a cent moves.'
   }
+  // The managed-rate anchor is derived from the DFY constant so the two can
+  // never drift apart (the R108→R110 standardisation missed this line once).
+  const managed = (DFY_REVEAL_PRICE_CENTS / 100).toFixed(0)
   const self = (revealPriceForLevel(level) / 100).toFixed(0)
-  return `Managed rate R108 · agencies charge R250+ per lead · your price R${self}, verified or you don't pay.`
+  return `Managed rate R${managed} · agencies charge R250+ per lead · your price R${self}, verified or you don't pay.`
 }

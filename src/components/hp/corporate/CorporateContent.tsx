@@ -6,12 +6,12 @@ import EarningsCalculator from '@/components/hp/corporate/EarningsCalculator'
 
 // Task 208: the corporate content, shared by the generic door (/corporate) and
 // every strategist door (/corporate/<slug>). Laws carried over from Task 207:
-// truthful numbers only; R108 never sits beside self-serve prices; no dashes
+// truthful numbers only; the corporate rate never sits beside self-serve prices; no dashes
 // in the copy; the partnership is named exactly as the owner stated it.
 
 const TILES = [
   { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
-  { icon: BadgeCheck, big: 'R108', small: 'per verified lead, flat, done for you' },
+  { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
   { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
   { icon: ShieldCheck, big: 'R0', small: 'to claim your credit, and no card is needed' },
 ]
@@ -106,10 +106,11 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             </p>
           </div>
           <div className="rounded-2xl border border-brand/40 bg-brand/5 p-5">
-            <p className="text-sm font-semibold text-brand">The corporate rate: R108 per verified lead, flat</p>
+            <p className="text-sm font-semibold text-brand">The corporate rate: R110 per qualified lead reveal, flat</p>
             <p className="text-sm text-muted-foreground mt-1">
               Our team runs the finding, the verification and the delivery into your pipeline. One
-              flat contractual rate, no ladder, no promos. The rate is the rate.
+              flat contractual rate, no ladder, no promos. The R550 starting credit is exactly five
+              managed leads, on us. The rate is the rate.
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-5">
@@ -193,10 +194,13 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         <p className="text-sm text-muted-foreground">
           {partner ? (
             <>
-              HustlePortal Corporate is delivered in strategic partnership with TrinityDirect Consortium,
-              led by Kelo Martin. The corporate edition of the platform reaches sales teams, agencies and
-              franchisors through the consortium, while sourcing, verification and delivery stay on the
-              HustlePortal engine the solo version runs on. One engine, two doors: self-serve for owner
+              HustlePortal Corporate is delivered in strategic partnership with Trinity Direct
+              Consortium (Pty) Ltd, led by Director Kelo Anthony Martins. The corporate edition of the
+              platform reaches sales teams, agencies and franchisors through the consortium, while
+              sourcing, verification and delivery stay on the HustlePortal engine the solo version
+              runs on. Per the partnership terms: on clients introduced by the Consortium, the
+              customer-facing rate is R110 per qualified lead reveal, of which R60 runs the engine and
+              R50 is the Consortium's referral share. One engine, two doors: self-serve for owner
               operators, managed for corporate floors.
             </>
           ) : (

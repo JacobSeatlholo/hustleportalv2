@@ -38,13 +38,21 @@ export const MEMBER_SPLIT_CENTS = 2500 // R25 of it when a enrolled member sourc
 export const STRATEGISTS: Strategist[] = [
   {
     slug: 'trinitydirect',
-    name: 'Kelo Martin',
-    company: 'TrinityDirect Consortium',
+    // Formal entity identity per Kelo Anthony Martins' partnership letter.
+    name: 'Kelo Anthony Martins',
+    company: 'Trinity Direct Consortium (Pty) Ltd',
     tagline: 'Corporate sales floors, equipped.',
     image: '/corporate/trinitydirect-logo.jpg',
     members: [],
   },
 ]
+
+// The corporate rate, aligned to the TDC agreement terms (Kelo's email,
+// Nov 2026): customer-facing R110 per qualified lead reveal, split R60 to the
+// Business Hustle entity and R50 to Trinity Direct Consortium (Pty) Ltd on
+// clients introduced by the Consortium. R110 makes the R550 starting credit
+// exactly five managed leads, which is why it beats the old R108.
+export const MANAGED_PER_LEAD_CENTS = 11000
 
 export function getStrategist(slug: string): Strategist | undefined {
   return STRATEGISTS.find((s) => s.slug === slug.toLowerCase().trim())

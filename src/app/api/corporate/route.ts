@@ -15,7 +15,7 @@ import { getStrategist, getStrategistMember } from '@/lib/corporate'
 //
 // Onboarding is a human act: the corporate team reads the claim in the inbox
 // (and the row here), sets the account up by hand, applies the R550 starting
-// credit via the exec wallet tools, and puts the managed rate R108 on the
+// credit via the exec wallet tools, and puts the managed rate R110 on the
 // account. No self-serve magic, no auto-grants — money moves by human hands.
 
 export const maxDuration = 15
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   })
 
   const creditLine = refSlug
-    ? `Referred by: ${strategist!.company} (${strategist!.slug})${member ? `, sourced by member ${member.name} (${member.code})` : ''}\nReferral law: R50 per managed lead this account takes${member ? ' (R25 strategist / R25 member split)' : ''}.`
+    ? `Referred by: ${strategist!.company} (${strategist!.slug})${member ? `, sourced by member ${member.name} (${member.code})` : ''}\nReferral law: at the R110 corporate rate, R50 per managed lead is the Consortium's share${member ? ' (R25 strategist / R25 member split)' : ''}.`
     : ''
   const notify = await sendSystemMail({
     to: TEAM_INBOX,
@@ -100,11 +100,11 @@ export async function POST(req: NextRequest) {
       creditLine,
       '',
       `Claim id: ${row.id}`,
-      'Next step: onboard by hand (account setup, R550 starting credit, managed rate R108).',
+      'Next step: onboard by hand (account setup, R550 starting credit = 5 managed leads, managed rate R110).',
     ].filter((l) => l !== '').join('\n'),
     headline: refSlug ? 'Corporate claim (strategist)' : 'Corporate claim',
     title: `${business} wants in`,
-    value: { text: 'R550 starting credit to apply', caption: 'Onboard by hand: account, credit, managed rate R108' },
+    value: { text: 'R550 starting credit to apply', caption: 'Onboard by hand: account, credit, managed rate R110' },
     ctaLabel: 'Open HustlePortal',
     ctaUrl: 'https://www.hustleportal.online/',
     preheader: 'New corporate account claim from the corporate landing page.',
