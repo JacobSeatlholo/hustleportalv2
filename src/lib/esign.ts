@@ -102,48 +102,47 @@ export interface StampResult {
 }
 
 /**
- * Stamp the signature onto the last page (image + /s/ execution block) and
- * append a Certificate of Electronic Signature page with the audit trail.
+ * Append the Certificate of Electronic Signature page: the drawn signature
+ * and /s/ execution block at the top, full audit trail below, and save the
+ * signed PDF.
  */
 export async function stampSignedPdf(input: StampInput): Promise<StampResult> {
   const pdf = await PDFDocument.load(input.originalBytes)
-  const pages = pdf.getPages()
-  const last = pages[pages.length - 1]
-  const font = await pdf.embedFont(StandardFonts.Helvetica)
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const black = rgb(0, 0, 0)
 
-  // --- execution block on the last page, bottom-left ---
-  // Geometry: signature image sits ABOVE the /s/ line; the detail lines run
-  // BELOW it, all at fixed baselines so nothing overlaps (image spans
-  // y=140..140+h, /s/ at 128, email at 114, session line at 102).
-  const x = 57
-  const y = 128
+  // --- execution block ON THE CERTIFICATE PAGE (Task 212b) ---
+  // The last page's layout differs per document (the strategist agreement's
+  // signature table sits low on its final page), so fixed coordinates on the
+  // document page risk overlapping printed text. Instead the drawn signature
+  // and execution details live at the top of the appended certificate page —
+  // deterministic, collision-free, and part of the same signed file.
+  const cert = pdf.addPage([595.28, 841.89])
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   let png: Awaited<ReturnType<PDFDocument['embedPng']>> | null = null
   try {
     png = await pdf.embedPng(Buffer.from(input.sigPngBase64, 'base64'))
   } catch {
     png = null // a broken image must not block signing — the typed name still executes
   }
-  if (png) {
-    const w = 170
-    const h = Math.min(56, w * (png.height / png.width))
-    last.drawImage(png, { x, y: y + 12, width: w, height: h })
-  }
-  last.drawText(`/s/ ${ascii(input.typedName)}`, { x, y, size: 12, font: bold, color: black })
-  last.drawText(ascii(`Electronically signed by ${input.typedName} <${input.signerEmail}>`), {
-    x, y: y - 14, size: 8.5, font, color: black,
-  })
-  last.drawText(ascii(`${sast(input.signedAt)} - HustlePortal e-sign (first-party), session ${input.sessionId}`), {
-    x, y: y - 26, size: 8.5, font, color: black,
-  })
 
-  // --- certificate page ---
-  const cert = pdf.addPage([595.28, 841.89])
+  // --- certificate page: signature + execution block, then the audit trail ---
   let cy = 800
   cy = drawLines(cert, ['CERTIFICATE OF ELECTRONIC SIGNATURE'], 57, cy, bold, 16, 22)
   cert.drawLine({ start: { x: 57, y: cy + 8 }, end: { x: 538, y: cy + 8 }, thickness: 1, color: black })
-  cy -= 24
+  cy -= 20
+  if (png) {
+    const w = 180
+    const h = Math.min(56, w * (png.height / png.width))
+    cert.drawImage(png, { x: 57, y: cy - h, width: w, height: h })
+    cy -= h + 14
+  }
+  cert.drawText(`/s/ ${ascii(input.typedName)}`, { x: 57, y: cy, size: 12, font: bold, color: black })
+  cy -= 14
+  cert.drawText(ascii(`Electronically signed by ${input.typedName} <${input.signerEmail}>`), { x: 57, y: cy, size: 9, font, color: black })
+  cy -= 13
+  cert.drawText(ascii(`${sast(input.signedAt)} - HustlePortal e-sign (first-party), session ${input.sessionId}`), { x: 57, y: cy, size: 9, font, color: black })
+  cy -= 26
   const fields: Array<[string, string]> = [
     ['Document', input.docTitle],
     ['Signer', `${input.typedName} <${input.signerEmail}>`],
