@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isExecUser, requireExec } from '@/lib/admin'
+import { DFY_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { db } from '@/lib/db'
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -162,9 +163,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   // Pricing tier path: the exec moves an account between the self-serve
-  // ladder (R18 list, R15 at Operator+) and the B2B done-for-you rate (R108
-  // flat, the rate the strategist agreement prices Stream B on). Exec seats
-  // never carry a tier.
+  // ladder (R18 list, R15 at Operator+) and the B2B done-for-you rate (R110
+  // flat, the rate the TDC partnership terms price the corporate track on,
+  // derived from the DFY constant). Exec seats never carry a tier.
   if (typeof body?.pricingTier === 'string') {
     const tier = body.pricingTier
     if (tier !== 'SELF_SERVE' && tier !== 'PREMIUM_DFY') {
@@ -184,7 +185,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       ok: true,
       client: updated,
       note: tier === 'PREMIUM_DFY'
-        ? 'Account moved to the done-for-you rate (R108 per lead reveal).'
+        ? `Account moved to the done-for-you rate (R${(DFY_REVEAL_PRICE_CENTS / 100).toFixed(0)} per lead reveal).`
         : 'Account back on the self-serve ladder (R18 list, R15 at Operator+).',
     })
   }

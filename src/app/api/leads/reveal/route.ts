@@ -66,8 +66,9 @@ export async function POST(req: NextRequest) {
   // member's level perk SERVER-SIDE (the UI number is only a display) —
   // Operator (L3) and up reveal at R15; Math.min keeps the discount
   // one-directional, an operator promo in config always wins over the ladder.
-  // B2B done-for-you (PREMIUM_DFY): the contractual R108 flat — no ladder, no
-  // promo; that rate lives in the DFY agreement, not the config table.
+  // B2B done-for-you (PREMIUM_DFY): the contractual corporate rate flat — no
+  // ladder, no promo; that rate lives in the DFY agreement (R110 per the TDC
+  // terms), not the config table.
   const configPrice = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || STANDARD_REVEAL_PRICE_CENTS
   const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true, pricingTier: true } })
   const selfServePrice = Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
