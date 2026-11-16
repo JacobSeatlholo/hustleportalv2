@@ -4,12 +4,14 @@ import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import CorporateContent from '@/components/hp/corporate/CorporateContent'
 import { STRATEGISTS, getStrategist } from '@/lib/corporate'
 
-// Task 208: the strategist doors. /corporate/trinitydirect is Kelo Martin's
-// branded version of the corporate offer: his company card, the partnership
-// named the way the boss stated it, the referral economics spelled out, the
-// earnings calculator, and the claim form that attributes the claim to his
-// slug (plus ?via=<code> when one of his enrolled members did the outreach).
-// The boss tracks every claim at /api/admin/exec/corporate (exec only).
+// Task 208: the strategist doors. /corporate/trinitydirect is the branded
+// version of the corporate offer for Trinity Direct Consortium (Pty) Ltd:
+// their company card and partnership, presented as pure sales (Task 210 law —
+// no commission economics client-facing). The claim form attributes the claim
+// to the slug (plus ?via=<code> when an enrolled member did the outreach), and
+// the boss tracks every claim at /api/admin/exec/corporate (exec only).
+// Task 211: the internal deal room lives at /corporate/<slug>/documents —
+// gated by key, never linked from this page.
 
 export function generateStaticParams() {
   return STRATEGISTS.map((s) => ({ slug: s.slug }))

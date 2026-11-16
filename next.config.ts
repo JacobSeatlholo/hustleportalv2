@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Task 211: the gated partner deal room streams agreement PDFs/DOCXs from
+  // private-docs/ at runtime. Standalone/serverless bundles do not trace
+  // fs-read files, so the docs must be listed here per route or the reads 404
+  // in production. The files are NOT under /public — never publicly served.
+  outputFileTracingIncludes: {
+    "/api/corporate/[slug]/docs": ["./private-docs/**"],
+    "/api/corporate/[slug]/docusign": ["./private-docs/**"],
+    "/corporate/[slug]/documents": ["./private-docs/**"],
+  },
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
