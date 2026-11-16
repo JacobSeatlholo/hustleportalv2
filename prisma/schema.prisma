@@ -1119,3 +1119,28 @@ model StatementEntry {
   // collide — Postgres allows many NULLs in a unique index.
   @@unique([accountId, sourceRef])
 }
+
+// ============ CORPORATE (Task 207) ============
+// Claims from the corporate landing page (corporate.hustleportal.online and
+// /corporate). Prospects are NOT members yet: the corporate team onboards them
+// by hand (account setup, R550 starting credit applied via the exec wallet
+// tools, managed rate R108). Duplicate claims by the same email inside 24h
+// answer ok without a second row, so a double click never double-fires the
+// team notification.
+
+model CorporateLead {
+  id          String   @id @default(cuid())
+  business    String
+  contactName String
+  email       String
+  phone       String?
+  teamSize    String? // "1 to 5 sellers" | "6 to 20 sellers" | "21 to 50 sellers" | "More than 50"
+  message     String?
+  source      String   @default("corporate-lp") // corporate-lp | trinitydirect | other
+  status      String   @default("NEW") // NEW | CONTACTED | WON | LOST
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}

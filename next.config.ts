@@ -18,6 +18,27 @@ const nextConfig: NextConfig = {
       { source: "/invoices", destination: "/?view=invoices", permanent: true },
     ];
   },
+  // Task 207: the corporate landing page. /corporate works on the main domain;
+  // once corporate.hustleportal.online is added as a domain in Vercel, this
+  // host rewrite serves the same page at the root of the subdomain so the B2B
+  // door gets its own clean address.
+  async rewrites() {
+    // Task 207: beforeFiles, and ONLY the bare root. Why both:
+    //  - plain-array rewrites run after filesystem checks, so '/' would always
+    //    find src/app/page.tsx first and the rewrite would never fire;
+    //  - a '/:path*' rewrite would drag /_next/* and /docs/* into /corporate/*
+    //    and break assets on the subdomain. Root-only keeps every asset,
+    //    favicon and doc URL working under the corporate host.
+    return {
+      beforeFiles: [
+        {
+          source: "/",
+          has: [{ type: "host", value: "corporate.hustleportal.online" }],
+          destination: "/corporate",
+        },
+      ],
+    };
+  },
   // Security headers on every response. CSP is tuned for Next.js reality:
   // 'unsafe-inline' scripts/styles are required by the framework's bootstrap,
   // but the policy still blocks external script origins, framing, object

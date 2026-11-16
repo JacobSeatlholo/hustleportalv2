@@ -1,0 +1,60 @@
+# AWS SES production access appeal — reply (case 179443042500763)
+
+> Re-drafted 2026-11-16. Same case facts as the original reply sent for case
+> 179443042500763; regenerate/re-paste only if AWS asks again. Status update:
+> production access is now GRANTED (50,000 emails/24h in af-south-1), so this
+> letter is reference material only.
+
+Dear AWS SES team,
+
+Thank you for reviewing our production access request and for the four
+questions below. Our answers:
+
+1. Who you are / how you use SES
+
+HustlePortal (https://www.hustleportal.online) is a South African business
+platform for small service businesses. SES handles our transactional email:
+account notifications, meeting/task confirmations, and lead-capture receipts.
+A separate, clearly separated lane handles opt-in bulk mail (owner-initiated
+campaigns to subscribers). Transactional volume today is low (tens of emails
+per day) and grows with member signups; bulk campaigns start paused and are
+sent manually by the business owner, not on schedules.
+
+2. How you collect and verify recipient addresses
+
+All addresses come from one of two sources. (a) Members register on the site
+with their own email address and confirm ownership at signup; we only mail a
+registered member about their own account. (b) Bulk mail goes only to
+subscribers who explicitly opted in through a form that records the opt-in
+timestamp and source. We do not purchase, scrape, or append lists. Every bulk
+email carries a working one-click unsubscribe (RFC 8058 List-Unsubscribe
+header plus an in-app unsubscribe), honoured immediately against a permanent
+suppression list (currently 575 entries from our legacy domain's history).
+
+3. Bounce and complaint handling
+
+Hard bounces suppress the address immediately and permanently; complaints
+(via feedback loops) also suppress immediately and are reviewed within 24
+hours. We monitor bounce rate and complaint rate on the SES dashboard before
+and after every send, and we stop a campaign that approaches a 2% bounce or
+0.1% complaint threshold. Suppression is enforced in application code at the
+send boundary, not just at list level.
+
+4. Sending rate and frequency
+
+Transactional mail is event-driven and stays far below a few thousand per
+day. Bulk sends are manual, throttled well below the SES default quota at
+first (we plan to ramp from a few hundred per campaign), and never more than
+one campaign per week per subscriber. We have no need for a quota increase
+until volumes justify it and our metrics prove deliverability.
+
+We keep sending domains DKIM-authenticated (easy-DKIM on the apex domain),
+enforce SPF alignment, and route inbound owner mail through a single SES
+receipt rule to a dedicated log address. Happy to provide any further detail,
+headers of sample messages, or the unsubscribe/suppression code paths.
+
+Thank you for your time.
+
+Regards,
+Jacob Seatlholo
+Business Hustle / HustlePortal — https://www.hustleportal.online
