@@ -2,13 +2,17 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Task 211: the gated partner deal room streams agreement PDFs/DOCXs from
-  // private-docs/ at runtime. Standalone/serverless bundles do not trace
-  // fs-read files, so the docs must be listed here per route or the reads 404
-  // in production. The files are NOT under /public — never publicly served.
+  // Task 211/212: the gated partner deal room streams agreement PDFs/DOCXs
+  // from private-docs/ at runtime, and the first-party e-sign engine reads the
+  // same directory to stamp signatures (pdf route) and create sessions (esign
+  // route). Standalone/serverless bundles do not trace fs-read files, so the
+  // docs must be listed here per route or the reads 404 in production. The
+  // files are NOT under /public — never publicly served.
   outputFileTracingIncludes: {
     "/api/corporate/[slug]/docs": ["./private-docs/**"],
-    "/api/corporate/[slug]/docusign": ["./private-docs/**"],
+    "/api/corporate/[slug]/esign": ["./private-docs/**"],
+    "/api/sign/[token]/pdf": ["./private-docs/**"],
+    "/api/sign/[token]/sign": ["./private-docs/**"],
     "/corporate/[slug]/documents": ["./private-docs/**"],
   },
   /* config options here */

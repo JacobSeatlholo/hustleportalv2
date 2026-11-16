@@ -7,8 +7,9 @@ import path from 'node:path'
 //     here; access is by direct URL with the gate key only.
 //   - Files live in private-docs/ (NOT public/) and stream through the API
 //     route after the gate key check. Wrong key = 404, same as a dead link.
-//   - DocuSign sends are server-side; the browser only ever receives a
-//     recipient-view URL for the signer.
+//   - Signing runs on the first-party e-sign engine (Task 212): sessions are
+//     created here, the signer gets a /sign/<token> link, stamping and the
+//     audit certificate happen in this app. No third-party signer involved.
 
 export const PRIVATE_DOCS_DIR = path.join(process.cwd(), 'private-docs')
 

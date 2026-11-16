@@ -2,20 +2,21 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Lock, FileText, FileSignature, ShieldCheck } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
-import DocusignSendForm from '@/components/hp/corporate/DocusignSendForm'
+import EsignSendForm from '@/components/hp/corporate/EsignSendForm'
 import { getStrategist } from '@/lib/corporate'
 import { PARTNER_DOCS, checkDocsKey } from '@/lib/partnerDocs'
-import { docusignStatus } from '@/lib/docusign'
+import { db } from '@/lib/db'
+import { sast } from '@/lib/esign'
 
-// ============ PARTNER DEAL ROOM (Task 211) ============
-// The internal documents + DocuSign section for the strategist partnership.
+// ============ PARTNER DEAL ROOM (Task 211, e-sign engine Task 212) ============
+// The internal documents + signing section for the strategist partnership.
 // Laws:
 //   - GATED: wrong or missing ?key= returns notFound() — the page simply does
 //     not exist for anyone else, and no client-facing page links here (the
 //     doors stay pure sales). Access is the direct URL the boss shares.
 //   - Documents stream from private-docs/ through the gated API route.
-//   - DocuSign env missing → the page renders the honest setup checklist
-//     instead of pretending the flow is live.
+//   - Signing is FIRST-PARTY (Task 212): our own engine replaced DocuSign —
+//     sessions, tokens, stamping, certificate and audit live in this app.
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
@@ -24,6 +25,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: s ? `Internal deal room — ${s.company} × HustlePortal` : 'Internal deal room',
     robots: { index: false, follow: false },
   }
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  SENT: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
+  VIEWED: 'bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-200',
+  SIGNED: 'bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-200',
 }
 
 export default async function PartnerDocumentsPage({
@@ -39,12 +46,20 @@ export default async function PartnerDocumentsPage({
   // Wrong key or unknown slug = indistinguishable from a dead link.
   if (!partner || !checkDocsKey(key)) notFound()
 
-  const ds = docusignStatus()
   const docs = PARTNER_DOCS.map((d) => ({
     ...d,
     pdf: `${d.base}.pdf`,
     docx: `${d.base}.docx`,
   }))
+  const sessions = await db.esignSession.findMany({
+    where: { slug },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      token: true, docTitle: true, signerName: true, signerEmail: true,
+      status: true, sentVia: true, createdAt: true, viewedAt: true, signedAt: true,
+    },
+  })
 
   return (
     <CorporateShell>
@@ -56,14 +71,14 @@ export default async function PartnerDocumentsPage({
             </p>
             <h1 className="font-display text-4xl leading-tight">Deal room: documents &amp; signing</h1>
             <p className="text-muted-foreground">
-              The working documents behind the {partner.company} partnership, and the DocuSign flow
-              to send them for signature. The client door stays pure sales — commission mechanics
+              The working documents behind the {partner.company} partnership, and the first-party
+              signing flow to execute them. The client door stays pure sales — commission mechanics
               live only in these documents and the internal ledger.
             </p>
             {signed === '1' && (
               <p className="rounded-xl border border-brand/40 bg-brand/5 p-4 text-sm text-brand font-semibold">
-                Signature session complete. DocuSign will email the signed copy to the parties. For
-                the counterparty's signed PDF, check the DocuSign account.
+                Signature session complete. The signed copy is on the signer&apos;s signing page and
+                in the session list below.
               </p>
             )}
           </header>
@@ -107,51 +122,50 @@ export default async function PartnerDocumentsPage({
 
           <section className="space-y-3">
             <h2 className="font-display text-2xl">Signing</h2>
-            {ds.configured ? (
-              <DocusignSendForm
-                slug={slug}
-                gateKey={key ?? ''}
-                docs={docs.filter((d) => d.pdf.endsWith('.pdf')).map((d) => ({ file: d.pdf, title: d.title }))}
-              />
-            ) : (
-              <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-                <p className="font-display text-xl flex items-center gap-2">
-                  <FileSignature className="h-5 w-5 text-brand" /> DocuSign not connected yet
+            <EsignSendForm
+              slug={slug}
+              gateKey={key ?? ''}
+              docs={docs.filter((d) => d.pdf.endsWith('.pdf')).map((d) => ({ file: d.pdf, title: d.title }))}
+            />
+
+            {sessions.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <p className="px-5 py-3 text-sm font-semibold border-b border-border bg-muted/40">
+                  Signing sessions
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  The send flow is built and will switch on the moment these four values are set in
-                  Vercel project settings (Environment Variables), then a redeploy:
-                </p>
-                <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-5">
-                  <li>
-                    Free <strong>developer (demo) account</strong> at developer.docusign.com — signs
-                    real documents in the demo environment at no cost.
-                  </li>
-                  <li>
-                    Apps &amp; Keys → <strong>Add App &amp; Integration Key</strong> → enable{' '}
-                    <strong>JWT grant</strong> → add an RSA keypair (generate one:{' '}
-                    <code className="font-mono text-xs">openssl genrsa -out docusign_private.pem 2048</code>
-                    , paste the <em>public</em> key in the app, keep the private one for the env).
-                  </li>
-                  <li>
-                    Grab <strong>Integration Key</strong>, <strong>API Username (User ID)</strong>{' '}
-                    and <strong>Account ID</strong> from the same screen. Grant consent once via the
-                    app's <em>Request personal access token</em> helper.
-                  </li>
-                  <li>
-                    Vercel env: <code className="font-mono text-xs">DOCUSIGN_INTEGRATION_KEY</code>,{' '}
-                    <code className="font-mono text-xs">DOCUSIGN_USER_ID</code>,{' '}
-                    <code className="font-mono text-xs">DOCUSIGN_ACCOUNT_ID</code>,{' '}
-                    <code className="font-mono text-xs">DOCUSIGN_RSA_PRIVATE_KEY</code> (paste the
-                    PEM). Missing right now: {ds.missing.join(', ')}.
-                  </li>
-                </ol>
-                <p className="text-xs text-muted-foreground flex items-center gap-2">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Demo endpoints are the defaults; switching
-                  to live signing later is two env values (DOCUSIGN_OAUTH_BASE / DOCUSIGN_API_BASE).
-                </p>
+                <ul className="divide-y divide-border">
+                  {sessions.map((s) => (
+                    <li key={s.token} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      <span className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 ${STATUS_STYLES[s.status] ?? 'bg-muted text-muted-foreground'}`}>
+                        {s.status}
+                      </span>
+                      <span className="font-semibold">{s.signerName}</span>
+                      <span className="text-muted-foreground">{s.docTitle}</span>
+                      <span className="text-xs text-muted-foreground">
+                        created {sast(s.createdAt)}
+                        {s.viewedAt ? ` · viewed ${sast(s.viewedAt)}` : ''}
+                        {s.signedAt ? ` · signed ${sast(s.signedAt)}` : ''}
+                      </span>
+                      <span className="ml-auto flex gap-3">
+                        <a href={`/sign/${s.token}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-brand underline">
+                          signing page
+                        </a>
+                        {s.status === 'SIGNED' && (
+                          <a href={`/api/sign/${s.token}/file`} className="text-xs font-semibold text-brand underline">
+                            signed PDF
+                          </a>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" /> 100% first-party: sessions, signature stamping,
+              certificates and the audit trail run on your own infrastructure — no DocuSign, no
+              per-envelope fees. Electronic signatures carry legal effect under the ECT Act 25 of 2002.
+            </p>
           </section>
 
           <footer className="text-xs text-muted-foreground border-t border-border pt-4">

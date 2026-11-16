@@ -1147,3 +1147,35 @@ model CorporateLead {
   @@index([email])
   @@index([refSlug, createdAt])
 }
+
+// ============ PARTNER E-SIGN (Task 212) ============
+// First-party electronic signing — no DocuSign, the whole flow is our own.
+// A session is created from the gated deal room; the signer opens
+// /sign/<token> (the token IS the secret), draws their signature, and the
+// stamped PDF + audit trail are stored here and emailed to the signer.
+model EsignSession {
+  id              String    @id @default(cuid())
+  token           String    @unique
+  slug            String // strategist door slug the deal room belongs to
+  docBase         String // private-docs PDF basename being signed
+  docTitle        String
+  signerName      String
+  signerEmail     String
+  status          String    @default("SENT") // SENT | VIEWED | SIGNED
+  sentVia         String    @default("manual") // email | manual
+  linkSentAt      DateTime?
+  viewedAt        DateTime?
+  viewerIp        String?
+  userAgent       String?
+  signedAt        DateTime?
+  signerIp        String?
+  signedUserAgent String?
+  originalSha256  String?
+  signedSha256    String?
+  signedPdf       Bytes?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([slug, createdAt])
+  @@index([signerEmail])
+}
