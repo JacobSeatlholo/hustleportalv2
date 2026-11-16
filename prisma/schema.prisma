@@ -1136,11 +1136,14 @@ model CorporateLead {
   phone       String?
   teamSize    String? // "1 to 5 sellers" | "6 to 20 sellers" | "21 to 50 sellers" | "More than 50"
   message     String?
-  source      String   @default("corporate-lp") // corporate-lp | trinitydirect | other
+  source      String   @default("corporate-lp") // corporate-lp | strategist-lp | other
   status      String   @default("NEW") // NEW | CONTACTED | WON | LOST
+  refSlug     String? // brand strategist slug (/corporate/<slug>) who referred this office
+  refMember   String? // member code (?via=<code>) when a strategist's enrolled member sourced it
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([email])
+  @@index([refSlug, createdAt])
 }

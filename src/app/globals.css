@@ -89,6 +89,36 @@
   --sidebar-ring: #f5c518;
 }
 
+/* Task 208: the corporate pages' light mode. B2B trust psychology: white is
+   the clean and honest field, near-black warm ink is authority, gold stays the
+   premium accent. Gold as TEXT on white needs the deep variant for contrast;
+   the bright #f5c518 stays on buttons (dark text on gold) and rings. The warm
+   ladder carries over from :root so nothing turns cool-slate blue. Scoped to
+   a wrapper class, so the rest of the app keeps its dark ink untouched. */
+.corporate-light {
+  --background: #ffffff;
+  --foreground: #14120e;
+  --card: #faf7f0;
+  --card-foreground: #14120e;
+  --popover: #faf7f0;
+  --popover-foreground: #14120e;
+  --primary: #f5c518;
+  --primary-foreground: #0d0c0a;
+  --secondary: #f3efe6;
+  --secondary-foreground: #14120e;
+  --muted: #f3efe6;
+  --muted-foreground: #5c5648;
+  --accent: #fff7d6;
+  --accent-foreground: #8a6d00;
+  --destructive: #d43a30;
+  --border: #e6e0d2;
+  --input: #e6e0d2;
+  --ring: #f5c518;
+  --color-brand: #a17c08;
+  --color-brand-soft: #c9a10a;
+  --color-brand-deep: #8a6d00;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

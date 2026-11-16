@@ -3,6 +3,9 @@
 // Task 207: the claim form on the corporate landing page. Plain fetch, inline
 // confirmation, no toast hop: the promise ("our corporate team reaches out
 // personally") is the response, shown right where the button was.
+// Task 208: carries referral attribution. refSlug arrives from the strategist
+// door (/corporate/<slug>); refMember arrives from a member's outreach link
+// (?via=<code>) read off the URL here, since members share links directly.
 
 import { useState } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
@@ -13,7 +16,7 @@ const inputCls =
   'w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition ' +
   'placeholder:text-muted-foreground/60 focus:border-brand focus:ring-2 focus:ring-brand/20'
 
-export default function CorporateClaimForm() {
+export default function CorporateClaimForm({ refSlug }: { refSlug?: string }) {
   const [form, setForm] = useState({ business: '', contactName: '', email: '', phone: '', teamSize: '', message: '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -28,10 +31,11 @@ export default function CorporateClaimForm() {
     setState('sending')
     setError('')
     try {
+      const via = new URLSearchParams(window.location.search).get('via') || ''
       const res = await fetch('/api/corporate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, refSlug: refSlug || '', refMember: refSlug ? via : '' }),
       })
       const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null
       if (res.ok && j?.ok) {

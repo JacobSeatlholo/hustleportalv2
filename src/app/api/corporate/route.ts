@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { sendSystemMail, TEAM_INBOX } from '@/lib/mailer'
+import { getStrategist, getStrategistMember } from '@/lib/corporate'
 
 // ============ CORPORATE CLAIM (Task 207) ============
 //
@@ -38,6 +39,18 @@ export async function POST(req: NextRequest) {
   const teamSize = clean(body.teamSize, 20)
   const message = clean(body.message, 600)
 
+  // Referral attribution (Task 208): the strategist door posts refSlug, an
+  // enrolled member's outreach link adds refMember (?via=<code>). Unknown
+  // slugs/codes are dropped silently, never guessed — a payout trail must
+  // point at real people from the registry, not at whatever a URL claims.
+  const refSlugRaw = clean(body.refSlug, 60)
+  const refMemberRaw = clean(body.refMember, 60)
+  const strategist = refSlugRaw ? getStrategist(refSlugRaw) : undefined
+  const member = strategist && refMemberRaw ? getStrategistMember(strategist.slug, refMemberRaw) : undefined
+  const refSlug = strategist?.slug ?? null
+  const refMember = member?.code ?? null
+  const source = refSlug ? 'strategist-lp' : 'corporate-lp'
+
   const errors: string[] = []
   if (!business) errors.push('Tell us the business name.')
   if (!contactName) errors.push('Tell us your name.')
@@ -62,14 +75,21 @@ export async function POST(req: NextRequest) {
   }
 
   const row = await db.corporateLead.create({
-    data: { business, contactName, email, phone: phone || null, teamSize: teamSize || null, message: message || null },
+    data: {
+      business, contactName, email,
+      phone: phone || null, teamSize: teamSize || null, message: message || null,
+      source, refSlug, refMember,
+    },
   })
 
+  const creditLine = refSlug
+    ? `Referred by: ${strategist!.company} (${strategist!.slug})${member ? `, sourced by member ${member.name} (${member.code})` : ''}\nReferral law: R50 per managed lead this account takes${member ? ' (R25 strategist / R25 member split)' : ''}.`
+    : ''
   const notify = await sendSystemMail({
     to: TEAM_INBOX,
-    subject: `Corporate claim: ${business} (R550 credit)`,
+    subject: `Corporate claim: ${business}${refSlug ? ` via ${strategist!.company}` : ''} (R550 credit)`,
     body: [
-      'A corporate account claim came in from the corporate page.',
+      refSlug ? 'A corporate account claim came in from a strategist door.' : 'A corporate account claim came in from the corporate page.',
       '',
       `Business: ${business}`,
       `Contact: ${contactName}`,
@@ -77,11 +97,12 @@ export async function POST(req: NextRequest) {
       phone ? `Phone: ${phone}` : '',
       teamSize ? `Team size: ${teamSize}` : '',
       message ? `Message: ${message}` : '',
+      creditLine,
       '',
       `Claim id: ${row.id}`,
       'Next step: onboard by hand (account setup, R550 starting credit, managed rate R108).',
     ].filter((l) => l !== '').join('\n'),
-    headline: 'Corporate claim',
+    headline: refSlug ? 'Corporate claim (strategist)' : 'Corporate claim',
     title: `${business} wants in`,
     value: { text: 'R550 starting credit to apply', caption: 'Onboard by hand: account, credit, managed rate R108' },
     ctaLabel: 'Open HustlePortal',
