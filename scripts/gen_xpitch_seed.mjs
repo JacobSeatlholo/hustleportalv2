@@ -22,7 +22,16 @@ if (!existsSync(SEED)) {
   process.exit(2)
 }
 const src = readFileSync(SEED, 'utf8')
-const header = src.slice(0, src.indexOf('export interface'))
+// Header = the leading comment block only. Cut at whichever TS declaration
+// comes first so a broken half-written file can never duplicate content.
+const cut = [src.indexOf('export interface'), src.indexOf('export const XPITCH_SEED')]
+  .filter((i) => i >= 0)
+  .sort((a, b) => a - b)[0]
+if (cut === undefined) {
+  console.error(`[${NAME}] FAIL: ${SEED} has neither the interface nor the XPITCH_SEED const — restore it from git.`)
+  process.exit(2)
+}
+const header = src.slice(0, cut)
 const m = src.match(/XPITCH_SEED: XPitchSeedLead\[\] = (\[[\s\S]*?\])\s*\n/)
 if (!m) {
   console.error(`[${NAME}] FAIL: could not parse the XPITCH_SEED array from ${SEED}.`)
@@ -102,8 +111,28 @@ for (const file of SOURCES) {
 // the CSV for the boss's eyes until he asks for a type change. Last wall:
 const seedable = additions.filter((a) => a.platform === 'tiktok')
 
+// The interface is re-emitted verbatim on every write so the seed file is
+// always complete and self-contained — src/app/api/admin/exec/xpitch/route.ts
+// imports XPitchSeedLead from it, and a regeneration that dropped the type
+// would fail the Vercel build.
+const INTERFACE_BLOCK = `export interface XPitchSeedLead {
+  handle: string
+  name: string
+  trade: string
+  city: string
+  followers: number
+  url: string
+  phone: string
+  email: string
+  platform: 'x' | 'tiktok'
+  lastPost: string
+  fresh: 'fresh' | 'warm' | 'stale' | 'no-posts' | 'unknown'
+}
+
+`
+
 const merged = [...current, ...seedable]
-const body = `export const XPITCH_SEED: XPitchSeedLead[] = ${JSON.stringify(merged, null, 2)}\n`
+const body = `${INTERFACE_BLOCK}export const XPITCH_SEED: XPitchSeedLead[] = ${JSON.stringify(merged, null, 2)}\n`
 
 writeFileSync(SEED, header + body)
 console.log(`[${NAME}] seed now ${merged.length} entries (${seedable.length} new fresh keepers merged; ${additions.length - seedable.length} non-tiktok rows held back by the seed's platform law)`)
