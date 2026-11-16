@@ -24,9 +24,9 @@ const TRIANGLE = [
   },
   {
     label: 'The managed rate',
-    value: 'R108',
-    unit: 'per verified lead, flat',
-    body: 'Our team runs the finding, the verification and the delivery into your team\u2019s pipeline. One flat contractual rate, no ladder, no promos — the rate is the rate.',
+    value: 'R110',
+    unit: 'per qualified lead reveal, flat',
+    body: 'Our team runs the finding, the verification and the delivery into your team\u2019s pipeline. One flat contractual rate, no ladder, no promos — the rate is the rate. R550 in starting credit is exactly five managed leads, on us.',
     tone: 'text-brand',
     highlight: true,
   },
