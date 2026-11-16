@@ -25,7 +25,8 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Loader2 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Loader2, ArrowRight } from 'lucide-react'
 import { api } from './shared'
 import { useHp, type ViewKey } from './store'
 import { PERSONAS, PROFESSIONS, personaOf, professionLabel, type Persona, type Profession } from './tracks'
@@ -67,6 +68,10 @@ export default function Onboarding() {
   const [step, setStep] = useState(0)
   const [profession, setProfession] = useState<Profession | null>(null)
   const [persona, setPersona] = useState<Persona | null>(null)
+  // The one line about the business the hints promise: the AI grounds on it
+  // (leads, pitches, emails, the plan), so the survey collects it right here
+  // instead of sending people hunting for a field that hid in Profile.
+  const [valueProp, setValueProp] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Auto open for accounts that never answered. A settle (answered, or
@@ -103,7 +108,7 @@ export default function Onboarding() {
     try {
       await api('/api/onboard', {
         method: 'POST',
-        body: JSON.stringify({ persona, profession }),
+        body: JSON.stringify({ persona, profession, valueProp: valueProp.trim().slice(0, 280) }),
       })
       try { localStorage.removeItem(DISMISS_KEY) } catch { /* private mode */ }
       await loadSession(true)
@@ -141,10 +146,10 @@ export default function Onboarding() {
         <DialogHeader>
           <div className="flex items-center justify-between gap-3 mb-1">
             <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-brand">
-              {step === 0 ? 'One minute, two questions' : step === 1 ? 'Question 2 of 2' : 'Your plan is ready'}
+              {step === 0 ? 'One minute, three questions' : step === 3 ? 'Your plan is ready' : `Question ${step + 1} of 3`}
             </span>
             <div className="flex gap-1.5">
-              {[0, 1, 2].map((i) => (
+              {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
                   className={`h-1.5 rounded-full transition-all ${i === step ? 'w-5 bg-brand' : i < step ? 'w-1.5 bg-brand/60' : 'w-1.5 bg-muted-foreground/30'}`}
@@ -170,6 +175,14 @@ export default function Onboarding() {
             </>
           )}
           {step === 2 && (
+            <>
+              <DialogTitle className="font-display text-2xl">In one line, what does your business do?</DialogTitle>
+              <DialogDescription className="text-sm">
+                This one line sharpens every lead, pitch and email the AI writes for you. You can change it any time in Profile.
+              </DialogDescription>
+            </>
+          )}
+          {step === 3 && (
             <>
               <DialogTitle className="font-display text-2xl">You are set, {first}.</DialogTitle>
               <DialogDescription className="text-sm">
@@ -211,7 +224,30 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 2 && pDef && (
+        {step === 2 && (
+          <div className="space-y-3">
+            <Textarea
+              rows={3}
+              value={valueProp}
+              onChange={(e) => setValueProp(e.target.value)}
+              placeholder="e.g. We fix and service cars at people's homes, around Soweto, same day."
+              className="text-sm"
+              autoFocus
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">Optional, but it makes everything sharper. One sentence is enough.</p>
+              <Button
+                onClick={() => setStep(3)}
+                disabled={saving}
+                className="bg-brand text-black hover:bg-brand/90 font-semibold shrink-0"
+              >
+                That is my business <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && pDef && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               {fLabel && <Badge variant="secondary">{fLabel}</Badge>}

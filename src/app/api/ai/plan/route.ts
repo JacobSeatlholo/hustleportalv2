@@ -3,19 +3,19 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { consumeAiBudget, aiBudgetExceeded } from '@/lib/aiusage'
 import { awardXp, bumpChallenge } from '@/lib/gamification'
-import { geminiGenerate } from '@/lib/gemini'
+import { zaiGenerate } from '@/lib/zai'
 
 export const maxDuration = 60
 
 const NO_KEY_MSG =
-  'The AI business plan needs your free Gemini API key. Get one in 1 minute at aistudio.google.com/apikey, then paste it under Integrations.'
+  'The AI engine is not connected on your account yet. Add your z.ai key under Integrations in about a minute, and your plan will write itself.'
 
 // POST /api/ai/plan, generate a real business plan from wizard answers
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // AI cost guard: one daily allowance per account, checked BEFORE any
-  // Gemini/DeepSeek spend. Generous for humans, a wall for scripts.
+  // GLM spend. Generous for humans, a wall for scripts.
   const budget = await consumeAiBudget(userId)
   if (!budget.ok) {
     return NextResponse.json(aiBudgetExceeded(budget), { status: 429 })
@@ -50,14 +50,15 @@ Structure the plan with these markdown sections (## level):
 
 Keep it under 700 words. No preamble, start with the first heading.`
 
-  const result = await geminiGenerate(userId, {
+  const result = await zaiGenerate(userId, {
     system: 'You are a no-nonsense South African small business advisor. You write tight, practical plans. Markdown only.',
     prompt,
+    timeoutMs: 55_000,
   })
 
   if (!result.ok) {
-    if (result.error.startsWith('NO_KEY')) {
-      return NextResponse.json({ error: NO_KEY_MSG, code: 'MISSING_GEMINI_KEY' }, { status: 400 })
+    if (result.reason === 'NO_KEY') {
+      return NextResponse.json({ error: NO_KEY_MSG, code: 'MISSING_AI_KEY' }, { status: 400 })
     }
     console.error('ai plan error', result.error)
     return NextResponse.json(

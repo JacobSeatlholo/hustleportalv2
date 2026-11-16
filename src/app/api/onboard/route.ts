@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { rateLimit, clientIp, tooMany } from '@/lib/ratelimit'
+import { getOrCreateDefaultProject } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,11 +10,13 @@ const PERSONAS = ['FIND_CLIENTS', 'GET_PAID', 'STAY_ON_TOP', 'RUN_EVERYTHING']
 const PROFESSIONS = ['ACCOUNTANT', 'ADVISOR', 'LAWYER', 'ENTREPRENEUR', 'SOLOPRENEUR', 'OTHER']
 
 /**
- * POST /api/onboard, save the two question post signup survey: how they work
- * (profession) and what they want first (persona). Idempotent: answering again
- * from Profile simply updates the answers, so personalization can follow the
- * user as their business changes. First completion stamps onboardedAt, which
- * releases the checkout intent handoff and the welcome tour in the right order.
+ * POST /api/onboard, save the three question post signup survey: how they
+ * work (profession), what they want first (persona) and the one line about
+ * their business (valueProp, optional, lands on the default workspace).
+ * Idempotent: answering again from Profile simply updates the answers, so
+ * personalization can follow the user as their business changes. First
+ * completion stamps onboardedAt, which releases the checkout intent handoff
+ * and the welcome tour in the right order.
  */
 export async function POST(req: NextRequest) {
   const userId = await getUserId()
@@ -35,6 +38,19 @@ export async function POST(req: NextRequest) {
 
     const before = await db.user.findUnique({ where: { id: userId }, select: { onboardedAt: true } })
     if (!before) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // The one line about the business the survey promised: it lands on the
+    // default company workspace, the profile every AI surface grounds on
+    // (lead pitches, emails, the business plan). Empty stays allowed, the
+    // question is optional so momentum never breaks, and a line already on
+    // the workspace is never overwritten by a later replay of the survey.
+    const valueProp = String(body.valueProp || '').trim().slice(0, 280)
+    if (valueProp) {
+      const workspace = await getOrCreateDefaultProject(userId)
+      if (!workspace.valueProp) {
+        await db.project.update({ where: { id: workspace.id }, data: { valueProp } })
+      }
+    }
 
     const user = await db.user.update({
       where: { id: userId },

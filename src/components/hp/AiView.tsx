@@ -81,7 +81,7 @@ function inline(text: string): React.ReactNode {
 }
 
 export default function AiView() {
-  const { bumpRefresh } = useHp()
+  const { bumpRefresh, setView } = useHp()
   const { toast } = useToast()
   const [tab, setTab] = useState<'plan' | 'advisor' | 'google'>('plan')
 
@@ -91,6 +91,9 @@ export default function AiView() {
   const [generating, setGenerating] = useState(false)
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activePlan, setActivePlan] = useState<PlanRecord | null>(null)
+  // The "now what" door: a plan without a next step is a dead end, so the
+  // view offers three exits the moment a plan lands (task, leads, advisor).
+  const [taskBusy, setTaskBusy] = useState(false)
 
   // Advisor
   const [messages, setMessages] = useState<{ role: string; content: string; matches?: PoolMatchLite[]; poolCount?: number }[]>([])
@@ -251,12 +254,64 @@ export default function AiView() {
                       {new Date(activePlan.createdAt).toLocaleDateString('en-ZA', { dateStyle: 'medium' })}
                     </span>
                   </div>
+                  <div className="rounded-xl border border-brand/30 bg-brand/5 p-3.5 mb-5">
+                    <p className="text-sm font-medium">This plan is your map, not your homework.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Start with the <b className="text-foreground">This Week</b> section below: three actions you can do today. The doors on the right turn the rest into motion.
+                    </p>
+                  </div>
                   <div className="prose-sm max-w-none text-sm leading-relaxed">
                     {renderMd(activePlan.content)}
                   </div>
                 </CardContent>
               </Card>
               <div className="space-y-3">
+                <Card>
+                  <CardContent className="p-3 space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Now put it to work</p>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      disabled={taskBusy}
+                      onClick={async () => {
+                        setTaskBusy(true)
+                        try {
+                          await api('/api/tasks', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              title: 'Work through my AI business plan',
+                              notes: 'Start with the This Week section in the AI plan, then the 90 day milestones. The plan lives in the AI tab.',
+                            }),
+                          })
+                          toast({ title: 'Added to your task list', description: 'Open Tasks to start on step one.' })
+                          bumpRefresh()
+                        } catch (e) {
+                          toast({ title: 'Could not add the task', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+                        } finally {
+                          setTaskBusy(false)
+                        }
+                      }}
+                    >
+                      {taskBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 text-brand" />}
+                      Add it to my tasks
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setView('leads')}>
+                      <Sparkles className="h-4 w-4 text-brand" />
+                      Find your first customers
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setChatInput('My business plan is in the AI tab. Help me start with the first action in its This Week section, step by step.')
+                        setTab('advisor')
+                      }}
+                    >
+                      <BrainCircuit className="h-4 w-4 text-brand" />
+                      Ask the Co-Founder to start step 1
+                    </Button>
+                  </CardContent>
+                </Card>
                 <Button
                   variant="outline"
                   className="w-full"
