@@ -1,13 +1,14 @@
 import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, Link2 } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
-import { REFERRAL_PER_LEAD_CENTS, MEMBER_SPLIT_CENTS, rand } from '@/lib/corporate'
 import CorporateClaimForm from '@/components/hp/CorporateClaimForm'
-import EarningsCalculator from '@/components/hp/corporate/EarningsCalculator'
 
 // Task 208: the corporate content, shared by the generic door (/corporate) and
 // every strategist door (/corporate/<slug>). Laws carried over from Task 207:
 // truthful numbers only; the corporate rate never sits beside self-serve prices; no dashes
 // in the copy; the partnership is named exactly as the owner stated it.
+// Task 210 law (boss): every door is PURE SALES. The referral law, splits and
+// member mechanics are internal only (claim API + exec rollup track them); no
+// commission content, calculator or ?via talk ever renders client-facing.
 
 const TILES = [
   { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
@@ -149,21 +150,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </ul>
       </section>
 
-      {partner ? (
-        <section className="space-y-3">
-          <h2 className="font-display text-2xl">For {partner.name}'s partners and team</h2>
-          <p className="text-sm text-muted-foreground">
-            This page is {partner.company}'s corporate door. When an office you refer claims their
-            credit here, the claim is tracked to {partner.name} and the referral law pays:{' '}
-            {rand(REFERRAL_PER_LEAD_CENTS)} per managed lead the account takes. Leads sourced by a
-            member you enrolled split {rand(REFERRAL_PER_LEAD_CENTS - MEMBER_SPLIT_CENTS)} to you and{' '}
-            {rand(MEMBER_SPLIT_CENTS)} to them, so your network earns with you. Share your door's
-            address, and add <span className="font-mono text-brand">?via=yours</span> once your member
-            code is registered.
-          </p>
-          <EarningsCalculator partnerName={partner.company} />
-        </section>
-      ) : (
+      {!partner && (
         <section className="space-y-3">
           <h2 className="font-display text-2xl">Our brand strategists</h2>
           <p className="text-sm text-muted-foreground">
@@ -176,13 +163,13 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           >
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/corporate/trinitydirect-logo.jpg" alt="TrinityDirect Consortium logo" className="h-full w-full object-contain" />
+              <img src="/corporate/trinitydirect-logo.jpg" alt="Trinity Direct Consortium (Pty) Ltd logo" className="h-full w-full object-contain" />
             </div>
             <div className="flex-1">
               <p className="font-semibold flex items-center gap-2">
-                TrinityDirect Consortium <Link2 className="h-3.5 w-3.5 text-brand" />
+                Trinity Direct Consortium (Pty) Ltd <Link2 className="h-3.5 w-3.5 text-brand" />
               </p>
-              <p className="text-sm text-muted-foreground">Led by Kelo Martin · corporate sales floors, equipped.</p>
+              <p className="text-sm text-muted-foreground">Led by Kelo Anthony Martins · corporate sales floors, equipped.</p>
             </div>
             <span className="text-xs font-semibold uppercase tracking-wide text-brand">Visit the door</span>
           </a>
@@ -198,16 +185,14 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
               Consortium (Pty) Ltd, led by Director Kelo Anthony Martins. The corporate edition of the
               platform reaches sales teams, agencies and franchisors through the consortium, while
               sourcing, verification and delivery stay on the HustlePortal engine the solo version
-              runs on. Per the partnership terms: on clients introduced by the Consortium, the
-              customer-facing rate is R110 per qualified lead reveal, of which R60 runs the engine and
-              R50 is the Consortium's referral share. One engine, two doors: self-serve for owner
+              runs on. One engine, two doors: self-serve for owner
               operators, managed for corporate floors.
             </>
           ) : (
             <>
               HustlePortal Corporate is delivered through brand strategists in strategic partnership with
-              HustlePortal. Each strategist runs their own door, presents the same offer, and is tracked
-              and paid on the referrals they bring. Sourcing, verification and delivery stay on the
+              HustlePortal. Each strategist runs their own door, presenting the same offer, the same
+              rate and the same verified pipeline behind it. Sourcing, verification and delivery stay on the
               HustlePortal engine the solo version runs on. One engine, many doors: self-serve for owner
               operators, managed for corporate floors.
             </>
