@@ -1143,8 +1143,10 @@ model CorporateLead {
   email       String
   phone       String?
   teamSize    String? // "1 to 5 sellers" | "6 to 20 sellers" | "21 to 50 sellers" | "More than 50"
+  industry    String? // what they sell / who they sell to (invitation survey, Task 215)
+  leadsNeeded String? // rough monthly lead need (invitation survey, Task 215)
   message     String?
-  source      String   @default("corporate-lp") // corporate-lp | strategist-lp | other
+  source      String   @default("corporate-lp") // corporate-lp | strategist-lp | application | other
   status      String   @default("NEW") // NEW | CONTACTED | WON | LOST
   refSlug     String? // brand strategist slug (/corporate/<slug>) who referred this office
   refMember   String? // member code (?via=<code>) when a strategist's enrolled member sourced it
@@ -1154,6 +1156,28 @@ model CorporateLead {
   @@index([status, createdAt])
   @@index([email])
   @@index([refSlug, createdAt])
+}
+
+// ============ CORPORATE ACCESS GATE (Task 215) ============
+// Corporate is a closed channel: a claim needs an access code handed out by
+// the team (a strategist's member code on their door, or an exec-minted code),
+// or an approved invitation application. The code carries the attribution it
+// was minted with, so the referral trail stays honest even when the code, not
+// the URL, did the referring.
+model CorporateAccessCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  label     String? // who it was minted for, e.g. "Kelo's Meadowdale prospects"
+  slug      String? // attributes claims to a strategist door
+  viaCode   String? // member attribution when a member's code opened the door
+  maxUses   Int       @default(1)
+  usedCount Int       @default(0)
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  createdBy String
+
+  @@index([active])
 }
 
 // ============ PARTNER E-SIGN (Task 212) ============

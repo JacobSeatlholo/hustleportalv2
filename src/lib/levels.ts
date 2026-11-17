@@ -32,6 +32,29 @@ export function revealPriceForLevel(level: number) {
   return level >= REVEAL_DISCOUNT_MIN_LEVEL ? DISCOUNTED_REVEAL_PRICE_CENTS : STANDARD_REVEAL_PRICE_CENTS
 }
 
+// ---- The self-serve ladder (Task 215, pricing strategy 4.1/4.2) ----
+// New accounts from 1 December 2026 pay R60 per reveal at levels 1-2 and the
+// price falls as the member levels up: R48 at Operator 3, R36 at Closer 4,
+// R24 at Boss 5, R15 at Tycoon 6. Accounts created before the cutoff keep the
+// launch economics permanently (R18 list, R15 at Operator 3) — nobody's money
+// shrinks, credit balances keep their exact purchasing power. The cohort is
+// DERIVED from createdAt, so no migration touches existing accounts.
+export const LADDER_START_ISO = '2026-12-01T00:00:00+02:00'
+const LADDER_START = new Date(LADDER_START_ISO).getTime()
+export const LADDER_REVEAL_CENTS = [6000, 6000, 4800, 3600, 2400, 1500] as const
+export type PricingCohort = 'LEGACY' | 'LADDER'
+
+export function cohortFor(createdAt?: string | Date | null): PricingCohort {
+  if (!createdAt) return 'LEGACY'
+  const t = new Date(createdAt).getTime()
+  return Number.isFinite(t) && t >= LADDER_START ? 'LADDER' : 'LEGACY'
+}
+
+export function ladderRevealPriceForLevel(level: number): number {
+  const idx = Math.min(Math.max(level, 1), LADDER_REVEAL_CENTS.length) - 1
+  return LADDER_REVEAL_CENTS[idx]
+}
+
 // ---- B2B done-for-you track ----
 // The corporate rate: R110 per qualified lead reveal, standardised with the
 // Trinity Direct Consortium partnership terms (Kelo's email, Nov 2026) so the
@@ -47,8 +70,10 @@ export function isPremiumTier(tier?: string | null): boolean {
 }
 
 /** The till's price for one reveal — the whole pricing rule in one place. */
-export function revealPriceFor(tier: string | null | undefined, level: number): number {
-  return isPremiumTier(tier) ? DFY_REVEAL_PRICE_CENTS : revealPriceForLevel(level)
+export function revealPriceFor(tier: string | null | undefined, level: number, cohort?: PricingCohort | string | null): number {
+  if (isPremiumTier(tier)) return DFY_REVEAL_PRICE_CENTS
+  if (cohort === 'LADDER') return ladderRevealPriceForLevel(level)
+  return revealPriceForLevel(level)
 }
 
 // ---- The till's anchor line (Task 206, on the record) ----
@@ -60,7 +85,7 @@ export function revealPriceFor(tier: string | null | undefined, level: number): 
 // (web-sourced Nov 2026, used as a labeled market reference, not a quote).
 export const AGENCY_PER_LEAD_CENTS = 25000
 
-export function tillAnchorLine(tier: string | null | undefined, level: number): string | null {
+export function tillAnchorLine(tier: string | null | undefined, level: number, cohort?: PricingCohort | string | null): string | null {
   if (isPremiumTier(tier)) {
     // DFY accounts never see their own rate beside R15 — their anchor is the market only.
     return 'Agencies charge R250+ per lead — this one is managed, and verified before a cent moves.'
@@ -68,6 +93,6 @@ export function tillAnchorLine(tier: string | null | undefined, level: number): 
   // The managed-rate anchor is derived from the DFY constant so the two can
   // never drift apart (the R108→R110 standardisation missed this line once).
   const managed = (DFY_REVEAL_PRICE_CENTS / 100).toFixed(0)
-  const self = (revealPriceForLevel(level) / 100).toFixed(0)
+  const self = (revealPriceFor(tier, level, cohort) / 100).toFixed(0)
   return `Managed rate R${managed} · agencies charge R250+ per lead · your price R${self}, verified or you don't pay.`
 }

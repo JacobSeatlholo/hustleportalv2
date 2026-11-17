@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { sendSystemMail, TEAM_INBOX } from '@/lib/mailer'
 import { getStrategist, getStrategistMember } from '@/lib/corporate'
+import { resolveAccessCode, consumeAccessCode } from '@/lib/corporateAccess'
 
 // ============ CORPORATE CLAIM (Task 207) ============
 //
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
   const phone = clean(body.phone, 30)
   const teamSize = clean(body.teamSize, 20)
   const message = clean(body.message, 600)
+  const industry = clean(body.industry, 80)
+  const leadsNeeded = clean(body.leadsNeeded, 60)
 
   // Referral attribution (Task 208): the strategist door posts refSlug, an
   // enrolled member's outreach link adds refMember (?via=<code>). Unknown
@@ -47,8 +50,22 @@ export async function POST(req: NextRequest) {
   const refMemberRaw = clean(body.refMember, 60)
   const strategist = refSlugRaw ? getStrategist(refSlugRaw) : undefined
   const member = strategist && refMemberRaw ? getStrategistMember(strategist.slug, refMemberRaw) : undefined
-  const refSlug = strategist?.slug ?? null
-  const refMember = member?.code ?? null
+
+  // THE ACCESS GATE (Task 215): corporate is a closed channel. A claim needs
+  // an access code — a team member's code (validated against the registry
+  // with the door's slug context) or an exec-minted code. The code's own
+  // attribution outranks whatever the URL claims: it is the credential that
+  // actually opened the door.
+  const access = await resolveAccessCode(body.accessCode, strategist?.slug ?? null)
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: 'This corporate door is locked. An access code from our team is required, or apply for an invitation.' },
+      { status: 403 },
+    )
+  }
+  const refSlug = access.slug ?? strategist?.slug ?? null
+  const refMember = access.viaCode ?? member?.code ?? null
+  const refStrategist = refSlug ? getStrategist(refSlug) : undefined
   const source = refSlug ? 'strategist-lp' : 'corporate-lp'
 
   const errors: string[] = []
@@ -74,20 +91,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, duplicate: true })
   }
 
+  // One use burned per accepted claim (minted codes only; member codes are
+  // links, not tickets). Consumed after every gate so a fumbled form never
+  // wastes the boss's hand-out.
+  await consumeAccessCode(access)
+
   const row = await db.corporateLead.create({
     data: {
       business, contactName, email,
       phone: phone || null, teamSize: teamSize || null, message: message || null,
+      industry: industry || null, leadsNeeded: leadsNeeded || null,
       source, refSlug, refMember,
     },
   })
 
   const creditLine = refSlug
-    ? `Referred by: ${strategist!.company} (${strategist!.slug})${member ? `, sourced by member ${member.name} (${member.code})` : ''}\nReferral law: at the R110 corporate rate, R50 per managed lead is the Consortium's share${member ? ' (R25 strategist / R25 member split)' : ''}.`
+    ? `Referred by: ${refStrategist!.company} (${refStrategist!.slug})${refMember ? `, sourced by member code ${refMember}` : ''}${access.kind === 'minted' && access.label ? ` — access code "${access.label}"` : ''}\nReferral law: at the R110 corporate rate, R50 per managed lead is the Consortium's share${refMember ? ' (R25 strategist / R25 member split)' : ''}.`
     : ''
   const notify = await sendSystemMail({
     to: TEAM_INBOX,
-    subject: `Corporate claim: ${business}${refSlug ? ` via ${strategist!.company}` : ''} (R550 credit)`,
+    subject: `Corporate claim: ${business}${refSlug ? ` via ${refStrategist!.company}` : ''} (R550 credit)`,
     body: [
       refSlug ? 'A corporate account claim came in from a strategist door.' : 'A corporate account claim came in from the corporate page.',
       '',
@@ -96,6 +119,8 @@ export async function POST(req: NextRequest) {
       `Email: ${email}`,
       phone ? `Phone: ${phone}` : '',
       teamSize ? `Team size: ${teamSize}` : '',
+      industry ? `Industry: ${industry}` : '',
+      leadsNeeded ? `Leads needed: ${leadsNeeded}` : '',
       message ? `Message: ${message}` : '',
       creditLine,
       '',

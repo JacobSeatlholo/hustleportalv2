@@ -78,13 +78,23 @@ export async function POST(req: NextRequest) {
       // Master account (exec email): make sure its exec flags exist. Idempotent,
       // touches nothing besides the two privilege flags on that one email.
       await ensureExecAdmin(user).catch(() => {})
-      // welcome bonus, R99 in lead credits: enough for real teaser reveals,
-      // the taste that sells the R199 Operator plan
-      const welcomeCents = parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900
+      // Referral attribution FIRST (teams invite teams): whether the member
+      // arrived via someone's ?ref= link decides their welcome amount, so the
+      // attribution must land before the grant. R10 still flows to the
+      // referrer; attribution failure never blocks registration.
+      let referrerId: string | null = null
+      try {
+        referrerId = await attributeSignup(user.id, normalized, body.refCode)
+      } catch { /* attribution must never block registration */ }
+      // welcome bonus (Task 215, owner's rule): R99 when you joined on your
+      // own, R120 when you came through someone's referral link — the R21
+      // difference is the visible reward for the distribution loop.
+      const welcomeCents = referrerId
+        ? (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_REFERRAL_CENTS)) || 12000)
+        : (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900)
       // Task 206: frame the welcome as the OUTCOME it buys, never as a price.
-      // R99 reads as a rand over five R18 reveals; "5 verified leads, on us"
-      // reads as a gift with a face. Numbers computed, never hardcoded, so a
-      // configured WELCOME_CREDIT_CENTS change keeps the copy honest.
+      // Numbers computed, never hardcoded, so a configured credit change keeps
+      // the copy honest.
       const welcomeReveals = Math.floor(welcomeCents / STANDARD_REVEAL_PRICE_CENTS)
       const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * STANDARD_REVEAL_PRICE_CENTS) / 100)
       const welcomeLeadLine =
@@ -92,14 +102,10 @@ export async function POST(req: NextRequest) {
           ? `Your wallet is already loaded: ${welcomeReveals} verified leads, on us, with R${welcomeLeftoverRands} still on the card after that.`
           : `Your wallet is already loaded with R${Math.round(welcomeCents / 100)} in lead credits.`
       if (welcomeCents > 0) {
-        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits`)
+        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits${referrerId ? ' (joined via referral)' : ''}`)
       }
       await awardXp(user.id, 'SIGNUP', 50, 'Joined HustlePortal')
       await bumpChallenge(user.id, 'login')
-      // Referral attribution (teams invite teams), R10 to the referrer on signup.
-      try {
-        await attributeSignup(user.id, normalized, body.refCode)
-      } catch { /* attribution must never block registration */ }
       // Welcome email, the first branded message of the relationship. Awaited
       // (serverless freezes unawaited promises after the response) but wrapped
       // so a failed send can never block registration.

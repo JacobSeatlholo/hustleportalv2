@@ -1,6 +1,8 @@
 import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
 import CorporateClaimForm from '@/components/hp/CorporateClaimForm'
+import CorporateAccessGate from '@/components/hp/CorporateAccessGate'
+import CorporateCalculator from '@/components/hp/CorporateCalculator'
 
 // Task 208: the corporate content, shared by the generic door (/corporate) and
 // every strategist door (/corporate/<slug>). Laws carried over from Task 207:
@@ -8,7 +10,9 @@ import CorporateClaimForm from '@/components/hp/CorporateClaimForm'
 // in the copy; the partnership is named exactly as the owner stated it.
 // Task 210 law (boss): every door is PURE SALES. The referral law, splits and
 // member mechanics are internal only (claim API + exec rollup track them); no
-// commission content, calculator or ?via talk ever renders client-facing.
+// commission content or ?via talk ever renders client-facing. Task 215 adds
+// the ONE client-facing calculator the owner asked for: pricing maths only
+// (R110 vs the R250+ agency anchor), never commission economics.
 
 const TILES = [
   { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
@@ -213,9 +217,27 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </p>
       </section>
 
+      <CorporateCalculator />
+
       <section className="space-y-4" id="claim">
-        <h2 className="font-display text-2xl">Claim your R550 starting credit</h2>
-        <CorporateClaimForm refSlug={partner?.slug} />
+        {partner ? (
+          <>
+            <h2 className="font-display text-2xl">Claim your R550 starting credit</h2>
+            <CorporateClaimForm refSlug={partner.slug} />
+          </>
+        ) : (
+          <>
+            {/* Task 215: the generic door is the locked B2B access point — a
+                code from the team, or an invitation application. */}
+            <h2 className="font-display text-2xl">Corporate access is by invitation</h2>
+            <p className="text-sm text-muted-foreground">
+              This door is locked on purpose. Corporate accounts are opened by our team on a written
+              agreement, so entry needs an access code from one of our team members, or an approved
+              invitation application.
+            </p>
+            <CorporateAccessGate />
+          </>
+        )}
       </section>
     </div>
   )

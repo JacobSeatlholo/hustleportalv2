@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { spendCredits } from '@/lib/wallet'
 import { getConfig, CONFIG_KEYS } from '@/lib/config'
-import { levelFor, revealPriceForLevel, STANDARD_REVEAL_PRICE_CENTS, isPremiumTier, DFY_REVEAL_PRICE_CENTS } from '@/lib/levels'
+import { levelFor, revealPriceForLevel, revealPriceFor, cohortFor, STANDARD_REVEAL_PRICE_CENTS, isPremiumTier, DFY_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { isSuppressed } from '@/lib/suppression'
 import { geminiGenerate, parseJsonLoose } from '@/lib/gemini'
 import { zaiGenerate } from '@/lib/zai'
@@ -70,8 +70,15 @@ export async function POST(req: NextRequest) {
   // ladder, no promo; that rate lives in the DFY agreement (R110 per the TDC
   // terms), not the config table.
   const configPrice = parseInt(await getConfig(CONFIG_KEYS.LEAD_PRICE)) || STANDARD_REVEAL_PRICE_CENTS
-  const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true, pricingTier: true } })
-  const selfServePrice = Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
+  const member = await db.user.findUnique({ where: { id: userId }, select: { xp: true, pricingTier: true, createdAt: true } })
+  // Task 215: the cohort decides the till. LEGACY accounts keep the launch
+  // rule (config list price floored by the level discount); LADDER accounts
+  // (created from 1 Dec 2026) pay the strategy ladder, independent of the
+  // legacy config so a stale LEAD_PRICE can never undercut it.
+  const cohort = cohortFor(member?.createdAt)
+  const selfServePrice = cohort === 'LADDER'
+    ? revealPriceFor(member?.pricingTier, levelFor(member?.xp ?? 0).level, cohort)
+    : Math.min(configPrice, revealPriceForLevel(levelFor(member?.xp ?? 0).level))
   const price = isPremiumTier(member?.pricingTier) ? DFY_REVEAL_PRICE_CENTS : selfServePrice
 
   let contact = {
