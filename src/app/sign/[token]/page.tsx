@@ -67,6 +67,15 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
                 <div>Signed file SHA-256: {session.signedSha256 || '—'}</div>
                 <div>Session: {session.id}</div>
               </dl>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your signed copy, right here</p>
+                <iframe
+                  src={`/api/sign/${session.token}/file?inline=1#toolbar=0`}
+                  title={`Signed copy of ${session.docTitle}`}
+                  className="w-full rounded-xl border border-border bg-white"
+                  style={{ height: '70vh' }}
+                />
+              </div>
               <a
                 href={`/api/sign/${session.token}/file`}
                 className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
