@@ -51,7 +51,8 @@ check('funnel numbers are consistent', !!m && m.activated <= m.accounts && m.new
   m ? `${m.accounts} accounts, ${m.activated} activated, ${m.newAccountsWeek} new this week, top-ups R${Math.round(m.topupsWeekCents / 100)}` : 'no metrics')
 check('call lists carry business names only', !!m && Array.isArray(m.closeNow) && Array.isArray(m.warming),
   m ? `close-now ${m.closeNow.length}, warming ${m.warming.length}, last activity ${m.lastActivity || 'none yet'}` : 'no metrics')
-check('digest email left the building', !!r && r.emailed === true, r?.emailed ? 'sent to the partner contact' : `emailError ${r?.emailError || r?.skipped || 'unknown'}`)
+check('digest email left the building', !!r && r.emailed === true, r?.emailed ? `sent to ${r.to || 'the partner contact'}` : `emailError ${r?.emailError || r?.skipped || 'unknown'}`)
+check('digest lands in the backend inbox', !!r && r.to === 'trinitydirectint@gmail.com', `to ${r?.to || 'unknown'}`)
 
 // 5. The cooldown holds the repeat.
 const again = await fetch(`${BASE}/api/cron/partner-digest?key=${encodeURIComponent(DASH_KEY)}`)

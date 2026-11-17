@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
   }
 
   const origin = `${url.protocol}//${url.host}`
-  const results: Array<{ slug: string; emailed: boolean; emailError?: string; skipped?: string; metrics?: PartnerDigest }> = []
+  const results: Array<{ slug: string; to?: string; emailed: boolean; emailError?: string; skipped?: string; metrics?: PartnerDigest }> = []
   for (const slug of slugs) {
     const cooldown = globalCooldown(`cron:partner-digest:${slug}`, 10 * 60 * 1000)
     if (!cooldown.ran) {
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
       continue
     }
     const sent = await sendOne(digest, origin)
-    results.push({ slug, ...sent, metrics: digest })
+    results.push({ slug, to: digest.contactEmail, ...sent, metrics: digest })
   }
   return NextResponse.json({ ok: true, results }, { headers: { 'Cache-Control': 'no-store' } })
 }
