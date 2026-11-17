@@ -11,7 +11,7 @@ import { attributeSignup } from '@/lib/referral'
 import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 import { ensureExecAdmin } from '@/lib/admin'
 import { runWelcomeSweep } from '@/lib/welcomesweep'
-import { STANDARD_REVEAL_PRICE_CENTS } from '@/lib/levels'
+import { STANDARD_REVEAL_PRICE_CENTS, revealPriceFor, cohortFor } from '@/lib/levels'
 
 // The welcome sweep runs after the response ships (Vercel keeps the function
 // alive for after() work): a fresh signup should wake up to real,
@@ -94,9 +94,13 @@ export async function POST(req: NextRequest) {
         : (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900)
       // Task 206: frame the welcome as the OUTCOME it buys, never as a price.
       // Numbers computed, never hardcoded, so a configured credit change keeps
-      // the copy honest.
-      const welcomeReveals = Math.floor(welcomeCents / STANDARD_REVEAL_PRICE_CENTS)
-      const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * STANDARD_REVEAL_PRICE_CENTS) / 100)
+      // the copy honest. Task 215: the outcome divides by the member's OWN
+      // first-reveal price (R18 legacy today, R60 on the ladder from 1 Dec) —
+      // a legacy divisor would promise five leads to a member who can only
+      // buy one.
+      const firstRevealCents = revealPriceFor(null, 1, cohortFor(user.createdAt))
+      const welcomeReveals = Math.floor(welcomeCents / firstRevealCents)
+      const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * firstRevealCents) / 100)
       const welcomeLeadLine =
         welcomeReveals >= 1
           ? `Your wallet is already loaded: ${welcomeReveals} verified leads, on us, with R${welcomeLeftoverRands} still on the card after that.`
