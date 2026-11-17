@@ -37,8 +37,10 @@ export const PARTNER_DOCS: PartnerDoc[] = [
     tag: 'agreement',
   },
   {
-    base: 'HustlePortal_Pricing_Strategy',
-    title: 'HustlePortal Pricing Strategy (v2, R110)',
+    // Task 214: the basename itself must be engine-free — it rides in download
+    // URLs, signing sessions and the signer's page.
+    base: 'Pricing_Strategy_Internal',
+    title: 'Pricing Strategy (v2, R110)',
     description:
       'The internal strategy: level ladder R60→R15 with grandfathering, R120 welcome credit, corporate R110 with the exact-five credit, referral economics. Internal only — moved out of /docs/ so it is no longer publicly served.',
     tag: 'internal',

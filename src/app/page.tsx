@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import Landing from '@/components/hp/Landing'
 import AppShell from '@/components/hp/AppShell'
 import { useHp, type ViewKey } from '@/components/hp/store'
+import { BH_JSON_LD } from '@/lib/jsonld'
 
 const VALID_VIEWS: ViewKey[] = [
   'dashboard', 'leads', 'clients', 'tasks', 'inventory', 'finance', 'ai', 'mail', 'calendar',
@@ -32,6 +33,12 @@ export default function Home() {
   // the exact load experience they had before.
   return (
     <>
+      {/* Structured data lives HERE, not in the root layout, so whitelabel
+          partner surfaces never inherit HustlePortal schema (Task 214). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(BH_JSON_LD) }}
+      />
       {session ? <AppShell /> : <Landing />}
       {sessionLoading && (
         <div className="fixed inset-0 z-[90] hp-gradient-bg flex items-center justify-center">

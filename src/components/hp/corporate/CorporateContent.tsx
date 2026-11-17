@@ -17,23 +17,29 @@ const TILES = [
   { icon: ShieldCheck, big: 'R0', small: 'to claim your credit, and no card is needed' },
 ]
 
-const STEPS = [
-  {
-    n: '1',
-    title: 'Claim your credit',
-    body: 'Fill in the form below. Our corporate team reaches out personally, sets your account up, and applies the R550 starting credit before you spend a cent.',
-  },
-  {
-    n: '2',
-    title: 'We find and verify',
-    body: 'Managed sourcing runs inside HustlePortal. Businesses are found, contact details are verified by hand and machine, and the leads land in your pipeline ready to work.',
-  },
-  {
-    n: '3',
-    title: 'Your sellers close',
-    body: 'Verified before a cent moves: an unverified lead is never charged. Your sellers spend their time selling, not hunting for numbers that work.',
-  },
-]
+// Task 214 whitelabel: step 2 speaks as the strategist's own desk on partner
+// doors; the generic door may name the engine.
+function steps(partner?: Strategist) {
+  return [
+    {
+      n: '1',
+      title: 'Claim your credit',
+      body: 'Fill in the form below. Our corporate team reaches out personally, sets your account up, and applies the R550 starting credit before you spend a cent.',
+    },
+    {
+      n: '2',
+      title: 'We find and verify',
+      body: partner
+        ? 'Managed sourcing runs end to end on our desk. Businesses are found, contact details are verified by hand and machine, and the leads land in your pipeline ready to work.'
+      : 'Managed sourcing runs inside HustlePortal. Businesses are found, contact details are verified by hand and machine, and the leads land in your pipeline ready to work.',
+    },
+    {
+      n: '3',
+      title: 'Your sellers close',
+      body: 'Verified before a cent moves: an unverified lead is never charged. Your sellers spend their time selling, not hunting for numbers that work.',
+    },
+  ]
+}
 
 const WHO = [
   'Sales teams that need a full pipeline, not a lead here and there',
@@ -85,7 +91,8 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       <header className="space-y-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
           <Building2 className="h-3.5 w-3.5" />
-          {partner ? `${partner.company} · HustlePortal Corporate` : 'HustlePortal Corporate'}
+          {/* Whitelabel law (Task 214): partner doors carry only the strategist's brand. */}
+          {partner ? partner.company : 'HustlePortal Corporate'}
         </p>
         <h1 className="font-display text-4xl leading-tight">
           Verified leads for corporate sales floors. Done for you.
@@ -98,7 +105,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         {partner ? (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Handshake className="h-4 w-4 text-brand" />
-            Presented by {partner.name} of {partner.company}, in strategic partnership with HustlePortal.
+            Presented by {partner.name} of {partner.company}.
           </p>
         ) : (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -163,7 +170,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       <section className="space-y-3">
         <h2 className="font-display text-2xl">How it works</h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          {STEPS.map((s) => (
+          {steps(partner).map((s) => (
             <div key={s.n} className="rounded-2xl border border-border bg-card p-5 space-y-2">
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white text-sm font-semibold">
                 {s.n}
@@ -187,7 +194,9 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       </section>
 
       <section className="space-y-3">
-        <h2 className="font-display text-2xl">Why corporate floors sign with HustlePortal</h2>
+        <h2 className="font-display text-2xl">
+          {partner ? 'Why corporate floors sign with us' : 'Why corporate floors sign with HustlePortal'}
+        </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {TRUST.map((t) => (
             <div key={t.title} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">

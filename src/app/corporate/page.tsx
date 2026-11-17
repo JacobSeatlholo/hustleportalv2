@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import CorporateContent from '@/components/hp/corporate/CorporateContent'
+import { BH_JSON_LD } from '@/lib/jsonld'
 
 // Task 207/208: the GENERIC corporate door. Served at /corporate on the main
 // domain, and at the root of corporate.hustleportal.online via the host
@@ -28,6 +29,12 @@ export const metadata: Metadata = {
 export default function CorporatePage() {
   return (
     <CorporateShell>
+      {/* Structured data lives HERE, not in the root layout, so partner doors
+          never inherit HustlePortal schema (Task 214). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(BH_JSON_LD) }}
+      />
       <main className="min-h-screen bg-background">
         <CorporateContent />
       </main>

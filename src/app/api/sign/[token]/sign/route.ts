@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { signaturePng?: string; typedName?: string; consent?: boolean }
+    | { signaturePng?: string; initialsPng?: string; typedName?: string; consent?: boolean }
     | null
   if (!body?.consent) {
     return NextResponse.json({ error: 'Consent is required to sign electronically.' }, { status: 400 })
@@ -34,6 +34,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   if (!match || match[1].length > MAX_SIG_BYTES) {
     return NextResponse.json({ error: 'Draw your signature in the box (image too large or invalid).' }, { status: 400 })
   }
+  // Optional per-page initials (Task 214): drawn in their own box, stamped on
+  // every page of the document before the certificate is appended.
+  const MAX_INIT_BYTES = 300_000
+  let initialsBase64: string | undefined
+  if (body.initialsPng) {
+    const initMatch = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(body.initialsPng)
+    if (!initMatch || initMatch[1].length > MAX_INIT_BYTES) {
+      return NextResponse.json({ error: 'The initials image is too large or invalid — clear it or sign without initials.' }, { status: 400 })
+    }
+    initialsBase64 = initMatch[1]
+  }
 
   try {
     const { bytes: original, title } = await loadSessionOriginal(session)
@@ -45,6 +56,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       originalBytes: original,
       docTitle: title,
       sigPngBase64: match[1],
+      initialsPngBase64: initialsBase64,
       typedName,
       signerEmail: session.signerEmail,
       sessionId: session.id,

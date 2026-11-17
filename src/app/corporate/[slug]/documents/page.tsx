@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Lock, FileText, FileSignature, ShieldCheck } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import EsignSendForm from '@/components/hp/corporate/EsignSendForm'
-import { getStrategist } from '@/lib/corporate'
+import { getStrategist, whitelabelMeta } from '@/lib/corporate'
 import { PARTNER_DOCS, checkDocsKey } from '@/lib/partnerDocs'
 import { db } from '@/lib/db'
 import { sast } from '@/lib/esign'
@@ -21,10 +21,12 @@ import { sast } from '@/lib/esign'
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const s = getStrategist(slug)
-  return {
-    title: s ? `Internal deal room — ${s.company} × HustlePortal` : 'Internal deal room',
-    robots: { index: false, follow: false },
-  }
+  // Whitelabel law (Task 214): the partner deal room never brands the engine —
+  // head metadata included.
+  const meta = s
+    ? whitelabelMeta(s, `Deal room — ${s.company}`, 'The partnership documents and the first-party signing flow.')
+    : { title: 'Deal room' }
+  return { ...meta, robots: { index: false, follow: false } }
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -62,7 +64,7 @@ export default async function PartnerDocumentsPage({
   })
 
   return (
-    <CorporateShell>
+    <CorporateShell footer={false}>
       <main className="min-h-screen bg-background">
         <div className="max-w-3xl mx-auto px-6 py-14 space-y-10">
           <header className="space-y-3">

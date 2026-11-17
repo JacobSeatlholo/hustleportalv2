@@ -14,6 +14,8 @@
 // Payout accrual against delivered leads lands with DFY billing (Task 203
 // roadmap) — the claim attribution is the honest root of that ledger.
 
+import type { Metadata } from 'next'
+
 export interface StrategistMember {
   /** Short code the member puts in their outreach link: ?via=<code> */
   code: string
@@ -62,6 +64,37 @@ export function getStrategistMember(slug: string, code: string): StrategistMembe
   const s = getStrategist(slug)
   if (!s) return undefined
   return s.members.find((m) => m.code.toLowerCase().trim() === code.toLowerCase().trim())
+}
+
+// ============ WHITELABEL HEAD (Task 214) ============
+// The root layout ships HustlePortal-branded metadata (og:title, application
+// name, apple web app title, keywords). Every partner surface overrides ALL of
+// it with the strategist's brand — link shares, app titles and search snippets
+// must never reveal the engine behind the door.
+export function whitelabelMeta(s: Strategist, title: string, description: string): Metadata {
+  const og = { title, description, siteName: s.company, images: [{ url: s.image }] }
+  return {
+    title,
+    description,
+    applicationName: s.company,
+    keywords: [s.company, s.name, 'verified leads', 'corporate sales', 'lead generation South Africa'],
+    appleWebApp: { capable: true, title: s.company, statusBarStyle: 'black-translucent' },
+    openGraph: { ...og, url: `/corporate/${s.slug}`, type: 'website' },
+    twitter: { card: 'summary_large_image', ...og },
+  }
+}
+
+/** Neutral head for signing pages: brand without the engine's name. */
+export function neutralSignMeta(brand: string): Metadata {
+  const og = { title: 'Sign document', description: 'First-party electronic signing — review, initial each page and sign.', siteName: brand, images: [] as { url: string }[] }
+  return {
+    title: `Sign document — ${brand}`,
+    applicationName: brand,
+    keywords: ['electronic signature', 'ECT Act 25 of 2002', 'sign document'],
+    appleWebApp: { capable: true, title: brand, statusBarStyle: 'black-translucent' },
+    openGraph: { ...og, type: 'website' },
+    twitter: { card: 'summary', ...og },
+  }
 }
 
 export function rand(cents: number): string {

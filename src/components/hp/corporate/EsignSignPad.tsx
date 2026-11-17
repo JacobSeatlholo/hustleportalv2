@@ -1,71 +1,74 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, type RefObject } from 'react'
 import { Loader2, PenLine, CheckCircle2, Eraser } from 'lucide-react'
 
 // The first-party signing surface: review the PDF inline, draw the signature
-// on a canvas, type the name, consent, execute. On success the session is
-// stamped and stored server-side; this view swaps to the completed card with
-// the download link for the signed copy.
+// on a canvas, optionally draw initials in their own box (stamped bottom-right
+// of EVERY page — Task 214, the counter-execution move for entity agreements),
+// type the name, consent, execute. On success the session is stamped and
+// stored server-side; this view swaps to the completed card with the download
+// link for the signed copy.
+
+function attachPad(canvasRef: RefObject<HTMLCanvasElement | null>, onInk: () => void) {
+  const canvas = canvasRef.current
+  if (!canvas) return () => {}
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return () => {}
+  ctx.lineWidth = 2.5
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = '#0f172a'
+  const pos = (e: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    return { x: ((e.clientX - rect.left) / rect.width) * canvas.width, y: ((e.clientY - rect.top) / rect.height) * canvas.height }
+  }
+  const down = (e: PointerEvent) => {
+    e.preventDefault()
+    const p = pos(e)
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    canvas.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      ev.preventDefault()
+      const q = pos(ev)
+      ctx.lineTo(q.x, q.y)
+      ctx.stroke()
+      onInk()
+    }
+    const up = () => {
+      canvas.removeEventListener('pointermove', move)
+      canvas.removeEventListener('pointerup', up)
+      canvas.removeEventListener('pointercancel', up)
+    }
+    canvas.addEventListener('pointermove', move)
+    canvas.addEventListener('pointerup', up)
+    canvas.addEventListener('pointercancel', up)
+  }
+  canvas.addEventListener('pointerdown', down)
+  return () => canvas.removeEventListener('pointerdown', down)
+}
+
 export default function EsignSignPad({ token, docTitle, signerName }: { token: string; docTitle: string; signerName: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const drawing = useRef(false)
+  const initialsRef = useRef<HTMLCanvasElement | null>(null)
   const [hasInk, setHasInk] = useState(false)
+  const [hasInitials, setHasInitials] = useState(false)
   const [typedName, setTypedName] = useState('')
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [signedAt, setSignedAt] = useState<string | null>(null)
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.lineWidth = 2.5
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.strokeStyle = '#0f172a'
-    const pos = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      return { x: ((e.clientX - rect.left) / rect.width) * canvas.width, y: ((e.clientY - rect.top) / rect.height) * canvas.height }
-    }
-    const down = (e: PointerEvent) => {
-      e.preventDefault()
-      drawing.current = true
-      const p = pos(e)
-      ctx.beginPath()
-      ctx.moveTo(p.x, p.y)
-      canvas.setPointerCapture(e.pointerId)
-    }
-    const move = (e: PointerEvent) => {
-      if (!drawing.current) return
-      e.preventDefault()
-      const p = pos(e)
-      ctx.lineTo(p.x, p.y)
-      ctx.stroke()
-      setHasInk(true)
-    }
-    const up = () => {
-      drawing.current = false
-    }
-    canvas.addEventListener('pointerdown', down)
-    canvas.addEventListener('pointermove', move)
-    canvas.addEventListener('pointerup', up)
-    canvas.addEventListener('pointercancel', up)
-    return () => {
-      canvas.removeEventListener('pointerdown', down)
-      canvas.removeEventListener('pointermove', move)
-      canvas.removeEventListener('pointerup', up)
-      canvas.removeEventListener('pointercancel', up)
-    }
-  }, [])
+  useEffect(() => attachPad(canvasRef, () => setHasInk(true)), [])
+  useEffect(() => attachPad(initialsRef, () => setHasInitials(true)), [])
 
-  function clearPad() {
-    const canvas = canvasRef.current
+  function clearPad(which: 'sig' | 'init') {
+    const canvas = which === 'sig' ? canvasRef.current : initialsRef.current
     const ctx = canvas?.getContext('2d')
     if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
-    setHasInk(false)
+    if (which === 'sig') setHasInk(false)
+    else setHasInitials(false)
   }
 
   async function sign() {
@@ -73,10 +76,11 @@ export default function EsignSignPad({ token, docTitle, signerName }: { token: s
     setError(null)
     try {
       const signaturePng = canvasRef.current?.toDataURL('image/png') ?? ''
+      const initialsPng = hasInitials ? (initialsRef.current?.toDataURL('image/png') ?? '') : ''
       const res = await fetch(`/api/sign/${token}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signaturePng, typedName, consent }),
+        body: JSON.stringify({ signaturePng, initialsPng: initialsPng || undefined, typedName, consent }),
       })
       const json = (await res.json().catch(() => null)) as { error?: string; signedAt?: string } | null
       if (!res.ok) {
@@ -146,8 +150,23 @@ export default function EsignSignPad({ token, docTitle, signerName }: { token: s
             className="mt-2 w-full rounded-xl border border-border bg-white touch-none cursor-crosshair"
             style={{ height: 'auto', aspectRatio: '720 / 200' }}
           />
-          <button onClick={clearPad} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+          <button onClick={() => clearPad('sig')} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
             <Eraser className="h-3.5 w-3.5" /> Clear signature
+          </button>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Initials — optional, stamped bottom-right of every page
+          </label>
+          <canvas
+            ref={initialsRef}
+            width={360}
+            height={110}
+            className="mt-2 w-1/2 min-w-[200px] rounded-xl border border-border bg-white touch-none cursor-crosshair"
+            style={{ height: 'auto', aspectRatio: '360 / 110' }}
+          />
+          <button onClick={() => clearPad('init')} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+            <Eraser className="h-3.5 w-3.5" /> Clear initials
           </button>
         </div>
         <label className="block space-y-1.5">
