@@ -48,6 +48,14 @@ const pdfHead = Buffer.from(await pdfRes.arrayBuffer()).subarray(0, 5).toString(
 check('document preview streams (%PDF)', pdfRes.ok && pdfHead === '%PDF-', `status ${pdfRes.status}`)
 const originalLen = Number(pdfRes.headers.get('content-length') || 0)
 
+// 3b. Validation wall: a typed row with an empty label but a value is rejected
+//     up front, and the rejection does NOT consume the one-shot session.
+const badFields = await fetch(`${BASE}/api/sign/${token}/sign`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ signaturePng: `data:image/png;base64,${sigB64}`, typedName: `QA Signer ${ts}`, consent: true, typedFields: [{ label: '', value: 'orphan value' }] }),
+})
+check('typed field with empty label rejected (session survives)', badFields.status === 400, `status ${badFields.status}`)
+
 // 4. Mark-viewed happens on page open; sign it (drawn signature + initials +
 //    typed name + typed fields + consent).
 const signRes = await fetch(`${BASE}/api/sign/${token}/sign`, {
@@ -58,7 +66,7 @@ const signRes = await fetch(`${BASE}/api/sign/${token}/sign`, {
     typedFields: [
       { label: 'Capacity', value: 'Director, for and on behalf of Business Hustle (Pty) Ltd' },
       { label: 'Effective date', value: '17 November 2026' },
-      { label: '', value: 'ignored empty row' },
+      { label: '', value: '' }, // fully-empty rows are skipped, not rejected
     ],
     consent: true,
   }),
@@ -121,7 +129,13 @@ check('badge state equals session truth on every doc card', badgeTruth(list0, ro
 // 8. The counter-signature copy itself: registered, streaming, and DOCX-less.
 check('V2 counter-signature copy listed in the room', room.includes(V2_TITLE), V2_TITLE.slice(0, 40) + '…')
 const v2seg = room.slice(room.indexOf(V2_TITLE), room.indexOf('Signing sessions'))
-check('V2 badge says awaiting counter-signature (not draft)', v2seg.includes('signed by Trinity — awaiting counter-signature'))
+// The badge must match the session's LIVE status: SENT → awaiting the owner's
+// counter-signature, SIGNED → executed with the signed copy below (the owner
+// really signs this copy, so the expectation reads the session, not history).
+const v2sess = (list0.sessions || []).find((s) => s.docTitle === V2_TITLE)
+check('V2 badge matches the counter-sign session truth', v2sess
+  ? (v2sess.status === 'SIGNED' ? v2seg.includes(BADGE) : v2seg.includes('signed by Trinity — awaiting counter-signature'))
+  : v2seg.includes('draft'), `session ${v2sess?.status || 'missing'}`)
 check('V2 card has no DOCX link (executed PDF is the source)', !v2seg.includes('Download DOCX'))
 const v2res = await fetch(`${BASE}/api/corporate/${SLUG}/docs?key=${encodeURIComponent(DOCS_KEY)}&file=${encodeURIComponent(V2_FILE)}`)
 const v2head = Buffer.from(await v2res.arrayBuffer()).subarray(0, 5).toString()
@@ -185,6 +199,20 @@ for (const t of qaTokens) {
   if (d.ok) deleted++
 }
 check('gated DELETE removes every QA session', deleted === qaTokens.length && qaTokens.length >= 1, `${deleted}/${qaTokens.length} removed`)
+// Second sweep: this run's uploaded session (and any other strays) were created
+// AFTER list0 was taken, so one more listing pass guarantees the room is clean
+// before the clean check runs.
+let swept = 0
+for (let i = 0; i < 3; i++) {
+  const l = await (await fetch(`${BASE}/api/corporate/${SLUG}/esign?key=${encodeURIComponent(DOCS_KEY)}`)).json()
+  const strays = (l.sessions || []).filter((s) => /@bhqa\.co\.za/.test(s.signerEmail || ''))
+  if (strays.length === 0) break
+  for (const s of strays) {
+    const d = await fetch(`${BASE}/api/corporate/${SLUG}/esign?key=${encodeURIComponent(DOCS_KEY)}&token=${encodeURIComponent(s.token)}`, { method: 'DELETE' })
+    if (d.ok) swept++
+  }
+}
+if (swept > 0) console.log(`  sweep: removed ${swept} leftover QA session(s)`)
 const listAfter = await (await fetch(`${BASE}/api/corporate/${SLUG}/esign?key=${encodeURIComponent(DOCS_KEY)}`)).json()
 const roomAfter = await (await fetch(`${BASE}/corporate/${SLUG}/documents?key=${encodeURIComponent(DOCS_KEY)}`)).text()
 check('room clean: no QA rows left', !roomAfter.includes('QA Signer') && !roomAfter.includes('QA Uploader') && !roomAfter.includes('@bhqa.co.za'))
