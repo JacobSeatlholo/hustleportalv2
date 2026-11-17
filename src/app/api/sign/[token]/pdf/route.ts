@@ -21,11 +21,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
 
   try {
     const { bytes, filename } = await loadSessionOriginal(session)
+    // HTTP headers are ByteStrings — uploaded filenames can carry ™ or other
+    // non-ASCII (the TDC agreement did), so the header name is ASCII-folded.
+    // The real name still shows in the viewer UI and in the session record.
+    const headerName = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '')
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${filename.replace(/"/g, '')}"`,
+        'Content-Disposition': `inline; filename="${headerName}"`,
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
       },

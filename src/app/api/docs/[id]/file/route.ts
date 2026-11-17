@@ -17,11 +17,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!meta) return NextResponse.json({ error: 'Document not found.' }, { status: 404 })
   const doc = await db.docFile.findUnique({ where: { id } })
   if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 })
+  // HTTP headers are ByteStrings — ASCII-fold non-ASCII filenames (™ etc.).
+  const headerName = doc.filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '')
   return new NextResponse(new Uint8Array(doc.bytes), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${doc.filename.replace(/"/g, '')}"`,
+      'Content-Disposition': `attachment; filename="${headerName}"`,
       'Cache-Control': 'no-store',
       'X-Robots-Tag': 'noindex, nofollow',
     },
