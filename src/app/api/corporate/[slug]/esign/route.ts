@@ -7,9 +7,12 @@ import { sendSystemMail } from '@/lib/mailer'
 
 // ============ E-SIGN SESSIONS — deal room side (Task 212) ============
 // GET  (gate key) → the sessions list for this door's deal room.
-// POST (gate key) → create a signing session for a private-docs PDF and email
-//        the signer their /sign/<token> link (falls back to a copyable link
-//        when the mail engine is not configured — shown honestly).
+// POST (gate key) → create a signing session and email the signer their
+//        /sign/<token> link (falls back to a copyable link when the mail
+//        engine is not configured — shown honestly). Two document sources:
+//        an allowlisted private-docs PDF (body.file) or an uploaded DocFile
+//        from the room's own upload endpoint (body.docFileId) — the
+//        counter-signature path for documents the other party executed.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -40,23 +43,67 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   if (!gate(req, slug)) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
 
   const body = (await req.json().catch(() => null)) as
-    | { file?: string; signerName?: string; signerEmail?: string }
+    | { file?: string; docFileId?: string; signerName?: string; signerEmail?: string }
     | null
-  if (!body || !body.file || !body.signerName || !body.signerEmail) {
-    return NextResponse.json({ error: 'file, signerName and signerEmail are required.' }, { status: 400 })
+  if (!body || (!body.file && !body.docFileId) || !body.signerName || !body.signerEmail) {
+    return NextResponse.json({ error: 'file (or docFileId), signerName and signerEmail are required.' }, { status: 400 })
   }
   if (!EMAIL_RE.test(body.signerEmail)) {
     return NextResponse.json({ error: 'That email does not look valid.' }, { status: 400 })
   }
-  const doc = findPartnerDoc(body.file)
-  if (!doc || doc.base !== body.file || !body.file.toLowerCase().endsWith('.pdf')) {
+
+  // Uploaded document (counter-signature path): the DocFile carries the exact
+  // bytes and their sha256, pinned at upload time.
+  if (body.docFileId) {
+    const docFile = await db.docFile.findUnique({ where: { id: body.docFileId } })
+    if (!docFile) {
+      return NextResponse.json({ error: 'Uploaded document not found — upload it again.' }, { status: 400 })
+    }
+    const token = newSigningToken()
+    const session = await db.esignSession.create({
+      data: {
+        token,
+        slug,
+        docFileId: docFile.id,
+        docBase: docFile.filename,
+        docTitle: docFile.filename.replace(/\.pdf$/i, '').replace(/_/g, ' '),
+        signerName: body.signerName.slice(0, 120),
+        signerEmail: body.signerEmail.slice(0, 200),
+        originalSha256: docFile.sha256,
+      },
+    })
+    const origin = `${url.protocol}//${url.host}`
+    const signUrl = `${origin}/sign/${token}`
+    const mail = await sendSystemMail({
+      to: session.signerEmail,
+      subject: `Signature request: ${session.docTitle}`,
+      body: `Hi ${session.signerName},\n\nThe draft "${session.docTitle}" is ready for your signature.\n\nOpen your signing page, review the document and draw your signature:\n${signUrl}\n\nThe signed copy and a certificate of electronic signature are generated automatically when you sign.`,
+      title: session.docTitle,
+      headline: 'Signature requested',
+      ctaLabel: 'Review and sign',
+      ctaUrl: signUrl,
+      preheader: 'One document is waiting for your signature',
+    })
+    if (mail.ok) {
+      await db.esignSession.update({ where: { id: session.id }, data: { sentVia: 'email', linkSentAt: new Date() } })
+    }
+    return NextResponse.json(
+      { ok: true, token, url: signUrl, emailed: mail.ok, emailError: mail.ok ? undefined : mail.error },
+      { headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
+
+  // Allowlisted private-docs document.
+  const file = body.file as string
+  const doc = findPartnerDoc(file)
+  if (!doc || doc.base !== file || !file.toLowerCase().endsWith('.pdf')) {
     return NextResponse.json({ error: 'Unknown document (send the PDF).' }, { status: 400 })
   }
 
   // Verify the PDF is actually on disk before promising anyone a signing link.
   let originalSha256 = ''
   try {
-    const { bytes } = await loadOriginalPdf(body.file)
+    const { bytes } = await loadOriginalPdf(file)
     originalSha256 = sha256hex(bytes)
   } catch {
     return NextResponse.json({ error: 'Document file missing on the server.' }, { status: 500 })
@@ -67,7 +114,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     data: {
       token,
       slug,
-      docBase: body.file,
+      docBase: file,
       docTitle: doc.title,
       signerName: body.signerName.slice(0, 120),
       signerEmail: body.signerEmail.slice(0, 200),

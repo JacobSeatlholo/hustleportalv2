@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { signaturePng?: string; initialsPng?: string; typedName?: string; consent?: boolean }
+    | { signaturePng?: string; initialsPng?: string; typedName?: string; consent?: boolean; typedFields?: Array<{ label?: string; value?: string }> }
     | null
   if (!body?.consent) {
     return NextResponse.json({ error: 'Consent is required to sign electronically.' }, { status: 400 })
@@ -28,6 +28,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   const typedName = (body.typedName || '').trim()
   if (typedName.length < 2 || typedName.length > 120) {
     return NextResponse.json({ error: 'Type your full name to confirm the signature.' }, { status: 400 })
+  }
+  // Typed info rendered into the execution block (Task 215): up to 8
+  // label/value rows, plain text, length-capped so the certificate page holds.
+  const MAX_FIELDS = 8
+  const typedFields: Array<{ label: string; value: string }> = []
+  if (Array.isArray(body.typedFields)) {
+    for (const f of body.typedFields.slice(0, MAX_FIELDS)) {
+      const label = (f?.label || '').trim()
+      const value = (f?.value || '').trim()
+      if (!label && !value) continue
+      if (!label || label.length > 60 || value.length > 200) {
+        return NextResponse.json({ error: 'Typed fields need a label (max 60 chars) and a value (max 200 chars).' }, { status: 400 })
+      }
+      typedFields.push({ label, value })
+    }
   }
   const dataUrl = body.signaturePng || ''
   const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
@@ -58,6 +73,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       sigPngBase64: match[1],
       initialsPngBase64: initialsBase64,
       typedName,
+      typedFields,
       signerEmail: session.signerEmail,
       sessionId: session.id,
       signerIp: ip,

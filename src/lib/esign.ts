@@ -111,6 +111,7 @@ export interface StampInput {
   sigPngBase64: string // raw base64 (no data: prefix) of the drawn signature
   initialsPngBase64?: string // raw base64 of the drawn initials — stamped on EVERY original page (Task 214)
   typedName: string
+  typedFields?: Array<{ label: string; value: string }> // typed info rendered in the execution block (Task 215)
   signerEmail: string
   sessionId: string
   signerIp: string
@@ -199,6 +200,17 @@ export async function stampSignedPdf(input: StampInput): Promise<StampResult> {
   cy -= 13
   cert.drawText(ascii(`${sast(input.signedAt)} - Business Hustle e-sign (first-party), session ${input.sessionId}`), { x: 57, y: cy, size: 9, font, color: black })
   cy -= 26
+  // Typed info the signer entered on the signing page (Task 215) — rendered
+  // into the execution block so what they typed is part of the executed file.
+  const infoFields: Array<[string, string]> = (input.typedFields || [])
+    .filter((f) => f.label.trim() && f.value.trim())
+    .map((f) => [ascii(f.label.trim()).slice(0, 60), ascii(f.value.trim()).slice(0, 200)])
+  for (const [label, value] of infoFields) {
+    cert.drawText(`${label}:`, { x: 57, y: cy, size: 10, font: bold, color: black })
+    cert.drawText(value, { x: 210, y: cy, size: 10, font, color: black })
+    cy -= 16
+  }
+  if (infoFields.length) cy -= 10
   const fields: Array<[string, string]> = [
     ['Document', input.docTitle],
     ['Signer', `${input.typedName} <${input.signerEmail}>`],

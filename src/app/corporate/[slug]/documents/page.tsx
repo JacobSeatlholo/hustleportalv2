@@ -113,23 +113,31 @@ export default async function PartnerDocumentsPage({
                           : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {executed ? 'executed — signed copy below' : d.tag === 'agreement' ? 'draft — for legal review' : 'internal'}
+                    {executed
+                      ? 'executed — signed copy below'
+                      : d.hasDocx === false
+                        ? 'signed by Trinity — awaiting counter-signature'
+                        : d.tag === 'agreement'
+                          ? 'draft — for legal review'
+                          : 'internal'}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{d.description}</p>
                 <div className="flex gap-3 pt-1">
                   <a
-                    href={`/api/corporate/${slug}/docs?key=${encodeURIComponent(key ?? '')}&file=${d.pdf}`}
+                    href={`/api/corporate/${slug}/docs?key=${encodeURIComponent(key ?? '')}&file=${encodeURIComponent(d.pdf)}`}
                     className="text-sm font-semibold text-brand underline"
                   >
                     Download PDF
                   </a>
-                  <a
-                    href={`/api/corporate/${slug}/docs?key=${encodeURIComponent(key ?? '')}&file=${d.docx}`}
-                    className="text-sm font-semibold text-brand underline"
-                  >
-                    Download DOCX (editable)
-                  </a>
+                  {d.hasDocx !== false && (
+                    <a
+                      href={`/api/corporate/${slug}/docs?key=${encodeURIComponent(key ?? '')}&file=${encodeURIComponent(d.docx)}`}
+                      className="text-sm font-semibold text-brand underline"
+                    >
+                      Download DOCX (editable)
+                    </a>
+                  )}
                 </div>
               </div>
               )

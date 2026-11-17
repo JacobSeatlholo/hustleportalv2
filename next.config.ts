@@ -71,6 +71,22 @@ const nextConfig: NextConfig = {
       "base-uri 'self'",
       "frame-ancestors 'none'",
     ].join("; ");
+    // Same policy, but the signing surfaces may be framed by the portal
+    // itself (the inline document review on /sign/<token>).
+    const cspSelf = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: wss:",
+      "media-src 'self' blob: https:",
+      "frame-src 'self' https://meet.jit.si https://*.jitsi.net https://online.yoco.com",
+      "form-action 'self' https://online.yoco.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'self'",
+    ].join("; ");
     return [
       {
         source: "/:path*",
@@ -80,6 +96,24 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=(self)" },
+        ],
+      },
+      // The signing surfaces frame the portal's own PDFs — review before
+      // signing and the signed copy after — so the global deny-the-frame rule
+      // relaxes to same-origin exactly there and nowhere else. Later rules
+      // override the same header keys for these paths.
+      {
+        source: "/sign/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: cspSelf },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        ],
+      },
+      {
+        source: "/api/sign/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: cspSelf },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
       },
     ];

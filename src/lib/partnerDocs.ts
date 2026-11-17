@@ -19,6 +19,8 @@ export interface PartnerDoc {
   title: string
   description: string
   tag: string
+  /** The other party's already-executed PDF has no editable DOCX companion. */
+  hasDocx?: boolean
 }
 
 export const PARTNER_DOCS: PartnerDoc[] = [
@@ -44,6 +46,18 @@ export const PARTNER_DOCS: PartnerDoc[] = [
     description:
       'The internal strategy: level ladder R60→R15 with grandfathering, R120 welcome credit, corporate R110 with the exact-five credit, referral economics. Internal only — moved out of /docs/ so it is no longer publicly served.',
     tag: 'internal',
+  },
+  {
+    // Task 215 round 2: the version Trinity executed on their own OpenSign
+    // system, loaded for the Business Hustle counter-signature. Their
+    // signatures stay; ours are added on top (initials every page, typed info,
+    // first-party certificate) — the executed copy records both parties.
+    base: 'Strategic_Partnership_Agreement_Tdc_Bh_V2_1-2_signed_by_OpenSign™',
+    title: 'Strategic Partnership Agreement — V2, signed by Trinity (counter-signature copy)',
+    description:
+      'V2.1 of the Trinity agreement as Trinity Direct Consortium signed and returned it (their OpenSign certificate and signature pages included, 22 pages). This is the copy Business Hustle counter-signs: initials on every page, typed info in the execution block, then our first-party certificate of electronic signature appended. No editable DOCX — the executed PDF is the source of truth.',
+    tag: 'agreement',
+    hasDocx: false,
   },
 ]
 
