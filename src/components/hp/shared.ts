@@ -269,15 +269,84 @@ export interface Task {
   isPrivate: boolean
   teamId: string | null
   leadId?: string | null
+  dealId?: string | null
   creatorId: string
   assigneeId: string | null
   creator: { id: string; name: string }
   assignee?: { id: string; name: string } | null
   team?: { id: string; name: string } | null
-  _count?: { comments: number } // Prisma _count include on the list payload
+  deal?: { id: string; title: string; stage: string } | null
+  _count?: { comments: number; docs?: number } // Prisma _count include on the list payload
   _openedAt?: string | null // first time the assigned person opened the record
   createdAt: string // date added — the Tasks list sorts on this
   updatedAt?: string
+}
+
+// ============ DEAL ROOM (Task 213) ============
+export const DEAL_STAGES = ['LEAD', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'] as const
+export const DEAL_STAGE_LABELS: Record<string, string> = {
+  LEAD: 'New lead',
+  PROPOSAL: 'Proposal',
+  NEGOTIATION: 'Negotiation',
+  WON: 'Won',
+  LOST: 'Lost',
+}
+
+export interface Deal {
+  id: string
+  title: string
+  company: string
+  contactName: string
+  contactEmail: string | null
+  contactPhone: string | null
+  value: number | null
+  stage: string
+  notes: string | null
+  ownerId: string
+  teamId: string | null
+  owner: { id: string; name: string }
+  team?: { id: string; name: string } | null
+  _count?: { tasks: number; docs: number }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DealTaskRow {
+  id: string
+  title: string
+  status: string
+  priority: string
+  dueDate: string | null
+  isPrivate: boolean
+  createdAt: string
+  assignee?: { id: string; name: string } | null
+  creator: { id: string; name: string }
+  _count?: { comments: number; docs: number }
+}
+
+export interface DealDocRow {
+  id: string
+  filename: string
+  size: number
+  sha256: string
+  uploaderId: string
+  createdAt: string
+  taskId?: string | null
+  dealId?: string | null
+}
+
+export interface EsignRow {
+  id: string
+  token: string
+  docFileId: string | null
+  docTitle: string
+  signerName: string
+  signerEmail: string
+  status: string // SENT | VIEWED | SIGNED
+  sentVia: string
+  createdAt: string
+  viewedAt: string | null
+  signedAt: string | null
 }
 
 export interface TaskEventRow {

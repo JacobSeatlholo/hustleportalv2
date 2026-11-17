@@ -42,6 +42,26 @@ export async function loadOriginalPdf(docBase: string): Promise<{ bytes: Buffer;
   return { bytes, title: ascii(doc.title) }
 }
 
+/**
+ * Original bytes for a signing session: an uploaded DocFile (platform deal
+ * room, Task 213) or an allowlisted private-docs PDF (partner doors). The
+ * session record decides which source applies.
+ */
+export async function loadSessionOriginal(session: { docBase: string; docFileId: string | null }): Promise<{ bytes: Buffer; title: string; filename: string }> {
+  if (session.docFileId) {
+    const { db } = await import('@/lib/db')
+    const f = await db.docFile.findUnique({ where: { id: session.docFileId } })
+    if (!f) throw new Error(`Missing document: ${session.docBase}`)
+    return {
+      bytes: Buffer.from(f.bytes),
+      title: ascii(f.filename.replace(/\.pdf$/i, '')),
+      filename: f.filename,
+    }
+  }
+  const { bytes, title } = await loadOriginalPdf(session.docBase)
+  return { bytes, title, filename: session.docBase }
+}
+
 /** pdf-lib standard fonts are WinAnsi — keep stamps/certificates ASCII-only. */
 function ascii(s: string): string {
   return s

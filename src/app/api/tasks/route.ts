@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { recordTaskEvent } from '@/lib/taskrecord'
+import { canSeeDeal } from '@/lib/dealroom'
 
 // GET /api/tasks?scope=mine|team
 export async function GET(req: NextRequest) {
@@ -36,7 +37,8 @@ export async function GET(req: NextRequest) {
       creator: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
-      _count: { select: { comments: true } },
+      deal: { select: { id: true, title: true, stage: true } },
+      _count: { select: { comments: true, docs: true } },
     },
     take: 300,
   })
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId, status, createdAt, appointmentId } = body
+  const { title, notes, priority, dueDate, isPrivate, teamId, assigneeId, leadId, status, createdAt, appointmentId, dealId } = body
   if (!title || !String(title).trim()) {
     return NextResponse.json({ error: 'Task title is required.' }, { status: 400 })
   }
@@ -97,6 +99,13 @@ export async function POST(req: NextRequest) {
     if (!appt) return NextResponse.json({ error: 'That meeting does not exist.' }, { status: 404 })
     linkedAppointmentId = appt.id
   }
+  // Deal room link (Task 213): a task can belong to a deal the user can see.
+  let linkedDealId: string | null = null
+  if (dealId) {
+    const deal = await canSeeDeal(String(dealId), userId)
+    if (!deal) return NextResponse.json({ error: 'That deal does not exist.' }, { status: 404 })
+    linkedDealId = deal.id
+  }
   if (teamId) {
     const member = await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } } })
     if (!member) return NextResponse.json({ error: 'Not a member of that team.' }, { status: 403 })
@@ -121,6 +130,7 @@ export async function POST(req: NextRequest) {
       teamId: teamId || null,
       leadId: linkedLeadId,
       appointmentId: linkedAppointmentId,
+      dealId: linkedDealId,
       creatorId: userId,
       assigneeId: assigneeId || userId,
       ...(backCreatedAt ? { createdAt: backCreatedAt } : {}),
@@ -129,7 +139,8 @@ export async function POST(req: NextRequest) {
       creator: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
-      _count: { select: { comments: true } },
+      deal: { select: { id: true, title: true, stage: true } },
+      _count: { select: { comments: true, docs: true } },
     },
   })
   await bumpChallenge(userId, 'add_task')

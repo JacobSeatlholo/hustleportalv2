@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { recordTaskEvent, STATUS_LABEL } from '@/lib/taskrecord'
+import { canSeeDeal } from '@/lib/dealroom'
 
 async function canEditTask(taskId: string, userId: string) {
   const task = await db.task.findUnique({ where: { id: taskId } })
@@ -31,6 +32,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   for (const k of allowed) if (k in body) data[k] = body[k]
   if ('dueDate' in body) data.dueDate = body.dueDate ? new Date(body.dueDate) : null
   if (data.assigneeId === '') data.assigneeId = null
+  // Deal room link (Task 213): attach the task to a deal the user can see,
+  // or unlink with null. The deal room shows every task wired to it.
+  if ('dealId' in body) {
+    if (body.dealId) {
+      const deal = await canSeeDeal(String(body.dealId), userId)
+      if (!deal) return NextResponse.json({ error: 'That deal does not exist.' }, { status: 404 })
+      data.dealId = deal.id
+    } else {
+      data.dealId = null
+    }
+  }
   // Moving a task onto a team follows the same law as creating it there:
   // the mover must belong to the target team, and team tasks are never private.
   if ('teamId' in body) {
@@ -53,6 +65,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       creator: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
+      deal: { select: { id: true, title: true, stage: true } },
     },
   })
   // The record witnesses every change of hands and state.
@@ -73,6 +86,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       userId,
       data.teamId ? `moved onto the team ${updated.team?.name || ''}`.trim() : 'moved back to personal tasks',
     )
+  }
+  if ('dealId' in data && data.dealId !== task.dealId) {
+    await recordTaskEvent(id, 'EDIT', userId, data.dealId ? 'linked it to a deal' : 'unlinked it from the deal')
   }
   const detailEdits = ['title', 'notes', 'priority', 'dueDate', 'isPrivate'].filter((k) => k in data)
   if (detailEdits.length > 0) {

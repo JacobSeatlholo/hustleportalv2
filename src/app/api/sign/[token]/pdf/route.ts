@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { loadOriginalPdf } from '@/lib/esign'
-import { readFile } from 'node:fs/promises'
+import { loadSessionOriginal } from '@/lib/esign'
 
 // ============ SIGNER: stream the original PDF (Task 212) ============
 // GET /api/sign/<token>/pdf — inline for the built-in viewer. The token IS the
@@ -21,12 +20,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
   }
 
   try {
-    const { bytes } = await loadOriginalPdf(session.docBase)
+    const { bytes, filename } = await loadSessionOriginal(session)
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${session.docBase}"`,
+        'Content-Disposition': `inline; filename="${filename.replace(/"/g, '')}"`,
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
       },

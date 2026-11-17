@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, Link2 } from 'lucide-react'
+import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
 import CorporateClaimForm from '@/components/hp/CorporateClaimForm'
 
@@ -42,6 +42,43 @@ const WHO = [
   'Property, insurance and finance teams working by appointment',
 ]
 
+// Task 213: the conversion section. Every claim is a real product behaviour —
+// verification-before-payment is enforced by the billing code, the flat rate
+// is the contractual rate, the e-sign engine is our own (Task 212) and the
+// POPIA opt-out is the public /remove-listing flow. No invented testimonials.
+const TRUST = [
+  {
+    icon: ShieldCheck,
+    title: 'Verified before a cent moves',
+    body: 'Contact details are checked by hand and machine before delivery. An unverified lead is never charged — the check is the guarantee, and it is written into how billing works.',
+  },
+  {
+    icon: Wallet,
+    title: 'One flat rate. No ladder.',
+    body: 'R110 per qualified lead reveal, contractually fixed. No tiered pricing, no promo games, no surprise line items when volume grows.',
+  },
+  {
+    icon: FileSignature,
+    title: 'Signed in minutes, not weeks',
+    body: 'Your agreement is signed on our own e-sign system with a timestamped audit certificate under the Electronic Communications and Transactions Act. No printing, no scanning, no chasing signatures.',
+  },
+  {
+    icon: Building2,
+    title: 'Done for you',
+    body: 'Managed sourcing runs inside the platform: businesses found, verified and delivered into your pipeline ready to work. Your sellers spend their day selling.',
+  },
+  {
+    icon: BadgeCheck,
+    title: 'R550 starting credit on us',
+    body: 'Applied at setup before you spend a cent — five qualified lead reveals to judge the quality first, with no card needed to claim.',
+  },
+  {
+    icon: Users,
+    title: 'POPIA-aware sourcing',
+    body: 'Business contact data is processed lawfully under POPIA. Any listed business can remove itself from the pipeline in one click, and the suppression holds.',
+  },
+]
+
 export default function CorporateContent({ partner }: { partner?: Strategist }) {
   return (
     <div className="max-w-3xl mx-auto px-6 py-14 space-y-12">
@@ -66,7 +103,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         ) : (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Handshake className="h-4 w-4 text-brand" />
-            Delivered through brand strategists we trust, starting with TrinityDirect Consortium.
+            Delivered by the Business Hustle corporate desk, on the same verified engine behind HustlePortal.
           </p>
         )}
       </header>
@@ -75,7 +112,6 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         <section className="flex items-center gap-5 rounded-2xl border border-border bg-card p-5">
           {/* White frame keeps the logo's own white field crisp on both looks. */}
           <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={partner.image} alt={`${partner.company} logo`} className="h-full w-full object-contain" />
           </div>
           <div className="space-y-1">
@@ -150,53 +186,21 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </ul>
       </section>
 
-      {!partner && (
-        <section className="space-y-3">
-          <h2 className="font-display text-2xl">Our brand strategists</h2>
-          <p className="text-sm text-muted-foreground">
-            Corporate accounts come through strategists we trust, each running their own door with the
-            same offer, the same rate and the same verified pipeline behind it.
-          </p>
-          <a
-            href="/corporate/trinitydirect"
-            className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 transition hover:border-brand/50"
-          >
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-border">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/corporate/trinitydirect-logo.jpg" alt="Trinity Direct Consortium (Pty) Ltd logo" className="h-full w-full object-contain" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold flex items-center gap-2">
-                Trinity Direct Consortium (Pty) Ltd <Link2 className="h-3.5 w-3.5 text-brand" />
-              </p>
-              <p className="text-sm text-muted-foreground">Led by Kelo Anthony Martins · corporate sales floors, equipped.</p>
-            </div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-brand">Visit the door</span>
-          </a>
-        </section>
-      )}
-
       <section className="space-y-3">
-        <h2 className="font-display text-2xl">About the partnership</h2>
-        <p className="text-sm text-muted-foreground">
-          {partner ? (
-            <>
-              HustlePortal Corporate is delivered in strategic partnership with Trinity Direct
-              Consortium (Pty) Ltd, led by Director Kelo Anthony Martins. The corporate edition of the
-              platform reaches sales teams, agencies and franchisors through the consortium, while
-              sourcing, verification and delivery stay on the HustlePortal engine the solo version
-              runs on. One engine, two doors: self-serve for owner
-              operators, managed for corporate floors.
-            </>
-          ) : (
-            <>
-              HustlePortal Corporate is delivered through brand strategists in strategic partnership with
-              HustlePortal. Each strategist runs their own door, presenting the same offer, the same
-              rate and the same verified pipeline behind it. Sourcing, verification and delivery stay on the
-              HustlePortal engine the solo version runs on. One engine, many doors: self-serve for owner
-              operators, managed for corporate floors.
-            </>
-          )}
+        <h2 className="font-display text-2xl">Why corporate floors sign with HustlePortal</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {TRUST.map((t) => (
+            <div key={t.title} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
+              <t.icon className="h-5 w-5 text-brand" />
+              <p className="text-sm font-semibold">{t.title}</p>
+              <p className="text-xs text-muted-foreground">{t.body}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Every corporate account is opened on a written agreement signed on our own e-sign system,
+          with a timestamped audit certificate. Business contact data is handled under POPIA and any
+          listed business can opt out in one click, so the pipeline you buy stays clean.
         </p>
       </section>
 

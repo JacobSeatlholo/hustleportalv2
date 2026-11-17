@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { loadOriginalPdf, sha256hex, stampSignedPdf, sast } from '@/lib/esign'
+import { loadSessionOriginal, sha256hex, stampSignedPdf, sast } from '@/lib/esign'
 import { sendSystemMail } from '@/lib/mailer'
 
 // ============ SIGNER: execute the signature (Task 212) ============
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   }
 
   try {
-    const { bytes: original, title } = await loadOriginalPdf(session.docBase)
+    const { bytes: original, title } = await loadSessionOriginal(session)
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     const ua = (req.headers.get('user-agent') || 'unknown').slice(0, 300)
     const signedAt = new Date()

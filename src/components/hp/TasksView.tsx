@@ -17,8 +17,10 @@ import { useToast } from '@/hooks/use-toast'
 import { api, PRIORITIES, type Task, type TaskCommentRow, type TaskEventRow } from './shared'
 import { useHp } from './store'
 import ScanDiaryDialog from './ScanDiaryDialog'
+import DealsView from './DealsView'
+import DocPanel from './DocPanel'
 import { useVoiceInput } from './useVoiceInput'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft, Search } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft, Search, Handshake, Paperclip } from 'lucide-react'
 
 // Task list ordering. CREATED_DESC (date added, newest first) is the default view;
 // PRIORITY sorts by importance; DUE keeps no-date tasks at the bottom, never the top.
@@ -44,6 +46,9 @@ function sortTasks(list: Task[], sortBy: string): Task[] {
 export default function TasksView() {
   const { session, bumpRefresh } = useHp()
   const { toast } = useToast()
+  // Task 213: the deal room lives one tab over from the task list, so deals,
+  // their tasks and their signing desk are reachable from Team Tasks.
+  const [section, setSection] = useState<'tasks' | 'deals'>('tasks')
   const [scope, setScope] = useState<'mine' | 'team'>('mine')
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -167,20 +172,35 @@ export default function TasksView() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs value={section} onValueChange={(v) => setSection(v as 'tasks' | 'deals')}>
+          <TabsList>
+            <TabsTrigger value="tasks" className="gap-1"><NotebookPen className="h-3.5 w-3.5" /> Tasks</TabsTrigger>
+            <TabsTrigger value="deals" className="gap-1"><Handshake className="h-3.5 w-3.5" /> Deals</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {section === 'tasks' && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setScanOpen(true)}>
+              <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Scan diary
+            </Button>
+            <Tabs value={scope} onValueChange={(v) => setScope(v as 'mine' | 'team')}>
+              <TabsList>
+                <TabsTrigger value="mine" className="gap-1"><UserIcon className="h-3.5 w-3.5" /> My tasks</TabsTrigger>
+                <TabsTrigger value="team" className="gap-1" disabled={!session?.team}><Users className="h-3.5 w-3.5" /> Team tasks</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
+      </div>
+
+      {section === 'deals' ? (
+        <DealsView teams={teams} />
+      ) : (
+        <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl">Tasks</h1>
           <p className="text-sm text-muted-foreground">{open.length} open · {done.length} done</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setScanOpen(true)}>
-            <NotebookPen className="h-4 w-4 mr-1.5 text-brand" /> Scan diary
-          </Button>
-          <Tabs value={scope} onValueChange={(v) => setScope(v as 'mine' | 'team')}>
-            <TabsList>
-              <TabsTrigger value="mine" className="gap-1"><UserIcon className="h-3.5 w-3.5" /> My tasks</TabsTrigger>
-              <TabsTrigger value="team" className="gap-1" disabled={!session?.team}><Users className="h-3.5 w-3.5" /> Team tasks</TabsTrigger>
-            </TabsList>
-          </Tabs>
         </div>
       </div>
 
@@ -358,6 +378,9 @@ export default function TasksView() {
         </div>
       )}
 
+        </>
+      )}
+
       <ScanDiaryDialog open={scanOpen} onOpenChange={setScanOpen} onDone={() => load()} />
     </div>
   )
@@ -385,6 +408,8 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   const [record, setRecord] = useState<{ events: TaskEventRow[]; verified: boolean } | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [loadingRecord, setLoadingRecord] = useState(false)
+  // Deal room (Task 213): documents + first-party e-sign invites live on the task
+  const [filesOpen, setFilesOpen] = useState(false)
   // Notion style: click the title, type, Enter. The sealed record witnesses
   // the rename server side (EDIT event on the chain).
   const [editingTitle, setEditingTitle] = useState(false)
@@ -558,6 +583,11 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
               {task.priority === 'HIGH' && <Badge variant="destructive" className="text-[10px] h-4">High</Badge>}
               {task.priority === 'LOW' && <Badge variant="secondary" className="text-[10px] h-4">Low</Badge>}
               {task.team && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {task.team.name}</span>}
+              {task.deal && (
+                <span className="inline-flex items-center gap-1 text-brand" title={`Deal: ${task.deal.title}`}>
+                  <Handshake className="h-3 w-3" /> {task.deal.title}
+                </span>
+              )}
               {!task.team && !task.isPrivate && <Badge variant="secondary" className="text-[10px] h-4">Business</Badge>}
               {task.isPrivate && <span className="text-[10px]">🔒 private</span>}
               {task.assignee && task.assignee.id !== currentUserId && <span>→ {task.assignee.name}</span>}
@@ -614,6 +644,22 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
           >
             <ShieldCheck className="h-3.5 w-3.5" />
             {recordOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {/* Deal room: documents + e-sign invites on this task */}
+          <button
+            onClick={() => setFilesOpen((v) => !v)}
+            className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
+              filesOpen || (task._count?.docs || 0) > 0
+                ? 'border-brand/50 text-brand bg-brand/5'
+                : 'border-stone-600/60 text-muted-foreground hover:border-brand hover:text-brand'
+            }`}
+            aria-label={filesOpen ? 'Hide documents' : 'Documents'}
+            aria-expanded={filesOpen}
+            title="Documents & signatures on this task"
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+            {(task._count?.docs || 0) > 0 && <span>{task._count?.docs}</span>}
+            {filesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           <Button variant="ghost" size="icon" onClick={() => onRemove(task)} className="text-muted-foreground hover:text-red-600 shrink-0">
             <Trash2 className="h-4 w-4" />
@@ -737,6 +783,11 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 ))}
               </div>
             )}
+          </div>
+        )}
+        {filesOpen && (
+          <div className="mt-3 border-t pt-3">
+            <DocPanel taskId={task.id} />
           </div>
         )}
       </CardContent>

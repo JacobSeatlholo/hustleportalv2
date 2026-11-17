@@ -45,14 +45,24 @@ export default function CorporateShell({ children }: { children: React.ReactNode
       </button>
       {children}
       <footer className="border-t border-border bg-card">
-        <div className="max-w-3xl mx-auto px-6 py-8 space-y-2 text-xs text-muted-foreground">
-          <p>
-            HustlePortal Corporate · Business Hustle, 99 Kloof St, Gardens, Cape Town.
+        <div className="max-w-3xl mx-auto px-6 py-8 space-y-3 text-xs text-muted-foreground">
+          {/* Task 213: the trust footer, exactly as the owner specified. */}
+          <p className="text-[11px] font-semibold tracking-wide text-foreground">
+            BUSINESS HUSTLE · SIMPLE ETERNITY HOLDINGS (PTY) LTD
           </p>
-          <p>
-            Owner operator or small team? The main{' '}
-            <Link href="/" className="text-brand underline underline-offset-2">HustlePortal</Link>{' '}
-            experience starts you with R99 in free lead credits and every tool included.
+          <p className="text-[11px]">
+            HustlePortal™, 99 Kloof St, Gardens, Cape Town.
+          </p>
+          <p className="text-[11px]">We feed your pipeline. You run your business.</p>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link href="/legal/terms" className="text-brand underline underline-offset-2">Terms of Service</Link>
+            <Link href="/legal/privacy" className="text-brand underline underline-offset-2">Privacy &amp; POPIA</Link>
+            <Link href="/remove-listing" className="text-brand underline underline-offset-2">Remove my business</Link>
+          </p>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <a href="https://www.businesshustle.co.za" className="text-brand underline underline-offset-2">www.businesshustle.co.za</a>
+            <span>@hustlebusiness</span>
+            <span>@businesshustleworldwide</span>
           </p>
         </div>
       </footer>
