@@ -93,14 +93,15 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
   return (
     <div className="max-w-3xl mx-auto px-6 py-14 space-y-12">
       <header className="space-y-4">
-        <p className={`font-semibold uppercase tracking-wider text-brand flex items-center gap-2 ${partner ? 'text-sm' : 'text-[11px]'}`}>
-          {/* Task 215 (owner): the partner logo sits next to the company name at
-              the top, and the line reads a little bigger on partner doors. */}
+        <p className={`font-semibold uppercase tracking-wider text-brand flex items-center gap-2.5 ${partner ? 'text-base md:text-lg' : 'text-[11px]'}`}>
+          {/* Task 215 (owner, round 2): the partner brand line must hold its own
+              against the headline — logo h-10 and text a step up on partner
+              doors, so the room knows whose door it is before it reads on. */}
           {partner && (
             <img
               src={partner.image}
               alt={`${partner.company} logo`}
-              className="h-8 w-8 shrink-0 rounded-lg bg-white object-contain ring-1 ring-border p-0.5"
+              className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain ring-1 ring-border p-0.5"
             />
           )}
           {!partner && <Building2 className="h-4 w-4" />}
@@ -136,6 +137,26 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             Delivered by the Business Hustle corporate desk, on the same verified engine behind HustlePortal.
           </p>
         )}
+        {/* Task 215 round 2: the reading spine. One quiet row of anchors so a
+            prospect always knows where they are and what is left: numbers →
+            how → maths → trust → claim. */}
+        <nav className="flex flex-wrap gap-2 pt-2" aria-label="Page sections">
+          {[
+            ['#numbers', 'The numbers'],
+            ['#how', 'How it works'],
+            ['#maths', 'The maths'],
+            ['#trust', 'Why us'],
+            ['#claim', 'Claim your credit'],
+          ].map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              className="rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-brand hover:text-foreground"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
       </header>
 
       {partner && (
@@ -152,17 +173,45 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3">
-        {TILES.map((t) => (
-          <div key={t.big} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
-            <t.icon className="h-5 w-5 text-brand" />
-            <p className="font-display text-2xl">{t.big}</p>
-            <p className="text-xs text-muted-foreground">{t.small}</p>
-          </div>
-        ))}
+      {/* Task 215 round 2: the page reads as one spine, each section anchored —
+          the numbers → how it works → the maths → trust → who it suits → claim. */}
+      <section id="numbers" className="space-y-3 scroll-mt-6">
+        <h2 className="font-display text-2xl">The numbers, upfront</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {TILES.map((t) => (
+            <div key={t.big} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
+              <t.icon className="h-5 w-5 text-brand" />
+              <p className="font-display text-2xl">{t.big}</p>
+              <p className="text-xs text-muted-foreground">{t.small}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="space-y-3">
+      <section id="how" className="space-y-3 scroll-mt-6">
+        <h2 className="font-display text-2xl">How it works</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {steps(partner).map((s) => (
+            <div key={s.n} className="rounded-2xl border border-border bg-card p-5 space-y-2">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white text-sm font-semibold">
+                {s.n}
+              </span>
+              <p className="font-semibold text-sm">{s.title}</p>
+              <p className="text-xs text-muted-foreground">{s.body}</p>
+            </div>
+          ))}
+        </div>
+        <div className="pt-2">
+          <a
+            href="#claim"
+            className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Claim your R550 credit — no card needed
+          </a>
+        </div>
+      </section>
+
+      <section id="maths" className="space-y-3 scroll-mt-6">
         <h2 className="font-display text-2xl">The maths your CFO will actually like</h2>
         <div className="space-y-3">
           <div className="rounded-2xl border border-border bg-card p-5">
@@ -190,33 +239,9 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="font-display text-2xl">How it works</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {steps(partner).map((s) => (
-            <div key={s.n} className="rounded-2xl border border-border bg-card p-5 space-y-2">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white text-sm font-semibold">
-                {s.n}
-              </span>
-              <p className="font-semibold text-sm">{s.title}</p>
-              <p className="text-xs text-muted-foreground">{s.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <CorporateCalculator />
 
-      <section className="space-y-3">
-        <h2 className="font-display text-2xl">Built for rooms like yours</h2>
-        <ul className="space-y-2">
-          {WHO.map((w) => (
-            <li key={w} className="flex items-start gap-2 text-sm text-muted-foreground">
-              <Users className="h-4 w-4 mt-0.5 text-brand shrink-0" /> {w}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="space-y-3">
+      <section id="trust" className="space-y-3 scroll-mt-6">
         <h2 className="font-display text-2xl">
           {partner ? 'Why corporate floors sign with us' : 'Why corporate floors sign with HustlePortal'}
         </h2>
@@ -236,9 +261,18 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </p>
       </section>
 
-      <CorporateCalculator />
+      <section id="who" className="space-y-3 scroll-mt-6">
+        <h2 className="font-display text-2xl">Built for rooms like yours</h2>
+        <ul className="space-y-2">
+          {WHO.map((w) => (
+            <li key={w} className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Users className="h-4 w-4 mt-0.5 text-brand shrink-0" /> {w}
+            </li>
+          ))}
+        </ul>
+      </section>
 
-      <section className="space-y-4" id="claim">
+      <section className="space-y-4 scroll-mt-6" id="claim">
         {partner ? (
           <>
             <h2 className="font-display text-2xl">No credit card needed. Claim your free credit. Get started now.</h2>

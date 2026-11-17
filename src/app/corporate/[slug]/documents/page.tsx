@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { Lock, FileText, FileSignature, ShieldCheck } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import EsignSendForm from '@/components/hp/corporate/EsignSendForm'
+import EsignSessionDelete from '@/components/hp/corporate/EsignSessionDelete'
 import { getStrategist, whitelabelMeta } from '@/lib/corporate'
 import { PARTNER_DOCS, checkDocsKey } from '@/lib/partnerDocs'
 import { db } from '@/lib/db'
@@ -58,14 +59,16 @@ export default async function PartnerDocumentsPage({
     orderBy: { createdAt: 'desc' },
     take: 20,
     select: {
-      token: true, docTitle: true, signerName: true, signerEmail: true,
+      token: true, docBase: true, docTitle: true, signerName: true, signerEmail: true,
       status: true, sentVia: true, createdAt: true, viewedAt: true, signedAt: true,
     },
   })
   // A doc whose latest session is SIGNED reads as executed, not as a draft —
   // the page is the one the boss sends the partner, so it must say the true
-  // state of the agreement at a glance.
-  const signedTitles = new Set(sessions.filter((s) => s.status === 'SIGNED').map((s) => s.docTitle))
+  // state of the agreement at a glance. Keyed on docBase, not title: only a
+  // signature on THAT document flips its badge, never a same-titled session
+  // of anything else (QA passes, renamed drafts).
+  const signedDocs = new Set(sessions.filter((s) => s.status === 'SIGNED').map((s) => s.docBase))
 
   return (
     <CorporateShell footer={false}>
@@ -94,7 +97,7 @@ export default async function PartnerDocumentsPage({
               <FileText className="h-5 w-5 text-brand" /> Documents
             </h2>
             {docs.map((d) => {
-              const executed = signedTitles.has(d.title)
+              const executed = signedDocs.has(d.base)
               return (
               <div key={d.base} className="rounded-2xl border border-border bg-card p-5 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -157,7 +160,7 @@ export default async function PartnerDocumentsPage({
                         {s.viewedAt ? ` · viewed ${sast(s.viewedAt)}` : ''}
                         {s.signedAt ? ` · signed ${sast(s.signedAt)}` : ''}
                       </span>
-                      <span className="ml-auto flex gap-3">
+                      <span className="ml-auto flex items-center gap-3">
                         <a href={`/sign/${s.token}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-brand underline">
                           signing page
                         </a>
@@ -166,6 +169,7 @@ export default async function PartnerDocumentsPage({
                             signed PDF
                           </a>
                         )}
+                        <EsignSessionDelete slug={slug} gateKey={key ?? ''} token={s.token} name={`${s.signerName} — ${s.docTitle}`} />
                       </span>
                     </li>
                   ))}

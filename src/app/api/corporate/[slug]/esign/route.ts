@@ -96,3 +96,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
+
+// DELETE (gate key + token) → remove a signing session from this room: QA
+// passes, mistaken sends, test rows. The stored signed copy lives inside the
+// session row, so deleting the session deletes its copy and audit with it —
+// that is the point: a removed session leaves no trace in the room.
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params
+  const url = new URL(req.url)
+  if (!gate(req, slug)) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+  const token = url.searchParams.get('token') || ''
+  if (!token) return NextResponse.json({ error: 'token is required.' }, { status: 400 })
+  const session = await db.esignSession.findUnique({ where: { token } })
+  if (!session || session.slug !== slug) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+  await db.esignSession.delete({ where: { id: session.id } })
+  return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
+}
