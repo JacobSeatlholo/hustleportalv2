@@ -33,6 +33,8 @@ export interface Strategist {
   members: StrategistMember[]
   /** Gated partner dashboard (?key=) — the strategist's own funnel metrics. */
   dashboardKey: string
+  /** Where the background digest lands (the partner's own inbox). */
+  contactEmail?: string
 }
 
 /** The referral law, in cents. One source of truth for page, calculator and API. */
@@ -52,6 +54,9 @@ export const STRATEGISTS: Strategist[] = [
     // purpose: the dashboard is the strategist's daily surface, the deal
     // room holds documents and the e-sign sender.
     dashboardKey: 'bh-tdc-dashboard-8v3nq5',
+    // The background digest lands here — the deal-room signer's address,
+    // the partnership's working inbox.
+    contactEmail: 'kelo@trinitydirect.co.za',
   },
 ]
 

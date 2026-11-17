@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Lock, FileText, FileSignature, ShieldCheck } from 'lucide-react'
+import { Lock, FileText, FileSignature, ShieldCheck, TrendingUp } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import EsignSendForm from '@/components/hp/corporate/EsignSendForm'
 import EsignSessionDelete from '@/components/hp/corporate/EsignSessionDelete'
@@ -83,6 +83,19 @@ export default async function PartnerDocumentsPage({
               The working documents behind the {partner.company} partnership, and the first-party
               signing flow to execute them. The client door stays pure sales — commission mechanics
               live only in these documents and the internal ledger.
+            </p>
+            {/* The dashboard is the strategist's daily surface — the room carries
+                the link so the partner never needs a second bookmark (their key
+                rides the URL; both surfaces are theirs by the same agreement). */}
+            <p className="flex items-center gap-2 text-sm">
+              <TrendingUp className="h-4 w-4 text-brand" />
+              <a
+                href={`/corporate/${slug}/dashboard?key=${encodeURIComponent(partner.dashboardKey)}`}
+                className="font-semibold text-brand underline"
+              >
+                Your partner dashboard →
+              </a>
+              <span className="text-muted-foreground">sign-ups, activation, delivered leads and your accrual, live.</span>
             </p>
             {signed === '1' && (
               <p className="rounded-xl border border-brand/40 bg-brand/5 p-4 text-sm text-brand font-semibold">
