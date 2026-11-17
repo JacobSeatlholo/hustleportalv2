@@ -1,6 +1,6 @@
 import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
-import CorporateClaimForm from '@/components/hp/CorporateClaimForm'
+import CorporateSignupForm from '@/components/hp/CorporateSignupForm'
 import CorporateAccessGate from '@/components/hp/CorporateAccessGate'
 import CorporateCalculator from '@/components/hp/CorporateCalculator'
 
@@ -93,8 +93,17 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
   return (
     <div className="max-w-3xl mx-auto px-6 py-14 space-y-12">
       <header className="space-y-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
-          <Building2 className="h-3.5 w-3.5" />
+        <p className={`font-semibold uppercase tracking-wider text-brand flex items-center gap-2 ${partner ? 'text-sm' : 'text-[11px]'}`}>
+          {/* Task 215 (owner): the partner logo sits next to the company name at
+              the top, and the line reads a little bigger on partner doors. */}
+          {partner && (
+            <img
+              src={partner.image}
+              alt={`${partner.company} logo`}
+              className="h-8 w-8 shrink-0 rounded-lg bg-white object-contain ring-1 ring-border p-0.5"
+            />
+          )}
+          {!partner && <Building2 className="h-4 w-4" />}
           {/* Whitelabel law (Task 214): partner doors carry only the strategist's brand. */}
           {partner ? partner.company : 'HustlePortal Corporate'}
         </p>
@@ -107,10 +116,20 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           R550 in starting credit to open the account.
         </p>
         {partner ? (
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Handshake className="h-4 w-4 text-brand" />
-            Presented by {partner.name} of {partner.company}.
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Handshake className="h-4 w-4 text-brand" />
+              Presented by {partner.name} of {partner.company}.
+            </p>
+            <div className="pt-1">
+              <a
+                href="#claim"
+                className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                No credit card needed — claim your free credit
+              </a>
+            </div>
+          </>
         ) : (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Handshake className="h-4 w-4 text-brand" />
@@ -222,8 +241,13 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       <section className="space-y-4" id="claim">
         {partner ? (
           <>
-            <h2 className="font-display text-2xl">Claim your R550 starting credit</h2>
-            <CorporateClaimForm refSlug={partner.slug} />
+            <h2 className="font-display text-2xl">No credit card needed. Claim your free credit. Get started now.</h2>
+            <p className="text-sm text-muted-foreground">
+              Open your corporate account on the spot. The R550 starting credit lands in your wallet
+              the moment you sign up, exactly five managed leads at the flat R110 rate. No card, no
+              callback, no waiting.
+            </p>
+            <CorporateSignupForm slug={partner.slug} />
           </>
         ) : (
           <>

@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast'
 import { api, rands, type CreditTx, type TopUpPack } from './shared'
 import { SPEND_ACTIONS, COMING_SOON_SKUS, TOPUP_MIN_CENTS, TOPUP_MAX_CENTS, bonusForLoad, creditsForLoad } from '@/lib/spend'
 import { levelFor, revealPriceFor, REVEAL_DISCOUNT_MIN_LEVEL, isPremiumTier, tillAnchorLine } from '@/lib/levels'
+import { getStrategist } from '@/lib/corporate'
+import { DFY_REVEAL_PRICE_CENTS } from '@/lib/levels'
 import { useHp } from './store'
 import { Wallet, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles, ShieldCheck, Gift, Coins } from 'lucide-react'
 
@@ -35,6 +37,11 @@ export default function WalletView() {
       ? { id: 'custom', name: 'Custom load', amountCents: customCents, creditCents: creditsForLoad(customCents), bonus: bonusForLoad(customCents) }
       : null
   const isValidCustom = customPack !== null
+  // Corporate law (owner, Task 215): PREMIUM_DFY accounts never see the B2C
+  // packs or the custom card loader. Their top-ups are arranged with the
+  // partner who introduced them — that is how the door closes the account.
+  const isDfy = isPremiumTier(session?.user?.pricingTier)
+  const dfyPartner = isDfy ? getStrategist(session?.user?.corporatePartner || '') : undefined
 
   // Task 206: the member's saved average deal value (from the lead calculator,
   // AVG_DEAL_CENTS user setting) turns the price list into outcome units.
@@ -164,6 +171,20 @@ export default function WalletView() {
       {/* Packs */}
       <div>
         <h2 className="font-medium mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> Top-up packs</h2>
+        {isDfy ? (
+          <Card>
+            <CardContent className="p-5 space-y-2">
+              <div className="font-medium text-sm flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Done-for-you account</div>
+              <p className="text-sm text-muted-foreground">
+                Your account runs on the managed rate: {rands(DFY_REVEAL_PRICE_CENTS)} per verified lead, flat.
+                There are no self-serve packs on this account — when the balance runs low, your top-up is
+                arranged with your account manager{dfyPartner ? ` at ${dfyPartner.company}` : ''}.
+              </p>
+              <p className="text-xs text-muted-foreground">Your starting credit is already on the card. Nothing here needs a card payment.</p>
+            </CardContent>
+          </Card>
+        ) : (
+        <>
         <div className="grid md:grid-cols-3 gap-3">
           {!data && [...Array(3)].map((_, i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}
           {data?.packs.map((p, i) => (
@@ -234,6 +255,8 @@ export default function WalletView() {
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
           Paid securely with Yoco (card, Apple Pay, Google Pay). Credits land in your wallet the moment your payment clears.
         </p>
+        </>
+        )}
       </div>
 
       {/* Ledger */}

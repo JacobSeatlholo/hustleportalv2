@@ -39,6 +39,7 @@ model User {
   xp               Int       @default(0)
   refCode          String?   @unique // personal invite code (lazy-generated)
   pricingTier      String    @default("SELF_SERVE") // SELF_SERVE = B2C self-serve (R18 list, R15 at Operator+) | PREMIUM_DFY = B2B done-for-you (R108 flat, the strategist agreement's premium rate)
+  corporatePartner String? // slug of the strategist door this corporate account signed up through (e.g. trinitydirect) — drives the partner dashboard and the DFY rate attribution
   platformAdmin    Boolean   @default(false)
   resetTokenHash   String? // sha256 of the password-reset token (never the token itself)
   resetTokenExpiry DateTime? // single-use, 30-minute window
@@ -89,6 +90,8 @@ model User {
   dealsOwned         Deal[]              @relation("DealOwner")
   dealsCreated       Deal[]              @relation("DealCreator")
   docsUploaded       DocFile[]           @relation("DocUploader")
+
+  @@index([corporatePartner])
 }
 
 // ============ FACILITATED MEETINGS (Executive Dashboard) ============
@@ -425,16 +428,16 @@ model FinanceEntry {
 // ============ APPOINTMENTS ============
 
 model Appointment {
-  id          String    @id @default(cuid())
-  userId      String
-  projectId   String?
-  title       String
-  clientName  String?
-  clientEmail String? // the person they are meeting — set here, the meeting link lands in their inbox the moment the appointment saves
-  notes       String?
-  minutes     String? // the call's own record: what was said, decided, agreed — jotted on the event during the meeting, never rides the invite email
-  startsAt    DateTime
-  endsAt      DateTime?
+  id            String    @id @default(cuid())
+  userId        String
+  projectId     String?
+  title         String
+  clientName    String?
+  clientEmail   String? // the person they are meeting — set here, the meeting link lands in their inbox the moment the appointment saves
+  notes         String?
+  minutes       String? // the call's own record: what was said, decided, agreed — jotted on the event during the meeting, never rides the invite email
+  startsAt      DateTime
+  endsAt        DateTime?
   meetLink      String? // Jitsi link (meet.ts)
   inviteSentAt  DateTime? // stamped when the meeting-link email actually went out; null = no email yet (or it failed)
   source        String    @default("MANUAL") // MANUAL | VOICE | ICS | BOOKING (guest booked via a booking link)
@@ -448,7 +451,7 @@ model Appointment {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
-  tasks       Task[]       // follow-up tasks spun from this meeting
+  tasks       Task[] // follow-up tasks spun from this meeting
 
   @@index([userId, startsAt])
   @@index([projectId])
@@ -474,13 +477,13 @@ model BookingLink {
   location    String? // "Rooms 4, Gardens, Cape Town" — shown on the page, rides into the calendar notes
   description String? // what the guest should know / bring
   avail       String // JSON weekly map {"1":[{"s":"09:00","e":"13:00"}],...} keys 0=Sun..6=Sat, SAST wall times
-  logoUrl     String?  // sanitized SVG data URL (invoice-logo pattern) — the practitioner's own face on the page
+  logoUrl     String? // sanitized SVG data URL (invoice-logo pattern) — the practitioner's own face on the page
   bookings    Int      @default(0) // lifetime count of confirmed bookings through this link
   active      Boolean  @default(true) // off = the page shows an honest "not taking bookings" card, nothing bookable
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   appointments Appointment[]
 
   @@index([userId])
@@ -1122,10 +1125,10 @@ model StatementEntry {
 
   account StatementAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  @@index([accountId, date])
   // One synced line per record per account. NULL sourceRefs (hand lines) never
   // collide — Postgres allows many NULLs in a unique index.
   @@unique([accountId, sourceRef])
+  @@index([accountId, date])
 }
 
 // ============ CORPORATE (Task 207) ============
@@ -1222,21 +1225,21 @@ model EsignSession {
 // holds its own tasks, uploaded documents and e-sign sessions, so a brand
 // strategist onboarding lives in one place instead of a WhatsApp thread.
 model Deal {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   title        String
   company      String
   contactName  String
   contactEmail String?
   contactPhone String?
   value        Float? // deal value in rands, as entered
-  stage        String   @default("LEAD") // LEAD | PROPOSAL | NEGOTIATION | WON | LOST
+  stage        String    @default("LEAD") // LEAD | PROPOSAL | NEGOTIATION | WON | LOST
   notes        String?
   ownerId      String
   creatorId    String
   teamId       String? // null = private to the owner
-  owner        User     @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  creator      User     @relation("DealCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  team         Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  owner        User      @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  creator      User      @relation("DealCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  team         Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   tasks        Task[]
   docs         DocFile[]
 
@@ -1251,18 +1254,18 @@ model Deal {
 // e-sign engine (Task 212). Bytes live in Postgres and the sha256 pins what
 // was sent for signing exactly as it was uploaded.
 model DocFile {
-  id         String   @id @default(cuid())
+  id         String         @id @default(cuid())
   taskId     String?
   dealId     String?
   filename   String
-  mime       String   @default("application/pdf")
+  mime       String         @default("application/pdf")
   size       Int
   bytes      Bytes
   sha256     String
   uploaderId String
-  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  deal       Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  uploader   User     @relation("DocUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  task       Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  deal       Deal?          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  uploader   User           @relation("DocUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
   sessions   EsignSession[]
 
   createdAt DateTime @default(now())

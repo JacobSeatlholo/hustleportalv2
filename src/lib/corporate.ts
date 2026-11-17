@@ -31,6 +31,8 @@ export interface Strategist {
   /** Company image under /corporate/ (public/corporate/). */
   image: string
   members: StrategistMember[]
+  /** Gated partner dashboard (?key=) — the strategist's own funnel metrics. */
+  dashboardKey: string
 }
 
 /** The referral law, in cents. One source of truth for page, calculator and API. */
@@ -46,6 +48,10 @@ export const STRATEGISTS: Strategist[] = [
     tagline: 'Corporate sales floors, equipped.',
     image: '/corporate/trinitydirect-logo.jpg',
     members: [],
+    // The partner dashboard gate. Separate from the deal-room key on
+    // purpose: the dashboard is the strategist's daily surface, the deal
+    // room holds documents and the e-sign sender.
+    dashboardKey: 'bh-tdc-dashboard-8v3nq5',
   },
 ]
 

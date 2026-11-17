@@ -18,6 +18,12 @@ export { LEVELS, levelFor }
  * wallet hiccup costs the bonus, never the XP.
  */
 export async function awardXp(userId: string, type: string, amount: number, description?: string) {
+  // Corporate law (owner, Task 215): the level ladder, its XP and its level-up
+  // rewards belong to the self-serve (B2C) world — a done-for-you account sits
+  // outside the game entirely, so a reveal can never mint a "Builder" bonus
+  // that the managed rate never promised.
+  const tier = await db.user.findUnique({ where: { id: userId }, select: { pricingTier: true } })
+  if (tier?.pricingTier === 'PREMIUM_DFY') return undefined
   const before = await db.user.findUnique({ where: { id: userId }, select: { xp: true } })
   await db.xpEvent.create({ data: { userId, type, amount, description } })
   const user = await db.user.update({
@@ -102,6 +108,10 @@ export async function loginStreak(userId: string): Promise<number> {
 }
 
 export async function bumpChallenge(userId: string, key: string) {
+  // Same corporate law as awardXp: no challenges, no streak rewards for
+  // done-for-you accounts.
+  const tier = await db.user.findUnique({ where: { id: userId }, select: { pricingTier: true } })
+  if (tier?.pricingTier === 'PREMIUM_DFY') return null
   const day = today()
   const def = CHALLENGES.find((c) => c.key === key)
   if (!def) return null

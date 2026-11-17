@@ -12,6 +12,7 @@ import { sendSystemMail, recordNoAccountReset } from '@/lib/mailer'
 import { ensureExecAdmin } from '@/lib/admin'
 import { runWelcomeSweep } from '@/lib/welcomesweep'
 import { STANDARD_REVEAL_PRICE_CENTS, revealPriceFor, cohortFor } from '@/lib/levels'
+import { getStrategist } from '@/lib/corporate'
 
 // The welcome sweep runs after the response ships (Vercel keeps the function
 // alive for after() work): a fresh signup should wake up to real,
@@ -33,6 +34,11 @@ export async function POST(req: NextRequest) {
 
     if (action === 'register') {
       const { email, password, name, businessName, industry, city, phone } = body
+      // Corporate sign-up (owner, Task 215): the partner doors carry an open
+      // "no credit card needed" registration. A valid strategist slug on the
+      // body opens the account on the PREMIUM_DFY track — the R110 managed
+      // rate, the exact-five starting credit, and the B2C ladder hidden.
+      const signupPartner = body.corporatePartner ? getStrategist(String(body.corporatePartner)) : undefined
       // Account-creation flood guard: stops scripted mass registration and the
       // welcome-mail noise it would generate. Generous for a real human.
       const regGate = rateLimit(`register:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
@@ -71,6 +77,8 @@ export async function POST(req: NextRequest) {
           city: city || null,
           phone: phone || null,
           role: userCount === 0 ? 'ADMIN' : 'MEMBER',
+          pricingTier: signupPartner ? 'PREMIUM_DFY' : 'SELF_SERVE',
+          corporatePartner: signupPartner?.slug ?? null,
         },
       })
       await createSession(user.id)
@@ -83,30 +91,37 @@ export async function POST(req: NextRequest) {
       // attribution must land before the grant. R10 still flows to the
       // referrer; attribution failure never blocks registration.
       let referrerId: string | null = null
-      try {
-        referrerId = await attributeSignup(user.id, normalized, body.refCode)
-      } catch { /* attribution must never block registration */ }
+      if (!signupPartner) {
+        try {
+          referrerId = await attributeSignup(user.id, normalized, body.refCode)
+        } catch { /* attribution must never block registration */ }
+      }
       // welcome bonus (Task 215, owner's rule): R99 when you joined on your
       // own, R120 when you came through someone's referral link — the R21
       // difference is the visible reward for the distribution loop.
-      const welcomeCents = referrerId
-        ? (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_REFERRAL_CENTS)) || 12000)
-        : (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900)
+      const welcomeCents = signupPartner
+        ? (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CORPORATE_CENTS)) || 55000)
+        : referrerId
+          ? (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_REFERRAL_CENTS)) || 12000)
+          : (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900)
       // Task 206: frame the welcome as the OUTCOME it buys, never as a price.
       // Numbers computed, never hardcoded, so a configured credit change keeps
       // the copy honest. Task 215: the outcome divides by the member's OWN
       // first-reveal price (R18 legacy today, R60 on the ladder from 1 Dec) —
       // a legacy divisor would promise five leads to a member who can only
       // buy one.
-      const firstRevealCents = revealPriceFor(null, 1, cohortFor(user.createdAt))
+      const firstRevealCents = revealPriceFor(user.pricingTier, 1, cohortFor(user.createdAt))
       const welcomeReveals = Math.floor(welcomeCents / firstRevealCents)
       const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * firstRevealCents) / 100)
-      const welcomeLeadLine =
-        welcomeReveals >= 1
+      const welcomeLeadLine = signupPartner
+        ? `Your wallet is already loaded: ${welcomeReveals} verified leads, on us. The R${Math.round(welcomeCents / 100)} starting credit is exactly ${welcomeReveals} managed leads at your flat corporate rate — no card needed.`
+        : welcomeReveals >= 1
           ? `Your wallet is already loaded: ${welcomeReveals} verified leads, on us, with R${welcomeLeftoverRands} still on the card after that.`
           : `Your wallet is already loaded with R${Math.round(welcomeCents / 100)} in lead credits.`
       if (welcomeCents > 0) {
-        await addCredits(user.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits${referrerId ? ' (joined via referral)' : ''}`)
+        await addCredits(user.id, welcomeCents, 'BONUS', signupPartner
+          ? `Welcome bonus, R${Math.round(welcomeCents / 100)} starting credit (corporate account via ${signupPartner.company})`
+          : `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits${referrerId ? ' (joined via referral)' : ''}`)
       }
       await awardXp(user.id, 'SIGNUP', 50, 'Joined HustlePortal')
       await bumpChallenge(user.id, 'login')
@@ -119,18 +134,49 @@ export async function POST(req: NextRequest) {
         const creditRand = Math.round(welcomeCents / 100)
         await sendSystemMail({
           to: normalized,
-          subject: welcomeReveals >= 1
-            ? `Welcome${first !== 'there' ? ` ${first}` : ''}, ${welcomeReveals} verified leads are on us`
-            : `Welcome${first !== 'there' ? ` ${first}` : ''}, your R${creditRand} lead credit is ready`,
+          subject: signupPartner
+            ? `Welcome${first !== 'there' ? ` ${first}` : ''}, your ${welcomeReveals} verified leads are loaded`
+            : welcomeReveals >= 1
+              ? `Welcome${first !== 'there' ? ` ${first}` : ''}, ${welcomeReveals} verified leads are on us`
+              : `Welcome${first !== 'there' ? ` ${first}` : ''}, your R${creditRand} lead credit is ready`,
           // The PostHog treatment: eyebrow, big headline, the credit as the
           // hero number. Copy stays verbatim; the chrome only frames it.
           headline: 'WELCOME ABOARD',
-          title: 'Your Business OS is live',
+          title: signupPartner ? 'Your corporate pipeline is live' : 'Your Business OS is live',
           value: welcomeReveals >= 1
             ? { text: `${welcomeReveals}`, caption: `Verified leads, already loaded — R${creditRand} in credits waiting` }
             : { text: `R${creditRand}`, caption: 'Lead credits already loaded in your wallet' },
           mascot: 'wave',
-          body: [
+          body: (signupPartner ? [
+            `Hi ${first},`,
+            '',
+            'Welcome to HustlePortal. Your corporate pipeline is live.',
+            '',
+            welcomeLeadLine,
+            'Your account runs on the done-for-you rate: one flat managed price per verified',
+            'lead, no ladder, no promos. Our engine finds and verifies the businesses;',
+            'your sellers close them. If a lead can\'t be verified, you\'re not charged for it.',
+            '',
+            'Three quick moves to make this week:',
+            '',
+            '1. Complete your profile. The more the engine knows about what you sell',
+            '   and to whom, the sharper your verified leads get.',
+            '2. Run your first Lead Finder search. Pick your city and industry,',
+            '   then reveal the businesses that fit your pipeline.',
+            '3. Save your best find to the pipeline. Invoices, tasks and finance',
+            '   all hang off that pipeline.',
+            '',
+            `Start here, it drops you straight into the Lead Finder:`,
+            `${base}/?view=leads`,
+            '',
+            `Your account manager is ${signupPartner.company}${signupPartner.name ? ` (${signupPartner.name})` : ''} — they look`,
+            'after your account, and top-ups go through them when your credit runs low.',
+            'Anything on the product itself: just reply to this email, a human reads every reply.',
+            '',
+            'Go get paid,',
+            'The HustlePortal team',
+            'Business Hustle · businesshustle.co.za',
+          ] : [
             `Hi ${first},`,
             '',
             'Welcome to HustlePortal. Your Business OS is live.',
@@ -157,7 +203,7 @@ export async function POST(req: NextRequest) {
             'Go get paid,',
             'The HustlePortal team',
             'Business Hustle · businesshustle.co.za',
-          ].join('\n'),
+          ]).join('\n'),
         })
       } catch (e) {
         console.error('[auth] welcome email failed for', normalized, e)

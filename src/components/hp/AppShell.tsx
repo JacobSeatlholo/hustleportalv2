@@ -43,7 +43,7 @@ import {
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
   Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy, ScrollText } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
-import { LEVELS } from '@/lib/levels'
+import { LEVELS, isPremiumTier } from '@/lib/levels'
 
 const NAV: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -199,8 +199,11 @@ export default function AppShell() {
   if (!session) return null
 
   const doneChallenges = session.challenges.filter((c) => c.done).length
+  // Corporate law (owner, Task 215): the Yoco card-link nudge is a B2C
+  // growth loop; done-for-you accounts never see it.
   const showCardBanner =
     !cardBannerDismissed &&
+    !isPremiumTier(session.user.pricingTier) &&
     session.level.level >= CARD_LINK_XP_LEVEL &&
     view !== 'wallet'
 
@@ -212,6 +215,8 @@ export default function AppShell() {
   const content = (() => {
     // View guard: a hidden module never renders, even via deep links or events.
     if (view !== 'dashboard' && disabledModules.includes(view)) return <DashboardView />
+    // Deep-link guard: a corporate account can never land on the B2C Grow view.
+    if (view === 'grow' && isPremiumTier(session.user.pricingTier)) return <DashboardView />
     switch (view) {
       case 'dashboard': return <DashboardView />
       case 'leads': return <LeadsView />
@@ -382,7 +387,7 @@ export default function AppShell() {
         >
           <div className="grid grid-cols-5">
             {/* disabled modules must not sit in the bar as silent dead taps */}
-            {BOTTOM_NAV.filter((n) => !disabledModules.includes(n.key)).map((n) => (
+            {BOTTOM_NAV.filter((n) => !disabledModules.includes(n.key) && !(session.user.pricingTier === 'PREMIUM_DFY' && n.key === 'grow')).map((n) => (
               <button
                 key={n.key}
                 onClick={() => setView(n.key)}
@@ -556,7 +561,7 @@ const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
 function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout, disabledModules, streak }: {
   view: ViewKey
   setView: (v: ViewKey) => void
-  session: { user: { name: string; businessName: string | null; role: string; xp: number }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null }; statementAccess?: boolean }
+  session: { user: { name: string; businessName: string | null; role: string; xp: number; pricingTier: string }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null }; statementAccess?: boolean }
   doneChallenges: number
   totalChallenges: number
   logout: () => Promise<void>
@@ -593,7 +598,9 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
 
   const nav = useMemo(() => {
     // Tailored workspace first: hidden modules never show, then personal order.
-    const pool = NAV.filter((n) => !disabledModules.includes(n.key))
+    // Corporate law (owner, Task 215): Grow & Earn is the B2C surface —
+    // plans, referral loop, level ladder. Done-for-you accounts never see it.
+    const pool = NAV.filter((n) => !disabledModules.includes(n.key) && !(session.user.pricingTier === 'PREMIUM_DFY' && n.key === 'grow'))
     if (!order || order.length === 0) return pool
     const known = pool.filter((n) => order.includes(n.key)).sort(
       (a, b) => order.indexOf(a.key) - order.indexOf(b.key)

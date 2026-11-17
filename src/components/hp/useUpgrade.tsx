@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Sparkles } from 'lucide-react'
+import { Check, Sparkles, ShieldCheck } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -92,6 +92,9 @@ interface UpgradeDetail {
 
 export default function UpgradeListener() {
   const setView = useHp((s) => s.setView)
+  // Corporate law (owner, Task 215): a done-for-you account never gets sold
+  // B2C plans — its extras are handled with the partner who introduced it.
+  const dfySession = useHp((s) => s.session?.user?.pricingTier === 'PREMIUM_DFY')
   const [info, setInfo] = useState<UpgradeDetail | null>(null)
   const open = Boolean(info)
   const copy = upgradeCopyFor(info?.feature)
@@ -111,6 +114,31 @@ export default function UpgradeListener() {
     }
     setView('grow')
   }, [setView])
+
+  if (dfySession) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && setInfo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-left">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+              Your done-for-you account
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              {info?.message || 'This extra sits outside the managed rate.'} Your corporate account runs on one
+              flat managed price — no self-serve plans, no card here. Your account manager arranges
+              anything extra with you directly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button onClick={() => setInfo(null)} className="w-full">
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && setInfo(null)}>

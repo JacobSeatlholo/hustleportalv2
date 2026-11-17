@@ -141,6 +141,7 @@ export function publicUser(u: {
   role: string
   xp: number
   pricingTier?: string
+  corporatePartner?: string | null
   persona?: string | null
   profession?: string | null
   onboardedAt?: Date | null
@@ -158,6 +159,7 @@ export function publicUser(u: {
     role: u.role,
     xp: u.xp,
     pricingTier: u.pricingTier || 'SELF_SERVE',
+    corporatePartner: u.corporatePartner || null,
     persona: u.persona || null,
     profession: u.profession || null,
     onboardedAt: u.onboardedAt || null,
