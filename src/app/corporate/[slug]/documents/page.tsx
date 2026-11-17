@@ -97,7 +97,9 @@ export default async function PartnerDocumentsPage({
               <FileText className="h-5 w-5 text-brand" /> Documents
             </h2>
             {docs.map((d) => {
-              const executed = signedDocs.has(d.base)
+              // docBase is stored with its extension (the exact uploaded
+              // filename); d.pdf is that same filename — key the badge there.
+              const executed = signedDocs.has(d.pdf)
               return (
               <div key={d.base} className="rounded-2xl border border-border bg-card p-5 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
