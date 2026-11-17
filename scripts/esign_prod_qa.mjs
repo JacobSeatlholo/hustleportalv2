@@ -12,7 +12,9 @@ const BASE = process.argv[2] || 'https://www.hustleportal.online'
 const DOCS_KEY = process.env.DOCS_KEY || 'bh-tdc-dealroom-qx7k29'
 const SLUG = 'trinitydirect'
 const DOC = 'Pricing_Strategy_Internal.pdf'
-const DOC_TITLE = 'Pricing Strategy (v2, R110)'
+// The room's pricing doc title bumps with every version (v2, v3, …) — assert
+// the family, never a hardcoded snapshot.
+const DOC_TITLE_FAMILY = 'Pricing Strategy (v'
 const V2_TITLE = 'Strategic Partnership Agreement — V2, signed by Trinity (counter-signature copy)'
 const V2_FILE = 'Strategic_Partnership_Agreement_Tdc_Bh_V2_1-2_signed_by_OpenSign™.pdf'
 const { readFileSync, writeFileSync } = await import('node:fs')
@@ -40,7 +42,7 @@ const token = mkJ.token
 
 // 2. The signing page renders and is reviewable.
 const page = await (await fetch(`${BASE}/sign/${token}`)).text()
-check('signing page opens (no account, no gate)', page.includes('Review and sign') && page.includes(DOC_TITLE))
+check('signing page opens (no account, no gate)', page.includes('Review and sign') && page.includes(DOC_TITLE_FAMILY))
 
 // 3. The PDF preview the signer must read.
 const pdfRes = await fetch(`${BASE}/api/sign/${token}/pdf`)

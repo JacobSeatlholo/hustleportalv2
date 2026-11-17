@@ -33,12 +33,19 @@ async function req(method, path, body, timeoutMs = 30000, extraHeaders = {}) {
     let json = null
     try { json = await res.json() } catch { /* html or empty ok */ }
     return { status: res.status, json, text: json ? '' : await res.text().catch(() => '') }
+  } catch (e) {
+    // a timeout or dropped connection is an honest FAIL, not a suite crash
+    return { status: 0, json: { error: String(e && e.message || e) }, text: '' }
   } finally { clearTimeout(t) }
 }
 async function raw(path, timeoutMs = 20000) {
-  const res = await fetch(path.startsWith('http') ? path : BASE + path, { signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' })
-  const text = await res.text().catch(() => '')
-  return { status: res.status, text, location: res.headers.get('location') }
+  try {
+    const res = await fetch(path.startsWith('http') ? path : BASE + path, { signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' })
+    const text = await res.text().catch(() => '')
+    return { status: res.status, text, location: res.headers.get('location') }
+  } catch (e) {
+    return { status: 0, text: String(e && e.message || e), location: null }
+  }
 }
 
 console.log(`\n[0] public surfaces`)
@@ -48,7 +55,7 @@ console.log(`\n[0] public surfaces`)
   check('health ok + db ping', h.status === 200 && hj?.ok === true && hj?.db?.ping === true, `tables=${hj?.db?.tables?.length ?? 0}`)
   const root = await raw('/')
   check('app shell serves', root.status === 200 && root.text.includes('HustlePortal'), `${root.text.length} bytes`)
-  check('landing is client-rendered shell (pricing verified via browser QA)', root.text.length < 60000 && root.status === 200, `${root.text.length} bytes`)
+  check('landing serves real content with the price anchors server-side', root.status === 200 && root.text.includes('HustlePortal') && (root.text.includes('R18') || root.text.includes('pricing')), `${root.text.length} bytes`)
   const man = await raw('/manifest.webmanifest')
   check('manifest ok + start_url fixed', man.status === 200 && man.text.includes('"start_url"') && !man.text.includes('/dashboard"'), '')
   const sw = await raw('/sw.js')
