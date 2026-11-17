@@ -30,7 +30,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
         'X-Robots-Tag': 'noindex, nofollow',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Document missing.' }, { status: 404 })
+  } catch (e) {
+    // Surface the real reason — a broken document link must be diagnosable.
+    return NextResponse.json(
+      { error: e instanceof Error ? `Document missing: ${e.message}` : 'Document missing.' },
+      { status: 404 },
+    )
   }
 }

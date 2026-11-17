@@ -15,6 +15,10 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib'
 import { PRIVATE_DOCS_DIR, findPartnerDoc } from '@/lib/partnerDocs'
+// Static import — a dynamic import here resolved fine in dev but broke module
+// resolution in the serverless bundle (Task 214: sessions pointed at uploaded
+// DocFiles 404'd as 'Document missing'). Server-only module, so this is safe.
+import { db } from '@/lib/db'
 
 export function newSigningToken(): string {
   return randomBytes(32).toString('base64url')
@@ -49,7 +53,6 @@ export async function loadOriginalPdf(docBase: string): Promise<{ bytes: Buffer;
  */
 export async function loadSessionOriginal(session: { docBase: string; docFileId: string | null }): Promise<{ bytes: Buffer; title: string; filename: string }> {
   if (session.docFileId) {
-    const { db } = await import('@/lib/db')
     const f = await db.docFile.findUnique({ where: { id: session.docFileId } })
     if (!f) throw new Error(`Missing document: ${session.docBase}`)
     return {
