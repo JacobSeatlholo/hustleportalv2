@@ -62,6 +62,10 @@ export default async function PartnerDocumentsPage({
       status: true, sentVia: true, createdAt: true, viewedAt: true, signedAt: true,
     },
   })
+  // A doc whose latest session is SIGNED reads as executed, not as a draft —
+  // the page is the one the boss sends the partner, so it must say the true
+  // state of the agreement at a glance.
+  const signedTitles = new Set(sessions.filter((s) => s.status === 'SIGNED').map((s) => s.docTitle))
 
   return (
     <CorporateShell footer={false}>
@@ -69,7 +73,7 @@ export default async function PartnerDocumentsPage({
         <div className="max-w-3xl mx-auto px-6 py-14 space-y-10">
           <header className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5" /> Internal — not client-facing
+              <Lock className="h-3.5 w-3.5" /> Private partnership room — not client-facing
             </p>
             <h1 className="font-display text-4xl leading-tight">Deal room: documents &amp; signing</h1>
             <p className="text-muted-foreground">
@@ -89,18 +93,22 @@ export default async function PartnerDocumentsPage({
             <h2 className="font-display text-2xl flex items-center gap-2">
               <FileText className="h-5 w-5 text-brand" /> Documents
             </h2>
-            {docs.map((d) => (
+            {docs.map((d) => {
+              const executed = signedTitles.has(d.title)
+              return (
               <div key={d.base} className="rounded-2xl border border-border bg-card p-5 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold">{d.title}</p>
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 ${
-                      d.tag === 'agreement'
-                        ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200'
-                        : 'bg-muted text-muted-foreground'
+                      executed
+                        ? 'bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-200'
+                        : d.tag === 'agreement'
+                          ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200'
+                          : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {d.tag === 'agreement' ? 'draft — for legal review' : 'internal'}
+                    {executed ? 'executed — signed copy below' : d.tag === 'agreement' ? 'draft — for legal review' : 'internal'}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{d.description}</p>
@@ -119,7 +127,8 @@ export default async function PartnerDocumentsPage({
                   </a>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </section>
 
           <section className="space-y-3">

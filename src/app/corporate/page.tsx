@@ -28,7 +28,12 @@ export const metadata: Metadata = {
 
 export default function CorporatePage() {
   return (
-    <CorporateShell>
+    // Task 215 (owner): NO footer here either — the entity block, the Cape
+    // Town address and the social handles are a circumvention trail. A
+    // prospect who lands on a strategist's door can walk to /corporate, and
+    // the footer used to hand them the operator straight away. The legal
+    // pages stay reachable at /legal/terms, /legal/privacy and /remove-listing.
+    <CorporateShell footer={false}>
       {/* Structured data lives HERE, not in the root layout, so partner doors
           never inherit HustlePortal schema (Task 214). */}
       <script
