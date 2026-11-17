@@ -365,8 +365,20 @@ export interface TaskCommentRow {
   taskId: string
   userId: string
   body: string
+  urgent: boolean
+  copiedEmails: string | null
   createdAt: string
   user: { id: string; name: string }
+  docs: { id: string; filename: string; size: number }[]
+  session: {
+    id: string
+    token: string
+    docTitle: string
+    signerName: string
+    signerEmail: string
+    status: string // SENT | VIEWED | SIGNED
+    signedAt: string | null
+  } | null
 }
 
 export interface CreditTx {

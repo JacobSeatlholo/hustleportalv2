@@ -369,16 +369,26 @@ model Task {
   @@index([dealId])
 }
 
-// Team discussion threads ON tasks — the in-context alternative to WhatsApp groups.
+// Team conversations ON tasks — the in-context alternative to WhatsApp groups.
+// A message is plain text by default; flipping urgent fans an email out to the
+// whole team plus any copied-in addresses; attachments ride the task's DocFiles
+// (implicit many-to-many — a document can appear in several messages without
+// duplicating its bytes); a signing session turns the message into a live
+// signature card inside the thread.
 model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  body      String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  taskId       String
+  userId       String
+  body         String
+  urgent       Boolean  @default(false) // true = emailed to everyone who can see the task + copied-in addresses
+  copiedEmails String? // comma-separated extra recipients (urgent fanout only)
+  sessionId    String? // set when this message is a document-signing card
+  createdAt    DateTime @default(now())
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task    Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session EsignSession? @relation("CommentSigningCard", fields: [sessionId], references: [id], onDelete: SetNull)
+  docs    DocFile[] // attachments: uploaded to the task, referenced by the message
 
   @@index([taskId, createdAt])
 }
@@ -1213,6 +1223,7 @@ model EsignSession {
   updatedAt       DateTime  @updatedAt
 
   docFile DocFile? @relation(fields: [docFileId], references: [id], onDelete: SetNull)
+  threadComments TaskComment[] @relation("CommentSigningCard") // conversation messages that surface this signing request
 
   @@index([slug, createdAt])
   @@index([signerEmail])
@@ -1267,6 +1278,7 @@ model DocFile {
   deal       Deal?          @relation(fields: [dealId], references: [id], onDelete: Cascade)
   uploader   User           @relation("DocUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
   sessions   EsignSession[]
+  comments   TaskComment[] // conversation messages that carry this document as an attachment
 
   createdAt DateTime @default(now())
 

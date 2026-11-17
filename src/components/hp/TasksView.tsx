@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +20,7 @@ import ScanDiaryDialog from './ScanDiaryDialog'
 import DealsView from './DealsView'
 import DocPanel from './DocPanel'
 import { useVoiceInput } from './useVoiceInput'
-import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft, Search, Handshake, Paperclip } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Users, User as UserIcon, NotebookPen, MessageSquare, SendHorizontal, ChevronDown, ChevronUp, ShieldCheck, Clock, Mic, MicOff, AlignLeft, Search, Handshake, Paperclip, AlertTriangle, FileSignature, Download, X } from 'lucide-react'
 
 // Task list ordering. CREATED_DESC (date added, newest first) is the default view;
 // PRIORITY sorts by importance; DUE keeps no-date tasks at the bottom, never the top.
@@ -418,6 +418,20 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   // @mentions: typing @ opens a picker over the people who can see this task.
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
+  // Conversations (Task 215 round 4): urgent flags, CC'd addresses, attachments
+  // and document-signing cards — the whole team discussion lives in the thread.
+  const [urgent, setUrgent] = useState(false)
+  const [copied, setCopied] = useState('')
+  const [attached, setAttached] = useState<{ id: string; filename: string }[]>([])
+  const [attachBusy, setAttachBusy] = useState(false)
+  const [threadError, setThreadError] = useState<string | null>(null)
+  const [signOpen, setSignOpen] = useState(false)
+  const [signDocs, setSignDocs] = useState<{ id: string; filename: string }[] | null>(null)
+  const [signDocId, setSignDocId] = useState('')
+  const [signName, setSignName] = useState('')
+  const [signEmail, setSignEmail] = useState('')
+  const [signBusy, setSignBusy] = useState(false)
+  const attachRef = useRef<HTMLInputElement>(null)
 
   const commentCount = comments ? comments.length : task._count?.comments || 0
 
@@ -521,18 +535,95 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
     const body = draft.trim()
     if (!body) return
     setPosting(true)
+    setThreadError(null)
     try {
       const res = await api<{ comment: TaskCommentRow }>(`/api/tasks/${task.id}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({
+          body,
+          urgent,
+          copiedEmails: urgent ? copied : '',
+          docIds: attached.map((a) => a.id),
+        }),
       })
       setComments((prev) => [...(prev || []), res.comment])
       onCommentCountChange(task.id, (comments?.length || 0) + 1)
       setDraft('')
-    } catch {
-      // non-fatal, the draft stays in the input
+      setUrgent(false)
+      setCopied('')
+      setAttached([])
+    } catch (e) {
+      // the draft stays in the input, the reason shows under it
+      setThreadError(e instanceof Error ? e.message : 'Could not send the message.')
     } finally {
       setPosting(false)
+    }
+  }
+
+  async function attachDoc(file: File) {
+    setAttachBusy(true)
+    setThreadError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('taskId', task.id)
+      const res = await fetch('/api/docs', { method: 'POST', body: fd })
+      const json = (await res.json().catch(() => null)) as { doc?: { id: string; filename: string }; error?: string } | null
+      if (!res.ok || !json?.doc) throw new Error(json?.error || 'Upload failed')
+      setAttached((prev) => [...prev, json.doc as { id: string; filename: string }])
+    } catch (e) {
+      setThreadError(e instanceof Error ? e.message : 'Could not upload the attachment.')
+    } finally {
+      setAttachBusy(false)
+      if (attachRef.current) attachRef.current.value = ''
+    }
+  }
+
+  // Send a task document for signature right from the conversation: the esign
+  // engine creates the session and emails the signer, then a signing card is
+  // posted into the thread so the whole team can watch it move SENT → SIGNED.
+  async function openSignForm() {
+    setSignOpen((v) => !v)
+    if (!signOpen && signDocs === null) {
+      try {
+        const res = await api<{ docs: { id: string; filename: string }[] }>(`/api/docs?taskId=${task.id}`)
+        setSignDocs(res.docs)
+        if (res.docs[0]) setSignDocId(res.docs[0].id)
+      } catch {
+        setSignDocs([])
+      }
+    }
+  }
+
+  async function sendForSigning() {
+    if (!signDocId || !signName.trim() || !signEmail.trim()) return
+    setSignBusy(true)
+    setThreadError(null)
+    try {
+      const res = await api<{ session: { id: string; docTitle: string; signerName: string; signerEmail: string } }>(
+        `/api/docs/${signDocId}/esign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ signerName: signName.trim(), signerEmail: signEmail.trim() }),
+        },
+      )
+      const s = res.session
+      const cres = await api<{ comment: TaskCommentRow }>(`/api/tasks/${task.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          body: `Sent "${s.docTitle}" for signature to ${s.signerName} <${s.signerEmail}>. The signed copy lands in this conversation when it is done.`,
+          sessionId: s.id,
+        }),
+      })
+      setComments((prev) => [...(prev || []), cres.comment])
+      onCommentCountChange(task.id, (comments?.length || 0) + 1)
+      setSignOpen(false)
+      setSignName('')
+      setSignEmail('')
+    } catch (e) {
+      setThreadError(e instanceof Error ? e.message : 'Could not send for signing.')
+    } finally {
+      setSignBusy(false)
     }
   }
 
@@ -615,7 +706,8 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
               </div>
             )}
           </div>
-          {/* Team discussion, comments happen IN context, not in a WhatsApp group */}
+          {/* Conversations: the team's discussion happens IN context — updates,
+              urgent alerts that email everyone, attachments, signature cards */}
           <button
             onClick={openThread}
             className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
@@ -623,8 +715,9 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 ? 'border-brand/50 text-brand bg-brand/5'
                 : 'border-stone-600/60 text-muted-foreground hover:border-brand hover:text-brand'
             }`}
-            aria-label={threadOpen ? 'Hide discussion' : `Discussion, ${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+            aria-label={threadOpen ? 'Hide conversation' : `Conversations, ${commentCount} message${commentCount === 1 ? '' : 's'}`}
             aria-expanded={threadOpen}
+            title="Conversations: discuss, attach, mark urgent, send for signature"
           >
             <MessageSquare className="h-3.5 w-3.5" />
             {commentCount > 0 && <span>{commentCount}</span>}
@@ -670,11 +763,12 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
           <div className="mt-3 border-t pt-3 space-y-2.5">
             {loadingComments ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading discussion…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading conversation…
               </div>
             ) : !comments || comments.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No comments yet, start the discussion. Everyone on this task sees it here, in context.
+                No messages yet — start the conversation. Everyone on this task sees it here, in
+                context; mark a message urgent to email the whole team at once.
               </p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto hp-scroll pr-1">
@@ -684,18 +778,78 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                     <div key={c.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div
                         className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                          mine ? 'bg-brand/15 border border-brand/30' : 'bg-white/5 border'
+                          c.urgent
+                            ? 'bg-red-500/10 border border-red-500/40'
+                            : mine
+                              ? 'bg-brand/15 border border-brand/30'
+                              : 'bg-white/5 border'
                         }`}
                       >
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <span className={`text-[11px] font-medium ${mine ? 'text-brand' : 'text-foreground'}`}>
                             {mine ? 'You' : c.user.name}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             {new Date(c.createdAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </span>
+                          {c.urgent && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-500 text-[10px] font-bold px-2 py-0.5">
+                              <AlertTriangle className="h-3 w-3" /> URGENT
+                            </span>
+                          )}
                         </div>
                         <p className="whitespace-pre-wrap break-words">{renderBody(c.body)}</p>
+                        {c.docs.length > 0 && (
+                          <div className="mt-1.5 space-y-1">
+                            {c.docs.map((d) => (
+                              <a
+                                key={d.id}
+                                href={`/api/docs/${d.id}/file`}
+                                title="Download the attachment"
+                                className="flex items-center gap-1.5 text-xs text-brand underline"
+                              >
+                                <Download className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{d.filename}</span>
+                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                  {d.size < 1024 * 1024 ? `${(d.size / 1024).toFixed(0)} KB` : `${(d.size / (1024 * 1024)).toFixed(1)} MB`}
+                                </span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        {c.session && (
+                          <div className="mt-2 rounded-lg border bg-card p-2 space-y-1">
+                            <p className="text-xs font-medium flex items-center gap-1.5">
+                              <FileSignature className="h-3.5 w-3.5 text-brand shrink-0" />
+                              <span className="truncate">Signing: {c.session.docTitle}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              for {c.session.signerName} ({c.session.signerEmail})
+                            </p>
+                            {c.session.status === 'SIGNED' ? (
+                              <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                                <span className="rounded-full bg-emerald-500/15 text-emerald-500 font-bold px-2 py-0.5 text-[10px]">
+                                  SIGNED
+                                </span>
+                                <a href={`/api/sign/${c.session.token}/file`} className="text-brand underline">
+                                  Download signed copy
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                                <span className={`rounded-full px-2 py-0.5 font-bold text-[10px] ${c.session.status === 'VIEWED' ? 'bg-sky-500/15 text-sky-500' : 'bg-amber-500/15 text-amber-500'}`}>
+                                  {c.session.status}
+                                </span>
+                                <a href={`/sign/${c.session.token}`} target="_blank" rel="noopener noreferrer" className="text-brand underline">
+                                  Open signing page
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {c.copiedEmails && (
+                          <p className="text-[10px] text-muted-foreground mt-1">Copied: {c.copiedEmails}</p>
+                        )}
                       </div>
                     </div>
                   )
@@ -719,6 +873,77 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                 <p className="px-3 py-1 text-[10px] text-muted-foreground border-t">Tag by name or email. A tagged teammate gets a mail about this task.</p>
               </div>
             )}
+            {threadError && (
+              <p className="text-xs text-red-500">{threadError}</p>
+            )}
+            {attached.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {attached.map((a) => (
+                  <span key={a.id} className="inline-flex items-center gap-1 rounded-full border bg-muted/30 px-2 py-0.5 text-[11px] max-w-full">
+                    <Paperclip className="h-3 w-3 text-brand shrink-0" />
+                    <span className="truncate max-w-[12rem]">{a.filename}</span>
+                    <button
+                      onClick={() => setAttached((p) => p.filter((x) => x.id !== a.id))}
+                      aria-label={`Remove ${a.filename} from this message`}
+                      className="text-muted-foreground hover:text-red-500 shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {signOpen && (
+              <div className="rounded-lg border bg-muted/20 p-2.5 space-y-2">
+                <p className="text-xs font-medium flex items-center gap-1.5">
+                  <FileSignature className="h-3.5 w-3.5 text-brand" /> Send a document for signature
+                </p>
+                {signDocs === null ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : signDocs.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No documents on this task yet — attach one with the paperclip first, then send it for signing.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <select
+                      value={signDocId}
+                      onChange={(e) => setSignDocId(e.target.value)}
+                      className="w-full h-8 rounded-lg border bg-card px-2 text-xs"
+                      aria-label="Document to sign"
+                    >
+                      {signDocs.map((d) => (
+                        <option key={d.id} value={d.id}>{d.filename}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <Input value={signName} onChange={(e) => setSignName(e.target.value)} placeholder="Signer name" className="h-8 text-xs" />
+                      <Input value={signEmail} onChange={(e) => setSignEmail(e.target.value)} placeholder="Signer email" type="email" className="h-8 text-xs" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={sendForSigning} disabled={signBusy || !signDocId || !signName.trim() || !signEmail.trim()} size="sm" className="h-7 text-xs">
+                        {signBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3 w-3 mr-1" />} Send for signature
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSignOpen(false)}>Cancel</Button>
+                      <span className="text-[10px] text-muted-foreground">The signer gets an email with their signing page.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {urgent && (
+              <div className="space-y-1">
+                <Input
+                  value={copied}
+                  onChange={(e) => setCopied(e.target.value)}
+                  placeholder="Copy others (comma-separated emails, optional)"
+                  className="h-8 text-xs"
+                />
+                <p className="text-[10px] text-red-500">
+                  URGENT emails everyone on this task&apos;s team plus anyone copied here the moment you send.
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Input
                 value={draft}
@@ -732,10 +957,50 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
                   }
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() }
                 }}
-                placeholder="Add a comment… type @ to tag a teammate"
+                placeholder={urgent ? 'Write the urgent update…' : 'Message the team… type @ to tag a teammate'}
                 className="flex-1"
               />
-              <Button onClick={postComment} disabled={posting || !draft.trim()} size="icon" className="shrink-0" aria-label="Send comment">
+              <input
+                ref={attachRef}
+                type="file"
+                accept="application/pdf,.pdf,.docx,.png,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && attachDoc(e.target.files[0])}
+              />
+              <Button
+                onClick={() => attachRef.current?.click()}
+                disabled={attachBusy}
+                size="icon"
+                variant="ghost"
+                className="shrink-0 text-muted-foreground hover:text-brand"
+                aria-label="Attach a document"
+                title="Attach a document"
+              >
+                {attachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              </Button>
+              <Button
+                onClick={() => setUrgent((v) => !v)}
+                size="icon"
+                variant="ghost"
+                className={`shrink-0 ${urgent ? 'text-red-500 bg-red-500/10' : 'text-muted-foreground hover:text-red-500'}`}
+                aria-label={urgent ? 'Urgent is on — click to send normally' : 'Mark this message urgent'}
+                aria-pressed={urgent}
+                title="Mark urgent — emails the whole team the moment you send"
+              >
+                <AlertTriangle className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={openSignForm}
+                size="icon"
+                variant="ghost"
+                className={`shrink-0 ${signOpen ? 'text-brand bg-brand/10' : 'text-muted-foreground hover:text-brand'}`}
+                aria-label="Send a document for signature"
+                aria-expanded={signOpen}
+                title="Send a document for signature"
+              >
+                <FileSignature className="h-4 w-4" />
+              </Button>
+              <Button onClick={postComment} disabled={posting || !draft.trim()} size="icon" className="shrink-0" aria-label="Send message">
                 {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
               </Button>
             </div>
