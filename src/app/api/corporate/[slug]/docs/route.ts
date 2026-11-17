@@ -30,11 +30,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   try {
     const bytes = await readFile(path.join(PRIVATE_DOCS_DIR, doc.base))
     const isPdf = doc.base.toLowerCase().endsWith('.pdf')
+    // HTTP header values are ByteStrings — a filename like the Trinity V2 copy
+    // carries ™, which throws on response construction and would surface here
+    // as a misleading 404. ASCII-fold for the wire (same convention as the
+    // e-sign file route); the real name still shows in the room UI.
+    const headerName = doc.base.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '')
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'Content-Type': isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${doc.base}"`,
+        'Content-Disposition': `attachment; filename="${headerName}"`,
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
       },
