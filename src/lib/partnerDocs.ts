@@ -35,16 +35,16 @@ export const PARTNER_DOCS: PartnerDoc[] = [
     base: 'Brand_Strategist_Agreement_DRAFT',
     title: 'Brand Strategist Agreement',
     description:
-      'The per-strategist appointment: the trinitydirect door, the R50 per managed lead referral fee (taper decision flagged for the owner), the R25/R25 member split mechanics, brand usage licence, non-circumvention, POPIA. DRAFT v0.1 — same 【】 placeholders and review caveat.',
+      'The per-strategist appointment: the trinitydirect door, the R50 per managed lead referral fee as executed flat in V2.1 (no taper), the R25/R25 member split mechanics, brand usage licence, non-circumvention, POPIA. DRAFT v0.1 — same 【】 placeholders and review caveat.',
     tag: 'agreement',
   },
   {
     // Task 214: the basename itself must be engine-free — it rides in download
     // URLs, signing sessions and the signer's page.
     base: 'Pricing_Strategy_Internal',
-    title: 'Pricing Strategy (v2, R110)',
+    title: 'Pricing Strategy (v3, live)',
     description:
-      'The internal strategy: level ladder R60→R15 with grandfathering, R120 welcome credit, corporate R110 with the exact-five credit, referral economics. Internal only — moved out of /docs/ so it is no longer publicly served.',
+      'The internal strategy as it now stands, on Business Hustle letterhead: the executed flat R50/R60 referral law (v2\u2019s 90-day taper is superseded), the armed self-serve ladder from 1 December 2026 with grandfathering before it, the exact-five R550 corporate credit, the live welcome credits and packs, and the partner funnel with its Monday digest. Every figure verified against the live till on 17 November 2026.',
     tag: 'internal',
   },
   {
