@@ -10,6 +10,7 @@ import { api } from './shared'
 import { useHp } from './store'
 import CityField from './CityField'
 import ThemeToggle from './ThemeToggle'
+import MemberTestimonials from './MemberTestimonials'
 import {
   Zap, Wallet, Loader2, ArrowRight, Check, Handshake, Sparkles, Gift, MailCheck,
   MessageSquareText, Timer, BookOpen, BadgeCheck, MessageCircleOff, Calculator, Clock,
@@ -87,6 +88,13 @@ export default function Landing() {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register')
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
+
+  // Task 219: the corporate doors link "Sign in here" to /app?signin=1 so a
+  // client arriving from a strategist's domain lands on the login form, not
+  // the registration tab.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('signin') === '1') setMode('login')
+  }, [])
 
   // register fields
   const [name, setName] = useState('')
@@ -469,6 +477,9 @@ export default function Landing() {
           ))}
         </div>
       </section>
+
+      {/* ===== Member stories: approved submissions from the wall (Task 219) ===== */}
+      <MemberTestimonials />
 
       {/* ===== Done-for-you work: one line — the catalogue lives inside the app ===== */}
       <section id="services" className="rounded-2xl border bg-card p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">

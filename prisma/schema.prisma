@@ -14,6 +14,7 @@ model User {
   email            String    @unique
   passwordHash     String
   name             String
+  testimonials     Testimonial[]
   businessName     String?
   industry         String?
   city             String?
@@ -534,6 +535,27 @@ model Invoice {
 }
 
 // ============ EMAIL (user's own Gmail SMTP) ============
+
+// Task 219 (owner): members tell their story, the desk approves, the doors and
+// the landing show the approved wall. Nothing renders publicly before a human
+// yes — the Task 213 law ("no invented testimonials") is enforced by the
+// approved flag itself: only rows a human approved are ever served.
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String // who said it, as they want it shown
+  business  String? // their business or role, optional
+  location  String? // town / city, optional
+  body      String // the story itself, capped at the API
+  rating    Int      @default(5) // 1..5 stars
+  refSlug   String? // which door it came from (null = main site)
+  userId    String? // set when a logged-in member submitted it
+  approved  Boolean  @default(false) // public only after a human yes
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([approved, refSlug])
+}
 
 model EmailLog {
   id         String    @id @default(cuid())

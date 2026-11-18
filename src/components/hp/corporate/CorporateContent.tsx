@@ -1,8 +1,21 @@
-import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature, Zap } from 'lucide-react'
+import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature, Zap, MessageSquareQuote, LogIn, Star } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
 import CorporateSignupForm from '@/components/hp/CorporateSignupForm'
 import CorporateAccessGate from '@/components/hp/CorporateAccessGate'
 import CorporateCalculator from '@/components/hp/CorporateCalculator'
+import TestimonialForm from '@/components/hp/TestimonialForm'
+
+// Approved testimonial rows the page's server component fetched (Task 219).
+// Only human-approved rows ever reach this prop — the wall cannot show a
+// pending story.
+export type WallRow = {
+  id: string
+  name: string
+  business: string | null
+  location: string | null
+  body: string
+  rating: number
+}
 
 // Task 208: the corporate content, shared by the generic door (/corporate) and
 // every strategist door (/corporate/<slug>). Laws carried over from Task 207:
@@ -118,7 +131,7 @@ function trust(partner?: Strategist) {
   return cards
 }
 
-export default function CorporateContent({ partner }: { partner?: Strategist }) {
+export default function CorporateContent({ partner, testimonials = [] }: { partner?: Strategist; testimonials?: WallRow[] }) {
   return (
     <div className="max-w-3xl mx-auto px-6 py-14 space-y-12">
       <header className="space-y-4">
@@ -177,6 +190,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             ['#how', 'How it works'],
             ['#maths', 'The maths'],
             ['#trust', 'Why us'],
+            ['#stories', 'Stories'],
             ['#claim', 'Claim your credit'],
           ].map(([href, label]) => (
             <a
@@ -188,6 +202,16 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             </a>
           ))}
         </nav>
+        {/* Task 219 (owner): the door never dead-ends again — clients of the
+            room log in at /app, which is the workspace on every host, this
+            domain included. */}
+        <p className="text-sm text-muted-foreground flex items-center gap-2">
+          <LogIn className="h-4 w-4 text-brand" />
+          Already have an account?{' '}
+          <a href="/app?signin=1" className="text-brand underline underline-offset-2 font-medium">
+            Sign in here
+          </a>
+        </p>
       </header>
 
       {partner && (
@@ -292,6 +316,46 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           with a timestamped audit certificate. Business contact data is handled under POPIA and any
           listed business can opt out in one click, so the pipeline you buy stays clean.
         </p>
+      </section>
+
+      {/* Task 219 (owner): the story wall. Only human-approved submissions
+          render here (the server component passes approved rows only), and the
+          form underneath adds new ones — nothing goes live before the desk's
+          yes in the exec dashboard. Task 213's "no invented testimonials" law
+          is enforced by the approved flag itself. */}
+      <section id="stories" className="space-y-4 scroll-mt-6">
+        <h2 className="font-display text-2xl flex items-center gap-2">
+          <MessageSquareQuote className="h-5 w-5 text-brand" /> Stories from the room
+        </h2>
+        {testimonials.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {testimonials.map((t) => (
+              <figure key={t.id} className="rounded-2xl border border-border bg-card p-5 space-y-2 flex flex-col">
+                <div className="flex gap-0.5" aria-label={`Rated ${t.rating} out of 5`}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star key={i} className={`h-3.5 w-3.5 ${i <= t.rating ? 'fill-brand text-brand' : 'text-muted-foreground/40'}`} />
+                  ))}
+                </div>
+                <blockquote className="text-sm leading-relaxed">“{t.body}”</blockquote>
+                <figcaption className="mt-auto text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{t.name}</span>
+                  {[t.business, t.location].filter(Boolean).length > 0 && (
+                    <> · {[t.business, t.location].filter(Boolean).join(', ')}</>
+                  )}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No stories on the wall yet. Worked with us before? Be the first below — the room reads
+            every story before it goes live.
+          </p>
+        )}
+        <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+          <p className="text-sm font-semibold">Add your story</p>
+          <TestimonialForm door={partner?.slug} />
+        </div>
       </section>
 
       <section id="who" className="space-y-3 scroll-mt-6">

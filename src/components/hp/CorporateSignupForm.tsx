@@ -46,9 +46,13 @@ export default function CorporateSignupForm({ slug, creditRands = 550 }: { slug:
       })
       const j = (await res.json().catch(() => null)) as { error?: string } | null
       if (res.ok) {
-        // The session cookie is set by the API. Land in the app.
+        // The session cookie is set by the API. Land in the app — at /app,
+        // NOT at '/': on the strategist's own domain (app.<brand>) the root
+        // serves the marketing door, so '/' bounced a fresh member straight
+        // back to the page they signed up from (owner, Task 219). /app is the
+        // workspace on every host, main domain and partner domains alike.
         setState('done')
-        setTimeout(() => { window.location.href = '/' }, 1200)
+        setTimeout(() => { window.location.href = '/app' }, 2000)
         return
       }
       setError(j?.error || 'Something went wrong on our side. Try again in a moment.')
@@ -61,12 +65,21 @@ export default function CorporateSignupForm({ slug, creditRands = 550 }: { slug:
 
   if (state === 'done') {
     return (
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center space-y-2">
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center space-y-3">
         <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
         <p className="font-semibold">Account open. Your R{creditRands} credit is loaded.</p>
         <p className="text-sm text-muted-foreground">
-          Taking you straight in — your first verified leads are one search away.
+          Taking you straight in — your first verified leads are one search away. The welcome email
+          with your account details is on its way too.
         </p>
+        {/* The manual door: if the auto-redirect stalls (slow network, popup
+            blocker, closed tab), one tap still lands in the workspace. */}
+        <a
+          href="/app"
+          className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          Open your app now
+        </a>
       </div>
     )
   }

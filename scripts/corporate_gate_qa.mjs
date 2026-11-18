@@ -7,9 +7,16 @@
 //   - partner door: open "no credit card" signup, whitelabel (0 HustlePortal
 //     visible — <script> stripped so JSON-LD never masquerades as copy)
 //   - every gated surface: wrong or missing key = indistinguishable 404
-// Read-only by design: no accounts, no applications, no emails.
+//   - Task 219: /app reachable on every host (the funnel end + login entry),
+//     the door links it, and the testimonial wall obeys the approval law —
+//     a submitted story stays hidden until the desk (the internal ops exec
+//     seat) approves it, then it shows on the wall and the door, then the
+//     suite deletes it (self-cleaning; the only side effects are one desk
+//     notification mail and a rate-limit hit).
+// Mostly read-only: no accounts persist, no applications, no leftover rows.
 // Run: node scripts/corporate_gate_qa.mjs [baseUrl]
 const BASE = process.argv[2] || 'https://www.hustleportal.online'
+const SUB = 'https://app.trinitydirect.co.za'
 const SLUG = 'trinitydirect'
 const DASH_KEY = 'bh-tdc-dashboard-8v3nq5'
 const ROOM_KEY = 'bh-tdc-dealroom-qx7k29'
@@ -28,16 +35,17 @@ async function raw(path, timeoutMs = 20000) {
     return { status: 0, text: String(e && e.message || e), location: null }
   }
 }
-async function post(path, body, timeoutMs = 20000) {
+async function post(path, body, cookie = '', timeoutMs = 20000) {
   try {
     const res = await fetch(BASE + path, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
       body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
     })
     const json = await res.json().catch(() => null)
-    return { status: res.status, json }
+    return { status: res.status, json, setCookie: res.headers.get('set-cookie') }
   } catch (e) {
-    return { status: 0, json: { error: String(e && e.message || e) } }
+    return { status: 0, json: { error: String(e && e.message || e) }, setCookie: null }
   }
 }
 // Visible copy only: scripts/styles stripped (JSON-LD metadata is not copy).
@@ -143,6 +151,53 @@ console.log('[7] gated APIs deny like a dead link (404, never 401/403)')
   check('docs API wrong key 404', docsWrong.status === 404, `status ${docsWrong.status}`)
   check('esign API no key 404', esignNone.status === 404, `status ${esignNone.status}`)
   check('upload API no key 404', uploadNone.status === 404, `status ${uploadNone.status}`)
+}
+
+console.log('[8] Task 219: /app is the product entry on every host, the door links it')
+{
+  const door = await raw(`/corporate/${SLUG}`)
+  check('door links Sign in at /app (login entry on his own domain)', door.text.includes('href="/app?signin=1"'), '')
+  const appPage = await raw('/app?signin=1')
+  check('/app serves the product entry on the main domain', appPage.status === 200, `status ${appPage.status}`)
+  check('/app boots to the login tab via ?signin=1', appPage.status === 200 && visible(appPage.text).includes('Sign in'), '')
+  const subDoor = await fetch(`${SUB}/`, { signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(() => '')
+  check('subdomain serves the strategist door', subDoor.includes('Claim your R550 credit'), '')
+  check('subdomain door carries the login entry too', subDoor.includes('/app?signin=1'), '')
+  const subApp = await fetch(`${SUB}/app?signin=1`, { signal: AbortSignal.timeout(20000) }).then(r => ({ s: r.status, t: r.text() })).then(async x => ({ s: x.s, t: await x.t }))
+  check('subdomain /app serves the product entry (funnel completes there)', subApp.s === 200 && subApp.t.includes('Sign in'), `status ${subApp.s}`)
+}
+
+console.log('[9] Task 219: testimonials — hidden until the desk says yes')
+{
+  const ts = Date.now()
+  const sub = await post('/api/testimonials', {
+    name: `QA Story ${ts}`, business: 'QA Enterprises', location: 'Cape Town',
+    body: `The verified leads pipeline kept our sellers selling through QA run ${ts}.`, rating: 5, slug: SLUG,
+  })
+  check('testimonial submits ok', sub.status === 200 && sub.json?.ok === true, `status ${sub.status}`)
+  const id = sub.json?.id
+  const pub = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
+  check('pending story is NOT on the public wall', Array.isArray(pub?.testimonials) && !pub.testimonials.some(t => t.id === id), '')
+  check('pending story is NOT on the door HTML', !(await raw(`/corporate/${SLUG}`)).text.includes(`QA Story ${ts}`), '')
+  // Moderation rides the internal ops exec seat (the established automation
+  // identity on prod: same gate as the boss's own, flagged internal on every
+  // roster lens). Login → approve → live → delete → gone. No db access needed.
+  const deny = await post('/api/admin/exec/testimonials', { id, action: 'approve' })
+  check('moderation is exec-only (unauthed 401)', deny.status === 401, `status ${deny.status}`)
+  const login = await post('/api/auth', { action: 'login', email: 'ops@hustleqa.example.com', password: process.env.OPS_SEAT_PASSWORD || 'OpsSeat2026!Hustle' })
+  const cookie = (login.setCookie || '').split(';')[0]
+  if (login.status === 200 && cookie) {
+    const ap = await post('/api/admin/exec/testimonials', { id, action: 'approve' }, cookie)
+    check('desk approves the story', ap.status === 200 && ap.json?.ok === true, `status ${ap.status}`)
+    const pub2 = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
+    check('approved story is live on the public wall', Array.isArray(pub2?.testimonials) && pub2.testimonials.some(t => t.id === id), '')
+    check('approved story shows on the door HTML', (await raw(`/corporate/${SLUG}`)).text.includes(`QA Story ${ts}`), '')
+    const del = await post('/api/admin/exec/testimonials', { id, action: 'delete' }, cookie)
+    const pub3 = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
+    check('desk deletes the story (suite leaves no artifact)', del.status === 200 && Array.isArray(pub3?.testimonials) && !pub3.testimonials.some(t => t.id === id), '')
+  } else {
+    check('ops exec seat available for the moderation leg', false, `status ${login.status} cookie=${!!cookie}`)
+  }
 }
 
 console.log(`\n==== CORPORATE GATE: ${pass} PASS / ${fail} FAIL ====`)

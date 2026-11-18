@@ -4,6 +4,7 @@ import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import CorporateContent from '@/components/hp/corporate/CorporateContent'
 import { STRATEGISTS, getStrategist, whitelabelMeta } from '@/lib/corporate'
 import { whitelabelJsonLd } from '@/lib/jsonld'
+import { db } from '@/lib/db'
 
 // Task 208: the strategist doors. /corporate/trinitydirect is the branded
 // version of the corporate offer for Trinity Direct Consortium (Pty) Ltd:
@@ -17,6 +18,12 @@ import { whitelabelJsonLd } from '@/lib/jsonld'
 export function generateStaticParams() {
   return STRATEGISTS.map((s) => ({ slug: s.slug }))
 }
+
+// Task 219: the story wall reads the live testimonial table, so the door
+// renders per request — a story the desk approves appears on the next view,
+// not on the next deploy. (Params alone would let Next prerender this page
+// with the wall frozen at build time.)
+export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
@@ -36,6 +43,15 @@ export default async function StrategistDoor({ params }: { params: Promise<{ slu
   const { slug } = await params
   const partner = getStrategist(slug)
   if (!partner) notFound()
+  // Task 219: the door's story wall — approved testimonials submitted through
+  // THIS door only. The approved flag is the human yes; nothing pending ever
+  // reaches the render.
+  const testimonials = await db.testimonial.findMany({
+    where: { approved: true, refSlug: slug },
+    orderBy: { createdAt: 'desc' },
+    take: 6,
+    select: { id: true, name: true, business: true, location: true, body: true, rating: true },
+  })
   return (
     <CorporateShell footer={false}>
       {/* Whitelabel structured data: the strategist IS the organization here. */}
@@ -44,7 +60,7 @@ export default async function StrategistDoor({ params }: { params: Promise<{ slu
         dangerouslySetInnerHTML={{ __html: JSON.stringify(whitelabelJsonLd(partner)) }}
       />
       <main className="min-h-screen bg-background">
-        <CorporateContent partner={partner} />
+        <CorporateContent partner={partner} testimonials={testimonials} />
       </main>
     </CorporateShell>
   )

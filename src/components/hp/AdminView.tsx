@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import ExecTestimonials from './ExecTestimonials'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -2796,6 +2797,10 @@ export default function AdminView() {
           <RefreshCw className="h-4 w-4 mr-1" /> Refresh
         </Button>
       </div>
+
+      {/* Task 219: testimonial moderation — the desk's yes/no over what the
+          doors and the landing may show. Pending first. */}
+      <ExecTestimonials />
 
       {/* KPIs */}
       {!k ? (
