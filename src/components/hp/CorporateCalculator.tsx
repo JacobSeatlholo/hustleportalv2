@@ -8,8 +8,9 @@
 // maths and the copy can never drift apart.
 // Task 216 law (offer asymmetry): the free-lead maths ride the door. The
 // strategist door counts its R550 credit as five free leads; the generic
-// door's direct maths assume none, because the R99 direct credit does not
-// cover a full R110 lead — and the note says where the five come from.
+// door's direct maths assume none, because the R120 access-code credit (Task
+// 217) does not cover a full R110 lead either — and the note says where the
+// five come from.
 
 import { useMemo, useState } from 'react'
 import { Calculator } from 'lucide-react'
@@ -84,7 +85,7 @@ export default function CorporateCalculator({ partner = false }: { partner?: boo
           Flat R110 per qualified lead reveal. Unverified leads are never charged.{' '}
           {partner
             ? 'Your R550 starting credit is applied at setup, before you spend a cent.'
-            : 'The R550 five lead credit is the strategist door credit; direct applications carry the R99 welcome, applied at setup.'}
+            : 'The R550 five lead credit is the strategist door credit; opening with an access code carries the R120 code credit, applied at setup.'}
         </p>
       </div>
     </section>

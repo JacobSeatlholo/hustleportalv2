@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
   const teamSize = clean(body.teamSize, 20)
   const industry = clean(body.industry, 80)
   const leadsNeeded = clean(body.leadsNeeded, 60)
+  // Task 217 (owner): the desk already knows where the office operates.
+  const location = clean(body.location, 80)
   const message = clean(body.message, 600)
   const refSlugRaw = clean(body.refSlug, 60)
   const refSlug = refSlugRaw && getStrategist(refSlugRaw) ? refSlugRaw : null
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
   if (!email || !EMAIL_RE.test(email)) errors.push('A working email address is required.')
   if (!industry) errors.push('Tell us what your business sells.')
   if (!leadsNeeded) errors.push('A rough monthly lead number helps us size your invitation.')
+  if (!location) errors.push('Tell us where your business operates.')
   if (errors.length) return NextResponse.json({ error: errors[0], errors }, { status: 400 })
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
     data: {
       business, contactName, email,
       phone: phone || null, teamSize: teamSize || null,
-      industry, leadsNeeded, message: message || null,
+      industry, leadsNeeded, location: location || null, message: message || null,
       source: 'application', status: 'NEW',
       refSlug,
     },
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
       `Email: ${email}`,
       phone ? `Phone: ${phone}` : '',
       teamSize ? `Team size: ${teamSize}` : '',
+      location ? `Location: ${location}` : '',
       `Industry: ${industry}`,
       `Leads needed per month: ${leadsNeeded}`,
       message ? `Message: ${message}` : '',

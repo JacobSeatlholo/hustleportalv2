@@ -106,10 +106,13 @@ export async function POST(req: NextRequest) {
           : (parseInt(await getConfig(CONFIG_KEYS.WELCOME_CREDIT_CENTS)) || 9900)
       // Task 206: frame the welcome as the OUTCOME it buys, never as a price.
       // Numbers computed, never hardcoded, so a configured credit change keeps
-      // the copy honest. Task 215: the outcome divides by the member's OWN
-      // first-reveal price (R18 legacy today, R60 on the ladder from 1 Dec) —
-      // a legacy divisor would promise five leads to a member who can only
-      // buy one.
+      // the copy honest. Task 215/217: the outcome divides by the member's OWN
+      // first-reveal price (R60 on the ladder, live 18 Nov 2026; R18 stays
+      // grandfathered for accounts before that date) — a legacy divisor would
+      // promise five leads to a member who can only buy one. On the ladder the
+      // R120 referral welcome buys exactly two verified leads, the R99 direct
+      // welcome one — the parity Kelo flagged is gone at the till, not just in
+      // the copy.
       const firstRevealCents = revealPriceFor(user.pricingTier, 1, cohortFor(user.createdAt))
       const welcomeReveals = Math.floor(welcomeCents / firstRevealCents)
       const welcomeLeftoverRands = Math.round((welcomeCents - welcomeReveals * firstRevealCents) / 100)

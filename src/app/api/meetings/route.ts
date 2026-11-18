@@ -117,6 +117,9 @@ export async function POST(req: NextRequest) {
   let member = await db.user.findUnique({ where: { email: memberEmail } })
   let accountCreated = false
   let passwordUrl: string | null = null
+  // The welcome the new account actually received, so the email states the
+  // real amount (Task 217: never hardcoded copy next to a configured grant).
+  let welcomeRands = 99
   if (!member) {
     const tempPassword = crypto.randomBytes(18).toString('base64url')
     member = await db.user.create({
@@ -136,6 +139,7 @@ export async function POST(req: NextRequest) {
     if (welcomeCents > 0) {
       await addCredits(member.id, welcomeCents, 'BONUS', `Welcome bonus, R${Math.round(welcomeCents / 100)} in lead credits`)
     }
+    welcomeRands = Math.round(welcomeCents / 100)
     await awardXp(member.id, 'SIGNUP', 50, 'Joined HustlePortal').catch(() => {})
     // Direct "choose your password" link (48 hour window), friendlier than
     // asking a brand new member to find the Forgot password button.
@@ -178,6 +182,7 @@ export async function POST(req: NextRequest) {
       memberBusiness,
       passwordUrl: passwordUrl as string,
       proposedWhen: meetingWhen(startsAt),
+      welcomeRands,
     })
     const sent = await sendSystemMail({ to: memberEmail, ...w, mascot: 'wave' })
     if (!sent.ok) welcomeError = sent.error || 'Welcome email failed'

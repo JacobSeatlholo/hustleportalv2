@@ -41,7 +41,7 @@ const FLOW_STEPS = [
 /** Truthful numbers only: every tile is a fact about the product. */
 const STAT_TILES = [
   { icon: Timer, big: '5 min', small: 'from account to your first lead search' },
-  { icon: Wallet, big: 'R99', small: 'in free lead credits when you join' },
+  { icon: Wallet, big: 'R120', small: 'in free lead credits when you join with a referral code' },
   { icon: BookOpen, big: '50+', small: 'free guides and tools in the hub' },
   { icon: BadgeCheck, big: 'R0', small: 'to start, and no card is needed' },
 ]
@@ -189,7 +189,7 @@ export default function Landing() {
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <div className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-brand" /> Proudly South African</div>
-            <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> R99 in free credits when you join</div>
+            <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> R120 in free credits with a referral code</div>
             <div className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500" /> Secure payments by Yoco</div>
             <a
               href={GOOGLE_REVIEWS_URL}
@@ -348,7 +348,7 @@ export default function Landing() {
               </Button>
               <p className="text-xs text-center text-muted-foreground">
                 {mode === 'register'
-                  ? 'Free to start. R99 in lead credits on us. No card needed.'
+                  ? 'Free to start. R120 in lead credits with a referral code, R99 without. No card needed.'
                   : 'Welcome back.'}
               </p>
               {mode === 'register' && (
@@ -543,7 +543,7 @@ export default function Landing() {
             <div className="md:col-span-3 rounded-xl border p-4 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Leads today</div>
-                <div className="text-[10px] rounded-full bg-brand/15 text-brand px-2 py-0.5 font-semibold">Credits R140</div>
+                <div className="text-[10px] rounded-full bg-brand/15 text-brand px-2 py-0.5 font-semibold">Credits R120</div>
               </div>
               {[
                 { name: 'Lerato’s Kitchen', city: 'Soweto' },
@@ -557,7 +557,7 @@ export default function Landing() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] hidden sm:inline-flex items-center gap-1 text-emerald-500 font-medium"><BadgeCheck className="h-3 w-3" /> Verified</span>
-                    <span className="text-[10px] rounded-md bg-brand text-black font-semibold px-2 py-1">Reveal R18</span>
+                    <span className="text-[10px] rounded-md bg-brand text-black font-semibold px-2 py-1">Reveal R60</span>
                   </div>
                 </div>
               ))}

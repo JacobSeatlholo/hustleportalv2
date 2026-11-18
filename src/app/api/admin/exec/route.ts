@@ -108,6 +108,7 @@ export async function GET() {
     select: {
       id: true, name: true, email: true, businessName: true, city: true, industry: true,
       role: true, platformAdmin: true, accountStatus: true, suspendedAt: true, createdAt: true,
+      corporatePartner: true,
       wallet: { select: { balance: true } },
       subscription: {
         select: { plan: true, status: true, billingCycle: true, amountCents: true, renewsAt: true, npoNumber: true },
@@ -142,6 +143,10 @@ export async function GET() {
       isAdmin: u.role === 'ADMIN' || u.platformAdmin,
       isQa: isNoiseEmail(u.email),
       isInternal: isInternalEmail(u.email) && !isProbeEmail(u.email),
+      // Task 217: the strategist door a corporate signup came through — the
+      // newest-members spotlight badges it ("trinitydirect") so the boss sees
+      // Kelo's link working at a glance.
+      corporatePartner: u.corporatePartner,
       walletCents: u.wallet?.balance ?? 0,
       plan: sub ? sub.plan : null,
       subStatus: sub ? (subLive ? 'ACTIVE' : sub.status === 'ACTIVE' ? 'PAST_DUE' : sub.status) : 'NONE',

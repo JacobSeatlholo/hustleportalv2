@@ -77,6 +77,7 @@ interface RosterRow {
   suspendedAt: string | null
   isAdmin: boolean
   isQa: boolean
+  corporatePartner: string | null
   walletCents: number
   plan: string | null
   subStatus: string
@@ -905,6 +906,7 @@ function ClientSheet({ id, onClose, onChanged, onPauseRequest }: {
                         id: c.id, name: c.name, email: c.email, businessName: c.businessName, city: c.city,
                         industry: c.industry, joinedAt: c.createdAt, accountStatus: c.accountStatus,
                         suspendedAt: c.suspendedAt, isAdmin: c.isAdmin, isQa: isProbeEmail(c.email) || isInternalEmail(c.email), walletCents: c.wallet?.balance ?? 0,
+                        corporatePartner: null,
                         plan: c.subscription?.plan ?? null, subStatus: c.subStatus, subCycle: c.subscription?.billingCycle ?? null,
                         subAmountCents: c.subscription?.amountCents ?? 0, renewsAt: c.subscription?.renewsAt ?? null,
                         npoNumber: c.subscription?.npoNumber ?? null,
@@ -2775,7 +2777,7 @@ export default function AdminView() {
       if (filter === 'PAYING' && u.subStatus !== 'ACTIVE') return false
       if (filter === 'NOPLAN' && u.plan) return false
       if (!needle) return true
-      return [u.name, u.email, u.businessName, u.city, u.industry]
+      return [u.name, u.email, u.businessName, u.city, u.industry, u.corporatePartner]
         .some((f) => (f || '').toLowerCase().includes(needle))
     })
   }, [roster, q, filter, showQa])
@@ -2862,6 +2864,9 @@ export default function AdminView() {
                   <div className="text-sm font-medium truncate">
                     {u.name}{u.businessName ? <span className="text-muted-foreground font-normal"> · {u.businessName}</span> : ''}
                     {u.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[9px] ml-1.5">exec</Badge>}
+                    {u.corporatePartner && (
+                      <Badge className="bg-brand text-black hover:bg-brand text-[9px] ml-1.5">{u.corporatePartner}</Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{u.email}{u.city ? ` · ${u.city}` : ''}</div>
                 </div>
@@ -2926,6 +2931,9 @@ export default function AdminView() {
                   <div className="text-sm font-medium truncate">
                     {u.name}{u.businessName ? <span className="text-muted-foreground font-normal"> · {u.businessName}</span> : ''}
                     {u.isAdmin && <Badge className="bg-sidebar text-white hover:bg-sidebar text-[9px] ml-1.5">exec</Badge>}
+                    {u.corporatePartner && (
+                      <Badge className="bg-brand text-black hover:bg-brand text-[9px] ml-1.5">{u.corporatePartner}</Badge>
+                    )}
                     {u.isQa && <Badge variant="outline" className="text-[9px] ml-1.5 border-muted-foreground/30 text-muted-foreground">QA</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{u.email}</div>

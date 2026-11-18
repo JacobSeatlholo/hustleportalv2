@@ -19,9 +19,12 @@ import { resolveAccessCode, consumeAccessCode } from '@/lib/corporateAccess'
 // via the exec wallet tools, and puts the managed rate R110 on the account.
 // Task 216 law (offer asymmetry): the credit follows the door. A claim that
 // attributes to a strategist (slug context) carries the R550 exact-five
-// credit; a direct claim (no slug) carries the R99 welcome. The email states
-// which one applies so the desk never has to guess. No self-serve magic, no
-// auto-grants — money moves by human hands.
+// credit. Task 217 (owner, Trinity Direct verdict): an access-code claim
+// without strategist attribution carries the R120 code credit, so the ladder
+// reads R550 strategist > R120 code > R99 bare fallback — circumvention lands
+// on a cheaper rung, never a better one. The email states which one applies
+// so the desk never has to guess. No self-serve magic, no auto-grants — money
+// moves by human hands.
 
 export const maxDuration = 15
 
@@ -109,12 +112,15 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Task 216: the credit follows the door — R550 only when the claim
-  // attributes to a strategist; direct claims carry the R99 welcome.
-  const creditRands = refSlug ? 550 : 99
+  // Task 216/217: the credit follows the door, on a three-rung ladder — R550
+  // only when the claim attributes to a strategist; an access-code claim
+  // without strategist attribution carries the R120 code credit (the owner's
+  // call at the Trinity Direct verdict); the R99 welcome stays the bare
+  // fallback (no code ever touched the claim).
+  const creditRands = refSlug ? 550 : access.kind ? 120 : 99
   const creditLine = refSlug
     ? `Referred by: ${refStrategist!.company} (${refStrategist!.slug})${refMember ? `, sourced by member code ${refMember}` : ''}${access.kind === 'minted' && access.label ? ` — access code "${access.label}"` : ''}\nReferral law: at the R110 corporate rate, R50 per managed lead is the Consortium's share${refMember ? ' (R25 strategist / R25 member split)' : ''}.`
-    : 'Direct claim: no strategist attribution, so the R99 direct welcome credit applies. The R550 five lead credit is the strategist door credit — upgrade by owner decision only.'
+    : `Access-code claim${access.kind === 'minted' && access.label ? ` ("${access.label}")` : ''}: no strategist attribution, so the R120 code credit applies. The R550 five lead credit is the strategist door credit — upgrade by owner decision only.`
   const notify = await sendSystemMail({
     to: TEAM_INBOX,
     subject: `Corporate claim: ${business}${refSlug ? ` via ${refStrategist!.company}` : ''} (R${creditRands} credit)`,
@@ -134,7 +140,7 @@ export async function POST(req: NextRequest) {
       `Claim id: ${row.id}`,
       refSlug
         ? 'Next step: onboard by hand (account setup, R550 starting credit = 5 managed leads, managed rate R110).'
-        : 'Next step: onboard by hand (account setup, R99 direct starting credit, managed rate R110).',
+        : 'Next step: onboard by hand (account setup, R120 access-code starting credit, managed rate R110).',
     ].filter((l) => l !== '').join('\n'),
     headline: refSlug ? 'Corporate claim (strategist)' : 'Corporate claim',
     title: `${business} wants in`,

@@ -12,12 +12,15 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 //
 // Laws this surface obeys:
 //  - Truthful numbers only: the R550 exact-five credit is the strategist door
-//    credit, the R99 welcome is the direct credit, R110 managed rate and
-//    R250+ agency anchor are the established facts.
+//    credit, the R120 code credit is this door's opening credit, the R99
+//    welcome is the bare-application fallback, R110 managed rate and R250+
+//    agency anchor are the established facts.
 //  - Task 216 offer-asymmetry law (boss): this door's offer must read
-//    DIFFERENT from a strategist door, by design — direct claims carry the
-//    R99 welcome and the page routes the R550 to the strategist doors, so a
-//    prospect sees the strategist's link as the advantage it is.
+//    DIFFERENT from a strategist door, by design — code-backed claims carry
+//    the R120 welcome and the page routes the R550 to the strategist doors, so
+//    a prospect sees the strategist's link as the advantage it is. Task 217
+//    (boss, at the Trinity Direct verdict) makes the ladder explicit: every
+//    circumvention ends on a cheaper rung, never a better one.
 //  - The managed-rate law: R110 shows against the agency market, never
 //    beside the self-serve reveal prices.
 //  - Boss voice: no dashes in the copy.
@@ -27,7 +30,7 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 export const metadata: Metadata = {
   title: 'HustlePortal Corporate — verified leads for corporate sales floors',
   description:
-    'Done for you, verified before a cent moves. R550 in starting credit through authorized brand strategists, R99 when you apply directly, at one flat R110 managed rate.',
+    'Done for you, verified before a cent moves. R550 in starting credit through authorized brand strategists, R120 when you open with an access code, at one flat R110 managed rate.',
 }
 
 export default function CorporatePage() {

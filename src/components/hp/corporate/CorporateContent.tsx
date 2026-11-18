@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature } from 'lucide-react'
+import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature, Zap } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
 import CorporateSignupForm from '@/components/hp/CorporateSignupForm'
 import CorporateAccessGate from '@/components/hp/CorporateAccessGate'
@@ -14,23 +14,26 @@ import CorporateCalculator from '@/components/hp/CorporateCalculator'
 // the ONE client-facing calculator the owner asked for: pricing maths only
 // (R110 vs the R250+ agency anchor), never commission economics.
 // Task 216 law (boss, offer asymmetry): the two doors carry DIFFERENT credits
-// by design, so nobody circumvents a strategist link. The R550 exact-five
-// credit is the strategist door credit. Direct applications on the generic
-// door carry the R99 welcome instead, and the page says so plainly — the
-// R550 stays visible so the strategist door reads as the advantage it is.
+// by design, so nobody circumvents a strategist link. Task 217 (boss, at the
+// Trinity Direct verdict) makes the ladder three rungs and states it plainly:
+// R550 exact-five is the strategist door credit, R120 is the access-code
+// credit on this door, R99 is the bare-application welcome. Every circumvention
+// ends on a cheaper rung, never a better one. The strategist door also carries
+// the real searches sweetener: DFY accounts get a 200/day engine allowance,
+// enforced in the scan gate (leadpool), so the tile states a fact, not a hope.
 function tiles(partner?: Strategist) {
   return partner
     ? [
         { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
         { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
+        { icon: Zap, big: '200', small: 'lead searches a day, on us — your own hunting between managed batches' },
         { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
-        { icon: ShieldCheck, big: 'R0', small: 'to claim your credit, and no card is needed' },
       ]
     : [
         { icon: Wallet, big: 'R550', small: 'in starting credit when your account opens through an authorized brand strategist' },
         { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
         { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
-        { icon: ShieldCheck, big: 'R99', small: 'in starting credit when you apply directly on this page' },
+        { icon: ShieldCheck, big: 'R120', small: 'in starting credit when you open with an access code' },
       ]
 }
 
@@ -43,7 +46,7 @@ function steps(partner?: Strategist) {
       title: 'Claim your credit',
       body: partner
         ? 'Fill in the form below. Your account opens on the spot and the R550 starting credit lands in your wallet before you spend a cent.'
-        : 'Enter your access code or apply below. Our corporate team sets your account up by hand and applies the R99 direct starting credit before you spend a cent. Opened through an authorized brand strategist, the R550 five lead credit applies instead.',
+        : 'Enter your access code or apply below. Our corporate team sets your account up by hand and applies the R120 starting credit when you open with a code. Opened through an authorized brand strategist, the R550 five lead credit applies instead.',
     },
     {
       n: '2',
@@ -71,7 +74,8 @@ const WHO = [
 // verification-before-payment is enforced by the billing code, the flat rate
 // is the contractual rate, the e-sign engine is our own (Task 212) and the
 // POPIA opt-out is the public /remove-listing flow. No invented testimonials.
-// Task 216: the credit card is door-aware (R550 strategist door, R99 direct).
+// Task 216/217: the credit card is door-aware (R550 strategist door, R120
+// access-code credit on the generic door).
 function trust(partner?: Strategist) {
   const cards = [
     {
@@ -103,7 +107,7 @@ function trust(partner?: Strategist) {
       : {
           icon: BadgeCheck,
           title: 'The credit follows the door',
-          body: 'Apply directly here and the R99 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the R550 credit, five qualified lead reveals, applies instead. No card is needed either way.',
+          body: 'Open with an access code and the R120 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the R550 credit, five qualified lead reveals, applies instead. No card is needed either way.',
         },
     {
       icon: Users,
@@ -141,7 +145,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           details of real businesses, delivered into your pipeline at one flat managed rate.
           {partner
             ? ' The R550 starting credit lands in your wallet the moment your account opens.'
-            : ' Your starting credit follows the door: R550 through an authorized brand strategist, R99 when you apply directly on this page.'}
+            : ' Your starting credit follows the door: R550 through an authorized brand strategist, R120 when you open with an access code.'}
         </p>
         {partner ? (
           <>
@@ -255,7 +259,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
               flat contractual rate, no ladder, no promos.
               {partner
                 ? ' The R550 starting credit is exactly five managed leads, on us. The rate is the rate.'
-                : ' The R550 starting credit is exactly five managed leads, and it is the strategist door credit; the direct door carries the R99 welcome. The rate is the rate.'}
+                : ' The R550 starting credit is exactly five managed leads, and it is the strategist door credit; the direct door carries the R120 access-code credit. The rate is the rate.'}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-5">
@@ -321,8 +325,8 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             <p className="text-sm text-muted-foreground">
               This door is locked on purpose. Corporate accounts are opened by our team on a written
               agreement, so entry needs an access code from one of our team members, or an approved
-              invitation application. Direct onboarding carries the R99 starting credit; the R550
-              five lead credit is the strategist door benefit, and it lands on accounts opened
+              invitation application. Opening with an access code carries the R120 starting credit; the
+              R550 five lead credit is the strategist door benefit, and it lands on accounts opened
               through an authorized brand strategist.
             </p>
             <CorporateAccessGate />

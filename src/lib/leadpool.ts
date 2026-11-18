@@ -27,6 +27,7 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { planState } from '@/lib/limits'
+import { isPremiumTier } from '@/lib/levels'
 import { suppressedNameKeys, suppressedOsmIds } from '@/lib/suppression'
 import { companyKeyFor, cachePutContact } from '@/lib/leadlookup'
 import { deadEmailMap } from '@/lib/reach'
@@ -198,6 +199,11 @@ function seenAgo(d: Date): string {
 const SCAN_COOLDOWN_MS = 12_000
 const DAILY_SCAN_CAP_FREE = 25
 const DAILY_SCAN_CAP_PAID = 100
+// Task 217 (owner, Trinity Direct verdict): the DFY sweetener is real, not
+// copy. A corporate account opened through a strategist door gets a doubled
+// engine allowance, enforced here, so the door tile "200 lead searches a day"
+// states an enforced fact.
+const DAILY_SCAN_CAP_DFY = 200
 
 export type ScanGate = { ok: true } | { ok: false; reason: 'cooldown'; waitSeconds: number } | { ok: false; reason: 'daily' }
 
@@ -215,7 +221,10 @@ export async function checkScanAllowance(userId: string): Promise<ScanGate> {
     if (waitMs > 0) return { ok: false, reason: 'cooldown', waitSeconds: Math.ceil(waitMs / 1000) + 1 }
   }
   const { paid } = await planState(userId)
-  const cap = paid ? DAILY_SCAN_CAP_PAID : DAILY_SCAN_CAP_FREE
+  // The DFY allowance outranks the plan ladder: a corporate account rides the
+  // 200/day engine cap whether or not it carries a B2C subscription.
+  const seller = await db.user.findUnique({ where: { id: userId }, select: { pricingTier: true } })
+  const cap = isPremiumTier(seller?.pricingTier) ? DAILY_SCAN_CAP_DFY : paid ? DAILY_SCAN_CAP_PAID : DAILY_SCAN_CAP_FREE
   // True SAST midnight in UTC: read today's date off the SAST clock (now minus
   // 2h), floor to that day, then shift the floor back 2h into UTC. The old
   // shortcut skipped the final shift, so the window actually refilled at

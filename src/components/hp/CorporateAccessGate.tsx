@@ -24,7 +24,7 @@ export default function CorporateAccessGate() {
   // initializer also runs during SSR where window does not exist) ---
   // Task 216: the resolution rides with the unlock, so the claim form can
   // state the door-true credit (a slug-attributed code carries the R550
-  // strategist credit; a bare code defaults to the R99 direct credit).
+  // strategist credit; a bare code carries the R120 code credit, Task 217).
   const [code, setCode] = useState('')
   const [checking, setChecking] = useState(false)
   const [codeError, setCodeError] = useState('')
@@ -35,7 +35,9 @@ export default function CorporateAccessGate() {
   }, [])
 
   // --- application state ---
-  const [app, setApp] = useState({ business: '', contactName: '', email: '', phone: '', teamSize: '', industry: '', leadsNeeded: '', message: '' })
+  // Task 217 (owner): location joins the survey, so the desk already knows
+  // where the office operates before the first conversation.
+  const [app, setApp] = useState({ business: '', contactName: '', email: '', phone: '', teamSize: '', location: '', industry: '', leadsNeeded: '', message: '' })
   const [appState, setAppState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [appError, setAppError] = useState('')
 
@@ -158,6 +160,7 @@ export default function CorporateAccessGate() {
             <input className={inputCls} placeholder="Your name" value={app.contactName} onChange={(e) => set('contactName', e.target.value)} maxLength={80} required />
             <input className={inputCls} type="email" placeholder="Work email" value={app.email} onChange={(e) => set('email', e.target.value)} maxLength={160} required />
             <input className={inputCls} type="tel" placeholder="Phone (optional)" value={app.phone} onChange={(e) => set('phone', e.target.value)} maxLength={30} />
+            <input className={inputCls} placeholder="Where is your business? (city or area)" value={app.location} onChange={(e) => set('location', e.target.value)} maxLength={80} required />
             <input className={inputCls} placeholder="What does your business sell?" value={app.industry} onChange={(e) => set('industry', e.target.value)} maxLength={80} required />
             <input className={inputCls} placeholder="Leads needed per month (e.g. 50)" value={app.leadsNeeded} onChange={(e) => set('leadsNeeded', e.target.value)} maxLength={60} required />
           </div>

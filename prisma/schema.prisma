@@ -1158,6 +1158,7 @@ model CorporateLead {
   teamSize    String? // "1 to 5 sellers" | "6 to 20 sellers" | "21 to 50 sellers" | "More than 50"
   industry    String? // what they sell / who they sell to (invitation survey, Task 215)
   leadsNeeded String? // rough monthly lead need (invitation survey, Task 215)
+  location    String? // city or area the business operates in (invitation survey, Task 217)
   message     String?
   source      String   @default("corporate-lp") // corporate-lp | strategist-lp | application | other
   status      String   @default("NEW") // NEW | CONTACTED | WON | LOST

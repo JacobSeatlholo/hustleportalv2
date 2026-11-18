@@ -58,13 +58,14 @@ console.log('[1] generic corporate door (the locked one)')
   check('generic door offers the locked paths (code or application)', d.status === 200 && (vis.toLowerCase().includes('access code') || vis.toLowerCase().includes('apply')), '')
   check('generic door keeps the BH voice (HustlePortal visible)', d.status === 200 && vis.includes('HustlePortal'), '')
   check('trust footer stayed off the corporate door (no entity block)', d.status === 200 && !vis.includes('Cape Town'), '')
-  // Task 216 offer-asymmetry law (boss): the generic door carries the R99
-  // direct credit, routes the R550 to the strategist doors, and never
-  // promises the R550 as a direct claim — the strategist link must read as
-  // the advantage it is.
-  check('offer asymmetry: R99 direct credit visible', d.status === 200 && vis.includes('R99'), `${count(vis, 'R99')} hits`)
+  // Task 216/217 offer-asymmetry law (boss): the generic door carries the
+  // R120 access-code credit, routes the R550 to the strategist doors, and
+  // never promises the R550 as a direct claim — every circumvention lands on
+  // a cheaper rung, never a better one.
+  check('offer asymmetry: R120 code credit visible', d.status === 200 && vis.includes('R120'), `${count(vis, 'R120')} hits`)
   check('offer asymmetry: R550 routed to the brand strategist', d.status === 200 && vis.includes('R550') && vis.toLowerCase().includes('strategist'), '')
   check('offer asymmetry: no direct R550 claim promise', d.status === 200 && !/claim (your|my) R550/i.test(vis), '')
+  check('Task 217: apply survey asks where the business operates', d.status === 200 && d.text.includes('Where is your business?'), '')
 }
 
 console.log('[2] partner door (the open one)')
@@ -80,6 +81,9 @@ console.log('[2] partner door (the open one)')
   check('door calculator shows the corporate rate (R110)', d.status === 200 && vis.includes('R110'), `${count(vis, 'R110')} hits`)
   check('partner logo wired', d.status === 200 && d.text.includes('/corporate/trinitydirect-logo.jpg'), '')
   check('trust footer stayed off the partner door (no entity block)', d.status === 200 && !vis.includes('Cape Town'), '')
+  // Task 217 (boss): the sweetener is a real, enforced fact — DFY accounts get
+  // a 200/day engine allowance in the scan gate, and the door states it.
+  check('Task 217 sweetener: 200 lead searches a day stated', d.status === 200 && vis.includes('200') && vis.toLowerCase().includes('lead searches a day'), '')
 }
 
 console.log('[3] unknown slug = a dead link, nothing else')

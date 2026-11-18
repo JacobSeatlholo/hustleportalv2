@@ -121,12 +121,15 @@ function first(name: string): string {
 
 // ---------------------------------------------------------------- emails
 
-/** Welcome email for an account the team just set up. Explains the password link, the R99 credit, and Google Calendar. */
+/** Welcome email for an account the team just set up. Explains the password
+ *  link, the loaded credit (Task 217: passed in, never hardcoded, so the copy
+ *  follows whatever the welcome config actually granted), and Google Calendar. */
 export function welcomeEmail(info: {
   memberName: string
   memberBusiness?: string | null
   passwordUrl: string
   proposedWhen?: string | null
+  welcomeRands?: number
 }): { subject: string; body: string } {
   const f = first(info.memberName)
   const subject = `Welcome to HustlePortal, ${f}, choose your password`
@@ -141,7 +144,7 @@ export function welcomeEmail(info: {
     'Open the link, pick a password, and you are in. If the link expires, the "Forgot password" button on the sign in page gives you a fresh one.',
     '',
     'WHAT IS ALREADY WAITING FOR YOU',
-    'Your wallet is loaded with R99 in lead credits. That is real finding power: the AI Lead Finder pulls verified businesses around you, ready to call. If a lead cannot be verified, you are not charged for it.',
+    `Your wallet is loaded with R${info.welcomeRands ?? 99} in lead credits. That is real finding power: the AI Lead Finder pulls verified businesses around you, ready to call. If a lead cannot be verified, you are not charged for it.`,
     '',
     'CONNECT YOUR GOOGLE CALENDAR (two minutes)',
     '1. Sign in at ' + APP_BASE,

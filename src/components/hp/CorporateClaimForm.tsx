@@ -12,8 +12,9 @@
 // passed in and the input is skipped.
 // Task 216 law (offer asymmetry): the credit this form promises is door-true.
 // A slug-attributed code (strategist door context) carries the R550 exact-five
-// credit; a bare minted code on the generic door defaults to the R99 direct
-// credit. The claim API re-resolves server-side and states the same split.
+// credit; a bare code on the generic door carries the R120 code credit (Task
+// 217, owner's call at the Trinity Direct verdict). The claim API re-resolves
+// server-side and states the same split.
 
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Loader2, KeyRound } from 'lucide-react'
@@ -33,7 +34,7 @@ export default function CorporateClaimForm({
   accessCode?: string
   accessSlug?: string | null
 }) {
-  const creditRands = refSlug || accessSlug ? 550 : 99
+  const creditRands = refSlug || accessSlug ? 550 : 120
   const [form, setForm] = useState({ business: '', contactName: '', email: '', phone: '', teamSize: '', message: '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -212,7 +213,7 @@ export default function CorporateClaimForm({
       </button>
       <p className="text-xs text-muted-foreground text-center">
         No card needed. We set your account up personally and the credit lands before you spend a cent.
-        {creditRands === 99 ? ' The R550 five lead credit rides the strategist door.' : ''}
+        {creditRands === 120 ? ' The R550 five lead credit rides the strategist door.' : ''}
       </p>
     </form>
   )

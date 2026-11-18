@@ -32,14 +32,18 @@ export function revealPriceForLevel(level: number) {
   return level >= REVEAL_DISCOUNT_MIN_LEVEL ? DISCOUNTED_REVEAL_PRICE_CENTS : STANDARD_REVEAL_PRICE_CENTS
 }
 
-// ---- The self-serve ladder (Task 215, pricing strategy 4.1/4.2) ----
-// New accounts from 1 December 2026 pay R60 per reveal at levels 1-2 and the
+// ---- The self-serve ladder (Task 215, pricing strategy 4.1/4.2; live from
+// Task 217) ----
+// New accounts from 18 November 2026 pay R60 per reveal at levels 1-2 and the
 // price falls as the member levels up: R48 at Operator 3, R36 at Closer 4,
 // R24 at Boss 5, R15 at Tycoon 6. Accounts created before the cutoff keep the
 // launch economics permanently (R18 list, R15 at Operator 3) — nobody's money
 // shrinks, credit balances keep their exact purchasing power. The cohort is
 // DERIVED from createdAt, so no migration touches existing accounts.
-export const LADDER_START_ISO = '2026-12-01T00:00:00+02:00'
+// Task 217 (owner, at the Trinity Direct verdict): the ladder was brought
+// forward from 1 December — the R60 entry rate IS the DIY offer the main page
+// now advertises, and the R18-welcome-parity Kelo flagged dies today.
+export const LADDER_START_ISO = '2026-11-18T00:00:00+02:00'
 const LADDER_START = new Date(LADDER_START_ISO).getTime()
 export const LADDER_REVEAL_CENTS = [6000, 6000, 4800, 3600, 2400, 1500] as const
 export type PricingCohort = 'LEGACY' | 'LADDER'
