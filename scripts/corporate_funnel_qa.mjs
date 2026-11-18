@@ -108,6 +108,11 @@ if (ctrlOk) {
   check('control welcome is the R99 welcome', bal === 9900, `balance=${bal}`)
   const w = await call(ctrl, 'GET', '/api/wallet')
   check('control sees the B2C packs grid', Array.isArray(w.json?.packs) && w.json.packs.length >= 3, `packs=${(w.json?.packs || []).length}`)
+  // THE PARTNER PRIVACY LAW (owner, Task 218): the strategist dashboard may only
+  // ever show accounts opened through the strategist's own door. The control
+  // just registered directly (no door, no slug) — it must not exist on that page.
+  const priv = await fetch(`${BASE}/corporate/${SLUG}/dashboard?key=${encodeURIComponent(DASH_KEY)}`).then(r => r.text()).catch(() => '')
+  check('privacy: control signup invisible on the partner dashboard', !priv.includes(`qa-self-${ts}@bhqa.co.za`) && !priv.includes(`QA Self Serve ${ts}`), '')
 }
 
 console.log('[7] an unknown slug can never open the DFY track')
@@ -118,6 +123,10 @@ if (unkOk) {
   check('unknown slug falls back SELF_SERVE', me.json?.user?.pricingTier === 'SELF_SERVE' && me.json?.user?.corporatePartner == null, `tier=${me.json?.user?.pricingTier} partner=${me.json?.user?.corporatePartner}`)
   const bal = await balance(unk)
   check('fallback welcome is the R99 welcome, not R550', bal === 9900, `balance=${bal}`)
+  // Same privacy law for the unknown-slug path: a signup that claimed a slug the
+  // registry does not know carries no attribution, so the partner never sees it.
+  const priv2 = await fetch(`${BASE}/corporate/${SLUG}/dashboard?key=${encodeURIComponent(DASH_KEY)}`).then(r => r.text()).catch(() => '')
+  check('privacy: unknown-slug signup invisible on the partner dashboard', !priv2.includes(`qa-unknown-${ts}@bhqa.co.za`) && !priv2.includes(`QA Unknown Slug ${ts}`), '')
 }
 
 console.log('[8] cleanup — sessions closed, QA accounts left as honest dashboard artifacts')

@@ -42,12 +42,21 @@ const nextConfig: NextConfig = {
     //  - a '/:path*' rewrite would drag /_next/* and /docs/* into /corporate/*
     //    and break assets on the subdomain. Root-only keeps every asset,
     //    favicon and doc URL working under the corporate host.
+    // Task 218: the strategist's own domain. Once the DNS CNAME lands and the
+    // host is added as a domain in Vercel, app.trinitydirect.co.za serves the
+    // Trinity Direct door at its root — the strategist's brand end to end, on
+    // the partnership's own domain. Same root-only law as the corporate host.
     return {
       beforeFiles: [
         {
           source: "/",
           has: [{ type: "host", value: "corporate.hustleportal.online" }],
           destination: "/corporate",
+        },
+        {
+          source: "/",
+          has: [{ type: "host", value: "app.trinitydirect.co.za" }],
+          destination: "/corporate/trinitydirect",
         },
       ],
     };
