@@ -83,23 +83,36 @@ export function sanitizeLead(raw: unknown): ReviewLead | null {
  * Push candidates into the review queue. Idempotent by handle: anything
  * already seeded, pipelined, queued or rejected is skipped, so reruns and
  * repeat waves stay clean.
+ * Task 216 freshness-upgrade law: a queued row never blocks better evidence.
+ * When the incoming stamp carries a lastPost date that is newer than (or
+ * missing from) the stored row, the stamp moves forward — unknown and
+ * no-posts rows heal on the next sweep that sees them. Nothing ever
+ * downgrades: a probe that returns no date leaves the row untouched.
  */
-export async function submitReviewLeads(incoming: unknown[]): Promise<{ added: number; skipped: number; queueCount: number }> {
+export async function submitReviewLeads(incoming: unknown[]): Promise<{ added: number; skipped: number; queueCount: number; updated: number }> {
   const store = await loadReview()
   const pipeline = await loadPipeline()
   const seeded = new Set(XPITCH_SEED.map((l) => l.handle.toLowerCase()))
   const piped = new Set(Object.keys(pipeline.extra || {}).map((h) => h.toLowerCase()))
   let added = 0
   let skipped = 0
+  let updated = 0
   for (const raw of incoming) {
     const lead = sanitizeLead(raw)
     if (!lead) { skipped++; continue }
     const k = lead.handle.toLowerCase()
-    if (seeded.has(k) || piped.has(k) || store.queue[k] || store.rejected[k]) { skipped++; continue }
+    const queued = store.queue[k]
+    if (queued && lead.lastPost && (!queued.lastPost || lead.lastPost > queued.lastPost)) {
+      queued.fresh = lead.fresh
+      queued.lastPost = lead.lastPost
+      updated++
+      continue
+    }
+    if (seeded.has(k) || piped.has(k) || queued || store.rejected[k]) { skipped++; continue }
     store.queue[lead.handle] = lead
     added++
   }
-  if (added > 0) store.updatedAt = new Date().toISOString()
+  if (added > 0 || updated > 0) store.updatedAt = new Date().toISOString()
   await setConfig(XPITCH_REVIEW_KEY, JSON.stringify(store))
-  return { added, skipped, queueCount: Object.keys(store.queue).length }
+  return { added, skipped, queueCount: Object.keys(store.queue).length, updated }
 }

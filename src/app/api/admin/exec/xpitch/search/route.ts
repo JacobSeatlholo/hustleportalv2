@@ -149,6 +149,13 @@ function pickLatestTime(rows: unknown[], keys: string[]): number | null {
   return best
 }
 
+// Task 216: ONE time-key list for both platforms. The live provider truth
+// (freshDebug evidence, 2026-11-18): the tiktok user.videos rows carry the
+// post time in `created_at` — the old tiktok-only list (create_time,
+// createTime, timestamp) missed it, every stamp read as no-posts, and the
+// fresh-only pipeline starved while paying for freshness calls that worked.
+const TIME_KEYS = ['created_at', 'createdAt', 'createdUtc', 'create_time', 'createTime', 'timestamp']
+
 export async function POST(req: NextRequest) {
   const gate = await requireExec()
   if (!gate.ok) return gate.res
@@ -320,7 +327,7 @@ export async function POST(req: NextRequest) {
     }
     const outF = (r.body as { output?: Record<string, unknown> } | null)?.output ?? {}
     const rows = (platform === 'x' ? (outF as { posts?: unknown[] }).posts : (outF as { videos?: unknown[] }).videos) || []
-    const stamp = freshStamp(pickLatestTime(Array.isArray(rows) ? rows : [], platform === 'x' ? ['created_at', 'createdAt', 'createdUtc', 'timestamp'] : ['create_time', 'createTime', 'timestamp']))
+    const stamp = freshStamp(pickLatestTime(Array.isArray(rows) ? rows : [], TIME_KEYS))
     freshDebug.push({
       handle: c.handle,
       queriedAs: usedSecUid ? 'sec_uid' : 'handle-as-sec_uid',
@@ -359,6 +366,7 @@ export async function POST(req: NextRequest) {
     freshChecked: toCheck.length,
     freshDebug,
     added: r.added,
+    freshUpdated: r.updated,
     skipped: r.skipped,
     queueCount: r.queueCount,
     costUsd: Number(costUsd.toFixed(4)),
