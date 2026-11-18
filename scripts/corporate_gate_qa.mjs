@@ -10,9 +10,9 @@
 //   - Task 219: /app reachable on every host (the funnel end + login entry),
 //     the door links it, and the testimonial wall obeys the approval law —
 //     a submitted story stays hidden until the desk (the internal ops exec
-//     seat) approves it, then it shows on the wall and the door, then the
-//     suite deletes it (self-cleaning; the only side effects are one desk
-//     notification mail and a rate-limit hit).
+//     seat) approves it, then it shows on the main-site wall ONLY (round 2
+//     law: the doors carry no wall), then the suite deletes it (self-cleaning;
+//     the only side effects are one desk notification mail and a rate-limit hit).
 // Mostly read-only: no accounts persist, no applications, no leftover rows.
 // Run: node scripts/corporate_gate_qa.mjs [baseUrl]
 const BASE = process.argv[2] || 'https://www.hustleportal.online'
@@ -167,14 +167,14 @@ console.log('[8] Task 219: /app is the product entry on every host, the door lin
   check('subdomain /app serves the product entry (funnel completes there)', subApp.s === 200 && subApp.t.includes('Sign in'), `status ${subApp.s}`)
 }
 
-console.log('[9] Task 219: testimonials — hidden until the desk says yes')
+console.log('[9] Task 219 round 2: testimonials belong to the main site only')
 {
   const ts = Date.now()
   const sub = await post('/api/testimonials', {
     name: `QA Story ${ts}`, business: 'QA Enterprises', location: 'Cape Town',
     body: `The verified leads pipeline kept our sellers selling through QA run ${ts}.`, rating: 5, slug: SLUG,
   })
-  check('testimonial submits ok', sub.status === 200 && sub.json?.ok === true, `status ${sub.status}`)
+  check('testimonial submits ok (slug still recorded for the desk)', sub.status === 200 && sub.json?.ok === true, `status ${sub.status}`)
   const id = sub.json?.id
   const pub = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
   check('pending story is NOT on the public wall', Array.isArray(pub?.testimonials) && !pub.testimonials.some(t => t.id === id), '')
@@ -190,8 +190,13 @@ console.log('[9] Task 219: testimonials — hidden until the desk says yes')
     const ap = await post('/api/admin/exec/testimonials', { id, action: 'approve' }, cookie)
     check('desk approves the story', ap.status === 200 && ap.json?.ok === true, `status ${ap.status}`)
     const pub2 = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
-    check('approved story is live on the public wall', Array.isArray(pub2?.testimonials) && pub2.testimonials.some(t => t.id === id), '')
-    check('approved story shows on the door HTML', (await raw(`/corporate/${SLUG}`)).text.includes(`QA Story ${ts}`), '')
+    check('approved story is live on the public wall (main site)', Array.isArray(pub2?.testimonials) && pub2.testimonials.some(t => t.id === id), '')
+    // Round 2 law (owner): the doors are pure sales again — even an APPROVED
+    // story never renders on a corporate door, subdomain included.
+    const doorHtml = (await raw(`/corporate/${SLUG}`)).text
+    check('approved story does NOT render on the door', !doorHtml.includes(`QA Story ${ts}`) && !doorHtml.includes('Stories from the room'), '')
+    const subDoor = await fetch(`${SUB}/`, { signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(() => '')
+    check('subdomain door carries no story wall either', !subDoor.includes('Stories from the room') && !subDoor.includes('Add your story'), '')
     const del = await post('/api/admin/exec/testimonials', { id, action: 'delete' }, cookie)
     const pub3 = await fetch(`${BASE}/api/testimonials?slug=${SLUG}`).then(r => r.json()).catch(() => null)
     check('desk deletes the story (suite leaves no artifact)', del.status === 200 && Array.isArray(pub3?.testimonials) && !pub3.testimonials.some(t => t.id === id), '')
