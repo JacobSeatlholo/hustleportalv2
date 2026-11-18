@@ -42,7 +42,7 @@ export const PARTNER_DOCS: PartnerDoc[] = [
     // Task 214: the basename itself must be engine-free — it rides in download
     // URLs, signing sessions and the signer's page.
     base: 'Pricing_Strategy_Internal',
-    title: 'Pricing Strategy (v3, live)',
+    title: 'Pricing Strategy (v3.1, live)',
     description:
       'The internal strategy as it now stands, on Business Hustle letterhead: the executed flat R50/R60 referral law (v2\u2019s 90-day taper is superseded), the live self-serve ladder from 18 November 2026 (brought forward from 1 December by owner decision at the Trinity Direct verdict; accounts before that date keep their launch economics, R18 list and R15 at Operator, with grandfathering), the three-rung credit law R550 strategist \u2192 R120 access code \u2192 R99 bare application, the 200/day engine allowance on DFY accounts, the exact-five R550 corporate credit, the live welcome credits and packs, and the partner funnel with its Monday digest. Every figure verified against the live till on 18 November 2026.',
     tag: 'internal',

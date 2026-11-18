@@ -18,9 +18,10 @@ const MEMBER_SPLIT = 2500;     // R25 of the R50 when an enrolled member sourced
 const WELCOME_STD = 9900;      // R99
 const WELCOME_REF = 12000;     // R120 referral-joined
 const WELCOME_CORP = 55000;    // R550
-const LIST = 1800;             // R18 self-serve list
-const OP_PRICE = 1500;         // R15 at Operator level 3+
-const LADDER = [6000, 6000, 4800, 3600, 2400, 1500]; // new accounts from 1 Dec 2026, levels 1-6
+const LIST = 1800;             // R18 self-serve list (grandfathered cohort)
+const OP_PRICE = 1500;         // R15 at Operator level 3+ (grandfathered cohort)
+const LADDER = [6000, 6000, 4800, 3600, 2400, 1500]; // new accounts from 18 Nov 2026 (brought forward from 1 Dec by owner decision, Task 217), levels 1-6
+const WELCOME_CODE = 12000;    // R120 access-code credit on the generic corporate door (Task 217)
 const PACKS = [
   { name: "Starter", pay: 50000, credit: 50000 },
   { name: "Growth", pay: 150000, credit: 165000 },
@@ -33,8 +34,9 @@ const r = (c) => "R" + Math.round(c / 100).toLocaleString("en-ZA");
 console.log("law check: TDC+BH =", TDC + BH, "== RATE", RATE, TDC + BH === RATE);
 console.log("member split check:", MEMBER_SPLIT * 2 === TDC);
 console.log("exact-five:", WELCOME_CORP / RATE, "managed leads");
-console.log("std welcome at list:", (WELCOME_STD / LIST).toFixed(2), "reveals");
+console.log("std welcome at legacy list:", (WELCOME_STD / LIST).toFixed(2), "reveals | at ladder R60:", (WELCOME_STD / LADDER[0]).toFixed(2));
 console.log("referral welcome at ladder R60:", WELCOME_REF / LADDER[0], "reveals");
+console.log("code credit at managed rate:", (WELCOME_CODE / RATE).toFixed(2), "managed leads");
 console.log("floor leads:", (FLOOR / RATE).toFixed(1));
 for (const p of PACKS) console.log(`pack ${p.name}: ${r(p.pay)} -> ${r(p.credit)} (+${Math.round((p.credit / p.pay - 1) * 100)}%)`);
 const LEADS = 1000;
@@ -164,13 +166,13 @@ const head = [
   new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 160, line: 300 },
-    children: [run("Ref: BH-PRICING-2026-03  |  Version: v3.0, live till  |  17 November 2026", { size: 21 })],
+    children: [run("Ref: BH-PRICING-2026-03  |  Version: v3.1, live till  |  18 November 2026", { size: 21 })],
   }),
   new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { after: 200, line: 300 },
     children: [new TextRun({
-      text: "v3.0 — INTERNAL STRATEGY DOCUMENT. Prepared by Business Hustle for its team and for the Trinity Direct Consortium deal room. Every figure below was verified against the live platform till and the executed Strategic Partnership Agreement V2.1 on 17 November 2026. Commercial terms bind only as written in the executed agreements; this document explains them, it does not replace them. This document is not legal advice.",
+      text: "v3.1 — INTERNAL STRATEGY DOCUMENT. Prepared by Business Hustle for its team and for the Trinity Direct Consortium deal room. Every figure below was verified against the live platform till and the executed Strategic Partnership Agreement V2.1 on 18 November 2026. v3.1 records the Trinity Direct verdict of 18 November 2026: the ladder went live that day and the offer ladder now runs three rungs. Commercial terms bind only as written in the executed agreements; this document explains them, it does not replace them. This document is not legal advice.",
       font: FONT, color: BLACK, size: 21, bold: true,
       underline: { type: UnderlineType.SINGLE },
     })],
@@ -186,23 +188,30 @@ const s1 = [
     run("flat recurring R50 to the Consortium and R60 to Business Hustle per qualifying managed lead for as long as the account stays active", { bold: true }),
     run(". The 90-day launch taper v2 recommended, sliding to R25 thereafter, did not survive into the signed agreement and is dead: no table in this version contains a taper row."),
   ]),
-  body("Third, the self-serve ladder v2 recommended was approved and built. Accounts created from 1 December 2026 price on the ladder — R60 at the entry levels falling to R15 at Tycoon — while every account created before the cutoff keeps the launch economics of R18 list and R15 at Operator permanently. The cohort is derived from the account's creation date, so no migration touches any balance. Fourth, the partner funnel went live end to end: an open corporate door, per-account attribution, the partner's own dashboard, and a Monday-morning digest that lands the strategist's numbers in the partnership's inbox without anyone asking."),
+  body("Third, the self-serve ladder v2 recommended was approved, built, and — on the owner's decision at the Trinity Direct verdict of 18 November 2026 — brought forward from 1 December to live that same day. Accounts created from 18 November 2026 price on the ladder — R60 at the entry levels falling to R15 at Tycoon — while every account created before the cutoff keeps the launch economics of R18 list and R15 at Operator permanently. The cohort is derived from the account's creation date, so no migration touches any balance. Fourth, the partner funnel went live end to end: an open corporate door, per-account attribution, the partner's own dashboard, and a Monday-morning digest that lands the strategist's numbers in the partnership's inbox without anyone asking."),
+  bodyRuns([
+    run("Fifth, and this is the law the Trinity Direct verdict produced: the offer ladder now has three rungs, written into the claim API and stated on every door. ", {}),
+    run("R550 exact-five rides the strategist door, R120 rides the access code on the generic corporate door, and R99 remains the bare direct welcome", { bold: true }),
+    run(". Every circumvention of a strategist link lands on a cheaper rung, never a better one. The main page advertises the DIY truth — R120 in welcome credit with a referral code, R60 per reveal on the ladder — and the generic corporate door collects the applicant's location in its invitation survey. The strategist door carries one further sweetener that is enforced rather than promised: corporate accounts receive a doubled 200-per-day engine search allowance, written into the scan gate."),
+  ]),
   body("What remains open is short and stated plainly in section 8: an optional monthly floor for corporate accounts, and re-denominating the top-up packs in leads rather than rands. Neither is built; neither blocks anything."),
 ];
 
 const s2 = [
   h1("2.  Where the pricing sits today"),
-  body("The platform runs on three real price points, all enforced at a single till function in code. The self-serve reveal costs R18 at list, dropping to R15 once a member reaches Operator level 3. The done-for-you corporate track — the managed rate — sits at a flat R110 per qualified lead reveal, inclusive of VAT where VAT is chargeable, standardised with the Trinity Direct Consortium partnership terms, and it never takes level discounts. The market anchor shown at every till is the R250-plus that South African pay-per-lead agencies advertise. These are the numbers the product actually charges today; every claim on every surface traces back to them."),
-  body("Around the till sit the supports, each verified on 17 November 2026. New members start with R99 in welcome credits, which the welcome email honestly converts at the R18 list price. A member who joins through a referral link starts with R120 instead — the owner's rule of November 2026, live in the signup path. A corporate account opened through a partner door starts with R550, which is exactly five managed leads at the R110 rate and is the corporate door's whole promise. The top-up packs sell rands of credit with bonuses rather than leads: Growth adds ten percent, Scale adds fifteen, and every top-up of R500 or more automatically runs the account's client campaign."),
-  caption("Table 1: The numbers at a glance (verified against the live till, 17 November 2026)"),
+  body("The platform runs on three real price points, all enforced at a single till function in code. The self-serve reveal prices by cohort: accounts created from 18 November 2026 pay the ladder — R60 at the entry levels, falling to R48, R36, R24 and R15 as the member levels up — while every account created before that date keeps R18 at list, dropping to R15 once the member reaches Operator level 3. The done-for-you corporate track — the managed rate — sits at a flat R110 per qualified lead reveal, inclusive of VAT where VAT is chargeable, standardised with the Trinity Direct Consortium partnership terms, and it never takes level discounts or ladder prices. The market anchor shown at every till is the R250-plus that South African pay-per-lead agencies advertise. These are the numbers the product actually charges today; every claim on every surface traces back to them."),
+  body("Around the till sit the supports, each verified on 18 November 2026. A new member who joins on their own starts with R99 in welcome credits, which the welcome email honestly converts at that member's own first-reveal price — one verified lead on the ladder, with R39 still on the card. A member who joins through a referral link starts with R120, which converts to exactly two verified ladder leads. A corporate claim backed by an access code carries R120 applied at setup by the desk. A corporate account opened through a partner door starts with R550, which is exactly five managed leads at the R110 rate and is the strategist door's whole promise — the generic door never offers it. The top-up packs sell rands of credit with bonuses rather than leads: Growth adds ten percent, Scale adds fifteen, and every top-up of R500 or more automatically runs the account's client campaign."),
+  caption("Table 1: The numbers at a glance (verified against the live till, 18 November 2026)"),
   fieldTable([
     ["Corporate managed rate", `${r(RATE)} per qualified lead reveal, flat, VAT inclusive; no level discounts apply`],
     ["Referral allocation (executed)", `${r(TDC)} to Trinity Direct Consortium / ${r(BH)} to Business Hustle, recurring per qualifying reveal`],
     ["Member-sourced split", `${r(MEMBER_SPLIT)} strategist / ${r(MEMBER_SPLIT)} member per managed lead, from the ${r(TDC)} allocation`],
-    ["Corporate welcome credit", `${r(WELCOME_CORP)} = exactly ${WELCOME_CORP / RATE} managed leads on us`],
-    ["Self-serve till (today)", `${r(LIST)} at list; ${r(OP_PRICE)} from Operator level 3`],
-    ["Ladder (new accounts from 1 Dec 2026)", `${r(LADDER[0])} at levels 1-2, falling to ${r(LADDER[5])} at Tycoon`],
-    ["Welcome credits", `${r(WELCOME_STD)} standard; ${r(WELCOME_REF)} when joined via a referral link; ${r(WELCOME_CORP)} corporate`],
+    ["Corporate welcome credit", `${r(WELCOME_CORP)} = exactly ${WELCOME_CORP / RATE} managed leads on us — the strategist door credit`],
+    ["Access-code credit (generic door)", `${r(WELCOME_CODE)} applied at setup; no strategist attribution, no exact-five`],
+    ["Self-serve till (accounts before 18 Nov 2026)", `${r(LIST)} at list; ${r(OP_PRICE)} from Operator level 3`],
+    ["Self-serve ladder (new accounts from 18 Nov 2026)", `${r(LADDER[0])} at levels 1-2, ${r(LADDER[2])} at Operator, ${r(LADDER[3])} at Closer, ${r(LADDER[4])} at Boss, ${r(LADDER[5])} at Tycoon`],
+    ["Welcome credits (self-serve)", `${r(WELCOME_STD)} direct (1 ladder lead); ${r(WELCOME_REF)} via referral link (2 ladder leads)`],
+    ["Engine search allowance per day", "25 free plan / 100 paid / 200 done-for-you corporate accounts (enforced in the scan gate)"],
     ["Top-up packs", PACKS.map((p) => `${p.name} ${r(p.pay)} (+${Math.round((p.credit / p.pay - 1) * 100)}% credit)`).join("; ")],
     ["Campaign auto-run", `every top-up of ${r(CAMPAIGN_AUTO)} or more runs the account's client campaign`],
     ["Market anchor", "R250+ per lead — the South African agency rate, shown at every till and price list"],
@@ -232,7 +241,7 @@ const s5 = [
   body("Everything v2 planned for the referral network is now running. The corporate door is open — no access code, no card — and every account that registers through it is attributed to the partner on the account itself. Onboarding is done-for-you from the first minute: the corporate welcome credit lands as the exact-five R550, the welcome email names the partner, and the corporate law holds in the app — the games, the level ladder, the business-to-consumer packs and the card nudge stay hidden on done-for-you accounts, and the upgrade dialog routes corporate conversations, not self-serve checkout."),
   body("The strategist sees all of it without asking. The partner dashboard shows every account opened through their door, its activation state, the managed leads delivered, the R50 accrual computed from live reveal transactions, and two call lists — close-now (accounts too low on credit to afford their next lead) and warming (under three leads left). The deal room links the dashboard directly. Every Monday morning at 08:00 SAST a digest lands in the partnership's backend inbox with the same numbers and a button into the dashboard; the recipient is the partnership's own address, trinitydirectint@gmail.com."),
   bodyRuns([
-    run("Live proof at the time of writing, 17 November 2026: "),
+    run("Live proof at the time of writing, 18 November 2026: "),
     run(`${LIVE.accounts} corporate accounts through the door, ${LIVE.activated} already revealing, ${LIVE.leads} managed leads delivered, ${"R" + LIVE.accrualRand} accrued to the Consortium`, { bold: true }),
     run(". Small numbers, real ones, and the machinery that grows them without a single manual report."),
   ]),
@@ -279,7 +288,7 @@ const s7 = [
 
 const s8 = [
   h1("8.  Implementation status and the open decisions"),
-  body("Live and enforced today: the R110 corporate rate across the corporate pages, the claim notifications and the till constant; the R550 exact-five welcome credit on the corporate door; the open partner funnel with per-account attribution; the partner dashboard and the Monday 08:00 SAST digest to the partnership's backend inbox; the referral allocations R50/R60 paid as companies; the member split R25/R25; the welcome credits R99, R120 and R550; the packs R500, R1 500 and R5 000 with ten and fifteen percent bonuses; and the ladder, coded against the 1 December 2026 cutoff, waiting for the calendar with every existing account already protected."),
+  body("Live and enforced today: the R110 corporate rate across the corporate pages, the claim notifications and the till constant; the R550 exact-five welcome credit on the strategist door, never on the generic one; the three-rung credit law R550 strategist, R120 access code, R99 bare direct, written into the claim API; the self-serve ladder live from 18 November 2026 with every account before that date grandfathered at R18 list and R15 at Operator; the 200-per-day engine allowance on done-for-you corporate accounts, enforced in the scan gate; the location field on the corporate invitation survey; the open partner funnel with per-account attribution; the partner dashboard and the Monday 08:00 SAST digest to the partnership's backend inbox; the referral allocations R50/R60 paid as companies; the member split R25/R25; the welcome credits R99, R120 and R550; and the packs R500, R1 500 and R5 000 with ten and fifteen percent bonuses."),
   body("Open decision one: the optional monthly floor for corporate accounts. v2 floated R2 500 a month — roughly " + Math.round(FLOOR / RATE) + " leads at the R110 rate — to stabilise pipeline planning once done-for-you billing ships. It remains an option, not built, and nothing in the executed agreement requires it. Open decision two: re-denominating the top-up packs in leads rather than rands, so a buyer reads '5 leads' on the button instead of R1 500. The live packs are rand-denominated with bonus credit; the rebrand is copy plus a constant, blocked on nothing, and worth doing when the ladder's first full month shows how new members actually talk about reveals. Both decisions belong to the owner; neither has a deadline the code cares about."),
 ];
 
