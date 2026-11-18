@@ -10,6 +10,10 @@
 // (a team member's code, or one the boss minted). The server re-resolves it;
 // when the caller already validated one (the generic door's gate) it is
 // passed in and the input is skipped.
+// Task 216 law (offer asymmetry): the credit this form promises is door-true.
+// A slug-attributed code (strategist door context) carries the R550 exact-five
+// credit; a bare minted code on the generic door defaults to the R99 direct
+// credit. The claim API re-resolves server-side and states the same split.
 
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Loader2, KeyRound } from 'lucide-react'
@@ -20,7 +24,16 @@ const inputCls =
   'w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition ' +
   'placeholder:text-muted-foreground/60 focus:border-brand focus:ring-2 focus:ring-brand/20'
 
-export default function CorporateClaimForm({ refSlug, accessCode: prevalidated }: { refSlug?: string; accessCode?: string }) {
+export default function CorporateClaimForm({
+  refSlug,
+  accessCode: prevalidated,
+  accessSlug,
+}: {
+  refSlug?: string
+  accessCode?: string
+  accessSlug?: string | null
+}) {
+  const creditRands = refSlug || accessSlug ? 550 : 99
   const [form, setForm] = useState({ business: '', contactName: '', email: '', phone: '', teamSize: '', message: '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -95,8 +108,8 @@ export default function CorporateClaimForm({ refSlug, accessCode: prevalidated }
         <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
         <p className="font-semibold">Claimed. The credit is yours.</p>
         <p className="text-sm text-muted-foreground">
-          Our corporate team reaches out personally to set your account up and apply your R550 starting credit.
-          Keep an eye on your inbox.
+          Our corporate team reaches out personally to set your account up and apply your
+          R{creditRands} starting credit. Keep an eye on your inbox.
         </p>
       </div>
     )
@@ -195,10 +208,11 @@ export default function CorporateClaimForm({ refSlug, accessCode: prevalidated }
         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
       >
         {state === 'sending' && <Loader2 className="h-4 w-4 animate-spin" />}
-        Claim my R550 starting credit
+        Claim my R{creditRands} starting credit
       </button>
       <p className="text-xs text-muted-foreground text-center">
         No card needed. We set your account up personally and the credit lands before you spend a cent.
+        {creditRands === 99 ? ' The R550 five lead credit rides the strategist door.' : ''}
       </p>
     </form>
   )

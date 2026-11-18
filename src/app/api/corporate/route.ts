@@ -15,9 +15,13 @@ import { resolveAccessCode, consumeAccessCode } from '@/lib/corporateAccess'
 // email, so a double click never double-fires onboarding.
 //
 // Onboarding is a human act: the corporate team reads the claim in the inbox
-// (and the row here), sets the account up by hand, applies the R550 starting
-// credit via the exec wallet tools, and puts the managed rate R110 on the
-// account. No self-serve magic, no auto-grants — money moves by human hands.
+// (and the row here), sets the account up by hand, applies the door's credit
+// via the exec wallet tools, and puts the managed rate R110 on the account.
+// Task 216 law (offer asymmetry): the credit follows the door. A claim that
+// attributes to a strategist (slug context) carries the R550 exact-five
+// credit; a direct claim (no slug) carries the R99 welcome. The email states
+// which one applies so the desk never has to guess. No self-serve magic, no
+// auto-grants — money moves by human hands.
 
 export const maxDuration = 15
 
@@ -105,12 +109,15 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  // Task 216: the credit follows the door — R550 only when the claim
+  // attributes to a strategist; direct claims carry the R99 welcome.
+  const creditRands = refSlug ? 550 : 99
   const creditLine = refSlug
     ? `Referred by: ${refStrategist!.company} (${refStrategist!.slug})${refMember ? `, sourced by member code ${refMember}` : ''}${access.kind === 'minted' && access.label ? ` — access code "${access.label}"` : ''}\nReferral law: at the R110 corporate rate, R50 per managed lead is the Consortium's share${refMember ? ' (R25 strategist / R25 member split)' : ''}.`
-    : ''
+    : 'Direct claim: no strategist attribution, so the R99 direct welcome credit applies. The R550 five lead credit is the strategist door credit — upgrade by owner decision only.'
   const notify = await sendSystemMail({
     to: TEAM_INBOX,
-    subject: `Corporate claim: ${business}${refSlug ? ` via ${refStrategist!.company}` : ''} (R550 credit)`,
+    subject: `Corporate claim: ${business}${refSlug ? ` via ${refStrategist!.company}` : ''} (R${creditRands} credit)`,
     body: [
       refSlug ? 'A corporate account claim came in from a strategist door.' : 'A corporate account claim came in from the corporate page.',
       '',
@@ -125,11 +132,13 @@ export async function POST(req: NextRequest) {
       creditLine,
       '',
       `Claim id: ${row.id}`,
-      'Next step: onboard by hand (account setup, R550 starting credit = 5 managed leads, managed rate R110).',
+      refSlug
+        ? 'Next step: onboard by hand (account setup, R550 starting credit = 5 managed leads, managed rate R110).'
+        : 'Next step: onboard by hand (account setup, R99 direct starting credit, managed rate R110).',
     ].filter((l) => l !== '').join('\n'),
     headline: refSlug ? 'Corporate claim (strategist)' : 'Corporate claim',
     title: `${business} wants in`,
-    value: { text: 'R550 starting credit to apply', caption: 'Onboard by hand: account, credit, managed rate R110' },
+    value: { text: `R${creditRands} starting credit to apply`, caption: 'Onboard by hand: account, credit, managed rate R110' },
     ctaLabel: 'Open HustlePortal',
     ctaUrl: 'https://www.hustleportal.online/',
     preheader: 'New corporate account claim from the corporate landing page.',

@@ -58,6 +58,13 @@ console.log('[1] generic corporate door (the locked one)')
   check('generic door offers the locked paths (code or application)', d.status === 200 && (vis.toLowerCase().includes('access code') || vis.toLowerCase().includes('apply')), '')
   check('generic door keeps the BH voice (HustlePortal visible)', d.status === 200 && vis.includes('HustlePortal'), '')
   check('trust footer stayed off the corporate door (no entity block)', d.status === 200 && !vis.includes('Cape Town'), '')
+  // Task 216 offer-asymmetry law (boss): the generic door carries the R99
+  // direct credit, routes the R550 to the strategist doors, and never
+  // promises the R550 as a direct claim — the strategist link must read as
+  // the advantage it is.
+  check('offer asymmetry: R99 direct credit visible', d.status === 200 && vis.includes('R99'), `${count(vis, 'R99')} hits`)
+  check('offer asymmetry: R550 routed to the brand strategist', d.status === 200 && vis.includes('R550') && vis.toLowerCase().includes('strategist'), '')
+  check('offer asymmetry: no direct R550 claim promise', d.status === 200 && !/claim (your|my) R550/i.test(vis), '')
 }
 
 console.log('[2] partner door (the open one)')
@@ -69,6 +76,7 @@ console.log('[2] partner door (the open one)')
   check('Trinity Direct branding visible', d.status === 200 && vis.includes('Trinity Direct'), '')
   check('open signup: no-credit-card promise visible', d.status === 200 && vis.toLowerCase().includes('no credit card'), '')
   check('open signup: free-credit promise visible', d.status === 200 && vis.toLowerCase().includes('claim your free credit'), '')
+  check('open signup: the R550 credit stays visible (the strategist door advantage)', d.status === 200 && vis.includes('R550'), `${count(vis, 'R550')} hits`)
   check('door calculator shows the corporate rate (R110)', d.status === 200 && vis.includes('R110'), `${count(vis, 'R110')} hits`)
   check('partner logo wired', d.status === 200 && d.text.includes('/corporate/trinitydirect-logo.jpg'), '')
   check('trust footer stayed off the partner door (no entity block)', d.status === 200 && !vis.includes('Cape Town'), '')

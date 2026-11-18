@@ -11,10 +11,14 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 // the same offer and points at the strategist doors.
 //
 // Laws this surface obeys:
-//  - Truthful numbers only: R550 credit is the owner-set onboarding promise,
-//    R108 managed rate and R250+ agency anchor are the established facts,
-//    R0 is simply true.
-//  - The managed-rate law: R108 shows against the agency market, never
+//  - Truthful numbers only: the R550 exact-five credit is the strategist door
+//    credit, the R99 welcome is the direct credit, R110 managed rate and
+//    R250+ agency anchor are the established facts.
+//  - Task 216 offer-asymmetry law (boss): this door's offer must read
+//    DIFFERENT from a strategist door, by design — direct claims carry the
+//    R99 welcome and the page routes the R550 to the strategist doors, so a
+//    prospect sees the strategist's link as the advantage it is.
+//  - The managed-rate law: R110 shows against the agency market, never
 //    beside the self-serve reveal prices.
 //  - Boss voice: no dashes in the copy.
 //  - Light by default (trust read: white, warm black ink, gold accents),
@@ -23,7 +27,7 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 export const metadata: Metadata = {
   title: 'HustlePortal Corporate — verified leads for corporate sales floors',
   description:
-    'Done for you, verified before a cent moves. R550 in starting credit for corporate accounts, delivered through brand strategists in strategic partnership with HustlePortal.',
+    'Done for you, verified before a cent moves. R550 in starting credit through authorized brand strategists, R99 when you apply directly, at one flat R110 managed rate.',
 }
 
 export default function CorporatePage() {

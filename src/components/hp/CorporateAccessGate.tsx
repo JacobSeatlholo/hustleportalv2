@@ -22,10 +22,13 @@ export default function CorporateAccessGate() {
 
   // --- code path state (URL ?via= prefill lands client-side only; the
   // initializer also runs during SSR where window does not exist) ---
+  // Task 216: the resolution rides with the unlock, so the claim form can
+  // state the door-true credit (a slug-attributed code carries the R550
+  // strategist credit; a bare code defaults to the R99 direct credit).
   const [code, setCode] = useState('')
   const [checking, setChecking] = useState(false)
   const [codeError, setCodeError] = useState('')
-  const [unlockedCode, setUnlockedCode] = useState('')
+  const [unlocked, setUnlocked] = useState<{ code: string; slug: string | null } | null>(null)
   useEffect(() => {
     const via = new URLSearchParams(window.location.search).get('via') || ''
     if (via) setCode(via)
@@ -51,9 +54,9 @@ export default function CorporateAccessGate() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       })
-      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; slug?: string | null } | null
       if (res.ok && j?.ok) {
-        setUnlockedCode(code)
+        setUnlocked({ code, slug: j.slug ?? null })
       } else {
         setCodeError(j?.error || 'That code does not open this door.')
       }
@@ -88,13 +91,13 @@ export default function CorporateAccessGate() {
     }
   }
 
-  if (unlockedCode) {
+  if (unlocked) {
     return (
       <div className="space-y-3">
         <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="h-4 w-4" /> Code accepted. Claim your credit below.
         </p>
-        <CorporateClaimForm accessCode={unlockedCode} />
+        <CorporateClaimForm accessCode={unlocked.code} accessSlug={unlocked.slug} />
       </div>
     )
   }

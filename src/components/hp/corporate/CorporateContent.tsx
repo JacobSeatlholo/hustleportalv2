@@ -13,13 +13,26 @@ import CorporateCalculator from '@/components/hp/CorporateCalculator'
 // commission content or ?via talk ever renders client-facing. Task 215 adds
 // the ONE client-facing calculator the owner asked for: pricing maths only
 // (R110 vs the R250+ agency anchor), never commission economics.
-
-const TILES = [
-  { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
-  { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
-  { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
-  { icon: ShieldCheck, big: 'R0', small: 'to claim your credit, and no card is needed' },
-]
+// Task 216 law (boss, offer asymmetry): the two doors carry DIFFERENT credits
+// by design, so nobody circumvents a strategist link. The R550 exact-five
+// credit is the strategist door credit. Direct applications on the generic
+// door carry the R99 welcome instead, and the page says so plainly — the
+// R550 stays visible so the strategist door reads as the advantage it is.
+function tiles(partner?: Strategist) {
+  return partner
+    ? [
+        { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
+        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
+        { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
+        { icon: ShieldCheck, big: 'R0', small: 'to claim your credit, and no card is needed' },
+      ]
+    : [
+        { icon: Wallet, big: 'R550', small: 'in starting credit when your account opens through an authorized brand strategist' },
+        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
+        { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
+        { icon: ShieldCheck, big: 'R99', small: 'in starting credit when you apply directly on this page' },
+      ]
+}
 
 // Task 214 whitelabel: step 2 speaks as the strategist's own desk on partner
 // doors; the generic door may name the engine.
@@ -28,7 +41,9 @@ function steps(partner?: Strategist) {
     {
       n: '1',
       title: 'Claim your credit',
-      body: 'Fill in the form below. Our corporate team reaches out personally, sets your account up, and applies the R550 starting credit before you spend a cent.',
+      body: partner
+        ? 'Fill in the form below. Your account opens on the spot and the R550 starting credit lands in your wallet before you spend a cent.'
+        : 'Enter your access code or apply below. Our corporate team sets your account up by hand and applies the R99 direct starting credit before you spend a cent. Opened through an authorized brand strategist, the R550 five lead credit applies instead.',
     },
     {
       n: '2',
@@ -56,38 +71,48 @@ const WHO = [
 // verification-before-payment is enforced by the billing code, the flat rate
 // is the contractual rate, the e-sign engine is our own (Task 212) and the
 // POPIA opt-out is the public /remove-listing flow. No invented testimonials.
-const TRUST = [
-  {
-    icon: ShieldCheck,
-    title: 'Verified before a cent moves',
-    body: 'Contact details are checked by hand and machine before delivery. An unverified lead is never charged — the check is the guarantee, and it is written into how billing works.',
-  },
-  {
-    icon: Wallet,
-    title: 'One flat rate. No ladder.',
-    body: 'R110 per qualified lead reveal, contractually fixed. No tiered pricing, no promo games, no surprise line items when volume grows.',
-  },
-  {
-    icon: FileSignature,
-    title: 'Signed in minutes, not weeks',
-    body: 'Your agreement is signed on our own e-sign system with a timestamped audit certificate under the Electronic Communications and Transactions Act. No printing, no scanning, no chasing signatures.',
-  },
-  {
-    icon: Building2,
-    title: 'Done for you',
-    body: 'Managed sourcing runs inside the platform: businesses found, verified and delivered into your pipeline ready to work. Your sellers spend their day selling.',
-  },
-  {
-    icon: BadgeCheck,
-    title: 'R550 starting credit on us',
-    body: 'Applied at setup before you spend a cent — five qualified lead reveals to judge the quality first, with no card needed to claim.',
-  },
-  {
-    icon: Users,
-    title: 'POPIA-aware sourcing',
-    body: 'Business contact data is processed lawfully under POPIA. Any listed business can remove itself from the pipeline in one click, and the suppression holds.',
-  },
-]
+// Task 216: the credit card is door-aware (R550 strategist door, R99 direct).
+function trust(partner?: Strategist) {
+  const cards = [
+    {
+      icon: ShieldCheck,
+      title: 'Verified before a cent moves',
+      body: 'Contact details are checked by hand and machine before delivery. An unverified lead is never charged — the check is the guarantee, and it is written into how billing works.',
+    },
+    {
+      icon: Wallet,
+      title: 'One flat rate. No ladder.',
+      body: 'R110 per qualified lead reveal, contractually fixed. No tiered pricing, no promo games, no surprise line items when volume grows.',
+    },
+    {
+      icon: FileSignature,
+      title: 'Signed in minutes, not weeks',
+      body: 'Your agreement is signed on our own e-sign system with a timestamped audit certificate under the Electronic Communications and Transactions Act. No printing, no scanning, no chasing signatures.',
+    },
+    {
+      icon: Building2,
+      title: 'Done for you',
+      body: 'Managed sourcing runs inside the platform: businesses found, verified and delivered into your pipeline ready to work. Your sellers spend their day selling.',
+    },
+    partner
+      ? {
+          icon: BadgeCheck,
+          title: 'R550 starting credit on us',
+          body: 'Applied at setup before you spend a cent — five qualified lead reveals to judge the quality first, with no card needed to claim.',
+        }
+      : {
+          icon: BadgeCheck,
+          title: 'The credit follows the door',
+          body: 'Apply directly here and the R99 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the R550 credit, five qualified lead reveals, applies instead. No card is needed either way.',
+        },
+    {
+      icon: Users,
+      title: 'POPIA-aware sourcing',
+      body: 'Business contact data is processed lawfully under POPIA. Any listed business can remove itself from the pipeline in one click, and the suppression holds.',
+    },
+  ]
+  return cards
+}
 
 export default function CorporateContent({ partner }: { partner?: Strategist }) {
   return (
@@ -113,8 +138,10 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </h1>
         <p className="text-muted-foreground">
           Your sellers close; our engine finds and verifies the businesses they sell to. Real contact
-          details of real businesses, delivered into your pipeline at one flat managed rate, with
-          R550 in starting credit to open the account.
+          details of real businesses, delivered into your pipeline at one flat managed rate.
+          {partner
+            ? ' The R550 starting credit lands in your wallet the moment your account opens.'
+            : ' Your starting credit follows the door: R550 through an authorized brand strategist, R99 when you apply directly on this page.'}
         </p>
         {partner ? (
           <>
@@ -178,7 +205,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       <section id="numbers" className="space-y-3 scroll-mt-6">
         <h2 className="font-display text-2xl">The numbers, upfront</h2>
         <div className="grid grid-cols-2 gap-3">
-          {TILES.map((t) => (
+          {tiles(partner).map((t) => (
             <div key={t.big} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
               <t.icon className="h-5 w-5 text-brand" />
               <p className="font-display text-2xl">{t.big}</p>
@@ -206,7 +233,7 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             href="#claim"
             className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
           >
-            Claim your R550 credit — no card needed
+            {partner ? 'Claim your R550 credit — no card needed' : 'Claim your starting credit — no card needed'}
           </a>
         </div>
       </section>
@@ -225,8 +252,10 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             <p className="text-sm font-semibold text-brand">The corporate rate: R110 per qualified lead reveal, flat</p>
             <p className="text-sm text-muted-foreground mt-1">
               Our team runs the finding, the verification and the delivery into your pipeline. One
-              flat contractual rate, no ladder, no promos. The R550 starting credit is exactly five
-              managed leads, on us. The rate is the rate.
+              flat contractual rate, no ladder, no promos.
+              {partner
+                ? ' The R550 starting credit is exactly five managed leads, on us. The rate is the rate.'
+                : ' The R550 starting credit is exactly five managed leads, and it is the strategist door credit; the direct door carries the R99 welcome. The rate is the rate.'}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-5">
@@ -239,14 +268,14 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </div>
       </section>
 
-      <CorporateCalculator />
+      <CorporateCalculator partner={!!partner} />
 
       <section id="trust" className="space-y-3 scroll-mt-6">
         <h2 className="font-display text-2xl">
           {partner ? 'Why corporate floors sign with us' : 'Why corporate floors sign with HustlePortal'}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {TRUST.map((t) => (
+          {trust(partner).map((t) => (
             <div key={t.title} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
               <t.icon className="h-5 w-5 text-brand" />
               <p className="text-sm font-semibold">{t.title}</p>
@@ -286,12 +315,15 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         ) : (
           <>
             {/* Task 215: the generic door is the locked B2B access point — a
-                code from the team, or an invitation application. */}
+                code from the team, or an invitation application. Task 216: the
+                credit asymmetry is stated here, where the door is chosen. */}
             <h2 className="font-display text-2xl">Corporate access is by invitation</h2>
             <p className="text-sm text-muted-foreground">
               This door is locked on purpose. Corporate accounts are opened by our team on a written
               agreement, so entry needs an access code from one of our team members, or an approved
-              invitation application.
+              invitation application. Direct onboarding carries the R99 starting credit; the R550
+              five lead credit is the strategist door benefit, and it lands on accounts opened
+              through an authorized brand strategist.
             </p>
             <CorporateAccessGate />
           </>
