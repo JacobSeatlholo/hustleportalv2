@@ -266,6 +266,13 @@ export async function POST(req: NextRequest) {
     const hay = `${bio} ${name} ${u.location ? String(u.location) : ''}`
     if (!looksSouthAfrican(hay, region)) { dropped++; continue }
     const contacts = extractContacts(bio)
+    // Task 216 freshness diag: TikTok providers name the secUid differently
+    // per endpoint (secUid, sec_uid, or nested under author). Capture every
+    // spelling so the freshness call sends a real sec_uid, never the handle.
+    const author = u.author && typeof u.author === 'object' ? (u.author as Record<string, unknown>) : null
+    const secUidRaw = [u.secUid, u.sec_uid, author?.secUid, author?.sec_uid].find(
+      (v) => typeof v === 'string' && v.trim()
+    ) as string | undefined
     kept.push({
       handle,
       name,
@@ -277,26 +284,56 @@ export async function POST(req: NextRequest) {
       email: contacts.email,
       fresh: 'unknown',
       lastPost: '',
-      secUid: u.secUid ? String(u.secUid) : undefined,
+      secUid: secUidRaw ? secUidRaw.trim() : undefined,
     })
   }
 
   // 3) freshness: one capped metered call per checked account, best-first
   //    (facebook has no freshness endpoint in the map, so it skips cleanly)
+  //    Task 216: every check leaves one honest debug line in the response —
+  //    what was queried, what the provider answered, what was parsed — so a
+  //    dry freshness run is evidence, not a mystery.
   const toCheck = wantFresh && FRESH_ENDPOINT[platform]
     ? [...kept].sort((a, b) => b.followers - a.followers).slice(0, maxFresh)
     : []
+  const freshDebug: Array<Record<string, unknown>> = []
   for (const c of toCheck) {
+    const usedSecUid = Boolean(c.secUid)
     const args =
       platform === 'x'
         ? { method: 'POST', body: { username: c.handle } }
-        : { method: 'POST', body: { sec_uid: c.secUid || c.handle, limit: 3 } }
+        : c.secUid
+          ? { method: 'POST', body: { sec_uid: c.secUid, limit: 3 } }
+          // No sec_uid captured from search: try the handle in both spellings
+          // (some treg TikTok doors accept unique_id) rather than skip.
+          : { method: 'POST', body: { sec_uid: c.handle, unique_id: c.handle, limit: 3 } }
     const r = await tregProbeCall(FRESH_ENDPOINT[platform], args, { timeoutMs: 25_000, maxCostUsd: MAX_CALL_COST_USD })
     costUsd += r.costUsd ?? 0
-    if (!r.ok) continue // freshness is a bonus; unknown is an honest stamp
+    if (!r.ok) {
+      freshDebug.push({
+        handle: c.handle,
+        queriedAs: usedSecUid ? 'sec_uid' : 'handle-as-sec_uid',
+        ok: false,
+        error: String(r.error || '').slice(0, 200),
+      })
+      continue // freshness is a bonus; unknown is an honest stamp
+    }
     const outF = (r.body as { output?: Record<string, unknown> } | null)?.output ?? {}
     const rows = (platform === 'x' ? (outF as { posts?: unknown[] }).posts : (outF as { videos?: unknown[] }).videos) || []
     const stamp = freshStamp(pickLatestTime(Array.isArray(rows) ? rows : [], platform === 'x' ? ['created_at', 'createdAt', 'createdUtc', 'timestamp'] : ['create_time', 'createTime', 'timestamp']))
+    freshDebug.push({
+      handle: c.handle,
+      queriedAs: usedSecUid ? 'sec_uid' : 'handle-as-sec_uid',
+      ok: true,
+      respKeys: Object.keys(outF).slice(0, 12),
+      rowsCount: Array.isArray(rows) ? rows.length : -1,
+      sampleRowKeys:
+        Array.isArray(rows) && rows.length && rows[0] && typeof rows[0] === 'object'
+          ? Object.keys(rows[0] as Record<string, unknown>).slice(0, 16)
+          : [],
+      stamp: stamp.fresh,
+      lastPost: stamp.lastPost,
+    })
     c.fresh = stamp.fresh
     c.lastPost = stamp.lastPost
   }
@@ -313,9 +350,14 @@ export async function POST(req: NextRequest) {
     providerFound,
     providerReason: providerReason || undefined,
     providerRows: rawRows.length,
+    searchRowKeys:
+      rawRows.length && typeof rawRows[0] === 'object'
+        ? Object.keys(rawRows[0] as Record<string, unknown>).slice(0, 24)
+        : [],
     southAfrican: kept.length,
     droppedNonSa: dropped,
     freshChecked: toCheck.length,
+    freshDebug,
     added: r.added,
     skipped: r.skipped,
     queueCount: r.queueCount,
