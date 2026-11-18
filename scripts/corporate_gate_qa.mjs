@@ -65,7 +65,12 @@ console.log('[1] generic corporate door (the locked one)')
   check('offer asymmetry: R120 code credit visible', d.status === 200 && vis.includes('R120'), `${count(vis, 'R120')} hits`)
   check('offer asymmetry: R550 routed to the brand strategist', d.status === 200 && vis.includes('R550') && vis.toLowerCase().includes('strategist'), '')
   check('offer asymmetry: no direct R550 claim promise', d.status === 200 && !/claim (your|my) R550/i.test(vis), '')
-  check('Task 217: apply survey asks where the business operates', d.status === 200 && d.text.includes('Where is your business?'), '')
+  // The location field renders client-side after the tab switch, so the static
+  // HTML cannot prove it. Prove the behaviour instead: an application without
+  // a location is rejected by the survey API (validation runs before any rate
+  // limit or row write, so the probe leaves nothing behind).
+  const ap = await post('/api/corporate/apply', { business: 'Gate QA Probe', contactName: 'Gate QA', email: 'qa-gate217@noise.invalid', industry: 'QA probe', leadsNeeded: '50' })
+  check('Task 217: apply survey demands where the business operates', ap.status === 400 && typeof ap.json?.error === 'string' && ap.json.error.toLowerCase().includes('where your business operates'), `status ${ap.status} error ${ap.json?.error ?? ''}`)
 }
 
 console.log('[2] partner door (the open one)')
