@@ -208,11 +208,14 @@ export interface TickResult {
 // they flow. A per instance cooldown keeps the nudge cheap, the empty state
 // costs one small read, and the database pacing law stays the only clock that
 // matters, so extra nudges can never push a queue past its perHour ceiling.
+// Cooldown raised 90s → 15 min (2026-11-19): on Neon's free plan every DB
+// touch costs ~6 minutes of awake compute (5-min suspend grace), and the
+// 24/7 nudges alone burned the whole monthly CU-hour allowance by day ~17.
 // Wrapped head to toe in try catch: a heartbeat can never break the route
 // that carried it.
 let lastOpportunisticTick = 0
 
-export async function opportunisticTick(maxSends = 2, minGapMs = 90_000): Promise<void> {
+export async function opportunisticTick(maxSends = 2, minGapMs = 900_000): Promise<void> {
   try {
     const now = Date.now()
     if (now - lastOpportunisticTick < minGapMs) return
