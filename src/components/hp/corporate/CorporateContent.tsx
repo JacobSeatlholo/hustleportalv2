@@ -14,25 +14,22 @@ import CorporateCalculator from '@/components/hp/CorporateCalculator'
 // the CFO. New spine: hook → the problem → the shift → the numbers → the
 // maths → pass it up → trust → claim. The strategist door no longer runs the
 // R550 coupon in its copy (owner: it cheapens the pitch; the mechanic still
-// exists server-side at claim, it just never renders here). The generic door
-// keeps the Task 216/217 asymmetry law: the ladder is stated where the door
-// is chosen. Laws kept: truthful numbers only; the corporate rate never sits
-// beside self-serve prices; no dashes in the copy; no commission mechanics
-// client-facing; whitelabel on partner doors.
+// exists server-side at claim, it just never renders here).
+// Task 221 round 4 (owner, same day, the A/B call): the GENERIC door is
+// straight business too. No strategist door mentions, no credit ladder, no
+// coupons: the rate, the maths, the trust. The Task 216/217 asymmetry ladder
+// is retired on this surface; welcome credits and referral links are the
+// strategist doors' game. Laws kept: truthful numbers only; the corporate
+// rate never sits beside self-serve prices; no dashes in the copy; no
+// commission mechanics client-facing; whitelabel on partner doors; the pass
+// it up block is partner-only (the generic door is the invitation desk).
 function tiles(partner?: Strategist) {
-  return partner
-    ? [
-        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat. The rate is the rate.' },
-        { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
-        { icon: Zap, big: '200', small: 'lead searches a day for your own hunting, between managed batches' },
-        { icon: ShieldCheck, big: '0', small: 'unverified leads charged. The check is the guarantee.' },
-      ]
-    : [
-        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
-        { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
-        { icon: ShieldCheck, big: 'R120', small: 'in starting credit when you open with an access code' },
-        { icon: Wallet, big: 'R550', small: 'the strategist door credit, on accounts opened through an authorized brand strategist' },
-      ]
+  return [
+    { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat. The rate is the rate.' },
+    { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
+    { icon: Zap, big: '200', small: 'lead searches a day for your own hunting, between managed batches' },
+    { icon: ShieldCheck, big: '0', small: 'unverified leads charged. The check is the guarantee.' },
+  ]
 }
 
 // Task 214 whitelabel: step 2 speaks as the strategist's own desk on partner
@@ -103,13 +100,6 @@ function trust(partner?: Strategist) {
       body: 'Business contact data is processed lawfully under POPIA. Any listed business can remove itself from the pipeline in one click, and the suppression holds.',
     },
   ]
-  if (!partner) {
-    cards.push({
-      icon: BadgeCheck,
-      title: 'The credit follows the door',
-      body: 'Open with an access code and the R120 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the strategist door credit applies instead. No card is needed either way.',
-    })
-  }
   return cards
 }
 
@@ -139,19 +129,8 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           {partner ? 'A sales floor that never runs dry.' : 'Verified leads for corporate sales floors. Done for you.'}
         </h1>
         <p className="text-lg text-muted-foreground leading-relaxed">
-          {partner ? (
-            <>
-              Verified businesses, delivered into your pipeline ready to work. Your sellers sell;
-              the hunting, the verifying and the chasing are done for you, at one flat rate.
-            </>
-          ) : (
-            <>
-              Your sellers close; our engine finds and verifies the businesses they sell to. Real contact
-              details of real businesses, delivered into your pipeline at one flat managed rate.
-              Your starting credit follows the door: the strategist door credit through an authorized
-              brand strategist, R120 when you open with an access code.
-            </>
-          )}
+          Verified businesses, delivered into your pipeline ready to work. Your sellers sell;
+          the hunting, the verifying and the chasing are done for you, at one flat rate.
         </p>
         {partner && (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -384,16 +363,14 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           </>
         ) : (
           <>
-            {/* Task 215: the generic door is the locked B2B access point — a
-                code from the team, or an invitation application. Task 216/217:
-                the credit asymmetry is stated here, where the door is chosen. */}
+            {/* Task 221 round 4 (owner): the generic door is straight business.
+                The code gate stays (the desk opens accounts by hand), the credit
+                ladder talk is gone. */}
             <h2 className="font-display text-2xl">Corporate access is by invitation</h2>
             <p className="text-sm text-muted-foreground">
               This door is locked on purpose. Corporate accounts are opened by our team on a written
               agreement, so entry needs an access code from one of our team members, or an approved
-              invitation application. Opening with an access code carries the R120 starting credit; the
-              strategist door credit is larger, and it lands on accounts opened through an authorized
-              brand strategist.
+              invitation application.
             </p>
             <CorporateAccessGate />
           </>

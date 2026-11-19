@@ -387,7 +387,7 @@ export default function AppShell() {
         >
           <div className="grid grid-cols-5">
             {/* disabled modules must not sit in the bar as silent dead taps */}
-            {BOTTOM_NAV.filter((n) => !disabledModules.includes(n.key) && !(session.user.pricingTier === 'PREMIUM_DFY' && n.key === 'grow')).map((n) => (
+            {BOTTOM_NAV.filter((n) => !disabledModules.includes(n.key)).map((n) => (
               <button
                 key={n.key}
                 onClick={() => setView(n.key)}
@@ -599,9 +599,12 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
 
   const nav = useMemo(() => {
     // Tailored workspace first: hidden modules never show, then personal order.
-    // Corporate law (owner, Task 215): Grow & Earn is the B2C surface —
-    // plans, referral loop, level ladder. Done-for-you accounts never see it.
-    const pool = NAV.filter((n) => !disabledModules.includes(n.key) && !(session.user.pricingTier === 'PREMIUM_DFY' && n.key === 'grow'))
+    // Task 215 law (Grow is the B2C surface) was superseded by the owner on
+    // 2026-11-19 (Task 221 round 4, the network effect): PREMIUM_DFY members
+    // get Grow & Share too. Their invite link runs on the strategist's own
+    // domain and the referral split trail is the partnership's growth engine,
+    // so hiding Grow from the floor would hide the funnel's own marketing.
+    const pool = NAV.filter((n) => !disabledModules.includes(n.key))
     if (!order || order.length === 0) return pool
     const known = pool.filter((n) => order.includes(n.key)).sort(
       (a, b) => order.indexOf(a.key) - order.indexOf(b.key)

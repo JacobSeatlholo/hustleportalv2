@@ -18,6 +18,18 @@ export default function CorporateSignupForm({ slug, creditRands = 550 }: { slug:
   // Honeypot, same law as the main registration: a hidden field real humans
   // never see. Bots fill every input they find.
   const [hpField, setHpField] = useState('')
+  // Task 221 round 4 (owner, network effect): the door captures ?ref=CODE,
+  // the same loop as the main site. A floor member's Grow & Share link lands
+  // here with their code, so the signup attributes to the strategist funnel
+  // (corporatePartner below) AND to the member (Referral row, the split
+  // trail). Same storage law as Landing: localStorage so a signup completed
+  // days later still attributes.
+  const [refCode] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.location.search
+      ? new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase() || localStorage.getItem('hp_ref') || ''
+      : localStorage.getItem('hp_ref') || ''
+  })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
 
@@ -42,6 +54,7 @@ export default function CorporateSignupForm({ slug, creditRands = 550 }: { slug:
           password: form.password,
           companyWebsite: hpField,
           corporatePartner: slug,
+          refCode: refCode || undefined,
         }),
       })
       const j = (await res.json().catch(() => null)) as { error?: string } | null

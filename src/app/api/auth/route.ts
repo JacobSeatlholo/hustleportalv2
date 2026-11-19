@@ -90,12 +90,17 @@ export async function POST(req: NextRequest) {
       // arrived via someone's ?ref= link decides their welcome amount, so the
       // attribution must land before the grant. R10 still flows to the
       // referrer; attribution failure never blocks registration.
+      // Task 221 round 4 (owner, network effect): attribution no longer skips
+      // corporate signups. A floor member's Grow & Share link now points at
+      // the strategist's own domain (?ref=CODE), so a signup can carry BOTH
+      // the strategist attribution (corporatePartner, the funnel) and the
+      // member attribution (Referral row, the split trail). The welcome
+      // priority below is unchanged: the corporate door credit outranks the
+      // referral credit, so the two loops never fight over the wallet.
       let referrerId: string | null = null
-      if (!signupPartner) {
-        try {
-          referrerId = await attributeSignup(user.id, normalized, body.refCode)
-        } catch { /* attribution must never block registration */ }
-      }
+      try {
+        referrerId = await attributeSignup(user.id, normalized, body.refCode)
+      } catch { /* attribution must never block registration */ }
       // welcome bonus (Task 215, owner's rule): R99 when you joined on your
       // own, R120 when you came through someone's referral link — the R21
       // difference is the visible reward for the distribution loop.

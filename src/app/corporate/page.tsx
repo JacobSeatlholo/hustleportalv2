@@ -7,20 +7,18 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 // domain, and at the root of corporate.hustleportal.online via the host
 // rewrite in next.config.ts (add the subdomain in Vercel Domains, one click).
 // Each brand strategist gets their own branded door at /corporate/<slug>
-// (first: /corporate/trinitydirect); this page stays the neutral version of
-// the same offer and points at the strategist doors.
+// (first: /corporate/trinitydirect).
 //
 // Laws this surface obeys:
-//  - Truthful numbers only: the R550 exact-five credit is the strategist door
-//    credit, the R120 code credit is this door's opening credit, the R99
-//    welcome is the bare-application fallback, R110 managed rate and R250+
-//    agency anchor are the established facts.
-//  - Task 216 offer-asymmetry law (boss): this door's offer must read
-//    DIFFERENT from a strategist door, by design — code-backed claims carry
-//    the R120 welcome and the page routes the R550 to the strategist doors, so
-//    a prospect sees the strategist's link as the advantage it is. Task 217
-//    (boss, at the Trinity Direct verdict) makes the ladder explicit: every
-//    circumvention ends on a cheaper rung, never a better one.
+//  - Task 221 round 4 (owner, 2026-11-19, the A/B call): this door is STRAIGHT
+//    BUSINESS. No strategist door mentions, no credit ladder, no coupons in
+//    the copy: the rate, the maths and the trust only. The Task 216/217
+//    asymmetry ladder is retired on this surface; welcome credits and
+//    referral links are the strategist doors' game.
+//  - The BH trust footer is ON here (owner, same call: trust converts) — it
+//    stays OFF on partner doors, where the Task 214 whitelabel law holds.
+//  - Truthful numbers only: R110 managed rate and R250+ agency anchor are the
+//    established facts.
 //  - The managed-rate law: R110 shows against the agency market, never
 //    beside the self-serve reveal prices.
 //  - Boss voice: no dashes in the copy.
@@ -30,17 +28,16 @@ import { BH_JSON_LD } from '@/lib/jsonld'
 export const metadata: Metadata = {
   title: 'HustlePortal Corporate — verified leads for corporate sales floors',
   description:
-    'Done for you, verified before a cent moves. R550 in starting credit through authorized brand strategists, R120 when you open with an access code, at one flat R110 managed rate.',
+    'Done for you, verified before a cent moves. Verified business leads delivered into your sales pipeline at one flat R110 managed rate, against the R250+ agencies advertise.',
 }
 
 export default function CorporatePage() {
   return (
-    // Task 215 (owner): NO footer here either — the entity block, the Cape
-    // Town address and the social handles are a circumvention trail. A
-    // prospect who lands on a strategist's door can walk to /corporate, and
-    // the footer used to hand them the operator straight away. The legal
-    // pages stay reachable at /legal/terms, /legal/privacy and /remove-listing.
-    <CorporateShell footer={false}>
+    // Task 221 round 4 (owner): the BH trust footer is ON. The old Task 215
+    // circumvention rule (no entity block, a strategist door could walk here)
+    // gave way to the trust argument: a CFO reading this page should see the
+    // real company behind the offer. Partner doors keep footer={false}.
+    <CorporateShell>
       {/* Structured data lives HERE, not in the root layout, so partner doors
           never inherit HustlePortal schema (Task 214). */}
       <script

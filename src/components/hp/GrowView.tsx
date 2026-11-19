@@ -24,6 +24,10 @@ import {
 interface RefsData {
   code: string
   link: string
+  // The strategist's company when this member came through a partner door:
+  // the link runs on the partnership's own domain and the self-serve plans
+  // stay hidden (owner, Task 221 round 4).
+  partnerCompany: string | null
   stats: { signedUp: number; subscribed: number; earnedCents: number }
   recent: { id: string; invitedEmail: string | null; status: string; rewardCents: number; createdAt: string; invitedUser: { name: string } | null }[]
   invitedBy: string | null
@@ -152,9 +156,12 @@ export default function GrowView() {
 
   function shareWhatsApp() {
     if (!refs) return
-    const msg = encodeURIComponent(
-      `I run my whole business on HustlePortal, leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win: ${refs.link}`
-    )
+    // Whitelabel law (Task 214): on a partner domain the pitch never names
+    // the engine — the link itself carries the brand.
+    const pitch = refs.partnerCompany
+      ? 'I run my whole business on one system: leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win'
+      : 'I run my whole business on HustlePortal, leads, follow-ups, invoices, an AI co-founder. It keeps me ahead of the competition. Join free with my link and we both win'
+    const msg = encodeURIComponent(`${pitch}: ${refs.link}`)
     window.open(`https://wa.me/?text=${msg}`, '_blank')
   }
 
@@ -256,7 +263,9 @@ export default function GrowView() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          R10 lands in your wallet when they join · R50 more when they subscribe. Every email you send already carries your link.
+          {refs?.partnerCompany
+            ? 'R10 lands in your wallet when a business owner you invited opens their account. Every invite lands on our own floor.'
+            : 'R10 lands in your wallet when they join · R50 more when they subscribe. Every email you send already carries your link.'}
           {refs?.invitedBy && <> Invited by <b className="text-foreground">{refs.invitedBy}</b>.</>}
         </p>
 
@@ -277,7 +286,11 @@ export default function GrowView() {
         )}
       </div>
 
-      {/* Plans */}
+      {/* Plans — the self-serve ladder is the B2C surface. A floor member
+          (partnerCompany set) is already PREMIUM_DFY, so the plan cards, the
+          NPO rate and the subscription tools stay hidden; their Grow story is
+          the referral loop above. (Owner, Task 221 round 4) */}
+      {!refs?.partnerCompany && (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg">Go further, faster</h3>
@@ -436,6 +449,7 @@ export default function GrowView() {
         </p>
         {currency.note && <p className="text-[11px] text-muted-foreground/80">{currency.note}</p>}
       </div>
+      )}
     </div>
   )
 }

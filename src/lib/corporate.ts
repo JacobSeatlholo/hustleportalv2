@@ -34,6 +34,10 @@ export interface Strategist {
   /** Gated partner dashboard (?key=) — keys live in corporateKeys.ts, server-only. */
   /** Where the background digest lands (the partner's own inbox). */
   contactEmail?: string
+  /** The strategist's own app host (Task 221 round 4): floor members'
+      Grow & Share links point here so the referral loop runs on the
+      partnership's own domain, ?ref=CODE landing on the marketing door. */
+  appDomain?: string
 }
 
 /** The referral law, in cents. One source of truth for page, calculator and API. */
@@ -55,6 +59,11 @@ export const STRATEGISTS: Strategist[] = [
     // The background digest lands here — the partnership's own backend inbox
     // (the boss's call: trinitydirectint@gmail.com, not the deal-room signer).
     contactEmail: 'trinitydirectint@gmail.com',
+    // The referral loop runs on the partnership's own host (owner, Task 221
+    // round 4): a floor member's invite link is app.trinitydirect.co.za/?ref=
+    // CODE, which lands on the marketing door this rewrite serves. The rewrite
+    // must be added in Vercel Domains for each new partner host.
+    appDomain: 'app.trinitydirect.co.za',
   },
 ]
 

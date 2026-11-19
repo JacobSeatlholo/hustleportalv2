@@ -97,7 +97,7 @@ export default function CorporateAccessGate() {
     return (
       <div className="space-y-3">
         <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="h-4 w-4" /> Code accepted. Claim your credit below.
+          <CheckCircle2 className="h-4 w-4" /> Code accepted. Open your floor below.
         </p>
         <CorporateClaimForm accessCode={unlocked.code} accessSlug={unlocked.slug} />
       </div>

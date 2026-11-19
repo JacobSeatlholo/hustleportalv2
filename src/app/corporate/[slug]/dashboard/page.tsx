@@ -163,6 +163,32 @@ export default async function PartnerDashboardPage({
   const callNow = rows.filter((r) => r.reveals > 0 && r.balance < MANAGED_PER_LEAD_CENTS)
   const warming = rows.filter((r) => r.reveals > 0 && r.balance >= MANAGED_PER_LEAD_CENTS && r.balance < 3 * MANAGED_PER_LEAD_CENTS)
 
+  // THE NETWORK (owner, Task 221 round 4): members of this floor who
+  // introduced other members of this floor through their Grow & Share links
+  // (?ref=CODE on the partnership's own domain). The referral law pays the
+  // member R10 when their invite opens an account, and the desk splits the
+  // R50 managed-lead share per the agreement (R25 to the sourcing member).
+  // Names and counts only: the same privacy where-clause rules everything
+  // here, both sides of every row must belong to THIS slug's floor.
+  const networkRows = await db.referral.findMany({
+    where: { invitedUser: { corporatePartner: slug }, referrer: { corporatePartner: slug } },
+    select: {
+      referrer: { select: { id: true, name: true } },
+      invitedUser: { select: { id: true, name: true } },
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  const networkMap = new Map<string, { name: string; invited: number; activated: number; lastAt: Date }>()
+  for (const r of networkRows) {
+    const e = networkMap.get(r.referrer.id) ?? { name: r.referrer.name, invited: 0, activated: 0, lastAt: r.createdAt }
+    e.invited += 1
+    if (r.invitedUser && (revealsByUser.get(r.invitedUser.id) ?? 0) > 0) e.activated += 1
+    if (r.createdAt > e.lastAt) e.lastAt = r.createdAt
+    networkMap.set(r.referrer.id, e)
+  }
+  const network = [...networkMap.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.invited - a.invited)
+
   return (
     <CorporateShell footer={false}>
       <main className="min-h-screen bg-background">
@@ -317,6 +343,52 @@ export default async function PartnerDashboardPage({
               invoiced against delivered leads. Email counts are volumes only; what your clients say
               stays inside their own accounts.
             </p>
+          </section>
+
+          {/* THE NETWORK (owner, Task 221 round 4): the flywheel made visible.
+              The floor's members are the marketing force; this section shows
+              the strategist whose introductions actually land. */}
+          <section className="space-y-3">
+            <h2 className="font-display text-2xl">Your network</h2>
+            <p className="text-sm text-muted-foreground">
+              Every member of your floor carries a Grow &amp; Share link that points at your own
+              domain{partner.appDomain ? <> ({partner.appDomain})</> : null}. When they bring a
+              business owner in through it, the account opens on your funnel, the member earns R10
+              on the spot, and the referral law pays on delivered leads: R50 per managed lead is
+              your share, R25 of it to the member who sourced the signup. Your clients become your
+              marketing force.
+            </p>
+            {network.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                No member introductions yet. Tell your floor: their invite link is under Grow &amp;
+                Share in their menu, and every business owner they bring in lands on your door.
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-4 py-3 font-semibold">Member</th>
+                        <th className="px-4 py-3 font-semibold">Introduced</th>
+                        <th className="px-4 py-3 font-semibold">Activated</th>
+                        <th className="px-4 py-3 font-semibold">Last introduction</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {network.map((n) => (
+                        <tr key={n.id}>
+                          <td className="px-4 py-3 font-semibold">{n.name}</td>
+                          <td className="px-4 py-3">{n.invited}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{n.activated}</td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{sast(n.lastAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </main>

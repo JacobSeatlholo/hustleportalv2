@@ -6,11 +6,13 @@
 // advertise as the market anchor. Client-side only; every figure traces to a
 // constant, so the maths and the copy can never drift apart.
 // Task 221 round 3 (owner, 2026-11-19): the R550 freebie leaves the
-// strategist door entirely, maths included. Both doors now run direct maths
+// strategist door entirely, maths included. Both doors run direct maths
 // with no credit assumed, so the door sells the flat rate, not a coupon. The
 // credit itself still lands server-side at claim, it just never renders
-// here. The generic door keeps stating the ladder (Task 216/217): that is
-// where the door is chosen, and the strategist advantage is the point.
+// here.
+// Task 221 round 4 (owner, the A/B call): the generic door goes straight
+// business too — no strategist mentions anywhere on it, so both doors run
+// identical direct maths and identical notes.
 
 import { useMemo, useState } from 'react'
 import { Calculator } from 'lucide-react'
@@ -62,11 +64,7 @@ export default function CorporateCalculator({ partner = false }: { partner?: boo
           <div className="rounded-xl border border-border bg-background p-4">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">With us</dt>
             <dd className="font-display text-2xl mt-1">{rand(maths.ours)}<span className="text-xs font-sans font-normal text-muted-foreground"> / month</span></dd>
-            {partner ? (
-              <p className="text-[11px] text-muted-foreground mt-1">Direct maths. Every lead in this number is verified before delivery.</p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground mt-1">Direct maths, no credit assumed; the R550 strategist credit covers five</p>
-            )}
+            <p className="text-[11px] text-muted-foreground mt-1">Direct maths. Every lead in this number is verified before delivery.</p>
           </div>
           <div className="rounded-xl border border-border bg-background p-4">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">The agency rate</dt>
@@ -80,9 +78,7 @@ export default function CorporateCalculator({ partner = false }: { partner?: boo
           </div>
         </dl>
         <p className="text-xs text-muted-foreground">
-          Flat R110 per qualified lead reveal. Unverified leads are never charged.{' '}
-          {!partner &&
-            'The R550 five lead credit is the strategist door credit; opening with an access code carries the R120 code credit, applied at setup.'}
+          Flat R110 per qualified lead reveal. Unverified leads are never charged.
         </p>
       </div>
     </section>
