@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature, Zap, LogIn } from 'lucide-react'
+import { BadgeCheck, Building2, Handshake, ShieldCheck, Users, Wallet, FileSignature, Zap, LogIn, ArrowRight, Forward } from 'lucide-react'
 import type { Strategist } from '@/lib/corporate'
 import CorporateSignupForm from '@/components/hp/CorporateSignupForm'
 import CorporateAccessGate from '@/components/hp/CorporateAccessGate'
@@ -9,36 +9,29 @@ import CorporateCalculator from '@/components/hp/CorporateCalculator'
 // (Submissions from the doors still carry their slug attribution in the
 // Testimonial table for the desk; the doors themselves just never render it.)
 
-// Task 208: the corporate content, shared by the generic door (/corporate) and
-// every strategist door (/corporate/<slug>). Laws carried over from Task 207:
-// truthful numbers only; the corporate rate never sits beside self-serve prices; no dashes
-// in the copy; the partnership is named exactly as the owner stated it.
-// Task 210 law (boss): every door is PURE SALES. The referral law, splits and
-// member mechanics are internal only (claim API + exec rollup track them); no
-// commission content or ?via talk ever renders client-facing. Task 215 adds
-// the ONE client-facing calculator the owner asked for: pricing maths only
-// (R110 vs the R250+ agency anchor), never commission economics.
-// Task 216 law (boss, offer asymmetry): the two doors carry DIFFERENT credits
-// by design, so nobody circumvents a strategist link. Task 217 (boss, at the
-// Trinity Direct verdict) makes the ladder three rungs and states it plainly:
-// R550 exact-five is the strategist door credit, R120 is the access-code
-// credit on this door, R99 is the bare-application welcome. Every circumvention
-// ends on a cheaper rung, never a better one. The strategist door also carries
-// the real searches sweetener: DFY accounts get a 200/day engine allowance,
-// enforced in the scan gate (leadpool), so the tile states a fact, not a hope.
+// Task 221 round 3 (owner, 2026-11-19): the door is a landing page that must
+// CONVERT the decision maker and arm the subordinate to pass the link up to
+// the CFO. New spine: hook → the problem → the shift → the numbers → the
+// maths → pass it up → trust → claim. The strategist door no longer runs the
+// R550 coupon in its copy (owner: it cheapens the pitch; the mechanic still
+// exists server-side at claim, it just never renders here). The generic door
+// keeps the Task 216/217 asymmetry law: the ladder is stated where the door
+// is chosen. Laws kept: truthful numbers only; the corporate rate never sits
+// beside self-serve prices; no dashes in the copy; no commission mechanics
+// client-facing; whitelabel on partner doors.
 function tiles(partner?: Strategist) {
   return partner
     ? [
-        { icon: Wallet, big: 'R550', small: 'in starting credit for your corporate account, applied at setup' },
-        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
-        { icon: Zap, big: '200', small: 'lead searches a day, on us — your own hunting between managed batches' },
+        { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat. The rate is the rate.' },
         { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
+        { icon: Zap, big: '200', small: 'lead searches a day for your own hunting, between managed batches' },
+        { icon: ShieldCheck, big: '0', small: 'unverified leads charged. The check is the guarantee.' },
       ]
     : [
-        { icon: Wallet, big: 'R550', small: 'in starting credit when your account opens through an authorized brand strategist' },
         { icon: BadgeCheck, big: 'R110', small: 'per qualified lead reveal, flat, done for you' },
         { icon: Building2, big: 'R250+', small: 'the going agency rate per lead, advertised' },
         { icon: ShieldCheck, big: 'R120', small: 'in starting credit when you open with an access code' },
+        { icon: Wallet, big: 'R550', small: 'the strategist door credit, on accounts opened through an authorized brand strategist' },
       ]
 }
 
@@ -48,25 +41,28 @@ function steps(partner?: Strategist) {
   return [
     {
       n: '1',
-      title: 'Claim your credit',
-      body: partner
-        ? 'Fill in the form below. Your account opens on the spot and the R550 starting credit lands in your wallet before you spend a cent.'
-        : 'Enter your access code or apply below. Our corporate team sets your account up by hand and applies the R120 starting credit when you open with a code. Opened through an authorized brand strategist, the R550 five lead credit applies instead.',
+      title: 'Open the floor',
+      body: 'Sign the agreement on our own e-sign system, with a timestamped audit certificate. Minutes, not weeks. The floor is yours the same day.',
     },
     {
       n: '2',
-      title: 'We find and verify',
-      body: partner
-        ? 'Managed sourcing runs end to end on our desk. Businesses are found, contact details are verified by hand and machine, and the leads land in your pipeline ready to work.'
-      : 'Managed sourcing runs inside HustlePortal. Businesses are found, contact details are verified by hand and machine, and the leads land in your pipeline ready to work.',
+      title: 'The pipeline fills',
+      body: (partner ? 'Our desk' : 'The HustlePortal desk') + ' runs managed sourcing end to end: businesses found, contact details verified by hand and machine, delivered into your pipeline ready to work.',
     },
     {
       n: '3',
       title: 'Your sellers close',
-      body: 'Verified before a cent moves: an unverified lead is never charged. Your sellers spend their time selling, not hunting for numbers that work.',
+      body: 'Sellers wake up to a pipeline of verified businesses and spend the day selling, not hunting. Verified before a cent moves: an unverified lead is never charged.',
     },
   ]
 }
+
+const PROBLEM = [
+  'Leads live in inboxes, WhatsApp threads and spreadsheets. Nobody owns the follow up.',
+  'When selling gets busy, prospecting stops. When prospecting stops, next month is empty.',
+  'Contact lists age fast. Sellers burn hours dialing numbers that went dead months ago.',
+  'Nobody can answer the question the money person asks: what is the pipeline actually worth today?',
+]
 
 const WHO = [
   'Sales teams that need a full pipeline, not a lead here and there',
@@ -75,18 +71,16 @@ const WHO = [
   'Property, insurance and finance teams working by appointment',
 ]
 
-// Task 213: the conversion section. Every claim is a real product behaviour —
-// verification-before-payment is enforced by the billing code, the flat rate
-// is the contractual rate, the e-sign engine is our own (Task 212) and the
-// POPIA opt-out is the public /remove-listing flow. No invented testimonials.
-// Task 216/217: the credit card is door-aware (R550 strategist door, R120
-// access-code credit on the generic door).
+// Task 213: every claim is a real product behaviour — verification-before-
+// payment is enforced by the billing code, the flat rate is the contractual
+// rate, the e-sign engine is our own (Task 212) and the POPIA opt-out is the
+// public /remove-listing flow. No invented testimonials, no invented numbers.
 function trust(partner?: Strategist) {
   const cards = [
     {
       icon: ShieldCheck,
       title: 'Verified before a cent moves',
-      body: 'Contact details are checked by hand and machine before delivery. An unverified lead is never charged — the check is the guarantee, and it is written into how billing works.',
+      body: 'Contact details are checked by hand and machine before delivery. An unverified lead is never charged. The check is the guarantee, and it is written into how billing works.',
     },
     {
       icon: Wallet,
@@ -103,25 +97,24 @@ function trust(partner?: Strategist) {
       title: 'Done for you',
       body: 'Managed sourcing runs inside the platform: businesses found, verified and delivered into your pipeline ready to work. Your sellers spend their day selling.',
     },
-    partner
-      ? {
-          icon: BadgeCheck,
-          title: 'R550 starting credit on us',
-          body: 'Applied at setup before you spend a cent — five qualified lead reveals to judge the quality first, with no card needed to claim.',
-        }
-      : {
-          icon: BadgeCheck,
-          title: 'The credit follows the door',
-          body: 'Open with an access code and the R120 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the R550 credit, five qualified lead reveals, applies instead. No card is needed either way.',
-        },
     {
       icon: Users,
       title: 'POPIA-aware sourcing',
       body: 'Business contact data is processed lawfully under POPIA. Any listed business can remove itself from the pipeline in one click, and the suppression holds.',
     },
   ]
+  if (!partner) {
+    cards.push({
+      icon: BadgeCheck,
+      title: 'The credit follows the door',
+      body: 'Open with an access code and the R120 starting credit is applied at setup, before you spend a cent. Open your account through an authorized brand strategist and the strategist door credit applies instead. No card is needed either way.',
+    })
+  }
   return cards
 }
+
+const CTA_CLS =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90'
 
 export default function CorporateContent({ partner }: { partner?: Strategist }) {
   return (
@@ -142,47 +135,59 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           {/* Whitelabel law (Task 214): partner doors carry only the strategist's brand. */}
           {partner ? partner.company : 'HustlePortal Corporate'}
         </p>
-        <h1 className="font-display text-4xl leading-tight">
-          Verified leads for corporate sales floors. Done for you.
+        <h1 className="font-display text-4xl leading-tight md:text-5xl">
+          {partner ? 'A sales floor that never runs dry.' : 'Verified leads for corporate sales floors. Done for you.'}
         </h1>
-        <p className="text-muted-foreground">
-          Your sellers close; our engine finds and verifies the businesses they sell to. Real contact
-          details of real businesses, delivered into your pipeline at one flat managed rate.
-          {partner
-            ? ' The R550 starting credit lands in your wallet the moment your account opens.'
-            : ' Your starting credit follows the door: R550 through an authorized brand strategist, R120 when you open with an access code.'}
+        <p className="text-lg text-muted-foreground leading-relaxed">
+          {partner ? (
+            <>
+              Verified businesses, delivered into your pipeline ready to work. Your sellers sell;
+              the hunting, the verifying and the chasing are done for you, at one flat rate.
+            </>
+          ) : (
+            <>
+              Your sellers close; our engine finds and verifies the businesses they sell to. Real contact
+              details of real businesses, delivered into your pipeline at one flat managed rate.
+              Your starting credit follows the door: the strategist door credit through an authorized
+              brand strategist, R120 when you open with an access code.
+            </>
+          )}
         </p>
-        {partner ? (
-          <>
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Handshake className="h-4 w-4 text-brand" />
-              Presented by {partner.name} of {partner.company}.
-            </p>
-            <div className="pt-1">
-              <a
-                href="#claim"
-                className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                No credit card needed — claim your free credit
-              </a>
-            </div>
-          </>
-        ) : (
+        {partner && (
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <Handshake className="h-4 w-4 text-brand" />
+            Presented by {partner.name} of {partner.company}.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <a href="#claim" className={CTA_CLS}>
+            Open your floor <ArrowRight className="h-4 w-4" />
+          </a>
+          {partner && (
+            <a
+              href="#forward"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 py-3 text-sm font-semibold text-muted-foreground transition hover:border-brand hover:text-foreground"
+            >
+              Not the signatory? Send this up <Forward className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+        {!partner && (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Handshake className="h-4 w-4 text-brand" />
             Delivered by the Business Hustle corporate desk, on the same verified engine behind HustlePortal.
           </p>
         )}
         {/* Task 215 round 2: the reading spine. One quiet row of anchors so a
-            prospect always knows where they are and what is left: numbers →
-            how → maths → trust → claim. */}
+            prospect always knows where they are and what is left: problem →
+            how → maths → forward → claim. */}
         <nav className="flex flex-wrap gap-2 pt-2" aria-label="Page sections">
           {[
-            ['#numbers', 'The numbers'],
-            ['#how', 'How it works'],
+            ['#problem', 'The problem'],
+            ['#how', 'How it runs'],
             ['#maths', 'The maths'],
-            ['#trust', 'Why us'],
-            ['#claim', 'Claim your credit'],
+            ...(partner ? [['#forward', 'For your CFO']] : []),
+            ['#claim', 'Open your floor'],
           ].map(([href, label]) => (
             <a
               key={href}
@@ -219,23 +224,35 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
         </section>
       )}
 
-      {/* Task 215 round 2: the page reads as one spine, each section anchored —
-          the numbers → how it works → the maths → trust → who it suits → claim. */}
-      <section id="numbers" className="space-y-3 scroll-mt-6">
-        <h2 className="font-display text-2xl">The numbers, upfront</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {tiles(partner).map((t) => (
-            <div key={t.big} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
-              <t.icon className="h-5 w-5 text-brand" />
-              <p className="font-display text-2xl">{t.big}</p>
-              <p className="text-xs text-muted-foreground">{t.small}</p>
-            </div>
+      {/* Task 221 round 3: the problem, stated the way the decision maker feels
+          it. No feature talk, no numbers yet. The room must nod before it reads on. */}
+      <section id="problem" className="space-y-4 scroll-mt-6">
+        <h2 className="font-display text-2xl md:text-3xl">Deals do not die at the close.</h2>
+        <p className="text-muted-foreground leading-relaxed">
+          They die in the quiet gaps between follow ups: the lead nobody owned, the number that went
+          dead, the week selling got busy so prospecting stopped. Growth rarely stalls on the market
+          or the product. It stalls on the pipeline.
+        </p>
+        <ul className="space-y-2.5">
+          {PROBLEM.map((p) => (
+            <li key={p} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" /> {p}
+            </li>
           ))}
-        </div>
+        </ul>
+        <p className="text-sm font-medium">
+          Every unworked lead is salary spent on nothing. That is the cost of a floor that hunts
+          from scratch, every month, forever.
+        </p>
       </section>
 
       <section id="how" className="space-y-3 scroll-mt-6">
-        <h2 className="font-display text-2xl">How it works</h2>
+        <h2 className="font-display text-2xl md:text-3xl">The shift</h2>
+        <p className="text-muted-foreground leading-relaxed">
+          The floor stops hunting from scratch. A desk that does nothing else fills the pipeline:
+          businesses found, verified by hand and machine, delivered ready to work. Your sellers
+          open their day selling.
+        </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {steps(partner).map((s) => (
             <div key={s.n} className="rounded-2xl border border-border bg-card p-5 space-y-2">
@@ -247,13 +264,18 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
             </div>
           ))}
         </div>
-        <div className="pt-2">
-          <a
-            href="#claim"
-            className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            {partner ? 'Claim your R550 credit — no card needed' : 'Claim your starting credit — no card needed'}
-          </a>
+      </section>
+
+      <section id="numbers" className="space-y-3 scroll-mt-6">
+        <h2 className="font-display text-2xl">The numbers, upfront</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {tiles(partner).map((t) => (
+            <div key={t.big} className="rounded-2xl border border-border bg-card p-5 space-y-1.5">
+              <t.icon className="h-5 w-5 text-brand" />
+              <p className="font-display text-2xl">{t.big}</p>
+              <p className="text-xs text-muted-foreground">{t.small}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -270,11 +292,8 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
           <div className="rounded-2xl border border-brand/40 bg-brand/5 p-5">
             <p className="text-sm font-semibold text-brand">The corporate rate: R110 per qualified lead reveal, flat</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Our team runs the finding, the verification and the delivery into your pipeline. One
-              flat contractual rate, no ladder, no promos.
-              {partner
-                ? ' The R550 starting credit is exactly five managed leads, on us. The rate is the rate.'
-                : ' The R550 starting credit is exactly five managed leads, and it is the strategist door credit; the direct door carries the R120 access-code credit. The rate is the rate.'}
+              The finding, the verification and the delivery into your pipeline are all in the rate.
+              One flat contractual number. No ladder, no promos, no renegotiation when volume grows.
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-5">
@@ -288,6 +307,38 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       </section>
 
       <CorporateCalculator partner={!!partner} />
+
+      {/* Task 221 round 3 (owner): the pass it up block. The person who feels
+          the pipeline problem daily is rarely the person who signs. This section
+          hands them the whole case in CFO language and tells them to forward the
+          page. Partner doors only: the generic door is the invitation desk. */}
+      {partner && (
+        <section id="forward" className="space-y-4 scroll-mt-6">
+          <h2 className="font-display text-2xl md:text-3xl">Reading this but not the one who signs?</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            You know this problem better than anyone above you. You live in the follow ups, the dead
+            numbers and the Monday pipeline guess. The person who can end it signs the agreements.
+            Put this page in front of them: everything a money person needs is on it, the rate, the
+            guarantee, the compliance and the maths.
+          </p>
+          <figure className="rounded-2xl border border-brand/40 bg-brand/5 p-5 space-y-2">
+            <figcaption className="text-xs font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
+              <Forward className="h-4 w-4" /> The whole case, four sentences
+            </figcaption>
+            <blockquote className="text-sm leading-relaxed">
+              We can have verified business leads delivered into our sales pipeline at R110 each,
+              flat, from a team that verifies every contact before it is ever charged. Agencies
+              advertise the same work from R250. Every lead and every rand sits in one ledger we can
+              check any time, the agreement is signed electronically with a timestamped audit
+              certificate, and the pipeline is POPIA clean. One closed deal covers more than a
+              hundred managed leads at our margins, so the maths is not close.
+            </blockquote>
+          </figure>
+          <p className="text-sm text-muted-foreground">
+            Send them the link to this page with that note. Then let them read it in their own time.
+          </p>
+        </section>
+      )}
 
       <section id="trust" className="space-y-3 scroll-mt-6">
         <h2 className="font-display text-2xl">
@@ -323,26 +374,26 @@ export default function CorporateContent({ partner }: { partner?: Strategist }) 
       <section className="space-y-4 scroll-mt-6" id="claim">
         {partner ? (
           <>
-            <h2 className="font-display text-2xl">No credit card needed. Claim your free credit. Get started now.</h2>
+            <h2 className="font-display text-2xl md:text-3xl">Open your floor today</h2>
             <p className="text-sm text-muted-foreground">
-              Open your corporate account on the spot. The R550 starting credit lands in your wallet
-              the moment you sign up, exactly five managed leads at the flat R110 rate. No card, no
-              callback, no waiting.
+              Fill in the form and the account opens on the spot: the corporate tier is set, the
+              wallet goes live, and the desk starts filling your pipeline. No card, no callback,
+              no waiting.
             </p>
             <CorporateSignupForm slug={partner.slug} />
           </>
         ) : (
           <>
             {/* Task 215: the generic door is the locked B2B access point — a
-                code from the team, or an invitation application. Task 216: the
-                credit asymmetry is stated here, where the door is chosen. */}
+                code from the team, or an invitation application. Task 216/217:
+                the credit asymmetry is stated here, where the door is chosen. */}
             <h2 className="font-display text-2xl">Corporate access is by invitation</h2>
             <p className="text-sm text-muted-foreground">
               This door is locked on purpose. Corporate accounts are opened by our team on a written
               agreement, so entry needs an access code from one of our team members, or an approved
               invitation application. Opening with an access code carries the R120 starting credit; the
-              R550 five lead credit is the strategist door benefit, and it lands on accounts opened
-              through an authorized brand strategist.
+              strategist door credit is larger, and it lands on accounts opened through an authorized
+              brand strategist.
             </p>
             <CorporateAccessGate />
           </>

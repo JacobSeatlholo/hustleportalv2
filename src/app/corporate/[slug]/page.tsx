@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return whitelabelMeta(
     s,
     `${s.company} — verified leads for corporate sales floors, done for you`,
-    `${s.company} presents the corporate edition of the lead engine: R550 in starting credit, exactly five managed leads, R110 per qualified lead reveal. Led by ${s.name}.`,
+    `${s.company} presents the corporate edition of the lead engine: verified business leads delivered into your sales pipeline, done for you, at one flat R110 managed rate. Led by ${s.name}.`,
   )
 }
 
