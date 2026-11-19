@@ -1108,5 +1108,70 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-10-30",
     "fresh": "fresh"
+  },
+  {
+    "handle": "s.rockvisuals",
+    "name": "Steven Cape Town Photographer",
+    "trade": "photographer",
+    "city": "Cape Town",
+    "followers": 6461,
+    "url": "https://www.tiktok.com/@s.rockvisuals",
+    "phone": "0848243164",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-12",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "wessy_pasinyore",
+    "name": "Capetown_photographer",
+    "trade": "photographer",
+    "city": "Cape Town",
+    "followers": 4443,
+    "url": "https://www.tiktok.com/@wessy_pasinyore",
+    "phone": "27813127828",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-11",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "saloncleodurban",
+    "name": "saloncleodurban",
+    "trade": "salon",
+    "city": "Durban",
+    "followers": 1212,
+    "url": "https://www.tiktok.com/@saloncleodurban",
+    "phone": "",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-11",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "johndanailtech",
+    "name": "JOHN’s NAILs DXB 💅💅",
+    "trade": "nails",
+    "city": "Johannesburg",
+    "followers": 1120,
+    "url": "https://www.tiktok.com/@johndanailtech",
+    "phone": "0554303581",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-19",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "yes_inailedit",
+    "name": "Joburg South Nail Tech 💅🏻",
+    "trade": "nail",
+    "city": "Johannesburg",
+    "followers": 19,
+    "url": "https://www.tiktok.com/@yes_inailedit",
+    "phone": "0718579763",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-15",
+    "fresh": "fresh"
   }
 ]
