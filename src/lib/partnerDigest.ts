@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { getStrategist, REFERRAL_PER_LEAD_CENTS, MANAGED_PER_LEAD_CENTS } from '@/lib/corporate'
+import { strategistDashboardUrl } from '@/lib/corporateKeys'
 import { sast } from '@/lib/esign'
 
 // ============ PARTNER DIGEST (Task 215, background analytics) ============
@@ -95,7 +96,7 @@ export async function computePartnerDigest(slug: string): Promise<PartnerDigest 
     slug: partner.slug,
     company: partner.company,
     contactEmail: partner.contactEmail,
-    dashboardUrlPath: `/corporate/${partner.slug}/dashboard?key=${encodeURIComponent(partner.dashboardKey)}`,
+    dashboardUrlPath: strategistDashboardUrl(partner.slug) ?? `/corporate/${partner.slug}/dashboard`,
     accounts: rows.length,
     newAccountsWeek: rows.filter((r) => r.createdAt >= weekAgo).length,
     activated: rows.filter((r) => r.reveals > 0).length,

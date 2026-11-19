@@ -5,6 +5,7 @@ import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import EsignSendForm from '@/components/hp/corporate/EsignSendForm'
 import EsignSessionDelete from '@/components/hp/corporate/EsignSessionDelete'
 import { getStrategist, whitelabelMeta } from '@/lib/corporate'
+import { dashboardKeyFor } from '@/lib/corporateKeys'
 import { PARTNER_DOCS, checkDocsKey } from '@/lib/partnerDocs'
 import { db } from '@/lib/db'
 import { sast } from '@/lib/esign'
@@ -90,7 +91,7 @@ export default async function PartnerDocumentsPage({
             <p className="flex items-center gap-2 text-sm">
               <TrendingUp className="h-4 w-4 text-brand" />
               <a
-                href={`/corporate/${slug}/dashboard?key=${encodeURIComponent(partner.dashboardKey)}`}
+                href={`/corporate/${slug}/dashboard?key=${encodeURIComponent(dashboardKeyFor(slug) ?? '')}`}
                 className="font-semibold text-brand underline"
               >
                 Your partner dashboard →

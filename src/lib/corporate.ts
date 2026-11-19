@@ -31,8 +31,7 @@ export interface Strategist {
   /** Company image under /corporate/ (public/corporate/). */
   image: string
   members: StrategistMember[]
-  /** Gated partner dashboard (?key=) — the strategist's own funnel metrics. */
-  dashboardKey: string
+  /** Gated partner dashboard (?key=) — keys live in corporateKeys.ts, server-only. */
   /** Where the background digest lands (the partner's own inbox). */
   contactEmail?: string
 }
@@ -50,10 +49,9 @@ export const STRATEGISTS: Strategist[] = [
     tagline: 'Corporate sales floors, equipped.',
     image: '/corporate/trinitydirect-logo.jpg',
     members: [],
-    // The partner dashboard gate. Separate from the deal-room key on
-    // purpose: the dashboard is the strategist's daily surface, the deal
-    // room holds documents and the e-sign sender.
-    dashboardKey: 'bh-tdc-dashboard-8v3nq5',
+    // The dashboard key lives in corporateKeys.ts (server-only): it used to
+    // sit here on the registry, but client components import this module, so
+    // the key rode in every member's JS bundle until Task 221 moved it.
     // The background digest lands here — the partnership's own backend inbox
     // (the boss's call: trinitydirectint@gmail.com, not the deal-room signer).
     contactEmail: 'trinitydirectint@gmail.com',
@@ -91,11 +89,6 @@ export function strategistForEmail(email?: string | null): { slug: string; name:
   const e = email.toLowerCase().trim()
   const s = STRATEGISTS.find((st) => st.contactEmail?.toLowerCase().trim() === e)
   return s ? { slug: s.slug, name: s.name } : undefined
-}
-
-export function strategistDashboardForEmail(email?: string | null): string | undefined {
-  const s = strategistForEmail(email)
-  return s ? `/corporate/${s.slug}/dashboard?key=${getStrategist(s.slug)?.dashboardKey}` : undefined
 }
 
 // ============ WHITELABEL HEAD (Task 214) ============

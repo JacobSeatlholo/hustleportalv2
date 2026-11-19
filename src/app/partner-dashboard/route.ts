@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
-import { strategistDashboardForEmail } from '@/lib/corporate'
+import { strategistDashboardForEmail } from '@/lib/corporateKeys'
 
 // ============ PARTNER DASHBOARD BRIDGE (boss, 2026-11-19) ============
 // The "Analytics dashboard" row in the workspace menu points here. The

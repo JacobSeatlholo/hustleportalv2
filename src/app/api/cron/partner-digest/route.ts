@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStrategist, STRATEGISTS } from '@/lib/corporate'
+import { strategistForDashboardKey } from '@/lib/corporateKeys'
 import { computePartnerDigest, type PartnerDigest } from '@/lib/partnerDigest'
 import { sendSystemMail } from '@/lib/mailer'
 import { globalCooldown } from '@/lib/ratelimit'
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
   const key = url.searchParams.get('key')
   let slugs: string[]
   if (key) {
-    const partner = STRATEGISTS.find((s) => s.dashboardKey === key)
+    const partner = strategistForDashboardKey(key)
     if (!partner) return NextResponse.json({ error: 'Not found.' }, { status: 401 })
     slugs = [partner.slug]
   } else if (bearerOk(req)) {

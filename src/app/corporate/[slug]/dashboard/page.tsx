@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { Users, Zap, Wallet, Handshake, Target, TrendingUp, Mail, CalendarClock } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
 import { getStrategist, REFERRAL_PER_LEAD_CENTS, MANAGED_PER_LEAD_CENTS } from '@/lib/corporate'
+import { dashboardKeyFor } from '@/lib/corporateKeys'
 import { whitelabelMeta } from '@/lib/corporate'
 import { db } from '@/lib/db'
 import { sast } from '@/lib/esign'
@@ -73,7 +74,7 @@ export default async function PartnerDashboardPage({
   const { key } = await searchParams
   const partner = getStrategist(slug)
   // Wrong key or unknown slug = indistinguishable from a dead link.
-  if (!partner || key !== partner.dashboardKey) notFound()
+  if (!partner || key !== dashboardKeyFor(slug)) notFound()
 
   // THE PRIVACY LAW: every query below filters corporatePartner = slug. This is
   // the only attribution this page can ever see — signups that arrived any other
