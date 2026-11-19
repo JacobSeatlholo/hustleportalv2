@@ -2,37 +2,35 @@
 
 // Task 215: the corporate lead calculator, on every corporate door. The
 // numbers are the established ones (pricing strategy 4.4 and the doors'
-// tiles): R110 per qualified lead reveal flat, R550 starting credit that is
-// exactly five managed leads, and the R250+ that agencies advertise as the
-// market anchor. Client-side only; every figure traces to a constant, so the
-// maths and the copy can never drift apart.
-// Task 216 law (offer asymmetry): the free-lead maths ride the door. The
-// strategist door counts its R550 credit as five free leads; the generic
-// door's direct maths assume none, because the R120 access-code credit (Task
-// 217) does not cover a full R110 lead either — and the note says where the
-// five come from.
+// tiles): R110 per qualified lead reveal flat, and the R250+ that agencies
+// advertise as the market anchor. Client-side only; every figure traces to a
+// constant, so the maths and the copy can never drift apart.
+// Task 221 round 3 (owner, 2026-11-19): the R550 freebie leaves the
+// strategist door entirely, maths included. Both doors now run direct maths
+// with no credit assumed, so the door sells the flat rate, not a coupon. The
+// credit itself still lands server-side at claim, it just never renders
+// here. The generic door keeps stating the ladder (Task 216/217): that is
+// where the door is chosen, and the strategist advantage is the point.
 
 import { useMemo, useState } from 'react'
 import { Calculator } from 'lucide-react'
 
 const REVEAL_CENTS = 11000 // mirrors DFY_REVEAL_PRICE_CENTS in src/lib/levels.ts
 const AGENCY_CENTS = 25000 // mirrors AGENCY_PER_LEAD_CENTS in src/lib/levels.ts
-const CREDIT_LEADS = 5 // R550 credit ÷ R110 = exactly five managed leads
 
 const rand = (cents: number) =>
   `R${(cents / 100).toLocaleString('en-ZA', { maximumFractionDigits: 0 })}`
 
 export default function CorporateCalculator({ partner = false }: { partner?: boolean }) {
   const [leads, setLeads] = useState(50)
-  const freeLeads = partner ? CREDIT_LEADS : 0
 
   const maths = useMemo(() => {
-    const ours = Math.max(0, leads - freeLeads) * REVEAL_CENTS
+    const ours = leads * REVEAL_CENTS
     const agency = leads * AGENCY_CENTS
     const saving = agency - ours
     const savingPct = agency > 0 ? Math.round((saving / agency) * 100) : 0
     return { ours, agency, saving, savingPct }
-  }, [leads, freeLeads])
+  }, [leads])
 
   return (
     <section className="space-y-4">
@@ -65,7 +63,7 @@ export default function CorporateCalculator({ partner = false }: { partner?: boo
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">With us</dt>
             <dd className="font-display text-2xl mt-1">{rand(maths.ours)}<span className="text-xs font-sans font-normal text-muted-foreground"> / month</span></dd>
             {partner ? (
-              <p className="text-[11px] text-muted-foreground mt-1">First {CREDIT_LEADS} leads on your R550 credit</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Direct maths. Every lead in this number is verified before delivery.</p>
             ) : (
               <p className="text-[11px] text-muted-foreground mt-1">Direct maths, no credit assumed; the R550 strategist credit covers five</p>
             )}
@@ -83,9 +81,8 @@ export default function CorporateCalculator({ partner = false }: { partner?: boo
         </dl>
         <p className="text-xs text-muted-foreground">
           Flat R110 per qualified lead reveal. Unverified leads are never charged.{' '}
-          {partner
-            ? 'Your R550 starting credit is applied at setup, before you spend a cent.'
-            : 'The R550 five lead credit is the strategist door credit; opening with an access code carries the R120 code credit, applied at setup.'}
+          {!partner &&
+            'The R550 five lead credit is the strategist door credit; opening with an access code carries the R120 code credit, applied at setup.'}
         </p>
       </div>
     </section>
