@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Users, Zap, Wallet, Handshake, Target, TrendingUp, Mail, CalendarClock } from 'lucide-react'
 import CorporateShell from '@/components/hp/corporate/CorporateShell'
+import DemoTools from '@/components/hp/corporate/DemoTools'
 import { getStrategist, REFERRAL_PER_LEAD_CENTS, MANAGED_PER_LEAD_CENTS } from '@/lib/corporate'
 import { dashboardKeyFor } from '@/lib/corporateKeys'
 import { whitelabelMeta } from '@/lib/corporate'
@@ -68,13 +69,18 @@ export default async function PartnerDashboardPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ key?: string }>
+  searchParams: Promise<{ key?: string; demo?: string }>
 }) {
   const { slug } = await params
-  const { key } = await searchParams
+  const { key, demo } = await searchParams
   const partner = getStrategist(slug)
   // Wrong key or unknown slug = indistinguishable from a dead link.
   if (!partner || key !== dashboardKeyFor(slug)) notFound()
+  // Demo tools render ONLY when the URL carries &demo=1 — the walkthrough URL
+  // the partner receives never does, so Kelo sees a populated dashboard with
+  // no seed/reset chrome. The key gates the endpoint itself. (owner, Task 221
+  // round 4)
+  const showDemoTools = demo === '1'
 
   // THE PRIVACY LAW: every query below filters corporatePartner = slug. This is
   // the only attribution this page can ever see — signups that arrived any other
@@ -193,6 +199,7 @@ export default async function PartnerDashboardPage({
     <CorporateShell footer={false}>
       <main className="min-h-screen bg-background">
         <div className="max-w-4xl mx-auto px-6 py-14 space-y-10">
+          {showDemoTools && <DemoTools slug={slug} dashKey={key as string} />}
           <header className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
               <Handshake className="h-3.5 w-3.5" /> Partner dashboard — {partner.company}

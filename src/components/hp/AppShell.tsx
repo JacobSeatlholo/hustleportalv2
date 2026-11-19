@@ -215,8 +215,9 @@ export default function AppShell() {
   const content = (() => {
     // View guard: a hidden module never renders, even via deep links or events.
     if (view !== 'dashboard' && disabledModules.includes(view)) return <DashboardView />
-    // Deep-link guard: a corporate account can never land on the B2C Grow view.
-    if (view === 'grow' && isPremiumTier(session.user.pricingTier)) return <DashboardView />
+    // Task 221 round 4 (owner, network effect): the old Task 215 deep-link
+    // guard (premium tiers bounced off Grow) is gone — the floor's referral
+    // loop is the funnel's growth engine and Grow renders for every tier.
     switch (view) {
       case 'dashboard': return <DashboardView />
       case 'leads': return <LeadsView />
