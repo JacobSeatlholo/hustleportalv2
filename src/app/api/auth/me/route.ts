@@ -5,6 +5,7 @@ import { ensureWallet } from '@/lib/wallet'
 import { listProjects, getOrCreateDefaultProject } from '@/lib/workspace'
 import { opportunisticTick } from '@/lib/campaignqueue'
 import { hasStatementAccess } from '@/lib/statements'
+import { strategistForEmail } from '@/lib/corporate'
 
 export async function GET() {
   try {
@@ -35,6 +36,9 @@ export async function GET() {
         role: user.role,
         platformAdmin: user.platformAdmin === true,
       }),
+      // The strategist's own funnel surface (boss, 2026-11-19): keyless
+      // slug+name only, the /partner-dashboard route holds the key.
+      partnerDashboard: strategistForEmail(user.email) ?? null,
       projects: projects.map((p) => ({
         id: p.id,
         name: p.name,

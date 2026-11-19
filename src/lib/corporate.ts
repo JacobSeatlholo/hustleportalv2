@@ -77,6 +77,27 @@ export function getStrategistMember(slug: string, code: string): StrategistMembe
   return s.members.find((m) => m.code.toLowerCase().trim() === code.toLowerCase().trim())
 }
 
+// The partner's own workspace menu entry (boss, 2026-11-19): when the
+// strategist logs into the member workspace, his funnel metrics surface as
+// "Analytics dashboard" in the menu instead of living only on a link he has
+// to keep. Gated to the partnership's registered contact email — NEVER to
+// corporatePartner alone, every client the funnel introduced carries that
+// same slug and must not see his funnel. The key itself never rides a
+// client bundle: /api/auth/me ships only the keyless slug+name so the menu
+// can show the row, and the /partner-dashboard route resolves the key
+// server-side and redirects. The menu hands over nothing he doesn't own.
+export function strategistForEmail(email?: string | null): { slug: string; name: string } | undefined {
+  if (!email) return undefined
+  const e = email.toLowerCase().trim()
+  const s = STRATEGISTS.find((st) => st.contactEmail?.toLowerCase().trim() === e)
+  return s ? { slug: s.slug, name: s.name } : undefined
+}
+
+export function strategistDashboardForEmail(email?: string | null): string | undefined {
+  const s = strategistForEmail(email)
+  return s ? `/corporate/${s.slug}/dashboard?key=${getStrategist(s.slug)?.dashboardKey}` : undefined
+}
+
 // ============ WHITELABEL HEAD (Task 214) ============
 // The root layout ships HustlePortal-branded metadata (og:title, application
 // name, apple web app title, keywords). Every partner surface overrides ALL of

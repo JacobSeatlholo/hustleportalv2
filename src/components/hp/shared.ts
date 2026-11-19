@@ -42,6 +42,10 @@ export interface SessionData {
   streak?: number
   team: { id: string; name: string; role: string } | null
   statementAccess?: boolean
+  // The strategist's own funnel surface (boss, 2026-11-19): keyless slug+name
+  // only — the menu row links /partner-dashboard, the key is resolved
+  // server-side and never rides a client bundle.
+  partnerDashboard?: { slug: string; name: string } | null
   projects: HpProjectRef[]
 }
 

@@ -41,7 +41,7 @@ import {
   LayoutDashboard, Target, ListTodo, Wallet, BrainCircuit, TrendingUp,
   UserCog, ShieldCheck, Menu, X, Sparkles, LogOut, ShoppingCart, BookOpen, Users, Briefcase,
   Mail, CalendarDays, ReceiptText, LineChart, PlugZap, Building2, ChevronDown, CreditCard, Gift,
-  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy, ScrollText } from 'lucide-react'
+  Boxes, LayoutGrid, Flame, Twitter, Instagram, PanelLeftClose, PanelLeftOpen, LifeBuoy, ScrollText, BarChart3, ExternalLink } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { LEVELS, isPremiumTier } from '@/lib/levels'
 
@@ -561,7 +561,7 @@ const ADMIN_NAV: { key: ViewKey; label: string; icon: React.ReactNode } = {
 function SidebarContent({ view, setView, session, doneChallenges, totalChallenges, logout, disabledModules, streak }: {
   view: ViewKey
   setView: (v: ViewKey) => void
-  session: { user: { name: string; businessName: string | null; role: string; xp: number; pricingTier: string }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null }; statementAccess?: boolean }
+  session: { user: { name: string; businessName: string | null; role: string; xp: number; pricingTier: string; email: string }; level: { icon: string; name: string; min: number; next: { level: number; name: string; min: number } | null }; statementAccess?: boolean; partnerDashboard?: { slug: string; name: string } | null }
   doneChallenges: number
   totalChallenges: number
   logout: () => Promise<void>
@@ -569,6 +569,7 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
   streak: number
 }) {
   const isAdmin = session.user.role === 'ADMIN'
+  const partnerDash = session.partnerDashboard
 
   // personal menu order (persisted per user)
   const [order, setOrder] = useState<ViewKey[] | null>(null)
@@ -728,6 +729,22 @@ function SidebarContent({ view, setView, session, doneChallenges, totalChallenge
           >
             <ScrollText className="h-4 w-4" /> Statements
           </button>
+        )}
+        {/* The strategist's own funnel metrics (boss, 2026-11-19): pinned
+            under the menu, keyed to the partnership's registered email, so
+            the clients his funnel introduced never see it. Opens his existing
+            key-gated dashboard in its own tab — the workspace stays put. */}
+        {partnerDash && (
+          <a
+            href="/partner-dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span className="flex-1">Analytics dashboard</span>
+            <ExternalLink className="h-3.5 w-3.5 opacity-50" />
+          </a>
         )}
         {isAdmin && (
           <button
