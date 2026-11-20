@@ -79,9 +79,11 @@ export function memberThemedHtml(body: string, theme?: MailThemeId, standardChar
   // engine lane appends to the body (memberFooter, for the text side of the
   // email) must never ride INSIDE the card too — a themed send showed it twice
   // (once as a body paragraph, once in the chrome footer). Strip a trailing
-  // one before rendering; the text side of the email keeps its line, the html
-  // side gets the styled one, and each document shows the platform once.
-  const bare = body.replace(/\n*Delivered by HustlePortal \(hustleportal\.online\)\s*$/, '')
+  // one before rendering — with OR without the (hustleportal.online) suffix,
+  // so a hand-typed or legacy bare line also never doubles up against the
+  // chrome footer; the text side of the email keeps its line, the html side
+  // gets the styled one, and each document shows the platform once.
+  const bare = body.replace(/\n*Delivered by HustlePortal(\s*\(hustleportal\.online\))?\s*$/, '')
   // Member sends ride the standard character law: blank-shirt badger, neutral
   // HP chip — the BH vest only rides HustlePortal's own mail and the boss's
   // own unbranded sends, never a member's. The replay path passes the flag
@@ -287,6 +289,24 @@ export function identityFromLabel(rawLabel: string): { from: string; address: st
     address: `${slug}@hustleportal.online`,
     label,
   }
+}
+
+/** THE SUBJECT WEARS THE SENDER TOO (member engine lane): a member's mail
+ *  announces who sent it in the inbox list the same way the banner does in
+ *  the mail — their identity label rides the subject's tail, campaign-credit
+ *  style (" · Brand"). Idempotent: a subject that already names the business
+ *  goes out byte-exact (case-insensitive match), and the 190-char ceiling
+ *  keeps the mark on every inbox while the business name is never truncated
+ *  away. The boss (ADMIN) and the neutral toggle never reach this helper —
+ *  the send route resolves both before calling. */
+export function brandSubject(subject: string, label: string): string {
+  const s = (subject || '').trim()
+  const l = (label || '').trim()
+  if (!s || !l) return s
+  if (s.toLowerCase().includes(l.toLowerCase())) return s
+  const mark = ` · ${l}`
+  const room = 190 - mark.length
+  return (s.length > room ? s.slice(0, room).trimEnd() : s) + mark
 }
 
 export async function userSendingIdentity(userId: string, projectId?: string): Promise<{ from: string; address: string; label: string }> {

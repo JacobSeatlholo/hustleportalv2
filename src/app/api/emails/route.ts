@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { sendMail, sanitizeCcInput, sanitizeFromLocal, userSendingIdentity } from '@/lib/mailer'
+import { sendMail, sanitizeCcInput, sanitizeFromLocal, userSendingIdentity, brandSubject } from '@/lib/mailer'
 import type { MailThemeId, MailBrand } from '@/lib/mailthemes'
 import { sanitizeBrand } from '@/lib/mailthemes'
 import { logoPublicUrl } from '@/app/api/campaign-logo/route'
@@ -77,21 +77,33 @@ export async function POST(req: NextRequest) {
   // that isn't theirs — and 'HustlePortal' as the identity label means no
   // name was ever set, so nothing to wear.
   let brand: MailBrand | undefined
-  if (sendTheme && body.useBrand !== false) {
+  // The subject mark rides a slightly wider law than the banner: any member
+  // engine send names its sender in the inbox (their business/project label
+  // on the subject tail), while the themed chrome still needs a theme to
+  // exist. Flipping the composer toggle to neutral strips BOTH — banner and
+  // subject mark — so "send as HustlePortal" means the whole mail is ours.
+  let identityLabel: string | null = null
+  if (body.useBrand !== false) {
     const me = await db.user.findUnique({ where: { id: userId }, select: { role: true } })
     if (me && me.role !== 'ADMIN') {
       const identity = await userSendingIdentity(userId, fromProfile)
       if (identity.label && identity.label !== 'HustlePortal') {
-        const logoRow = await db.userSetting
-          .findUnique({ where: { userId_key: { userId, key: 'CAMPAIGN_LOGO' } }, select: { value: true } })
-          .catch(() => null)
-        brand = sanitizeBrand({
-          name: identity.label,
-          ...(logoRow?.value ? { logoUrl: logoPublicUrl(userId, logoRow.value) } : {}),
-        }) || undefined
+        identityLabel = identity.label
+        if (sendTheme) {
+          const logoRow = await db.userSetting
+            .findUnique({ where: { userId_key: { userId, key: 'CAMPAIGN_LOGO' } }, select: { value: true } })
+            .catch(() => null)
+          brand = sanitizeBrand({
+            name: identity.label,
+            ...(logoRow?.value ? { logoUrl: logoPublicUrl(userId, logoRow.value) } : {}),
+          }) || undefined
+        }
       }
     }
   }
+  // One subject for transport AND the log row: the archive replays exactly
+  // the line the recipient saw, and the composer's draft comes back marked.
+  const sendSubject = identityLabel ? brandSubject(subject, identityLabel) : subject
 
   // AIRTIME LAW for email (the boss's prepaid model — prices live in ONE
   // place, src/lib/spend.ts):
@@ -151,7 +163,7 @@ export async function POST(req: NextRequest) {
       userId,
       toEmail: to,
       ccEmail: cc.length ? cc.join(', ') : null,
-      subject,
+      subject: sendSubject,
       body: mailBody,
       status: 'DRAFT',
       provider: 'NONE',
@@ -162,7 +174,7 @@ export async function POST(req: NextRequest) {
   }))
 
   const result = await sendMail(userId, {
-    to, subject, body: mailBody, attachments,
+    to, subject: sendSubject, body: mailBody, attachments,
     ...(cc.length ? { cc } : {}),
     ...(fromLocal ? { fromLocal } : {}),
     ...(fromProfile ? { projectId: fromProfile } : {}),
@@ -179,7 +191,7 @@ export async function POST(req: NextRequest) {
   const logData = {
     toEmail: to,
     ccEmail: cc.length ? cc.join(', ') : null,
-    subject,
+    subject: sendSubject,
     body: mailBody,
     status: result.ok ? 'SENT' : 'FAILED',
     provider,
