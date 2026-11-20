@@ -201,27 +201,24 @@ async function resetDemo(slug: string) {
   const demoUsers = await db.user.findMany({ where: { email: { endsWith: DEMO_DOMAIN } }, select: { id: true } })
   const ids = demoUsers.map((u) => u.id)
 
-  // The referrer's demo rewards: find the referrer and sum the trail FIRST —
-  // the wallet restore must hit exactly that one account, nothing else.
-  const firstDemoTx = await db.creditTx.findFirst({ where: { description: { startsWith: DEMO_TX_MARK } }, select: { userId: true } })
   // THE LEDGER-IS-TRUTH RECONCILE (owner, after a crashed reset left phantom
-  // money): a reset that deleted the trail rows but died before restoring the
-  // wallet used to leave the referrer's balance carrying money no ledger row
-  // explains — invisible, exactly what the demo law forbids. So the restore
-  // no longer decrements by the trail sum (fragile: it assumes the pre-seed
-  // balance was exact and skips entirely when the crash already removed the
-  // [demo] rows). Instead the referrer's wallet is RECONCILED to the sum of
-  // the ledger rows that actually remain — the balance is whatever the books
-  // say, every time, even after a half-finished reset. The referrer resolves
-  // through the SAME rule seedDemo uses, so the crash path finds him too.
+  // money): two bugs compounded here. First, a reset that deleted the trail
+  // rows but died before restoring the wallet left the referrer's balance
+  // carrying money no ledger row explains. Second — the deeper one — the
+  // referrer was resolved from the FIRST [demo]-marked ledger row, but the
+  // demo accounts' own rows carry that same mark, so the "restore" could
+  // decrement a throwaway demo wallet (deleted a few lines later anyway)
+  // while the real referrer was never touched: the phantom's root cause.
+  // Now the referrer resolves through the SAME rule seedDemo credits by —
+  // the floor's oldest non-demo account — and the wallet is RECONCILED to
+  // the sum of the ledger rows that actually remain: the balance is whatever
+  // the books say, every time, even after a half-finished reset.
   const referrer =
-    firstDemoTx?.userId
-    ?? (await db.user.findFirst({
-        where: { corporatePartner: slug, email: { not: { endsWith: DEMO_DOMAIN } } },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      }))?.id
-    ?? null
+    (await db.user.findFirst({
+      where: { corporatePartner: slug, email: { not: { endsWith: DEMO_DOMAIN } } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }))?.id ?? null
 
   await db.referral.deleteMany({ where: { OR: [{ invitedUserId: { in: ids } }, { referrerId: { in: ids } }] } })
   await db.creditTx.deleteMany({ where: { OR: [{ userId: { in: ids } }, { description: { startsWith: DEMO_TX_MARK } }] } })
