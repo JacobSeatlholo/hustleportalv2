@@ -1173,5 +1173,31 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-11-15",
     "fresh": "fresh"
+  },
+  {
+    "handle": "urbanglow254",
+    "name": "Urban Glow Beauty Parlour",
+    "trade": "beauty",
+    "city": "Durban",
+    "followers": 71952,
+    "url": "https://www.tiktok.com/@urbanglow254",
+    "phone": "0728814707",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-19",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "appexplumbers",
+    "name": "KPG Pretoria Plumbers",
+    "trade": "plumber",
+    "city": "Pretoria",
+    "followers": 53,
+    "url": "https://www.tiktok.com/@appexplumbers",
+    "phone": "0704324255",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-19",
+    "fresh": "fresh"
   }
 ]
