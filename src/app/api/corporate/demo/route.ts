@@ -204,8 +204,24 @@ async function resetDemo(slug: string) {
   // The referrer's demo rewards: find the referrer and sum the trail FIRST —
   // the wallet restore must hit exactly that one account, nothing else.
   const firstDemoTx = await db.creditTx.findFirst({ where: { description: { startsWith: DEMO_TX_MARK } }, select: { userId: true } })
-  const referrerId = firstDemoTx?.userId
-  const bonus = await db.creditTx.aggregate({ where: { description: { startsWith: DEMO_TX_MARK } }, _sum: { amount: true } })
+  // THE LEDGER-IS-TRUTH RECONCILE (owner, after a crashed reset left phantom
+  // money): a reset that deleted the trail rows but died before restoring the
+  // wallet used to leave the referrer's balance carrying money no ledger row
+  // explains — invisible, exactly what the demo law forbids. So the restore
+  // no longer decrements by the trail sum (fragile: it assumes the pre-seed
+  // balance was exact and skips entirely when the crash already removed the
+  // [demo] rows). Instead the referrer's wallet is RECONCILED to the sum of
+  // the ledger rows that actually remain — the balance is whatever the books
+  // say, every time, even after a half-finished reset. The referrer resolves
+  // through the SAME rule seedDemo uses, so the crash path finds him too.
+  const referrer =
+    firstDemoTx?.userId
+    ?? (await db.user.findFirst({
+        where: { corporatePartner: slug, email: { not: { endsWith: DEMO_DOMAIN } } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      }))?.id
+    ?? null
 
   await db.referral.deleteMany({ where: { OR: [{ invitedUserId: { in: ids } }, { referrerId: { in: ids } }] } })
   await db.creditTx.deleteMany({ where: { OR: [{ userId: { in: ids } }, { description: { startsWith: DEMO_TX_MARK } }] } })
@@ -214,14 +230,17 @@ async function resetDemo(slug: string) {
   await db.wallet.deleteMany({ where: { userId: { in: ids } } })
   const removed = await db.user.deleteMany({ where: { id: { in: ids } } })
 
-  let restoredCents = 0
-  if (referrerId && bonus._sum.amount) {
-    restoredCents = bonus._sum.amount
-    // Restore the referrer's wallet to what it was before the demo.
-    await db.wallet.update({ where: { userId: referrerId }, data: { balance: { decrement: restoredCents } } })
-    // Never leave a negative balance behind, whatever the ledger said.
-    await db.wallet.updateMany({ where: { userId: referrerId, balance: { lt: 0 } }, data: { balance: 0 } })
+  let reconciledCents = 0
+  if (referrer) {
+    // The books are the balance: whatever rows survive, the wallet says the same.
+    const ledger = await db.creditTx.aggregate({ where: { userId: referrer }, _sum: { amount: true } })
+    const truth = ledger._sum.amount ?? 0
+    const row = await db.wallet.findUnique({ where: { userId: referrer }, select: { balance: true } })
+    if (row) {
+      reconciledCents = row.balance - truth
+      await db.wallet.update({ where: { userId: referrer }, data: { balance: truth } })
+    }
   }
 
-  return NextResponse.json({ ok: true, removed: removed.count, restoredCents })
+  return NextResponse.json({ ok: true, removed: removed.count, reconciledCents })
 }
