@@ -74,6 +74,14 @@ export type OutgoingMail = {
  */
 export function memberThemedHtml(body: string, theme?: MailThemeId, standardCharacter = true, brand?: MailBrand): string | undefined {
   if (!theme || theme === 'plain') return undefined
+  // THE ONE-FOOTER LAW: the themed chrome already carries the quiet
+  // "Delivered by HustlePortal" line, so the plain-text delivery line that the
+  // engine lane appends to the body (memberFooter, for the text side of the
+  // email) must never ride INSIDE the card too — a themed send showed it twice
+  // (once as a body paragraph, once in the chrome footer). Strip a trailing
+  // one before rendering; the text side of the email keeps its line, the html
+  // side gets the styled one, and each document shows the platform once.
+  const bare = body.replace(/\n*Delivered by HustlePortal \(hustleportal\.online\)\s*$/, '')
   // Member sends ride the standard character law: blank-shirt badger, neutral
   // HP chip — the BH vest only rides HustlePortal's own mail and the boss's
   // own unbranded sends, never a member's. The replay path passes the flag
@@ -82,10 +90,12 @@ export function memberThemedHtml(body: string, theme?: MailThemeId, standardChar
   // or their own — plus the uploaded campaign logo when they have one) wears
   // it: their client then gets mail that looks like it came from THEIR
   // business (the whitelabel law, applied to the member lane), never our mark.
-  return themedEmailHtml(body, {
+  return themedEmailHtml(bare, {
     theme,
     standardCharacter,
-    footerLines: ['Delivered by HustlePortal'],
+    // The delivered-by credit is pushed by the deliveredByCredit flag itself —
+    // passing the line here too would render it twice.
+    footerLines: [],
     deliveredByCredit: true,
     ...(brand ? { brand } : {}),
   })
@@ -123,8 +133,8 @@ function memberHtmlWithPixel(mail: OutgoingMail): string | undefined {
  * The log stores the words (body) plus the look (theme) — the html the
  * recipient actually saw is rebuilt deterministically from those:
  *   - member Gmail send → their words in the picked look, nothing added;
- *   - member engine send → the quiet "Delivered by HustlePortal" line was part
- *     of the text at send time, so the replay appends it again;
+ *   - member engine send → the themed chrome carries the quiet "Delivered by
+ *     HustlePortal" line itself (ONE-FOOTER law), never appended twice;
  *   - campaign row → the full bulk chrome (unsub line + legal footer + branded
  *     frame), reconstructed with the signed link from the row id. The open
  *     pixel is deliberately left OUT — a preview must never count as a read.
@@ -174,8 +184,11 @@ export function replaySentHtml(opts: {
   // BH one — the caller (preview API) passes the requester's law so the
   // replay shows exactly what landed. A member row's own brand (stored on the
   // row at send time) rides again, so the archive shows the name the
-  // recipient actually saw, not the sender's current one.
-  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme, opts.standardCharacter ?? true, opts.brand || undefined)
+  // recipient actually saw, not the sender's current one. The themed chrome
+  // carries the quiet delivery line itself (the ONE-FOOTER law in
+  // memberThemedHtml), so the body never gets memberFooter appended here —
+  // appending it showed the line twice in the replay card.
+  return memberThemedHtml(bodyText, theme, opts.standardCharacter ?? true, opts.brand || undefined)
 }
 
 const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/
