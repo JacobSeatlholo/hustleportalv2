@@ -163,6 +163,9 @@ export default function MailView() {
   // name. The roster comes back with the status call.
   const [profiles, setProfiles] = useState<SenderProfile[]>([])
   const [fromProfile, setFromProfile] = useState('')
+  // The white-label toggle (on by default): on a themed look their own name
+  // rides the banner and the platform credits itself only in the footer.
+  const [wearBrand, setWearBrand] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -170,6 +173,10 @@ export default function MailView() {
   // Campaigns (exec): batch queues with read receipts, build the audience,
   // review the draft, press Start, and the engine paces the sends like a human.
   const isAdmin = session?.user?.role === 'ADMIN'
+  // The name the white-label chrome wears: the "Sending from" pick's label
+  // (the account identity leads), the same label the From line and the server
+  // law resolve — banner and sender can never disagree.
+  const brandLabel = profiles.find((p) => p.id === (fromProfile || ''))?.name || ''
   const [campaignRows, setCampaignRows] = useState<CampaignRow[] | null>(null)
   const [campaigns, setCampaigns] = useState<CampaignInfo[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -895,7 +902,9 @@ export default function MailView() {
         method: 'POST',
         // The composer previews the ENGINE lane: the quiet delivery line is
         // part of what a platform send appends, so the render carries it.
-        body: JSON.stringify({ body, theme, provider: 'PLATFORM' }),
+        // The brand pick rides too (same law the send runs), so the preview
+        // shows THEIR name in the banner exactly as the recipient will.
+        body: JSON.stringify({ body, theme, provider: 'PLATFORM', useBrand: wearBrand, fromProfile: fromProfile || undefined }),
       })
       setPreviewHtml(r.html)
     } catch (e) {
@@ -928,6 +937,7 @@ export default function MailView() {
           theme,
           projectId: activeProjectId,
           fromProfile: fromProfile || undefined,
+          useBrand: wearBrand,
           attachments: atts.length ? atts : undefined,
         }),
       })
@@ -1451,6 +1461,35 @@ export default function MailView() {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">{LOOKS.find((l) => l.id === theme)?.blurb}</p>
+              {/* The white-label toggle: on a themed look their own name rides
+                  the banner (the sending identity they picked — business,
+                  workspace or their own) and the platform steps back to one
+                  quiet "Delivered by HustlePortal" footer line. Off = the
+                  neutral HustlePortal chrome, exactly as before. The boss's
+                  account never sees it: his mail IS HustlePortal. */}
+              {theme !== 'plain' && !isAdmin && brandLabel && brandLabel !== 'HustlePortal' && (
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-brand/25 bg-brand/5 px-3 py-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={wearBrand}
+                    onClick={() => setWearBrand((v) => !v)}
+                    className={`mt-0.5 h-4 w-7 shrink-0 rounded-full transition relative ${wearBrand ? 'bg-brand' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all ${wearBrand ? 'left-3.5' : 'left-0.5'}`} />
+                  </button>
+                  <div className="text-xs">
+                    <p className="font-medium">
+                      Send it as <span className="text-brand">{brandLabel}</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {wearBrand
+                        ? `“${brandLabel}” sits at the top instead of ours — with a small “Delivered by HustlePortal” line in the footer.`
+                        : 'The HustlePortal name stays on the frame, as it has always been.'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input

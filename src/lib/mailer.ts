@@ -66,9 +66,11 @@ export type OutgoingMail = {
 /**
  * The themed html for a member send: the look the sender chose frames THEIR
  * words, nothing else. No legal footer, no unsubscribe, no pitch — the member
- * law holds (this is their business email to their contact; the platform adds
- * only the quiet "Delivered by HustlePortal" line on engine sends, which is
- * part of the body text and renders as the closing block). Pure function.
+ * law holds (this is their business email to their contact). The themed chrome
+ * carries exactly one platform trace: the quiet "Delivered by HustlePortal"
+ * footer line, and when the sender's brand rides (their name in the banner,
+ * their logo in the chip) that footer is the ONLY place the platform appears.
+ * Pure function.
  */
 export function memberThemedHtml(body: string, theme?: MailThemeId, standardCharacter = true, brand?: MailBrand): string | undefined {
   if (!theme || theme === 'plain') return undefined
@@ -76,10 +78,17 @@ export function memberThemedHtml(body: string, theme?: MailThemeId, standardChar
   // HP chip — the BH vest only rides HustlePortal's own mail and the boss's
   // own unbranded sends, never a member's. The replay path passes the flag
   // through so an exec's own rows replay the BH chrome they actually wore.
-  // A member WITH an uploaded campaign logo may pass their brand: their client
-  // then gets mail that looks like it came from THEIR business (the Task 185
-  // brand law, applied to the member lane), never our mark.
-  return themedEmailHtml(body, { theme, footerLines: [], standardCharacter, ...(brand ? { brand } : {}) })
+  // A member WITH a brand (their sending identity name — business, workspace
+  // or their own — plus the uploaded campaign logo when they have one) wears
+  // it: their client then gets mail that looks like it came from THEIR
+  // business (the whitelabel law, applied to the member lane), never our mark.
+  return themedEmailHtml(body, {
+    theme,
+    standardCharacter,
+    footerLines: ['Delivered by HustlePortal'],
+    deliveredByCredit: true,
+    ...(brand ? { brand } : {}),
+  })
 }
 
 /** The 1x1 open-tracker img, appended inside the html body when present. */
@@ -129,8 +138,9 @@ export function replaySentHtml(opts: {
   campaign?: string | null
   /** Campaign rows only: the signed one-tap unsubscribe link of that row. */
   unsubUrl?: string | null
-  /** Campaign rows only: the sender brand the send rode (from the queue state).
-   *  Absent on an exec blast = the BH chrome, exactly as it went out. */
+  /** The sender brand the send rode — campaign rows from the queue state,
+   *  member rows from the brandJson stamped on the row at send time. Absent
+   *  on an exec blast = the BH chrome, exactly as it went out. */
   brand?: MailBrand | null
   /** Campaign rows only: true when the send rode the standard character
    *  (member-owned or branded queue) — the replay must match the send. */
@@ -162,8 +172,10 @@ export function replaySentHtml(opts: {
   if (!theme || theme === 'plain') return undefined
   // Non-campaign rows: member sends rode the standard chrome, exec rows the
   // BH one — the caller (preview API) passes the requester's law so the
-  // replay shows exactly what landed.
-  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme, opts.standardCharacter ?? true)
+  // replay shows exactly what landed. A member row's own brand (stored on the
+  // row at send time) rides again, so the archive shows the name the
+  // recipient actually saw, not the sender's current one.
+  return memberThemedHtml(bodyText + (opts.provider === 'PLATFORM' ? memberFooter() : ''), theme, opts.standardCharacter ?? true, opts.brand || undefined)
 }
 
 const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w.-]+\.\w+$/

@@ -76,7 +76,10 @@ export function EmailPreviewDialog({ row, onOpenChange, extraDescription }: { ro
         theme: look,
         provider: row.provider || null,
         campaign: row.campaign || null,
-        rowId: row.campaign ? row.id : null,
+        // Every row replays from its OWN record: campaign rows for the signed
+        // unsubscribe link, member rows so the sender brand stamped at send
+        // time (the name the recipient actually saw) rides the replay.
+        rowId: row.id || null,
       }),
     })
       .then((r) => { if (!dead) setHtml(r.html || null) })

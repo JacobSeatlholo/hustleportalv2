@@ -340,6 +340,10 @@ export interface ThemedMailOptions {
   standardCharacter?: boolean
   /** Legal footer lines (from mailer.legalFooterLines). */
   footerLines?: string[]
+  /** Member lane: the footer credit reads "Delivered by HustlePortal" — the
+   *  small platform line under the sender's own name — instead of the
+   *  campaign lane's "<Brand> · sent via HustlePortal". */
+  deliveredByCredit?: boolean
   /** Base for brand images; tests and previews override it. */
   assetBase?: string
 }
@@ -454,11 +458,15 @@ function footerRow(opts: ThemedMailOptions, t: MailTheme): string {
   }
   if (opts.footerLines?.length) lines.push(...opts.footerLines)
   // A branded send identifies the SENDER (POPIA: the recipient must know who
-  // is talking) with one quiet platform credit, not our full legal block.
-  if (opts.brand) {
+  // is talking) with one quiet platform credit, not our full legal block. The
+  // member lane (deliveredByCredit) reads "Delivered by HustlePortal" — the
+  // sender's name already sits in the banner, so the footer carries only the
+  // small platform line. Campaign keeps "<Brand> · sent via HustlePortal".
+  if (opts.brand && !opts.deliveredByCredit) {
     const bn = opts.brand.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     lines.push(`${bn} &middot; sent via HustlePortal`)
   }
+  if (opts.deliveredByCredit) lines.push('Delivered by HustlePortal')
   if (lines.length === 0) return ''
   const body = lines
     .map((l) => l.replace(/(https?:\/\/[^\s<]+)/g, (_m, u: string) => `<a href="${u}" style="color:${t.link}">${u}</a>`))

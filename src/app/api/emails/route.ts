@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserId } from '@/lib/auth'
-import { sendMail, sanitizeCcInput, sanitizeFromLocal } from '@/lib/mailer'
-import type { MailThemeId } from '@/lib/mailthemes'
+import { sendMail, sanitizeCcInput, sanitizeFromLocal, userSendingIdentity } from '@/lib/mailer'
+import type { MailThemeId, MailBrand } from '@/lib/mailthemes'
+import { sanitizeBrand } from '@/lib/mailthemes'
+import { logoPublicUrl } from '@/app/api/campaign-logo/route'
 import { planState, FREE_LIMITS } from '@/lib/limits'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
 import { ensureWallet, spendCredits, addCredits, formatRands } from '@/lib/wallet'
@@ -61,6 +63,35 @@ export async function POST(req: NextRequest) {
   // never errors the send — it just falls back to plain, same as before.
   const pickedTheme: MailThemeId | null = MAIL_THEMES.includes(body.theme) ? body.theme : null
   const sendTheme: MailThemeId | undefined = pickedTheme && pickedTheme !== 'plain' ? pickedTheme : undefined
+
+  // THE WHITE-LABEL LAW (the network effect, on every themed member send):
+  // when a member (never the boss — his mail IS HustlePortal) picks a look,
+  // the chrome wears THEIR brand by default — the sending identity's name
+  // (the picked workspace, else the business on the account, else their own
+  // name — the same label the From line carries, so banner and sender never
+  // disagree) plus their uploaded campaign logo when they have one. The
+  // platform steps back to one quiet footer line: "Delivered by
+  // HustlePortal". Ticking the composer toggle off (useBrand: false) keeps
+  // the old neutral chrome. The name is resolved SERVER-side from the
+  // account's own records — a client can never dress the send in a name
+  // that isn't theirs — and 'HustlePortal' as the identity label means no
+  // name was ever set, so nothing to wear.
+  let brand: MailBrand | undefined
+  if (sendTheme && body.useBrand !== false) {
+    const me = await db.user.findUnique({ where: { id: userId }, select: { role: true } })
+    if (me && me.role !== 'ADMIN') {
+      const identity = await userSendingIdentity(userId, fromProfile)
+      if (identity.label && identity.label !== 'HustlePortal') {
+        const logoRow = await db.userSetting
+          .findUnique({ where: { userId_key: { userId, key: 'CAMPAIGN_LOGO' } }, select: { value: true } })
+          .catch(() => null)
+        brand = sanitizeBrand({
+          name: identity.label,
+          ...(logoRow?.value ? { logoUrl: logoPublicUrl(userId, logoRow.value) } : {}),
+        }) || undefined
+      }
+    }
+  }
 
   // AIRTIME LAW for email (the boss's prepaid model — prices live in ONE
   // place, src/lib/spend.ts):
@@ -125,6 +156,7 @@ export async function POST(req: NextRequest) {
       status: 'DRAFT',
       provider: 'NONE',
       theme: pickedTheme,
+      ...(brand ? { brandJson: JSON.stringify(brand) } : {}),
       ...(fromProfile ? { projectId: fromProfile } : {}),
     },
   }))
@@ -135,6 +167,7 @@ export async function POST(req: NextRequest) {
     ...(fromLocal ? { fromLocal } : {}),
     ...(fromProfile ? { projectId: fromProfile } : {}),
     ...(sendTheme ? { theme: sendTheme } : {}),
+    ...(brand ? { brand } : {}),
     // Engine sends carry the read-receipt pixel bound to this row; Gmail
     // sends ignore it (their own inbox, no tracker) — read receipts stay
     // engine-lane only, which is exactly where the platform controls the html.
@@ -151,8 +184,11 @@ export async function POST(req: NextRequest) {
     status: result.ok ? 'SENT' : 'FAILED',
     provider,
     // The look rides the log so the archive can show it and a re-opened draft
-    // restores the picker exactly as the sender left it.
+    // restores the picker exactly as the sender left it. The brand rides too:
+    // the replay then shows the name the recipient actually saw, even if the
+    // business renames itself later.
     theme: pickedTheme,
+    brandJson: brand ? JSON.stringify(brand) : null,
     error: result.ok ? null : result.error,
   }
   email = await db.emailLog.update({ where: { id: email.id }, data: logData })

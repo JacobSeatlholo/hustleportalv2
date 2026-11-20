@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
-import { replaySentHtml } from '@/lib/mailer'
+import { replaySentHtml, userSendingIdentity } from '@/lib/mailer'
 import { unsubscribeUrl, readCampaignStates, effectiveCampaignBrand, campaignStandardCharacter } from '@/lib/campaignqueue'
 import { db } from '@/lib/db'
 import { requireExec } from '@/lib/admin'
 import { rateLimit, tooMany } from '@/lib/ratelimit'
-import { sanitizeBrand } from '@/lib/mailthemes'
+import { sanitizeBrand, type MailBrand } from '@/lib/mailthemes'
+import { logoPublicUrl } from '@/app/api/campaign-logo/route'
 
 // POST /api/emails/preview → what the recipient saw for a given look.
 //
@@ -54,8 +55,8 @@ export async function POST(req: NextRequest) {
   const rowId = typeof b?.rowId === 'string' && b.rowId ? b.rowId : null
   const row = rowId
     ? (execGate.ok
-        ? await db.emailLog.findUnique({ where: { id: rowId }, select: { userId: true, campaign: true } })
-        : await db.emailLog.findFirst({ where: { id: rowId, userId }, select: { userId: true, campaign: true } }))
+        ? await db.emailLog.findUnique({ where: { id: rowId }, select: { userId: true, campaign: true, brandJson: true } })
+        : await db.emailLog.findFirst({ where: { id: rowId, userId }, select: { userId: true, campaign: true, brandJson: true } }))
     : null
 
   // The signed unsubscribe link only comes back for rows the caller may see.
@@ -68,6 +69,38 @@ export async function POST(req: NextRequest) {
   // law applies: members see the standard chrome, exec the BH one.
   let brand = execGate.ok ? undefined : sanitizeBrand(b?.brand) || undefined
   let standardCharacter = !execGate.ok
+  // A member ROW's own brand (stamped on the row at send time) is ground
+  // truth for the replay — the name the recipient actually saw, whichever
+  // side is looking — and it always rode the standard character.
+  if (row?.brandJson && !row.campaign) {
+    try {
+      const stored = sanitizeBrand(JSON.parse(row.brandJson))
+      if (stored) {
+        brand = stored
+        standardCharacter = true
+      }
+    } catch { /* a broken stamp replays the neutral chrome, never an error page */ }
+  }
+  // The composer preview (no row): run the SAME white-label law the send
+  // runs, so what the sender checks is what the recipient gets — their
+  // sending identity's name in the banner (plus their uploaded logo), the
+  // opt-out respected, the boss exempt via the exec gate above.
+  if (!row && !execGate.ok && b?.useBrand !== false) {
+    const fromProfile = typeof b?.fromProfile === 'string' && b.fromProfile.length > 5 ? b.fromProfile : undefined
+    try {
+      const identity = await userSendingIdentity(userId, fromProfile)
+      if (identity.label && identity.label !== 'HustlePortal') {
+        const logoRow = await db.userSetting
+          .findUnique({ where: { userId_key: { userId, key: 'CAMPAIGN_LOGO' } }, select: { value: true } })
+          .catch(() => null)
+        const derived: MailBrand | undefined = sanitizeBrand({
+          name: identity.label,
+          ...(logoRow?.value ? { logoUrl: logoPublicUrl(userId, logoRow.value) } : {}),
+        }) || undefined
+        if (derived) brand = derived
+      }
+    } catch { /* a status hiccup previews the neutral chrome, never an error page */ }
+  }
   const stateTag = row?.campaign || (execGate.ok && isCampaign && typeof b?.campaign === 'string' ? b.campaign : null)
   if (stateTag) {
     const states = await readCampaignStates()
