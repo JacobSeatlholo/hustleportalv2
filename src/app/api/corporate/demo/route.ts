@@ -180,7 +180,7 @@ async function seedDemo(slug: string, referrerEmail?: string) {
       const at = new Date(now - (c.def.lastRevealDaysAgo * DAY) - ((c.def.revealSpanDays - (r * c.def.revealSpanDays) / Math.max(c.def.reveals, 1)) * DAY))
       rb += 2500
       await db.creditTx.create({
-        data: { userId: referrer.id, type: 'BONUS', amount: 2500, description: `${DEMO_TX_MARK} Referral reward, R25 member share on a managed lead (${c.def.business})`, balanceAfter: rb, createdAt: at },
+        data: { userId: referrer.id, type: 'BONUS', amount: 2500, description: `${DEMO_TX_MARK} Referral reward, R25 per managed lead (${c.def.business})`, balanceAfter: rb, createdAt: at },
       })
     }
   }

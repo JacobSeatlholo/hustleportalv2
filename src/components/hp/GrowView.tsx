@@ -264,7 +264,7 @@ export default function GrowView() {
         </div>
         <p className="text-xs text-muted-foreground">
           {refs?.partnerCompany
-            ? 'R10 lands in your wallet when a business owner you invited opens their account. Every invite lands on our own floor.'
+            ? 'R10 lands in your wallet when a business owner you invited opens their account, and R25 for every managed lead their account reveals. Every invite lands on our own floor.'
             : 'R10 lands in your wallet when they join · R50 more when they subscribe. Every email you send already carries your link.'}
           {refs?.invitedBy && <> Invited by <b className="text-foreground">{refs.invitedBy}</b>.</>}
         </p>

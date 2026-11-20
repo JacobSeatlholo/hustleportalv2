@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useHp } from './store'
+import { isPremiumTier } from '@/lib/levels'
 import { openInstallTutorial } from './InstallApp'
 import {
   Target, Sparkles, Mail, Users, ArrowRight, Rocket, Trophy, Zap, Smartphone,
@@ -31,6 +32,7 @@ interface Step {
 
 export default function WelcomeTour() {
   const setView = useHp((s) => s.setView)
+  const sessionUser = useHp((s) => s.session?.user)
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
 
@@ -110,9 +112,15 @@ export default function WelcomeTour() {
     },
     {
       icon: <Users className="h-7 w-7 text-brand" />,
+      // Client economics law (owner, 2026-11-20): members on a partner floor
+      // see ONLY their own earning, R10 on join and R25 per managed lead —
+      // never the R50 partner share or the word split. The R50-subscribe
+      // wording is the main-app B2C law and stays for self-serve tiers.
       kicker: 'Grow together',
-      title: 'Invite owners. Earn R50 each.',
-      body: 'Teams that grow together, win together. Share your invite link, when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
+      title: isPremiumTier(sessionUser?.pricingTier) ? 'Invite owners. Earn from day one.' : 'Invite owners. Earn R50 each.',
+      body: isPremiumTier(sessionUser?.pricingTier)
+        ? 'Teams that grow together, win together. Share your invite link: R10 lands in your wallet the moment a business owner opens their account, and R25 for every managed lead their account reveals. Your link is ready in Grow & Earn.'
+        : 'Teams that grow together, win together. Share your invite link, when someone subscribes, you earn R50 credit and they start with a bonus. Your link is ready in Grow & Earn.',
       cta: 'Get my invite link',
       goTo: () => setView('grow'),
     },
