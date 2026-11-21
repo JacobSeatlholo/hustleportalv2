@@ -1199,5 +1199,31 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-11-19",
     "fresh": "fresh"
+  },
+  {
+    "handle": "mobile.videographer.cpt",
+    "name": "Mobile Videographer Cape Town",
+    "trade": "videographer",
+    "city": "Cape Town",
+    "followers": 1942,
+    "url": "https://www.tiktok.com/@mobile.videographer.cpt",
+    "phone": "",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-17",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "bakeryofhope",
+    "name": "Bakery of Hope Capetown",
+    "trade": "baker",
+    "city": "Cape Town",
+    "followers": 1486,
+    "url": "https://www.tiktok.com/@bakeryofhope",
+    "phone": "0682033196",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-04",
+    "fresh": "fresh"
   }
 ]
