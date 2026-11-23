@@ -1225,5 +1225,44 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-11-04",
     "fresh": "fresh"
+  },
+  {
+    "handle": "infinitydecorrr",
+    "name": "infinity decor & events",
+    "trade": "events",
+    "city": "Durban",
+    "followers": 30717,
+    "url": "https://www.tiktok.com/@infinitydecorrr",
+    "phone": "0905585038",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-21",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "lulubloom_2001",
+    "name": "Cape Town Florist & Bento Cake",
+    "trade": "delivery",
+    "city": "Cape Town",
+    "followers": 8843,
+    "url": "https://www.tiktok.com/@lulubloom_2001",
+    "phone": "",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-20",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "bbcakes.cpt",
+    "name": "BBCAKES Cape Town",
+    "trade": "unsorted",
+    "city": "Cape Town",
+    "followers": 5440,
+    "url": "https://www.tiktok.com/@bbcakes.cpt",
+    "phone": "",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-23",
+    "fresh": "fresh"
   }
 ]
