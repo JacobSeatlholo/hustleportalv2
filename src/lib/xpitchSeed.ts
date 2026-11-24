@@ -1264,5 +1264,44 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-11-23",
     "fresh": "fresh"
+  },
+  {
+    "handle": "lashxpress_el",
+    "name": "Lash’Xpress",
+    "trade": "unsorted",
+    "city": "Sandton",
+    "followers": 15299,
+    "url": "https://www.tiktok.com/@lashxpress_el",
+    "phone": "0764038915",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-21",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "event_connect",
+    "name": "Events & Decor",
+    "trade": "events",
+    "city": "Durban",
+    "followers": 14126,
+    "url": "https://www.tiktok.com/@event_connect",
+    "phone": "0692649122",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-22",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "_downtownbakery",
+    "name": "DT bakery.   ꧁༺𝓚༻꧂",
+    "trade": "baker",
+    "city": "Cape Town",
+    "followers": 1627,
+    "url": "https://www.tiktok.com/@_downtownbakery",
+    "phone": "08146460723",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-16",
+    "fresh": "fresh"
   }
 ]
