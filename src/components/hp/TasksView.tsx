@@ -410,6 +410,44 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
   const [loadingRecord, setLoadingRecord] = useState(false)
   // Deal room (Task 213): documents + first-party e-sign invites live on the task
   const [filesOpen, setFilesOpen] = useState(false)
+  // Send to teammate (Hayley case, round 2): forward any task you created
+  // straight onto a teammate — the task moves onto the shared team, lands in
+  // their inbox (the PATCH announces it) and stays on your list too.
+  const { toast } = useToast()
+  const [sendOpen, setSendOpen] = useState(false)
+  const [sendTo, setSendTo] = useState('')
+  const [sending, setSending] = useState(false)
+  // Teammates across all my teams, deduped; each carries the first shared team
+  // so the forward lands on a team both of us actually belong to.
+  const teammates = (() => {
+    const seen = new Map<string, { id: string; name: string; email: string; teamId: string }>()
+    for (const t of teams) {
+      for (const m of t.members) {
+        if (m.id === currentUserId || seen.has(m.id)) continue
+        seen.set(m.id, { ...m, teamId: t.id })
+      }
+    }
+    return [...seen.values()]
+  })()
+  const sendTask = async () => {
+    const target = teammates.find((m) => m.id === sendTo)
+    if (!target) return
+    setSending(true)
+    try {
+      const r = await api<{ task: Task }>(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ teamId: target.teamId, assigneeId: target.id, isPrivate: false }),
+      })
+      onUpdated(task.id, r.task)
+      setSendOpen(false)
+      setSendTo('')
+      toast({ title: `Sent to ${target.name}`, description: `"${task.title}" is now on their list — they'll get the email too.` })
+    } catch (e) {
+      toast({ title: 'Could not send the task', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
+    } finally {
+      setSending(false)
+    }
+  }
   // Notion style: click the title, type, Enter. The sealed record witnesses
   // the rename server side (EDIT event on the chain).
   const [editingTitle, setEditingTitle] = useState(false)
@@ -754,10 +792,50 @@ function TaskRow({ task, onToggle, onRemove, onCommentCountChange, currentUserId
             {(task._count?.docs || 0) > 0 && <span>{task._count?.docs}</span>}
             {filesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
+          {/* Send to teammate: one tap forward, the inbox announcement rides along */}
+          {task.creatorId === currentUserId && teammates.length > 0 && (
+            <button
+              onClick={() => setSendOpen((v) => !v)}
+              className={`flex items-center gap-1 rounded-full border px-2.5 min-h-[32px] text-xs shrink-0 transition ${
+                sendOpen
+                  ? 'border-brand/50 text-brand bg-brand/5'
+                  : 'border-stone-600/60 text-muted-foreground hover:border-brand hover:text-brand'
+              }`}
+              aria-label={sendOpen ? 'Hide send options' : 'Send to a teammate'}
+              aria-expanded={sendOpen}
+              title="Send to a teammate: the task moves onto your shared team and lands on their list"
+            >
+              <SendHorizontal className="h-3.5 w-3.5" />
+              {sendOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => onRemove(task)} className="text-muted-foreground hover:text-red-600 shrink-0">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+
+        {sendOpen && (
+          <div className="mt-3 border-t pt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Send this task to</span>
+            <Select value={sendTo} onValueChange={setSendTo}>
+              <SelectTrigger className="h-8 w-[200px] text-xs" aria-label="Pick a teammate">
+                <SelectValue placeholder="Pick a teammate" />
+              </SelectTrigger>
+              <SelectContent>
+                {teammates.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name || m.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" className="h-8" onClick={sendTask} disabled={!sendTo || sending}>
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
+              Send
+            </Button>
+            <span className="text-[11px] text-muted-foreground">It moves onto your shared team — it stays on your list too.</span>
+          </div>
+        )}
 
         {threadOpen && (
           <div className="mt-3 border-t pt-3 space-y-2.5">

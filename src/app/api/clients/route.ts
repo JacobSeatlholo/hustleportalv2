@@ -10,11 +10,18 @@ export async function GET(req: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const projectId = new URL(req.url).searchParams.get('projectId') || ''
-  const where: Record<string, unknown> = { userId }
+  // The clients sync law (Hayley case, round 2): a client lives in a project
+  // workspace, and a tagged project member works that workspace — so clients
+  // follow their project onto the member's desk, exactly like the project
+  // itself does. Owners keep seeing their own books; edits stay owner-only
+  // (PATCH/DELETE still check userId), members get the read side.
+  const sharedProjects = { some: { userId } }
+  const where: Record<string, unknown> = { OR: [{ userId }, { project: { members: sharedProjects } }] }
   if (projectId && projectId !== 'ALL') {
     const project = await resolveProject(userId, projectId)
     if (project.id !== projectId) return NextResponse.json({ error: 'Unknown project.' }, { status: 404 })
     where.projectId = projectId
+    delete where.OR
   }
   const clients = await db.client.findMany({
     where,

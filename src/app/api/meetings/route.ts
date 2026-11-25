@@ -10,6 +10,7 @@ import { sendSystemMail } from '@/lib/mailer'
 import { jitsiMeetLink } from '@/lib/meet'
 import { welcomeEmail, inviteEmail, meetingWhen } from '@/lib/meeting'
 import { confirmAndNotify } from '@/lib/meetingConfirm'
+import { resolveProject } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -270,6 +271,44 @@ export async function PATCH(req: NextRequest) {
     const raw = String(body.meetLink || '').trim()
     const meetLink = raw && /^https?:\/\//.test(raw) ? raw : null
     current = await db.meeting.update({ where: { id }, data: { meetLink } })
+  }
+
+  // The B2C bridge (boss, 2026-11-25): guests who came in through the social
+  // media booking and meeting links live here on the exec desk — this action
+  // feeds one into a member's pipeline as a SOCIAL lead, where the normal
+  // follow-up machinery (stages, tasks, campaigns) takes over. Idempotent:
+  // the same guest email maps onto the same SOCIAL lead per member.
+  if (body.toSocialLead) {
+    const targetUserId = String(body.toSocialLead.userId || '').trim()
+    if (!targetUserId) return NextResponse.json({ error: 'Pick the member whose pipeline this lead feeds.' }, { status: 400 })
+    const member = await db.user.findUnique({ where: { id: targetUserId }, select: { id: true } })
+    if (!member) return NextResponse.json({ error: 'That member has no account.' }, { status: 404 })
+    const personName = (meeting.guestName || meeting.memberName || '').trim()
+    const personEmail = normalizeEmail(meeting.guestEmail || meeting.memberEmail)
+    if (!personEmail) return NextResponse.json({ error: 'This meeting has no guest email to feed across.' }, { status: 400 })
+    const project = await resolveProject(targetUserId, body.toSocialLead.projectId ?? null)
+    const existing = await db.lead.findFirst({
+      where: { userId: targetUserId, source: 'SOCIAL', email: { equals: personEmail, mode: 'insensitive' } },
+      select: { id: true },
+    })
+    if (existing) {
+      return NextResponse.json({ lead: await db.lead.findUnique({ where: { id: existing.id } }), alreadyFed: true })
+    }
+    const lead = await db.lead.create({
+      data: {
+        userId: targetUserId,
+        projectId: project.id,
+        company: personName || 'Social lead',
+        contactName: personName || null,
+        email: personEmail,
+        phone: meeting.memberPhone || null,
+        source: 'SOCIAL',
+        stage: 'NEW',
+        unlocked: true, // they handed over their details to book — no reveal wall on our own capture
+        notes: `B2C social lead, captured from the executive desk. Came in via "${meeting.title}" (${meeting.startsAt.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}), status ${meeting.status}.`,
+      },
+    })
+    return NextResponse.json({ lead, alreadyFed: false }, { status: 201 })
   }
 
   if (body.confirm) {

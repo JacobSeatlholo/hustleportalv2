@@ -4,6 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { recordTaskEvent, STATUS_LABEL } from '@/lib/taskrecord'
 import { canSeeDeal } from '@/lib/dealroom'
+import { sendTaskAssignedMail } from '@/lib/taskmail'
 
 async function canEditTask(taskId: string, userId: string) {
   const task = await db.task.findUnique({ where: { id: taskId } })
@@ -57,13 +58,30 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       data.teamId = null
     }
   }
+  // Assignment integrity, same wall as creation (Hayley case, round 2): a task
+  // can only land on someone who is actually IN the team it lives in, and a
+  // personal task can never be assigned across the desk — forwarding a private
+  // task to a teammate means moving it onto the shared team IN THE SAME PATCH.
+  if ('assigneeId' in data) {
+    const newAssignee = data.assigneeId ? String(data.assigneeId) : null
+    const effectiveTeamId = ('teamId' in data ? (data.teamId as string | null) : task.teamId) || null
+    if (newAssignee && newAssignee !== userId && !effectiveTeamId) {
+      return NextResponse.json({ error: 'Personal tasks can only be assigned to you. Move the task onto a team to send it.' }, { status: 400 })
+    }
+    if (newAssignee && newAssignee !== userId && effectiveTeamId) {
+      const assigneeMember = await db.teamMember.findUnique({
+        where: { teamId_userId: { teamId: effectiveTeamId, userId: newAssignee } },
+      })
+      if (!assigneeMember) return NextResponse.json({ error: 'That person is not a member of this team.' }, { status: 400 })
+    }
+  }
 
   const updated = await db.task.update({
     where: { id },
     data,
     include: {
       creator: { select: { id: true, name: true } },
-      assignee: { select: { id: true, name: true } },
+      assignee: { select: { id: true, name: true, email: true } },
       team: { select: { id: true, name: true } },
       deal: { select: { id: true, title: true, stage: true } },
     },
@@ -77,6 +95,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (newAssignee && newAssignee !== task.assigneeId) {
       const u = await db.user.findUnique({ where: { id: newAssignee }, select: { name: true } })
       await recordTaskEvent(id, 'SENT', userId, `sent to ${u?.name || 'a teammate'}`)
+      // Forwarding announces itself: the new assignee hears it in the inbox
+      // through the same door creation uses (taskmail.ts).
+      if (newAssignee !== userId) {
+        const mover = await db.user.findUnique({ where: { id: userId }, select: { name: true } })
+        await sendTaskAssignedMail(updated, mover?.name || 'A teammate')
+      }
     }
   }
   if ('teamId' in data && data.teamId !== task.teamId) {

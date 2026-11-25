@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth'
 import { bumpChallenge } from '@/lib/gamification'
 import { recordTaskEvent } from '@/lib/taskrecord'
 import { canSeeDeal } from '@/lib/dealroom'
-import { sendSystemMail } from '@/lib/mailer'
+import { sendTaskAssignedMail } from '@/lib/taskmail'
 
 // GET /api/tasks?scope=mine|team
 export async function GET(req: NextRequest) {
@@ -16,6 +16,10 @@ export async function GET(req: NextRequest) {
   const memberships = await db.teamMember.findMany({ where: { userId }, select: { teamId: true } })
   const teamIds = memberships.map((m) => m.teamId)
 
+  // The sender's law (Hayley case, round 2): a task you SENT used to vanish
+  // from your own list the moment it gained a team — the mine scope kept
+  // creator-tasks only when they were still personal. Now everything you
+  // created stays with you, assigned away or not.
   let where: Record<string, unknown>
   if (scope === 'team') {
     if (teamIds.length === 0) return NextResponse.json({ tasks: [] })
@@ -24,12 +28,12 @@ export async function GET(req: NextRequest) {
     where = {
       OR: [
         { assigneeId: userId },
-        { creatorId: userId, teamId: null },
+        { creatorId: userId },
         { assigneeId: userId, teamId: { in: teamIds } },
       ],
     }
   } else {
-    where = { OR: [{ assigneeId: userId }, { creatorId: userId, teamId: null }] }
+    where = { OR: [{ assigneeId: userId }, { creatorId: userId }] }
   }
   const tasks = await db.task.findMany({
     where,
@@ -149,41 +153,8 @@ export async function POST(req: NextRequest) {
   // (the accountability clock starts at the send) or the owner CREATED it for self.
   if (task.assignee && task.assignee.id !== userId) {
     await recordTaskEvent(task.id, 'SENT', userId, `sent to ${task.assignee.name}`)
-    // The inbox announcement (Hayley case, boss 2026-11-25): "send updates
-    // directly to their inboxes" was promised and the assignment email never
-    // existed — a sent task was invisible until the teammate happened to log
-    // in. Best effort, suppression-checked, same laws as the comment fanout.
-    try {
-      const dead = await db.suppression.findMany({ where: { email: task.assignee.email }, select: { email: true } })
-      if (dead.length === 0) {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://www.hustleportal.online'
-        const creatorName = task.creator?.name || 'A teammate'
-        const teamLine = task.team ? ` on the ${task.team.name} team` : ''
-        await sendSystemMail({
-          to: task.assignee.email,
-          subject: `${creatorName} sent you a task: ${task.title}`,
-          body: [
-            `Hi ${task.assignee.name.split(' ')[0] || 'there'},`,
-            '',
-            `${creatorName} assigned you a task${teamLine}:`,
-            '',
-            `"${task.title}"`,
-            task.dueDate ? `Due: ${new Date(task.dueDate).toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}` : '',
-            notes ? `Notes: ${String(notes).slice(0, 300)}` : '',
-            '',
-            `Open your tasks: ${appUrl}/tasks`,
-            '',
-            'The task waits in your Tasks module — open it to start the record.',
-          ].filter(Boolean).join('\n'),
-          title: task.title,
-          headline: 'Task assigned to you',
-          value: { text: String(title).slice(0, 140), caption: `From ${creatorName}${teamLine}` },
-          ctaLabel: 'Open your tasks',
-          ctaUrl: `${appUrl}/tasks`,
-          preheader: `${creatorName} sent you a task`,
-        })
-      }
-    } catch { /* best effort: the task is already saved and recorded */ }
+    // The inbox announcement rides the shared door in taskmail.ts.
+    await sendTaskAssignedMail(task, task.creator?.name || 'A teammate')
   } else {
     await recordTaskEvent(
       task.id,

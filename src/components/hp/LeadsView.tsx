@@ -558,6 +558,18 @@ interface DiscoverResult {
 
 type DiscoverMode = 'AI_SEARCH' | 'OSM' | 'LIVE' | 'POOL' | 'SCARCE' | 'NONE'
 
+// A B2C social lead as the side-lane shows it: already in the pipeline, source SOCIAL.
+interface SocialLeadRow {
+  id: string
+  company: string
+  contactName: string | null
+  email: string | null
+  phone: string | null
+  city: string | null
+  stage: string
+  createdAt: string
+}
+
 // The learning loop's one tap reasons, shown right on the card the seller
 // dismissed. WRONG_INDUSTRY teaches the engine loudest, so it leads.
 const DISMISS_REASONS: { key: string; label: string }[] = [
@@ -621,6 +633,12 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
   // Persisted so the user chooses once and the app remembers.
   const [autoAdd, setAutoAdd] = useState(true)
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
+  // B2C side-lane (boss, 2026-11-25): "include social media leads" — when the
+  // toggle is on, every search also lines up the SOCIAL leads already captured
+  // in your pipeline (guests who booked through social links, fed across from
+  // the executive desk), so one search covers the businesses AND the consumers.
+  const [socialOn, setSocialOn] = useState(false)
+  const [socialLeads, setSocialLeads] = useState<SocialLeadRow[]>([])
   // The dismiss flow: which card is showing its reason chips right now.
   const [dismissFor, setDismissFor] = useState<string | null>(null)
   // Profile nudge: one gentle tip when BOTH the hunt description and the
@@ -631,6 +649,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
 
   useEffect(() => {
     try { setAutoAdd(localStorage.getItem('hp_discover_autoadd') !== '0') } catch { /* default on */ }
+    try { setSocialOn(localStorage.getItem('hp_discover_social') === '1') } catch { /* default off */ }
   }, [])
 
   // Every open: aim at the active workspace and restore that project's remembered search.
@@ -650,6 +669,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     setNote('')
     setMode('NONE')
     setAddedKeys(new Set())
+    setSocialLeads([])
     setNudgeClosed(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -669,6 +689,7 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
     setNote('')
     setMode('NONE')
     setAddedKeys(new Set())
+    setSocialLeads([])
   }
 
   // Engagement loop while the search runs: rotating status + a live seconds counter
@@ -754,6 +775,17 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
       setResSource(res.source || (res.mode === 'LIVE' ? 'TEAM' : 'WEB'))
       setNote(res.notice ? `${res.notice} ${res.note || ''}`.trim() : res.note || '')
       setSelected(new Set(res.leads.map((l) => l.company)))
+      // The B2C side-lane rides along when the toggle is on: the SOCIAL leads
+      // already captured in this pipeline, newest first. Non-fatal — a failed
+      // side fetch never breaks the search itself.
+      if (socialOn) {
+        try {
+          const own = await api<{ leads: (SocialLeadRow & { source?: string })[] }>('/api/leads?scope=mine')
+          setSocialLeads(own.leads.filter((l) => l.source === 'SOCIAL').slice(0, 12))
+        } catch { setSocialLeads([]) }
+      } else {
+        setSocialLeads([])
+      }
       if (autoAdd && res.leads.length > 0) {
         const added = await saveLeads(res.leads)
         setAddedKeys(new Set(res.leads.map((l) => l.company)))
@@ -944,6 +976,20 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
               Add found leads to my pipeline automatically
             </label>
           )}
+          {!busy && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={socialOn}
+                onChange={(e) => {
+                  setSocialOn(e.target.checked)
+                  try { localStorage.setItem('hp_discover_social', e.target.checked ? '1' : '0') } catch { /* private mode */ }
+                }}
+                className="h-4 w-4 accent-brand"
+              />
+              Include social media leads <span className="text-[10px] text-muted-foreground/80">(B2C — the guests captured from your social bookings)</span>
+            </label>
+          )}
 
           {note && (
             <p className="text-xs text-muted-foreground bg-muted rounded-lg p-2">{note}</p>
@@ -1057,6 +1103,42 @@ function DiscoverDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpen
                 </Button>
               )}
             </div>
+          )}
+
+          {/* The B2C side-lane: your captured social leads, riding next to the
+              AI's business results when the toggle is on. They are already in
+              the pipeline — this surfaces them at search time, one screen for
+              both kinds of selling. */}
+          {!busy && socialOn && socialLeads.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>{socialLeads.length} social media lead{socialLeads.length === 1 ? '' : 's'} · B2C</span>
+                <Badge className="bg-fuchsia-500/15 text-fuchsia-400">From your social bookings</Badge>
+              </div>
+              <div className="space-y-1.5">
+                {socialLeads.map((s) => (
+                  <div key={s.id} className="rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/5 p-2.5">
+                    <div className="text-sm font-medium truncate">{s.contactName || s.company}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <span className="truncate">
+                        {s.email || 'no email'}{s.phone ? ` · ${s.phone}` : ''}{s.city ? ` · ${s.city}` : ''}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-fuchsia-500/15 text-fuchsia-500 px-1.5 py-0.5 text-[10px] font-medium">
+                        {s.stage}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Already in your pipeline (Leads &amp; Pipeline → source Social). Feed more across from the executive desk's Meetings card.
+              </p>
+            </div>
+          )}
+          {!busy && socialOn && results.length > 0 && socialLeads.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              No social media leads captured yet — guests who book through your social links can be fed into the pipeline from the executive desk's Meetings card.
+            </p>
           )}
         </div>
       </DialogContent>

@@ -1343,12 +1343,45 @@ const EMPTY_MEETING_FORM = {
   notes: '',
 }
 
-function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; onChanged: () => void }) {
+function MeetingsCard({ meetings, roster, onChanged }: {
+  meetings: MeetingRow[] | null
+  roster: { id: string; name: string; email: string }[] | null
+  onChanged: () => void
+}) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_MEETING_FORM })
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  // The B2C bridge: feed a meeting's guest into a member's pipeline as a
+  // SOCIAL lead — the consumers who came in through the social booking and
+  // meeting links finally reach the follow-up machinery (stages, tasks, AI).
+  const [feedFor, setFeedFor] = useState<string | null>(null)
+  const [feedTo, setFeedTo] = useState('')
+  const [feeding, setFeeding] = useState(false)
+
+  async function feedSocialLead(m: MeetingRow) {
+    if (!feedTo) return
+    setFeeding(true)
+    try {
+      const r = await api<{ alreadyFed: boolean }>('/api/meetings', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: m.id, toSocialLead: { userId: feedTo } }),
+      })
+      toast({
+        title: r.alreadyFed ? 'Already in their pipeline' : 'Fed to the pipeline',
+        description: r.alreadyFed
+          ? 'That guest is already a SOCIAL lead on that member\'s desk — no duplicate was made.'
+          : `The guest landed in the member's Leads & Pipeline (source Social, stage NEW). They can act on it now.`,
+      })
+      setFeedFor(null)
+      setFeedTo('')
+    } catch (e) {
+      toast({ title: 'Could not feed that lead', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
+    } finally {
+      setFeeding(false)
+    }
+  }
 
   const rows = meetings || []
   const confirmed = rows.filter((m) => m.status === 'CONFIRMED').length
@@ -1463,7 +1496,7 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
             </div>
           )}
           {rows.map((m) => (
-            <div key={m.id} className="flex items-start gap-3 px-4 py-3">
+            <div key={m.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
               <div className="h-9 w-9 rounded-full bg-brand/15 text-brand flex items-center justify-center text-sm font-bold shrink-0">
                 {m.memberName.slice(0, 1).toUpperCase()}
               </div>
@@ -1515,7 +1548,37 @@ function MeetingsCard({ meetings, onChanged }: { meetings: MeetingRow[] | null; 
                     <Link2 className="h-3 w-3" /> Copy link
                   </Button>
                 )}
+                {(roster?.length ?? 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[11px] gap-1 border-fuchsia-500/40 text-fuchsia-400"
+                    onClick={() => { setFeedFor(feedFor === m.id ? null : m.id); setFeedTo('') }}
+                  >
+                    <UserPlus className="h-3 w-3" /> Feed as lead
+                  </Button>
+                )}
               </div>
+              {feedFor === m.id && (
+                <div className="w-full min-w-[240px] space-y-2 pt-1">
+                  <Select value={feedTo} onValueChange={setFeedTo}>
+                    <SelectTrigger className="h-8 text-xs" aria-label="Pick the member whose pipeline this guest feeds into">
+                      <SelectValue placeholder="Feed into whose pipeline?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(roster || []).map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name || u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8 w-full" onClick={() => feedSocialLead(m)} disabled={!feedTo || feeding}>
+                    {feeding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                    Feed {m.guestName || m.guestEmail} as a SOCIAL lead
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -2825,7 +2888,7 @@ export default function AdminView() {
       <WinBackCard />
 
       {/* Meetings: the business cases you set, with the one tap confirm state */}
-      <MeetingsCard meetings={exec?.meetings ?? null} onChanged={() => setTick((t) => t + 1)} />
+      <MeetingsCard meetings={exec?.meetings ?? null} roster={exec?.roster ?? null} onChanged={() => setTick((t) => t + 1)} />
 
       {/* Payments: gateway mode, webhook state, latest settled money */}
       <PaymentsCard payments={exec?.payments ?? null} onChanged={() => setTick((t) => t + 1)} />
