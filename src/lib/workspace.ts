@@ -16,10 +16,14 @@ export type ProjectShape = {
   isDefault: boolean
 }
 
-/** List the user's company workspaces, default first, with counts + assigned members. */
+/** List the user's company workspaces, default first, with counts + assigned members.
+ *  The sync law (Hayley case, boss 2026-11-25): a teammate tagged onto a project
+ *  gets that project IN their own workspace switcher — this used to list only
+ *  owned projects, so the shared one never synced. Shared projects carry
+ *  access 'MEMBER' so the UI can badge them; owned stay 'OWNER'. */
 export async function listProjects(userId: string) {
   const projects = await db.project.findMany({
-    where: { userId },
+    where: { OR: [{ userId }, { members: { some: { userId } } }] },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     include: {
       members: {
@@ -38,6 +42,7 @@ export async function listProjects(userId: string) {
   )
   return projects.map((p) => ({
     ...p,
+    access: p.userId === userId ? 'OWNER' : 'MEMBER',
     counts: counts.find((c) => c.id === p.id) ?? { id: p.id, leads: 0, clients: 0, invoices: 0 },
     members: p.members.map((m) => ({ id: m.id, userId: m.userId, name: m.user.name, email: m.user.email })),
   }))
@@ -45,11 +50,16 @@ export async function listProjects(userId: string) {
 
 /**
  * Resolve the user's active project. Every user always has at least the
- * default "My Business" workspace, created on demand.
+ * default "My Business" workspace, created on demand. A project the user is
+ * a tagged member of resolves too — the sync law's working half: without it
+ * a teammate could SEE the shared workspace but every row she wrote would
+ * silently land on her own default instead.
  */
 export async function resolveProject(userId: string, projectId?: string | null) {
   if (projectId) {
-    const p = await db.project.findFirst({ where: { id: projectId, userId } })
+    const p = await db.project.findFirst({
+      where: { id: projectId, OR: [{ userId }, { members: { some: { userId } } }] },
+    })
     if (p) return p
   }
   return getOrCreateDefaultProject(userId)

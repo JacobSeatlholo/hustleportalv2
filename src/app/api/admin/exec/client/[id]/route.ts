@@ -35,7 +35,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!user) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
   const now = Date.now()
-  const [topups, creditTxs, projects, stageGroups, pipelineRows, clientsCount, invoices, leadsTotal, poolRows, poolCounts, campaigns] = await Promise.all([
+  const [topups, creditTxs, projects, stageGroups, pipelineRows, clientsCount, invoices, leadsTotal, poolRows, poolCounts, campaigns, teamMemberships, sharedProjects, recentTasks] = await Promise.all([
     db.topUp.findMany({
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
@@ -86,6 +86,29 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       take: 8,
       select: { id: true, mode: true, leadCount: true, fromPool: true, createdAt: true },
     }),
+    // The collaboration lens (Hayley case, boss 2026-11-25): which teams the
+    // client sits in, which projects teammates shared with them, and the tasks
+    // assigned to or created by them — the exact surfaces the sync bug hid.
+    db.teamMember.findMany({
+      where: { userId: id },
+      include: { team: { select: { id: true, name: true, ownerId: true } } },
+    }),
+    db.projectMember.findMany({
+      where: { userId: id },
+      include: { project: { select: { id: true, name: true, userId: true, createdAt: true } } },
+    }),
+    db.task.findMany({
+      where: { OR: [{ assigneeId: id }, { creatorId: id }] },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: {
+        id: true, title: true, status: true, priority: true, dueDate: true,
+        teamId: true, assigneeId: true, creatorId: true, createdAt: true,
+        team: { select: { name: true } },
+        creator: { select: { name: true, email: true } },
+        assignee: { select: { name: true, email: true } },
+      },
+    }),
   ])
 
   const sub = user.subscription
@@ -115,6 +138,15 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     },
     clientsCount,
     invoices,
+    collaboration: {
+      teams: teamMemberships.map((tm) => ({ id: tm.team.id, name: tm.team.name, role: tm.role, ownerId: tm.team.ownerId })),
+      sharedProjects: sharedProjects.map((sp) => ({ id: sp.project.id, name: sp.project.name, ownerId: sp.project.userId, role: sp.role, addedAt: sp.createdAt })),
+      tasks: recentTasks.map((t) => ({
+        id: t.id, title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate,
+        team: t.team?.name || null, creator: t.creator?.email || null, assignee: t.assignee?.email || null,
+        createdAt: t.createdAt,
+      })),
+    },
   })
 }
 
