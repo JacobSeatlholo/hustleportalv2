@@ -1303,5 +1303,44 @@ export const XPITCH_SEED: XPitchSeedLead[] = [
     "platform": "tiktok",
     "lastPost": "2026-11-16",
     "fresh": "fresh"
+  },
+  {
+    "handle": "_saint_nails_",
+    "name": "Braamfontein Saint Nails",
+    "trade": "nails",
+    "city": "Johannesburg",
+    "followers": 497057,
+    "url": "https://www.tiktok.com/@_saint_nails_",
+    "phone": "0616963634",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-22",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "braaishisanyama",
+    "name": "Sloane’s Butchery & Deli",
+    "trade": "braai",
+    "city": "Soweto",
+    "followers": 92668,
+    "url": "https://www.tiktok.com/@braaishisanyama",
+    "phone": "",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-19",
+    "fresh": "fresh"
+  },
+  {
+    "handle": "joburgsouthnailtech",
+    "name": "GOOD MOOD MANI",
+    "trade": "nails",
+    "city": "Johannesburg",
+    "followers": 1836,
+    "url": "https://www.tiktok.com/@joburgsouthnailtech",
+    "phone": "0655909197",
+    "email": "",
+    "platform": "tiktok",
+    "lastPost": "2026-11-11",
+    "fresh": "fresh"
   }
 ]
