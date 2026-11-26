@@ -15,10 +15,10 @@ export const dynamic = 'force-dynamic'
  *   client   the day the relationship started
  *
  * Matching is by the client's email address, scoped to the owner's books —
- * and the feed is readable by the client's project members too (clients sync
- * law, read side; note writes stay owner-only). A client with no email simply
- * sees notes, tasks and the day they were added, the feed is honest about
- * what it can and cannot see.
+ * and the feed, including note writes, is open to the client's project
+ * members too (clients sync law; client record edits stay owner-only). A
+ * client with no email simply sees notes, tasks and the day they were added,
+ * the feed is honest about what it can and cannot see.
  */
 
 type TimelineItem = {
@@ -41,7 +41,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // The clients sync law (Hayley case, round 4): the history is part of the
   // client's read side, so a tagged project member opens the same feed the
   // owner opens — the list route already seats her at this desk, the timeline
-  // was still owner-only and 404ed her. Writes stay owner-only (POST below).
+  // was still owner-only and 404ed her. Note writes are open to members too
+  // (POST below); client record edits stay owner-only.
   const client = await db.client.findFirst({
     where: { id, OR: [{ userId }, { project: { members: { some: { userId } } } }] },
   })
@@ -141,7 +142,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
-  const client = await db.client.findFirst({ where: { id, userId } })
+  // Round 5 (Hayley case): a tagged member works the shared client's history,
+  // so she logs notes on it too — same wall as the GET above. The note keeps
+  // its author (userId), and client record edits stay owner-only (PATCH/DELETE).
+  const client = await db.client.findFirst({
+    where: { id, OR: [{ userId }, { project: { members: { some: { userId } } } }] },
+  })
   if (!client) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
   const body = await req.json().catch(() => ({}))
