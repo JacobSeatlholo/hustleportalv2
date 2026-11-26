@@ -14,9 +14,11 @@ export const dynamic = 'force-dynamic'
  *   meetings facilitated meetings where the client sits on either side
  *   client   the day the relationship started
  *
- * Matching is by the client's email address, scoped to the owner. A client
- * with no email simply sees notes, tasks and the day they were added, the
- * feed is honest about what it can and cannot see.
+ * Matching is by the client's email address, scoped to the owner's books —
+ * and the feed is readable by the client's project members too (clients sync
+ * law, read side; note writes stay owner-only). A client with no email simply
+ * sees notes, tasks and the day they were added, the feed is honest about
+ * what it can and cannot see.
  */
 
 type TimelineItem = {
@@ -36,7 +38,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
-  const client = await db.client.findFirst({ where: { id, userId } })
+  // The clients sync law (Hayley case, round 4): the history is part of the
+  // client's read side, so a tagged project member opens the same feed the
+  // owner opens — the list route already seats her at this desk, the timeline
+  // was still owner-only and 404ed her. Writes stay owner-only (POST below).
+  const client = await db.client.findFirst({
+    where: { id, OR: [{ userId }, { project: { members: { some: { userId } } } }] },
+  })
   if (!client) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
   const email = normEmail(client.email)
@@ -52,11 +60,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const [notes, tasks, invoices, emails, meetings] = await Promise.all([
     db.clientNote.findMany({ where: { clientId: client.id }, orderBy: { createdAt: 'desc' }, take: 60 }),
     db.task.findMany({ where: { clientId: client.id, isPrivate: false }, orderBy: { createdAt: 'desc' }, take: 40, select: { id: true, title: true, status: true, dueDate: true, createdAt: true } }),
+    // Invoices and emails live in the owner's books, so they read through the
+    // client's owner — a teammate sees the client's real account history, and
+    // for the owner calling this it resolves to the same value as before.
     email
-      ? db.invoice.findMany({ where: { userId, clientEmail: { equals: email, mode: 'insensitive' } }, orderBy: { createdAt: 'desc' }, take: 40, select: { id: true, number: true, clientName: true, status: true, total: true, issuedAt: true, createdAt: true } })
+      ? db.invoice.findMany({ where: { userId: client.userId, clientEmail: { equals: email, mode: 'insensitive' } }, orderBy: { createdAt: 'desc' }, take: 40, select: { id: true, number: true, clientName: true, status: true, total: true, issuedAt: true, createdAt: true } })
       : Promise.resolve([] as Array<{ id: string; number: string; clientName: string; status: string; total: number; issuedAt: Date | null; createdAt: Date }>),
     email
-      ? db.emailLog.findMany({ where: { userId, toEmail: email, status: { in: ['SENT', 'FAILED', 'QUEUED'] } }, orderBy: { createdAt: 'desc' }, take: 60, select: { id: true, subject: true, status: true, campaign: true, openedAt: true, openCount: true, sentAt: true, createdAt: true } })
+      ? db.emailLog.findMany({ where: { userId: client.userId, toEmail: email, status: { in: ['SENT', 'FAILED', 'QUEUED'] } }, orderBy: { createdAt: 'desc' }, take: 60, select: { id: true, subject: true, status: true, campaign: true, openedAt: true, openCount: true, sentAt: true, createdAt: true } })
       : Promise.resolve([] as Array<{ id: string; subject: string; status: string; campaign: string | null; openedAt: Date | null; openCount: number; sentAt: Date | null; createdAt: Date }>),
     email
       ? db.meeting.findMany({ where: { OR: [{ memberEmail: { equals: email, mode: 'insensitive' } }, { guestEmail: { equals: email, mode: 'insensitive' } }] }, orderBy: { startsAt: 'desc' }, take: 20, select: { id: true, title: true, status: true, startsAt: true, location: true } })
